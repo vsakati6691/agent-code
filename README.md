@@ -57,8 +57,9 @@ runs the analysis ([docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md)):
 | When (weekdays, US Eastern) | Run | What it does |
 |---|---|---|
 | 08:30 | Pre-market | Account snapshot, economic calendar, news, quotes → pre-market report |
-| 10:30–15:30 hourly | Intraday check | Quotes and news; flags stop breaches and changed decisions (no paper trades) |
+| 12:30 | Midday check | Quotes and news; flags stop breaches and changed decisions (no paper trades) |
 | 16:30 | Post-close | Prices, constituents, fundamentals, calendar → paper fills, stops, loss limits, new paper orders, full report |
+| Fri 17:30 | Weekly review | Local files only: paper P&L per strategy vs SPY, loss-limit headroom, missed runs |
 
 These are Claude Code scheduled tasks. They run only while the Claude app is
 open; if it's closed, a run happens the next time it opens.
@@ -85,13 +86,13 @@ The daily report (`reports\daily_two_strategy_<date>_<label>.md`) has these sect
 
 ## Quick start (Windows)
 
-Full guide: [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md).
+Needs Python 3.12 (`winget install Python.Python.3.12`).
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-copy .env.example .env                     # add your Alpha Vantage key
-.\.venv\Scripts\python.exe -m pytest       # 164 tests
+copy .env.example .env                     # add your free Alpha Vantage key (never commit .env)
+.\.venv\Scripts\python.exe -m pytest       # all tests must pass
 ```
 
 ## Commands
@@ -107,16 +108,17 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -m agent_trading snapshot fundamentals|quotes|news|filings|econ <files>
 & $py -m agent_trading import-robinhood <get_equity_historicals JSON files>
 & $py -m agent_trading account import <snapshot.json>
+& $py -m agent_trading dividends <SYMBOL> <file>    # for GTAA total-return backtests
+& $py -m agent_trading fetch [--symbols ...]        # Alpha Vantage fallback: prices, earnings calendar, T-bills
 
 # Evidence
-& $py -m agent_trading evaluate-scanner             # Strategy A, point-in-time S&P 500 lists
-& $py -m agent_trading evaluate-desk                # Strategy B rules
-& $py -m agent_trading evaluate-gtaa                # Strategy C
-& $py -m agent_trading evaluate [--holdout]         # legacy strategy: train/validation(/holdout)
+& $py -m agent_trading evaluate-scanner             # Strategy A: point-in-time lists + factor ablation
+& $py -m agent_trading evaluate-desk                # Strategy B: 1x/2x/3x costs + baselines
+& $py -m agent_trading evaluate-gtaa                # Strategy C: C0/C1/C2, total return
 ```
 
-Every evaluation reports train and validation periods. The most recent 20% of
-history is an untouched holdout; using it is logged.
+Every evaluation reports train and validation periods only. The most recent 20%
+of history is an untouched holdout that no command evaluates.
 
 ## Project layout
 
@@ -128,7 +130,7 @@ src/agent_trading/
   paper.py                    simulated broker (next-open fills, stops, time exits)
   daily.py                    daily cycle + report
   data/                       validation, cache, universe, snapshots, rates, imports
-  backtest/                   engines, evaluation, benchmarks, statistics
+  backtest/                   desk engine, allocation engine (GTAA), scanner backtest, splits, stats
   account.py, journal.py, regime.py, cli.py
 docs/DAILY_ROUTINE.md         the runbook the scheduled Claude sessions follow
 tests/                        unit, integration (mocked services) and safety tests
@@ -138,7 +140,7 @@ tests/                        unit, integration (mocked services) and safety tes
 
 - **Survivorship bias:** about 10% of historical S&P 500 members are missing from the scanner backtest, either because the filing omits the ticker or because the stock is delisted on Robinhood. No point-in-time lists are available after Sept 2023.
 - **Fundamentals:** current values only, so they can't be backtested.
-- **No dividends:** prices are price-return only, which understates bond and REIT ETFs in GTAA.
+- **Dividends:** the GTAA backtest uses total return (dividend-adjusted), but the daily GTAA signals and the other backtests use price-only bars.
 - **Daily bars only:** intraday stop fills, partial fills, halts and taxes are not modelled, and exchange holidays aren't in code (the runbook checks them).
 - **News:** headlines are unverified until the article is read.
 
@@ -146,7 +148,7 @@ tests/                        unit, integration (mocked services) and safety tes
 
 1. Paper trade all three strategies for 3–6 months, giving the most weight to GTAA.
 2. Compare paper results with the backtests.
-3. Only if the evidence justifies it, design a separate live phase: brokerage approvals on, small limits, a kill switch, and authorization for every order.
+3. Only if the evidence justifies it, design a separate live phase: small limits, a kill switch, and authorization for every order (Robinhood trade approvals are already on for the agent account).
 
 ## For AI assistants
 

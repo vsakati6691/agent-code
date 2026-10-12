@@ -4,7 +4,7 @@ At each month-end close a weights function returns target weights, using only
 data up to that close. Orders fill at the next open with the usual costs.
 
 Risk policy (unchanged per-position limits, "option a"): every position gets an
-ATR protective stop and is sized by the same RiskEngine as the swing strategy,
+ATR protective stop and is sized by the same RiskEngine as paper trading,
 so its notional is min(target weight x equity, RiskEngine size). A stopped-out
 position stays out until the next rebalance. Positions that remain in the
 target are not resized at rebalance (avoids churn); positions dropped from the
@@ -52,7 +52,7 @@ def run_allocation(
     initial = initial_equity if initial_equity is not None else settings.paper_starting_equity
 
     rows = {s: df[["open", "high", "low", "close"]].to_dict("index") for s, df in bars.items()}
-    atrs = {s: atr(df, settings.strategy.atr_period).to_dict() for s, df in bars.items()}
+    atrs = {s: atr(df, 14).to_dict() for s, df in bars.items()}
     returns = pd.DataFrame({s: df["close"] for s, df in bars.items()}).sort_index().pct_change()
     all_dates = sorted(set().union(*(df.index for df in bars.values()))) if bars else []
     is_month_end = dict(zip(all_dates, month_end_flags(all_dates)))

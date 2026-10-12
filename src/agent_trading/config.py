@@ -74,41 +74,10 @@ class DataConfig:
 
 
 @dataclass(frozen=True)
-class StrategyConfig:
-    fast_ma: int = 20
-    slow_ma: int = 50
-    momentum_lookback: int = 63
-    rsi_period: int = 14
-    rsi_max_entry: float = 75.0
-    atr_period: int = 14
-    volume_lookback: int = 20
-
-
-@dataclass(frozen=True)
-class ScreenConfig:
-    min_price: float = 5.0
-    min_avg_dollar_volume: float = 50_000_000.0
-
-
-@dataclass(frozen=True)
-class WalkForwardConfig:
-    train_bars: int = 252
-    test_bars: int = 63
-    oos_fraction: float = 0.3
-    grid: dict[str, list[Any]] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
 class EvaluationConfig:
     train_fraction: float = 0.6
     validation_fraction: float = 0.2  # the remainder is the untouched holdout
-    bootstrap_samples: int = 1000
-    bootstrap_block: int = 20
     min_trades: int = 30
-    sensitivity_grid: dict[str, list[Any]] = field(default_factory=dict)
-    cash_interest: bool = True  # credit idle cash with the 3-month T-bill rate in backtests
-    cost_levels_bps: list[float] = field(default_factory=lambda: [0.0, 12.5, 25.0, 50.0])
-    stress_windows: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -131,7 +100,6 @@ class BrokerConfig:
 @dataclass(frozen=True)
 class PaperConfig:
     order_expiry_days: int = 3
-    skip_entries_before_earnings: bool = True
 
 
 @dataclass(frozen=True)
@@ -183,11 +151,6 @@ class GTAAConfig:
 
 
 @dataclass(frozen=True)
-class ReportConfig:
-    earnings_warning_days: int = 7
-
-
-@dataclass(frozen=True)
 class PathConfig:
     journal_db: str = "data/journal.db"
     reports_dir: str = "reports"
@@ -202,9 +165,6 @@ class Settings:
     risk: RiskConfig = field(default_factory=RiskConfig)
     costs: CostConfig = field(default_factory=CostConfig)
     data: DataConfig = field(default_factory=DataConfig)
-    strategy: StrategyConfig = field(default_factory=StrategyConfig)
-    screen: ScreenConfig = field(default_factory=ScreenConfig)
-    walkforward: WalkForwardConfig = field(default_factory=WalkForwardConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     regime: RegimeConfig = field(default_factory=RegimeConfig)
     broker: BrokerConfig = field(default_factory=BrokerConfig)
@@ -212,7 +172,6 @@ class Settings:
     scanner: ScannerConfig = field(default_factory=ScannerConfig)
     desk: DeskConfig = field(default_factory=DeskConfig)
     gtaa: GTAAConfig = field(default_factory=GTAAConfig)
-    reports: ReportConfig = field(default_factory=ReportConfig)
     paths: PathConfig = field(default_factory=PathConfig)
     base_dir: Path = Path(".")
 
@@ -285,9 +244,6 @@ def validate(settings: Settings) -> Settings:
     e = settings.evaluation
     if not (0 < e.train_fraction and 0 < e.validation_fraction and e.train_fraction + e.validation_fraction < 1):
         raise ConfigError("evaluation fractions must be positive and leave room for a holdout")
-    s = settings.strategy
-    if not 0 < s.fast_ma < s.slow_ma:
-        raise ConfigError("strategy.fast_ma must be positive and less than slow_ma")
     if settings.data.outputsize not in ("compact", "full"):
         raise ConfigError("data.outputsize must be 'compact' or 'full'")
     if not settings.symbols:
@@ -306,9 +262,6 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
         "risk": RiskConfig,
         "costs": CostConfig,
         "data": DataConfig,
-        "strategy": StrategyConfig,
-        "screen": ScreenConfig,
-        "walkforward": WalkForwardConfig,
         "evaluation": EvaluationConfig,
         "regime": RegimeConfig,
         "broker": BrokerConfig,
@@ -316,7 +269,6 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
         "scanner": ScannerConfig,
         "desk": DeskConfig,
         "gtaa": GTAAConfig,
-        "reports": ReportConfig,
         "paths": PathConfig,
     }
     top_level = {"mode", "paper_starting_equity", "universe", *sections}

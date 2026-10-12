@@ -67,7 +67,7 @@ one-line note.
    positions and actionable tickers → `snapshot quotes <file>`.
 5. `& $py -m agent_trading daily --no-paper --label premarket`.
 
-## Intraday check (weekdays, hourly 10:30–15:30 ET)
+## Midday check (weekdays, 12:30 ET, once)
 
 Keep it light (rate limits): quotes for the desk symbols, QQQ, SPY and open
 paper positions → `snapshot quotes <file>`; market news → `snapshot news
@@ -75,6 +75,13 @@ paper positions → `snapshot quotes <file>`; market news → `snapshot news
 Report only changes: a live price at or below a paper stop, a new
 high-impact event, or a desk decision that changed since the last run. The
 paper broker does NOT run intraday; signals use daily closes.
+
+## Weekly review (Fridays 17:30 ET)
+
+Local files only, no MCP calls: `& $py -m agent_trading paper status`, the paper
+tables in `data\journal.db` and the week's post-close reports →
+`reports\weekly_review_<date>.md` (paper P&L per strategy vs SPY, loss-limit
+headroom, missed runs, and a reminder of what the backtests showed).
 
 ## Data source outages
 

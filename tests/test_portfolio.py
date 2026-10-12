@@ -4,7 +4,6 @@ from dataclasses import replace
 import pandas as pd
 import pytest
 
-from agent_trading.backtest.benchmarks import buy_and_hold
 from agent_trading.backtest.portfolio import month_end_flags, run_allocation
 
 from .conftest import make_bars
@@ -31,7 +30,7 @@ def test_first_fills_at_open_after_first_month_end(settings, three):
     dates = list(three["A"].index)
     flags = month_end_flags(dates)
     # the first month-end with a full ATR(14) history behind it
-    first_me = next(d for i, (d, f) in enumerate(zip(dates, flags)) if f and i >= settings.strategy.atr_period)
+    first_me = next(d for i, (d, f) in enumerate(zip(dates, flags)) if f and i >= 14)
     first_fill = dates[dates.index(first_me) + 1]
     entries = sorted(t.entry_date for t in res.trades)
     assert entries[0] == first_fill.date()

@@ -183,7 +183,7 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
         ctx.spec_warning = (f"configuration changed during the paper evaluation (frozen {frozen}, now {ctx.config_hash}); "
                             "results after the change are a new experiment, not the same out-of-sample period")
     if run_paper and all_bars:
-        res = broker.run(all_bars, None, cal, as_of, intents=intents)
+        res = broker.run(all_bars, as_of, intents)
         ctx.paper_events, ctx.paper_warnings, ctx.proposals = res.events, res.warnings, res.new_orders
     ctx.status = broker.status(all_bars, as_of) if all_bars else None
     ctx.manifest_path = str(_write_manifest(settings, ctx, label, intents, broker, frozen))

@@ -8,8 +8,8 @@ local SQLite journal.
 Daily cycle (run after the close of `as_of`):
   1. fill orders created on earlier days at the first later bar's open;
   2. check protective stops on each bar since the last run;
-  3. from `as_of`'s close, queue exits for positions with an exit signal and
-     entries for approved candidates, to be filled at the next open.
+  3. from `as_of`'s close, queue the strategies' exit and entry intents (each
+     entry approved and sized by the RiskEngine), to be filled at the next open.
 """
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ import numpy as np
 import pandas as pd
 
 from .config import Settings
-from .data.service import EarningsData
 from .journal import Journal
 from .risk import Holding, PortfolioState, RiskEngine, RiskViolation
 
@@ -94,17 +93,6 @@ def _last_close(df: pd.DataFrame | None, on_or_before: pd.Timestamp) -> float | 
     return None if hist.empty else float(hist.iloc[-1])
 
 
-def earnings_within(earnings: EarningsData | None, symbol: str, as_of: date, days: int) -> date | None:
-    if earnings is None or not earnings.available:
-        return None
-    t = earnings.table
-    hits = t[(t["symbol"] == symbol) & (t["reportDate"] >= as_of)]
-    if hits.empty:
-        return None
-    nxt = min(hits["reportDate"])
-    return nxt if (nxt - as_of).days <= days else None
-
-
 def portfolio_state(
     journal: Journal,
     settings: Settings,
@@ -122,46 +110,6 @@ def portfolio_state(
         market_value += t.quantity * (last if last is not None else t.entry_price)
     cash = journal.cash(settings.paper_starting_equity)
     return PortfolioState(cash + market_value, cash - reserved_cash, tuple(holdings))
-
-
-def propose_entries(
-    screen: pd.DataFrame,
-    bars: dict[str, pd.DataFrame],
-    state: PortfolioState,
-    settings: Settings,
-    earnings: EarningsData | None,
-    as_of: date,
-    exclude: set[str] | frozenset[str] = frozenset(),
-) -> list[Proposal]:
-    """Rank entry signals by momentum and size each through the RiskEngine.
-
-    Approved proposals consume risk and cash for the ones ranked below them.
-    """
-    if screen.empty:
-        return []
-    engine = RiskEngine(settings)
-    returns = returns_frame(bars)
-    proposals = []
-    cands = screen[screen["entry_signal"]].sort_values("momentum", ascending=False)
-    for sym, row in cands.iterrows():
-        if sym in exclude:
-            continue
-        stop = row["close"] - settings.risk.atr_stop_multiple * row["atr"]
-        nxt = earnings_within(earnings, sym, as_of, settings.reports.earnings_warning_days)
-        note = "" if (earnings is not None and earnings.available) else "earnings unverified"
-        if nxt is not None and settings.paper.skip_entries_before_earnings:
-            proposals.append(Proposal(sym, row["close"], stop, 0, 0, 0, False, f"earnings on {nxt}", row["momentum"]))
-            continue
-        d = engine.evaluate_entry(sym, float(row["close"]), float(stop), state, returns)
-        proposals.append(Proposal(sym, row["close"], stop, d.quantity, d.risk_amount, d.notional,
-                                  d.approved, d.reason, row["momentum"], note))
-        if d.approved:
-            state = replace(
-                state,
-                cash=state.cash - d.notional,
-                holdings=state.holdings + (Holding(sym, d.quantity, float(row["close"]), float(stop)),),
-            )
-    return proposals
 
 
 class PaperBroker:
@@ -235,16 +183,8 @@ class PaperBroker:
 
     # --- daily cycle ---------------------------------------------------------
 
-    def run(
-        self,
-        bars: dict[str, pd.DataFrame],
-        screen: pd.DataFrame | None,
-        earnings: EarningsData | None,
-        as_of: date,
-        intents: list[Intent] | None = None,
-    ) -> RunResult:
-        """Process fills/stops up to `as_of`, then queue orders from `intents`
-        (strategy A/B) or, when intents is None, from the legacy `screen`."""
+    def run(self, bars: dict[str, pd.DataFrame], as_of: date, intents: list[Intent]) -> RunResult:
+        """Process fills/stops up to `as_of`, then queue orders from the strategies' `intents`."""
         from .risk import trading_status
 
         result = RunResult()
@@ -268,11 +208,10 @@ class PaperBroker:
         self._queue_time_exits(bars, as_of, result)
         if not status.new_entries_allowed:
             result.warnings.append(f"new entries blocked: {status.reason}")
-        if intents is None:
-            self._queue_signals(bars, screen if screen is not None else pd.DataFrame(), earnings, as_of, result,
-                                allow_entries=status.new_entries_allowed)
-        else:
-            self._queue_intents(bars, intents, as_of, result, allow_entries=status.new_entries_allowed)
+        open_df = self.journal.open_trades()
+        for sym in sorted(set(open_df["symbol"]) - set(bars)) if not open_df.empty else []:
+            result.warnings.append(f"{sym}: no valid data today, so its exit signal and stop cannot be evaluated")
+        self._queue_intents(bars, intents, as_of, result, allow_entries=status.new_entries_allowed)
         self._set_meta("last_signal_date", as_of.isoformat())
         return result
 
@@ -421,39 +360,6 @@ class PaperBroker:
             if age > self.settings.paper.order_expiry_days:
                 self._finish_order(o.id, "cancelled", note=f"expired after {age} business days without a valid bar")
                 result.events.append(f"expired {o.side.upper()} {o.symbol} (no valid price data)")
-
-    def _queue_signals(self, bars, screen: pd.DataFrame, earnings, as_of: date, result: RunResult,
-                       allow_entries: bool = True) -> None:
-        pending = self.orders("pending")
-        pending_syms = set(pending["symbol"]) if not pending.empty else set()
-        open_df = self.journal.open_trades()
-
-        for t in open_df.itertuples() if not open_df.empty else []:
-            if t.symbol not in screen.index:
-                result.warnings.append(
-                    f"{t.symbol}: no valid data today, so its exit signal and stop cannot be evaluated"
-                )
-                continue
-            if screen.at[t.symbol, "exit_signal"] and t.symbol not in pending_syms:
-                self._add_order(as_of, t.symbol, "sell", t.quantity, float(screen.at[t.symbol, "close"]),
-                                None, "exit signal", int(t.id))
-                result.events.append(f"queued SELL {t.symbol} (exit signal) for next open")
-
-        if not allow_entries or screen.empty:
-            return
-        reserved = float((pending.loc[pending["side"] == "buy", "quantity"] * pending.loc[pending["side"] == "buy", "ref_price"]).sum()) if not pending.empty else 0.0
-        state = portfolio_state(self.journal, self.settings, bars, pd.Timestamp(as_of), reserved)
-        pending_buys = pending[pending["side"] == "buy"] if not pending.empty else pending
-        if not pending_buys.empty:
-            state = replace(state, holdings=state.holdings + tuple(
-                Holding(o.symbol, o.quantity, o.ref_price, o.stop_price) for o in pending_buys.itertuples()))
-        held = set(open_df["symbol"]) if not open_df.empty else set()
-        for p in propose_entries(screen, bars, state, self.settings, earnings, as_of, held | pending_syms):
-            if p.approved:
-                self._add_order(as_of, p.symbol, "buy", p.quantity, float(p.ref_price), float(p.stop),
-                                f"entry signal (momentum {p.momentum:+.1%})")
-                result.events.append(f"queued BUY {p.symbol} x{p.quantity:g} (ref {p.ref_price:.2f}, stop {p.stop:.2f}, risk ${p.risk:.2f})")
-            result.new_orders.append(p)
 
     # --- reporting -----------------------------------------------------------
 

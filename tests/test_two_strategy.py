@@ -1,4 +1,4 @@
-﻿"""Strategy A (S&P 500 scanner), Strategy B (desk), new risk limits, and the daily cycle.
+"""Strategy A (S&P 500 scanner), Strategy B (desk), new risk limits, and the daily cycle.
 
 All external services are mocked with saved-payload fixtures."""
 import json
@@ -22,7 +22,7 @@ from agent_trading.data.universe import UniverseError, coverage, import_universe
 from agent_trading.journal import Journal
 from agent_trading.paper import Intent, PaperBroker
 from agent_trading.risk import Holding, PortfolioState, RiskEngine, trading_status
-from agent_trading.strategies.desk import Position, leveraged_blockers, qqq_regime, run_desk
+from agent_trading.strategies.desk import Position, leveraged_blockers, run_desk
 from agent_trading.strategies.scanner import run_scan, score
 
 from .conftest import make_bars
@@ -312,7 +312,7 @@ def test_intents_dedupe_no_short_and_exclusive(settings, broker):
                Intent("TQQQ", "buy", close, close * 0.9, "B-desk", "dup", 1),
                Intent("SQQQ", "buy", 30, 27, "B-desk", "other side", 0.5),
                Intent("NVDA", "sell", 100, None, "B-desk", "no position")]
-    r = broker.run(b1, None, None, d, intents=intents)
+    r = broker.run(b1, d, intents)
     pending = broker.orders("pending")
     assert list(pending["symbol"]) == ["TQQQ"]
     reasons = {p.symbol + str(i): p.reason for i, p in enumerate(r.new_orders)}
@@ -329,12 +329,12 @@ def test_fill_reduced_when_open_gaps_up(settings, broker):
     d1 = days[-2]
     b1 = {s: df.loc[:d1] for s, df in bars.items()}
     close = float(b1["NVDA"]["close"].iloc[-1])
-    broker.run(b1, None, None, d1.date(), intents=[Intent("NVDA", "buy", close, close - 2, "B-desk", "t", 1)])
+    broker.run(b1, d1.date(), [Intent("NVDA", "buy", close, close - 2, "B-desk", "t", 1)])
     order = broker.orders("pending").iloc[0]
     gapped = {s: df.copy() for s, df in bars.items()}
     g = gapped["NVDA"]
     g.loc[days[-1], ["open", "high"]] = [close * 1.01, max(close * 1.02, g.loc[days[-1], "high"])]
-    broker.run(gapped, None, None, days[-1].date(), intents=[])
+    broker.run(gapped, days[-1].date(), [])
     t = broker.journal.open_trades().iloc[0]
     assert t["quantity"] <= order["quantity"] and t["strategy"] == "B-desk"
 
@@ -342,7 +342,7 @@ def test_fill_reduced_when_open_gaps_up(settings, broker):
 def test_time_exit_queued_for_leveraged(settings, broker):
     bars = desk_bars()
     broker.journal.open_trade("TQQQ", 0.1, 40, 30, date(2026, 9, 28), strategy="B-desk")
-    broker.run(bars, None, None, bars["TQQQ"].index[-1].date(), intents=[])
+    broker.run(bars, bars["TQQQ"].index[-1].date(), [])
     sells = broker.orders("pending")
     assert (sells["side"] == "sell").any() and "max holding" in sells.iloc[0]["reason"]
 
@@ -352,7 +352,7 @@ def test_loss_limit_blocks_new_entries(settings, broker):
     d = bars["NVDA"].index[-1].date()
     broker._record_equity(d - timedelta(days=1), 1100.0)  # pretend yesterday's equity was $1,100
     close = float(bars["NVDA"]["close"].iloc[-1])
-    r = broker.run(bars, None, None, d, intents=[Intent("NVDA", "buy", close, close - 2, "B-desk", "t")])
+    r = broker.run(bars, d, [Intent("NVDA", "buy", close, close - 2, "B-desk", "t")])
     assert broker.orders("pending").empty
     assert any("blocked" in w for w in r.warnings)
 

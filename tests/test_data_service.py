@@ -1,7 +1,6 @@
 import logging
 from datetime import date
 
-import pandas as pd
 import pytest
 
 from agent_trading.data.alphavantage import (

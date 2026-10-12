@@ -1,4 +1,7 @@
-"""Event loop over daily bars.
+"""Event loop over daily bars for rule-based strategies (used by the desk backtest).
+
+Callers pass `prepared` rows per symbol: {timestamp: {open, high, low, close,
+atr, entry, exit, momentum}}, with entry/exit computed from data up to that close.
 
 Timing model (no look-ahead):
   * signals are computed from day t's close;
@@ -10,16 +13,14 @@ Entries are approved and sized by the same RiskEngine as paper trading.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import date
 
 import numpy as np
 import pandas as pd
 
-from ..config import Settings, StrategyConfig
-from ..indicators import add_indicators
+from ..config import Settings
 from ..risk import Holding, PortfolioState, RiskEngine
-from ..strategy import generate_signals
 from .metrics import compute_metrics
 
 
@@ -58,30 +59,19 @@ class BacktestResult:
         return pd.DataFrame([{**t.__dict__, "costs": t.costs, "pnl": t.pnl} for t in self.trades])
 
 
-def prepare(bars: dict[str, pd.DataFrame], cfg: StrategyConfig) -> dict[str, dict]:
-    """Indicators + signals per symbol, as {symbol: {timestamp: row-dict}}."""
-    prepared = {}
-    for sym, df in bars.items():
-        ind = add_indicators(df, cfg)
-        frame = ind.join(generate_signals(ind, cfg))
-        prepared[sym] = frame.to_dict("index")
-    return prepared
-
-
 def run_backtest(
     bars: dict[str, pd.DataFrame],
     settings: Settings,
     start: pd.Timestamp | None = None,
     end: pd.Timestamp | None = None,
-    strategy: StrategyConfig | None = None,
     initial_equity: float | None = None,
-    prepared: dict[str, dict] | None = None,
+    *,
+    prepared: dict[str, dict],
     cash_rate: pd.Series | None = None,
 ) -> BacktestResult:
     """`cash_rate`: optional per-day simple interest rate credited on positive cash
     at each close (see data.rates.daily_cash_rate)."""
-    cfg = strategy or settings.strategy
-    rows = prepared if prepared is not None else prepare(bars, cfg)
+    rows = prepared
     risk_cfg = settings.risk
     engine = RiskEngine(settings)
     slip = settings.costs.per_side
@@ -203,11 +193,4 @@ def run_backtest(
     )
     metrics["interest_earned"] = round(interest, 2)
     metrics["trading_pnl"] = round(sum(t.pnl for t in closed), 2)
-    return BacktestResult(equity, closed, metrics, params=cfg.__dict__.copy())
-
-
-def strategy_grid(base: StrategyConfig, grid: dict[str, list]) -> list[StrategyConfig]:
-    configs = [base]
-    for key, values in grid.items():
-        configs = [replace(c, **{key: v}) for c in configs for v in values]
-    return [c for c in configs if c.fast_ma < c.slow_ma]
+    return BacktestResult(equity, closed, metrics)

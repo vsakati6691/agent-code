@@ -4,10 +4,7 @@ All indicators are causal: the value on day t uses only data up to day t.
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-
-from .config import StrategyConfig
 
 
 def sma(series: pd.Series, n: int) -> pd.Series:
@@ -56,21 +53,3 @@ def rate_of_change(close: pd.Series, n: int) -> pd.Series:
     return close / close.shift(n) - 1
 
 
-def volume_ratio(volume: pd.Series, n: int = 20) -> pd.Series:
-    """Today's volume relative to the average of the previous n days."""
-    prior_avg = volume.shift(1).rolling(n, min_periods=n).mean()
-    return volume / prior_avg.replace(0, np.nan)
-
-
-def add_indicators(df: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
-    out = df.copy()
-    close = out["close"]
-    out["sma_fast"] = sma(close, cfg.fast_ma)
-    out["sma_slow"] = sma(close, cfg.slow_ma)
-    out["momentum"] = rate_of_change(close, cfg.momentum_lookback)
-    out["rsi"] = rsi(close, cfg.rsi_period)
-    out["atr"] = atr(out, cfg.atr_period)
-    out["vol_ratio"] = volume_ratio(out["volume"], cfg.volume_lookback)
-    out["avg_dollar_volume"] = (close * out["volume"]).rolling(cfg.volume_lookback, min_periods=cfg.volume_lookback).mean()
-    out = out.join(macd(close))
-    return out

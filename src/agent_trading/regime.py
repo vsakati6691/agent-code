@@ -45,20 +45,3 @@ def current(bench: pd.DataFrame, cfg: RegimeConfig) -> dict:
     }
 
 
-def performance_by_regime(equity: pd.Series, regimes: pd.DataFrame, column: str = "trend") -> pd.DataFrame:
-    """Daily strategy returns grouped by the regime known at the prior close."""
-    rets = equity.pct_change().dropna()
-    # days before the regime can be measured are reported, not silently dropped
-    label = regimes[column].shift(1).reindex(rets.index).fillna("unclassified")
-    rows = []
-    for name, grp in rets.groupby(label):
-        n = len(grp)
-        std = grp.std()
-        rows.append({
-            column: name,
-            "days": n,
-            "total_return": float((1 + grp).prod() - 1),
-            "annualized_return": float((1 + grp).prod() ** (TRADING_DAYS / n) - 1) if n else None,
-            "sharpe": float(math.sqrt(TRADING_DAYS) * grp.mean() / std) if n > 1 and std > 0 else None,
-        })
-    return pd.DataFrame(rows)
