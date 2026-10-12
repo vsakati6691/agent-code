@@ -8,6 +8,8 @@ from pathlib import Path
 
 _PATTERNS = [
     re.compile(r"(apikey=)[^&\s'\"]+", re.IGNORECASE),
+    # Alpha Vantage rate-limit notices echo the key: "We have detected your API key as XXXX ..."
+    re.compile(r"(api key as )[A-Za-z0-9]+", re.IGNORECASE),
     re.compile(r"((?:api[_-]?key|token|secret|password)['\"]?\s*[:=]\s*['\"]?)[^'\"\s,&]+", re.IGNORECASE),
 ]
 _KNOWN_SECRETS: set[str] = set()

@@ -159,6 +159,18 @@ def test_api_key_never_logged(caplog):
     assert "SUPERSECRETKEY123" not in record.getMessage()
 
 
+def test_rate_limit_notice_echoing_the_key_is_redacted():
+    """Alpha Vantage's 25/day notice contains the key itself; it must never surface."""
+    from agent_trading.data.alphavantage import parse_dividends_json
+
+    notice = {"Information": "We have detected your API key as ZZTESTKEY9876 and our standard API rate limit is 25"}
+    for parse in (lambda d: parse_daily_json(d, "SPY"), lambda d: parse_dividends_json(d, "SPY"),
+                  lambda d: parse_earnings_csv('{"Information": "' + d["Information"] + '"}')):
+        with pytest.raises(AlphaVantageError) as exc:
+            parse(notice)
+        assert "ZZTESTKEY9876" not in str(exc.value) and "***" in str(exc.value)
+
+
 def test_client_sends_key_but_errors_hide_it():
     class Resp:
         status_code = 500

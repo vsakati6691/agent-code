@@ -13,7 +13,7 @@ from typing import Any
 import pandas as pd
 import requests
 
-from ..logging_setup import register_secret
+from ..logging_setup import redact, register_secret
 
 BASE_URL = "https://www.alphavantage.co/query"
 SOURCE_NAME = "Alpha Vantage"
@@ -21,7 +21,14 @@ log = logging.getLogger(__name__)
 
 
 class AlphaVantageError(RuntimeError):
-    """API returned an error, a rate-limit notice, or a premium-only notice."""
+    """API returned an error, a rate-limit notice, or a premium-only notice.
+
+    The message is redacted on creation: Alpha Vantage rate-limit notices echo
+    the caller's API key, and these messages reach logs, CLI output and reports.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(redact(str(message)))
 
 
 def parse_daily_json(data: dict[str, Any], symbol: str) -> pd.DataFrame:
@@ -71,6 +78,26 @@ def parse_treasury_json(data: dict[str, Any]) -> pd.Series:
     return s.rename("yield_pct")
 
 
+def parse_dividends_json(data: dict[str, Any], symbol: str) -> pd.Series:
+    """Cash dividends per share by ex-dividend date."""
+    for key in ("Error Message", "Information", "Note"):
+        if key in data:
+            raise AlphaVantageError(f"{symbol} dividends: {data[key]}")
+    rows = data.get("data")
+    if rows is None:
+        raise AlphaVantageError(f"{symbol} dividends: unexpected format")
+    out = {}
+    for r in rows:
+        d, a = r.get("ex_dividend_date"), r.get("amount")
+        try:
+            out[pd.Timestamp(d)] = float(a)
+        except (TypeError, ValueError):
+            continue
+    s = pd.Series(out, dtype=float).sort_index()
+    s.index.name = "ex_date"
+    return s.rename("amount")
+
+
 class AlphaVantageClient:
     def __init__(
         self,
@@ -117,6 +144,14 @@ class AlphaVantageClient:
         except ValueError:
             raise AlphaVantageError("treasury yield: response was not JSON") from None
         return parse_treasury_json(data)
+
+    def dividends(self, symbol: str) -> pd.Series:
+        resp = self._get({"function": "DIVIDENDS", "symbol": symbol})
+        try:
+            data = resp.json()
+        except ValueError:
+            raise AlphaVantageError(f"{symbol} dividends: response was not JSON") from None
+        return parse_dividends_json(data, symbol)
 
     def earnings_calendar(self, horizon: str = "3month") -> pd.DataFrame:
         resp = self._get({"function": "EARNINGS_CALENDAR", "horizon": horizon})
