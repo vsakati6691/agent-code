@@ -49,7 +49,9 @@ package in `src/agent_trading/`, tests in `tests/`, config in
 ## Refreshing long history from Robinhood
 
 Call the MCP tool `get_equity_historicals` with `interval: "day"`, up to 10
-symbols per call. Large results are saved to a file by the harness; pass those
+symbols per call, `start_time` as early as 2007-09-01, and the default
+`adjustment_type` (split). Never use `adjustment_type: "all"` for daily bars;
+it returns wrong prices. Large results are saved to a file by the harness; pass those
 file paths to:
 
 ```powershell

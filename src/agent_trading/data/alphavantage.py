@@ -58,6 +58,19 @@ def parse_earnings_csv(text: str) -> pd.DataFrame:
     return df
 
 
+def parse_treasury_json(data: dict[str, Any]) -> pd.Series:
+    """Monthly 3-month T-bill yields in percent, indexed by month start."""
+    for key in ("Error Message", "Information", "Note"):
+        if key in data:
+            raise AlphaVantageError(f"treasury yield: {data[key]}")
+    rows = [(r["date"], r["value"]) for r in data.get("data", []) if r.get("value") not in (None, "", ".")]
+    if not rows:
+        raise AlphaVantageError("treasury yield: no data")
+    s = pd.Series({pd.Timestamp(d): float(v) for d, v in rows}).sort_index()
+    s.index.name = "date"
+    return s.rename("yield_pct")
+
+
 class AlphaVantageClient:
     def __init__(
         self,
@@ -96,6 +109,14 @@ class AlphaVantageClient:
         except ValueError:
             raise AlphaVantageError(f"{symbol}: response was not JSON") from None
         return parse_daily_json(data, symbol)
+
+    def treasury_yield(self, maturity: str = "3month") -> pd.Series:
+        resp = self._get({"function": "TREASURY_YIELD", "interval": "monthly", "maturity": maturity})
+        try:
+            data = resp.json()
+        except ValueError:
+            raise AlphaVantageError("treasury yield: response was not JSON") from None
+        return parse_treasury_json(data)
 
     def earnings_calendar(self, horizon: str = "3month") -> pd.DataFrame:
         resp = self._get({"function": "EARNINGS_CALENDAR", "horizon": horizon})

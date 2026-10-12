@@ -42,10 +42,12 @@ def equal_weight(bars: dict[str, pd.DataFrame], start, end, initial: float, cost
     return values.sort_index().ffill().sum(axis=1).rename("equity")
 
 
-def trend_timing(df: pd.DataFrame, start, end, initial: float, cost: float, ma: int = 200) -> pd.Series:
+def trend_timing(df: pd.DataFrame, start, end, initial: float, cost: float, ma: int = 200,
+                 cash_rate: pd.Series | None = None) -> pd.Series:
     """Hold the benchmark only while its close is above its `ma`-day SMA.
 
     Signal at day t's close, trade at day t+1's open (same timing as the strategy).
+    Cash earns `cash_rate` (per-day) when provided, as in the strategy backtest.
     """
     full = df.copy()
     full["sma"] = sma(full["close"], ma)
@@ -54,7 +56,9 @@ def trend_timing(df: pd.DataFrame, start, end, initial: float, cost: float, ma: 
         return pd.Series(dtype=float)
     signal = (full["close"] > full["sma"]).shift(1).reindex(w.index).fillna(False)
     cash, units, curve = initial, 0.0, {}
+    rates = cash_rate.to_dict() if cash_rate is not None else {}
     for day, row in w.iterrows():
+        cash += cash * float(rates.get(day, 0.0))
         want = bool(signal.loc[day])
         if want and units == 0:
             units = cash / (row["open"] * (1 + cost))
@@ -67,12 +71,14 @@ def trend_timing(df: pd.DataFrame, start, end, initial: float, cost: float, ma: 
 
 
 def benchmark_table(
-    bars: dict[str, pd.DataFrame], bench_symbol: str, start, end, initial: float, cost: float
+    bars: dict[str, pd.DataFrame], bench_symbol: str, start, end, initial: float, cost: float,
+    cash_rate: pd.Series | None = None,
 ) -> dict[str, dict]:
     out: dict[str, dict] = {}
     if bench_symbol in bars:
         b = bars[bench_symbol]
         out[f"{bench_symbol} buy & hold"] = compute_metrics(buy_and_hold(b, start, end, initial, cost), [], initial, 1.0)
-        out[f"{bench_symbol} 200-day trend timing"] = compute_metrics(trend_timing(b, start, end, initial, cost), [], initial)
+        out[f"{bench_symbol} 200-day trend timing"] = compute_metrics(
+            trend_timing(b, start, end, initial, cost, cash_rate=cash_rate), [], initial)
     out["Equal-weight universe buy & hold"] = compute_metrics(equal_weight(bars, start, end, initial, cost), [], initial, 1.0)
     return out

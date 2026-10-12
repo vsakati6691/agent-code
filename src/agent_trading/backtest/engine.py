@@ -75,7 +75,10 @@ def run_backtest(
     strategy: StrategyConfig | None = None,
     initial_equity: float | None = None,
     prepared: dict[str, dict] | None = None,
+    cash_rate: pd.Series | None = None,
 ) -> BacktestResult:
+    """`cash_rate`: optional per-day simple interest rate credited on positive cash
+    at each close (see data.rates.daily_cash_rate)."""
     cfg = strategy or settings.strategy
     rows = prepared if prepared is not None else prepare(bars, cfg)
     risk_cfg = settings.risk
@@ -100,6 +103,8 @@ def run_backtest(
     curve: dict[pd.Timestamp, float] = {}
     days_exposed = 0
     prev_day: pd.Timestamp | None = None
+    interest = 0.0
+    rate_by_day = cash_rate.to_dict() if cash_rate is not None else {}
 
     def close(sym: str, when: pd.Timestamp, raw_price: float, reason: str) -> None:
         nonlocal cash
@@ -161,6 +166,10 @@ def run_backtest(
                 last_close[sym] = bar["close"]
         if positions:
             days_exposed += 1
+        if cash > 0 and rate_by_day:
+            credit = cash * float(rate_by_day.get(d, 0.0))
+            cash += credit
+            interest += credit
         curve[d] = cash + sum(t.quantity * last_close[s] for s, t in positions.items())
 
         # 5. signals from today's close, acted on tomorrow
@@ -189,6 +198,8 @@ def run_backtest(
         traded_notional=sum(t.quantity * (t.entry_price + t.exit_price) for t in closed),
         holding_days=[(t.exit_date - t.entry_date).days for t in closed],
     )
+    metrics["interest_earned"] = round(interest, 2)
+    metrics["trading_pnl"] = round(sum(t.pnl for t in closed), 2)
     return BacktestResult(equity, closed, metrics, params=cfg.__dict__.copy())
 
 

@@ -97,6 +97,9 @@ class EvaluationConfig:
     bootstrap_block: int = 20
     min_trades: int = 30
     sensitivity_grid: dict[str, list[Any]] = field(default_factory=dict)
+    cash_interest: bool = True  # credit idle cash with the 3-month T-bill rate in backtests
+    cost_levels_bps: list[float] = field(default_factory=lambda: [0.0, 12.5, 25.0, 50.0])
+    stress_windows: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

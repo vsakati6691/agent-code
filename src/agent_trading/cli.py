@@ -53,9 +53,13 @@ def _fmt_metrics(m: dict) -> str:
 # ------------------------------------------------------------------ commands
 
 def cmd_fetch(settings: Settings, args) -> int:
+    from .data.rates import refresh_rates
+
     svc = _service(settings, with_client=True)
     status = svc.refresh(_symbols(settings, args.symbols), args.as_of)
     svc.refresh_earnings(args.as_of)
+    if refresh_rates(settings, svc.client, args.as_of):
+        print("T-bill rates updated")
     for sym, msg in status.items():
         print(f"{sym:<6} {msg}")
     print(f"API calls used this run: {svc.client.calls_made}")
@@ -182,17 +186,28 @@ def cmd_paper(settings: Settings, args) -> int:
 
 
 def _backtest_bars(settings: Settings, args) -> dict:
-    """Backtests validate completeness but not freshness (history may be older)."""
+    """Backtests validate completeness but not freshness (history may be older).
+
+    Old frozen stretches (pre-merger shells, thin pre-listing trading) are
+    trimmed off; a recent freeze excludes the symbol.
+    """
     from .data.cache import read_cache
-    from .data.validation import DataQualityError, validate_bars
+    from .data.validation import DataQualityError, trim_frozen_history, validate_bars
 
     cache_dir = settings.resolve(settings.data.cache_dir)
+    since = getattr(args, "since", None)
     bars = {}
     for sym in _symbols(settings, args.symbols):
         df = read_cache(cache_dir, sym)
         try:
-            last = df.index[-1].date() if df is not None and not df.empty else args.as_of
-            bars[sym] = validate_bars(df, sym, last, 0, settings.data.min_history_bars)
+            if df is None or df.empty:
+                raise DataQualityError(f"{sym}: no data")
+            if since is not None:
+                df = df.loc[str(since):]
+            df, note = trim_frozen_history(df, sym)
+            if note:
+                log.warning("%s", note)
+            bars[sym] = validate_bars(df, sym, df.index[-1].date(), 0, settings.data.min_history_bars)
         except DataQualityError as exc:
             log.warning("Excluded from backtest: %s", exc)
     return bars
@@ -250,6 +265,13 @@ def cmd_evaluate(settings: Settings, args) -> int:
     if args.holdout and holdout_uses(settings) > 0:
         print(f"Note: the holdout has already been evaluated {holdout_uses(settings)} time(s); "
               "repeated use turns it into a tuning set.")
+    from .data.rates import load_monthly_rates, refresh_rates
+
+    if settings.evaluation.cash_interest and load_monthly_rates(settings) is None:
+        try:
+            refresh_rates(settings, _service(settings, with_client=True).client, args.as_of)
+        except ConfigError as exc:
+            print(f"T-bill rates unavailable ({exc}); cash will earn no interest in this evaluation.")
     bars = _backtest_bars(settings, args)
     try:
         rep = evaluate(bars, settings, use_holdout=args.holdout)
@@ -342,15 +364,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     b = sub.add_parser("backtest", help="full-period plus in-sample/out-of-sample backtest")
     b.add_argument("--symbols", nargs="*")
+    b.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     b.set_defaults(func=cmd_backtest)
 
     w = sub.add_parser("walkforward", help="walk-forward optimisation and out-of-sample evaluation")
     w.add_argument("--symbols", nargs="*")
+    w.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     w.set_defaults(func=cmd_walkforward)
 
     ev = sub.add_parser("evaluate", help="train/validation(/holdout) evaluation with benchmarks, regimes, bootstrap, sensitivity")
     ev.add_argument("--symbols", nargs="*")
     ev.add_argument("--holdout", action="store_true", help="also evaluate the untouched holdout (logged; use sparingly)")
+    ev.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     ev.set_defaults(func=cmd_evaluate)
 
     j = sub.add_parser("journal", help="paper-trade journal")

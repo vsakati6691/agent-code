@@ -29,7 +29,9 @@ Earnings calendar ────────────────┘           
 | Backtest with slippage and commissions; out-of-sample and walk-forward | `backtest/` |
 | Central RiskEngine: per-trade, aggregate and correlated risk, gap buffer, cash-only | `risk.py` |
 | Simulated paper broker (next-open fills, stops, same costs as backtest) | `paper.py` |
-| Train/validation/holdout evaluation, benchmarks, bootstrap, sensitivity | `backtest/evaluation.py`, `benchmarks.py`, `stats.py` |
+| Train/validation/holdout evaluation, benchmarks, bootstrap, deflated Sharpe, sensitivity, cost and stress tables | `backtest/evaluation.py`, `benchmarks.py`, `stats.py` |
+| Target-weight allocation engine (month-end rebalance, same RiskEngine caps) | `backtest/portfolio.py` |
+| 3-month T-bill interest on idle cash (no look-ahead) | `data/rates.py` |
 | Market regime (trend, volatility) | `regime.py` |
 | Read-only broker account snapshot (masked, staleness-checked) | `account.py` |
 | Paper-trade journal (SQLite) | `journal.py` |
@@ -119,7 +121,9 @@ $py = ".\.venv\Scripts\python.exe"
 
 ## Known limitations
 
-- Free Alpha Vantage tier: ~100 bars per fetch and 25 requests/day. Long history is seeded from Robinhood via `import-robinhood`.
+- Free Alpha Vantage tier: ~100 bars per fetch and 25 requests/day. Long history (2007 onward, about 19 years) is seeded from Robinhood via `import-robinhood`. Never use Robinhood's `adjustment_type: all` daily bars; they are wrong.
+- Robinhood daily volume sometimes drops out for a few days (e.g. Aug 2010, Oct 2025) while prices stay correct; this is tolerated. Runs of flat price bars (dead feeds, pre-merger SPAC shells) are rejected, or trimmed from old history in backtests.
+- Dividends are not modelled (price return only), for both strategies and benchmarks.
 - Alpha Vantage daily bars are not split-adjusted; a split inside the cached history causes that symbol to be rejected.
 - Daily bars only: intraday stop fills, partial fills, halts and taxes are not modelled.
 - The Robinhood MCP is only available inside a Claude session; the Python code never talks to the broker.

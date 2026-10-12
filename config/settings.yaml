@@ -71,6 +71,16 @@ evaluation:                     # chronological train / validation / untouched h
     slow_ma: [50, 100]
     momentum_lookback: [21, 63, 126]
     atr_stop_multiple: [2.0, 2.5, 3.0]
+  cash_interest: true           # idle cash earns the prior month's 3-month T-bill yield
+  cost_levels_bps: [0, 12.5, 25, 50]   # all-in cost per side for the cost-sensitivity table
+  stress_windows:               # windows inside the holdout are skipped automatically
+    GFC tail: ["2008-10-01", "2009-03-09"]
+    Aug 2011: ["2011-07-22", "2011-10-03"]
+    2015-16 selloff: ["2015-08-01", "2016-02-11"]
+    Q4 2018: ["2018-10-01", "2018-12-24"]
+    COVID crash: ["2020-02-19", "2020-03-23"]
+    2022 bear: ["2022-01-03", "2022-10-12"]
+    Apr 2025 tariffs: ["2025-04-01", "2025-04-30"]
 
 regime:
   benchmark: SPY
