@@ -83,6 +83,8 @@ class LiveResult:
     tickets_date: str | None = None      # when the tickets shown were issued
     skipped: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    previous_date: str | None = None     # the last earlier ticket day, checked against the account
+    previous: list[str] = field(default_factory=list)
 
 
 class LiveLedger:
@@ -117,9 +119,14 @@ class LiveLedger:
                   t.reason, t.planned_risk) for t in tickets],
             )
 
-    def latest_tickets(self) -> tuple[str | None, list[Ticket]]:
+    def latest_tickets(self, before: date | None = None) -> tuple[str | None, list[Ticket]]:
+        """The most recent day's tickets (optionally only days strictly before `before`)."""
         with closing(self._connect()) as conn:
-            row = conn.execute("SELECT MAX(created_date) AS d FROM live_tickets").fetchone()
+            if before is None:
+                row = conn.execute("SELECT MAX(created_date) AS d FROM live_tickets").fetchone()
+            else:
+                row = conn.execute("SELECT MAX(created_date) AS d FROM live_tickets WHERE created_date < ?",
+                                   (before.isoformat(),)).fetchone()
             if row is None or row["d"] is None:
                 return None, []
             rows = conn.execute("SELECT * FROM live_tickets WHERE created_date = ? ORDER BY id", (row["d"],)).fetchall()
@@ -169,12 +176,40 @@ def prepare(settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None
         entry = avg if avg else float(t["limit_price"])
         filled = np.busday_offset(np.datetime64(t["created_date"]), 1, roll="forward").astype(date)
         res.positions[sym] = Position(p["quantity"], entry, float(t["stop_price"]), filled)
+    open_sells = {o["symbol"] for o in snap.open_orders if str(o.get("side", "")).lower() == "sell"}
+    for sym, pos in res.positions.items():
+        if pos.stop > 0 and sym not in open_sells:
+            res.warnings.append(f"{sym}: no open sell order at the broker, so its stop-loss is not protected; "
+                                f"place a good-till-cancelled stop-loss sell of {pos.quantity:g} at {pos.stop:.2f}")
+    res.previous_date, res.previous = reconcile(ledger, snap, res.positions, as_of)
     res.equity = min(snap.total_value, cfg.capital)
     res.cash = max(0.0, min(snap.cash, cfg.capital - invested))
     if record:
         ledger.record_equity(as_of, snap.total_value)
     res.status = trading_status(ledger.equity_history(), snap.total_value, settings.risk, pd.Timestamp(as_of))
     return res
+
+
+def reconcile(ledger: LiveLedger, snap: AccountSnapshot, positions: dict[str, Position],
+              as_of: date) -> tuple[str | None, list[str]]:
+    """What happened to the previous ticket day's tickets, judged from the account snapshot."""
+    day, tickets = ledger.latest_tickets(before=as_of)
+    open_by_side = {(o["symbol"], str(o.get("side", "")).lower()) for o in snap.open_orders}
+    out = []
+    for t in tickets:
+        label = f"{t.side.upper()} {t.symbol} {t.quantity:g}"
+        if t.side == "buy":
+            if t.symbol in positions:
+                out.append(f"{label}: filled (held: {positions[t.symbol].quantity:g})")
+            elif (t.symbol, "buy") in open_by_side:
+                out.append(f"{label}: order still open")
+            else:
+                out.append(f"{label}: not in the account (not placed, not filled, or already exited)")
+        elif t.symbol not in positions:
+            out.append(f"{label}: done (no longer held)")
+        else:
+            out.append(f"{label}: still held; place the sell if you still agree with it")
+    return day, out
 
 
 def holdings_of(positions: dict[str, Position]) -> tuple[Holding, ...]:
