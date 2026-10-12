@@ -1,0 +1,74 @@
+# agent-trading configuration.
+# Research and paper-trading ONLY. The loader rejects any other mode and any
+# attempt to enable shorting, margin, options or crypto.
+
+mode: paper
+
+# Paper-trading starting equity. This is NOT read from the broker; it mirrors
+# the ~$1,000 funded agent account for realistic sizing.
+paper_starting_equity: 1000.0
+
+risk:
+  risk_per_trade_pct: 0.005     # 0.5% of equity at risk per trade (entry - stop)
+  max_open_risk_pct: 0.015      # 1.5% aggregate planned open risk
+  max_position_pct: 0.25        # no single position above 25% of equity (notional)
+  atr_stop_multiple: 2.5        # initial stop = entry - 2.5 * ATR
+  fractional_shares: true       # needed for meaningful sizing on a small account
+  min_order_notional: 1.0       # skip "dust" positions below $1 (Robinhood fractional minimum)
+  allow_short: false
+  allow_margin: false
+  allow_options: false
+  allow_crypto: false
+
+costs:
+  commission_per_order: 0.0     # Robinhood equities are commission-free...
+  slippage_bps: 10              # ...but spread + slippage are real; 10 bps per side
+
+data:
+  provider: alphavantage
+  cache_dir: data/cache
+  outputsize: compact           # free keys only get "compact" (~100 bars); "full" is premium
+  max_staleness_days: 4         # reject series whose last bar is >4 business days old
+  min_history_bars: 90          # reject series shorter than this
+  request_pause_seconds: 12.5   # spacing between API calls
+  daily_request_budget: 24      # free tier is 25/day; leave one spare
+
+strategy:                       # baseline trend/momentum rules (a research hypothesis, not an edge)
+  fast_ma: 20
+  slow_ma: 50
+  momentum_lookback: 63
+  rsi_period: 14
+  rsi_max_entry: 75.0
+  atr_period: 14
+  volume_lookback: 20
+
+screen:
+  min_price: 5.0
+  min_avg_dollar_volume: 50000000   # $50M/day, 20-day average
+
+walkforward:
+  train_bars: 252
+  test_bars: 63
+  oos_fraction: 0.3
+  grid:
+    fast_ma: [10, 20]
+    slow_ma: [50]
+    momentum_lookback: [21, 63]
+
+reports:
+  earnings_warning_days: 7
+
+paths:
+  journal_db: data/journal.db
+  reports_dir: reports
+  logs_dir: logs
+
+# Liquid US stocks and ETFs. Themes are research areas, not predictions.
+# 22 symbols + 1 earnings-calendar call fits the free 25 requests/day limit.
+universe:
+  broad_market_etfs: [SPY, QQQ]
+  sector_etfs: [SMH, XLK, IGV, XLU, XLE, XLI]
+  semiconductors: [NVDA, AMD, AVGO, TSM, MU]
+  ai_infrastructure: [ANET, VRT]
+  cloud: [MSFT, AMZN, GOOGL, ORCL]
+  power_energy: [ETN, CEG, VST]
