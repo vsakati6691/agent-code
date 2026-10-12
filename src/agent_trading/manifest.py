@@ -3,6 +3,8 @@
 Each run writes data/runs/<as_of>_<label>_<time>.json with the code version,
 a hash of the configuration, the time and source of every input snapshot, and
 every signal the run produced (accepted and rejected) with its reason.
+The pre-market run checks that the previous trading day's post-close run
+log exists, so a missed scheduled run is reported instead of going unnoticed.
 
 The paper-trading evaluation is only meaningful if the rules don't change
 mid-test: the first paper run stores the configuration hash as the frozen
@@ -19,6 +21,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .config import Settings
+from .market_calendar import previous_trading_day
 
 RUNS_DIR = "runs"
 # git is often not on PATH on Windows; the run log must still record the commit
@@ -63,8 +66,18 @@ def _plain(obj):
     return obj
 
 
+def runs_dir(settings: Settings) -> Path:
+    return settings.resolve(settings.data.cache_dir).parent / RUNS_DIR
+
+
+def missed_postclose(settings: Settings, as_of: date) -> date | None:
+    """The previous NYSE trading day if it has no post-close run log, else None."""
+    prev = previous_trading_day(as_of)
+    return None if any(runs_dir(settings).glob(f"{prev.isoformat()}_postclose_*.json")) else prev
+
+
 def write_manifest(settings: Settings, as_of: date, label: str, payload: dict) -> Path:
-    d = settings.resolve(settings.data.cache_dir).parent / RUNS_DIR
+    d = runs_dir(settings)
     d.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
     path = d / f"{as_of.isoformat()}_{label or 'run'}_{now:%H%M%S}.json"

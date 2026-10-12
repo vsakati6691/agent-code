@@ -145,6 +145,8 @@ def cmd_daily(settings: Settings, args) -> int:
 
     text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper, label=args.label or "")
     print(f"Run log: {ctx.manifest_path}")
+    if ctx.missed_run:
+        print(f"WARNING: MISSED RUN: {ctx.missed_run}")
     if ctx.spec_warning:
         print(f"WARNING: {ctx.spec_warning}")
     path = write(settings, text, args.as_of, args.label or "")

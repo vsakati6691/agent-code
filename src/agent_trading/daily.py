@@ -59,6 +59,7 @@ class DailyContext:
     code: dict = field(default_factory=dict)
     config_hash: str = ""
     spec_warning: str = ""
+    missed_run: str = ""
     manifest_path: str = ""
     live: LiveResult | None = None
     live_desk: list[DeskDecision] = field(default_factory=list)
@@ -92,11 +93,16 @@ def _earnings_lookup(fund: pd.DataFrame | None, cal, as_of: date):
 
 
 def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: str = "") -> tuple[str, DailyContext]:
-    from .manifest import code_version, config_hash
+    from .manifest import code_version, config_hash, missed_postclose
 
     ctx = DailyContext(as_of)
     ctx.code = code_version(settings.base_dir)
     ctx.config_hash = config_hash(settings)
+    if label == "premarket" and (missed := missed_postclose(settings, as_of)) is not None:
+        ctx.missed_run = (f"no post-close run log for {missed} (data/runs/{missed}_postclose_*.json): the scheduled "
+                          "post-close run did not run or did not finish. Tickets shown here may be stale, and that "
+                          "day's paper fills, stops and loss-limit checks did not happen. Check the scheduled task "
+                          "and rerun the post-close cycle.")
     svc = MarketDataService(settings)
     journal = Journal(settings.resolve(settings.paths.journal_db))
 
@@ -262,6 +268,7 @@ def _write_manifest(settings: Settings, ctx: DailyContext, label: str, intents, 
         "as_of": ctx.as_of, "label": label, "mode": settings.mode,
         "code": ctx.code, "config_hash": ctx.config_hash, "frozen_spec_hash": frozen,
         "spec_start_date": broker._meta("spec_start_date"), "spec_warning": ctx.spec_warning or None,
+        "missed_run": ctx.missed_run or None,
         "inputs": {k: (None if s is None else {"source": s.source, "fetched_at": s.fetched_at, "rows": len(s.table)})
                    for k, s in ctx.snapshots.items()},
         "universe": ctx.universe_note, "coverage": ctx.coverage, "data_notes": ctx.data_notes,
@@ -308,6 +315,8 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
            f"**Mode: {mode}** · generated {datetime.now():%Y-%m-%d %H:%M} local · code {ctx.code.get('commit', '?')}{dirty} · "
            f"config {ctx.config_hash} · run log `{Path(ctx.manifest_path).name if ctx.manifest_path else 'n/a'}`", "",
            DISCLAIMER, ""]
+    if ctx.missed_run:
+        out += [f"> ⚠ **MISSED RUN:** {ctx.missed_run}", ""]
     if ctx.spec_warning:
         out += [f"> ⚠ **Spec changed:** {ctx.spec_warning}", ""]
     out += ["## Data sources and freshness", ""]
