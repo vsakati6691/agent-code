@@ -231,6 +231,8 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -m agent_trading evaluate-scanner             # Strategy A: point-in-time lists + factor ablation
 & $py -m agent_trading evaluate-desk                # Strategy B: 1x/2x/3x costs + baselines
 & $py -m agent_trading evaluate-gtaa                # Strategy C: C0/C1/C2, total return
+& $py -m agent_trading tournament [--no-test]       # all candidates vs benchmarks -> research/registry.jsonl
+& $py -m agent_trading kill-switch status|engage|release
 ```
 
 Every evaluation reports train and validation periods only. The most recent 20%
@@ -252,6 +254,17 @@ src/agent_trading/
 docs/DAILY_ROUTINE.md         the runbook the scheduled Claude sessions follow
 tests/                        unit, integration (mocked services) and safety tests
 ```
+
+## Strategy tournament (2026-10-12)
+
+`tournament` runs 12 pre-registered candidates (4 benchmarks, 8 strategies) through one engine:
+- same data, costs, train/validation/test periods and metrics;
+- walk-forward, cost stress, deflated Sharpe;
+- an append-only registry in `research/`.
+
+**Result: no candidate passed the acceptance rules.** GTAA (Strategy C) remains the lowest-drawdown option but trails SPY. Details:
+- [research/TOURNAMENT_2026-10-12.md](research/TOURNAMENT_2026-10-12.md);
+- [docs/FINAL_REPORT_2026-10-12.md](docs/FINAL_REPORT_2026-10-12.md).
 
 ## Known limitations
 

@@ -62,7 +62,8 @@ Daily runbook: [docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md).
    - Record the source and time of each snapshot.
    - On a billing or tool error, report it and continue with what's available; never retry in a loop.
 9. **Evidence honesty:**
-   - Don't tune parameters on the holdout.
+   - Don't tune parameters on the holdout. The tournament's test period (2022+) was evaluated on 2026-10-12 for the benchmarks and GTAA; use `tournament --no-test` for new research, and never edit `ACCEPTANCE` after seeing results.
+   - `research/registry.jsonl` is append-only: never rewrite or delete its lines.
    - Don't claim an edge the backtests don't show (currently: A has none, B is weak, C is modest).
    - Signals are research output, not advice.
 10. **Git:**
@@ -78,6 +79,7 @@ Daily runbook: [docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md).
 .\.venv\Scripts\python.exe -m pytest                                   # must pass before committing
 .\.venv\Scripts\python.exe -m agent_trading daily --no-paper           # report from imported data
 .\.venv\Scripts\python.exe -m agent_trading evaluate-scanner|evaluate-desk|evaluate-gtaa
+.\.venv\Scripts\python.exe -m agent_trading tournament --no-test                # research reruns; the test period is evaluated once and logged
 ```
 
 ## Collecting data through MCP

@@ -39,3 +39,12 @@ def test_no_secrets_in_source():
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"ALPHAVANTAGE_API_KEY\s*=\s*['\"][A-Z0-9]{8,}", text)
         assert not re.search(r"\b\d{9}\b", text), f"possible account number in {path.name}"
+
+
+def test_cli_imports_and_every_command_parses():
+    from agent_trading.cli import build_parser
+
+    p = build_parser()
+    for argv in (["daily", "--no-paper"], ["tournament", "--no-test"], ["kill-switch", "status"],
+                 ["account", "show"], ["paper", "status"]):
+        assert p.parse_args(argv).func is not None

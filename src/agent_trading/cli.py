@@ -518,9 +518,7 @@ def cmd_tournament(settings: Settings, args) -> int:
         sel = e.selection
         print(f"{n:18s} Sharpe {sel['sharpe']:.2f}  CAGR {sel['cagr']:+.1%}  MDD {sel['max_drawdown']:+.1%}  "
               f"{e.decision or 'benchmark'}")
-    print(f"
-Registry: {registry} (run {meta['run_id']})
-Report: {out}")
+    print(f"\nRegistry: {registry} (run {meta['run_id']})\nReport: {out}")
     return 0
 
 
