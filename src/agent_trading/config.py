@@ -150,6 +150,19 @@ class GTAAConfig:
     sma_months: int = 10
 
 
+LIVE_STRATEGIES = ("A-scanner", "B-desk", "C-gtaa")
+
+
+@dataclass(frozen=True)
+class LiveConfig:
+    """Manual live tickets. This code never sends orders: it writes order
+    tickets that the account owner enters in the Robinhood app themselves."""
+    enabled: bool = False
+    capital: float = 1000.0           # sizing never uses more than this, whatever the account holds
+    strategies: list[str] = field(default_factory=lambda: ["B-desk", "C-gtaa"])
+    limit_buffer_pct: float = 0.005   # buy limit = close x (1 + buffer); sell limit = close x (1 - buffer)
+
+
 @dataclass(frozen=True)
 class PathConfig:
     journal_db: str = "data/journal.db"
@@ -172,6 +185,7 @@ class Settings:
     scanner: ScannerConfig = field(default_factory=ScannerConfig)
     desk: DeskConfig = field(default_factory=DeskConfig)
     gtaa: GTAAConfig = field(default_factory=GTAAConfig)
+    live: LiveConfig = field(default_factory=LiveConfig)
     paths: PathConfig = field(default_factory=PathConfig)
     base_dir: Path = Path(".")
 
@@ -248,6 +262,16 @@ def validate(settings: Settings) -> Settings:
         raise ConfigError("data.outputsize must be 'compact' or 'full'")
     if not settings.symbols:
         raise ConfigError("universe is empty")
+    lv = settings.live
+    if lv.capital <= 0:
+        raise ConfigError("live.capital must be positive")
+    if not 0 <= lv.limit_buffer_pct <= 0.02:
+        raise ConfigError("live.limit_buffer_pct must be in [0, 0.02]")
+    bad = set(lv.strategies) - set(LIVE_STRATEGIES)
+    if bad:
+        raise ConfigError(f"live.strategies has unknown entries {sorted(bad)}; allowed: {list(LIVE_STRATEGIES)}")
+    if lv.enabled and len(settings.broker.account_last4) != 4:
+        raise ConfigError("live.enabled requires broker.account_last4")
     return settings
 
 
@@ -269,6 +293,7 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
         "scanner": ScannerConfig,
         "desk": DeskConfig,
         "gtaa": GTAAConfig,
+        "live": LiveConfig,
         "paths": PathConfig,
     }
     top_level = {"mode", "paper_starting_equity", "universe", *sections}

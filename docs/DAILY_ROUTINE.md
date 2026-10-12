@@ -9,8 +9,9 @@ the analysis. All commands run from the repo root:
 $py = ".\.venv\Scripts\python.exe"
 ```
 
-**Hard rules for every run:** research and paper only. Never call any
-`place_*`, `cancel_*`, `review_*` or `exercise_*` Robinhood tool. Robinhood
+**Hard rules for every run:** the session never trades. Never call any
+`place_*`, `cancel_*`, `review_*` or `exercise_*` Robinhood tool, even to
+"place the tickets": live tickets are for the owner to place by hand. Robinhood
 account = Agent-trading (••8204) only. Never write the full account number,
 API keys or tokens to files, logs or reports. If a tool fails or data is
 stale, say so in the summary and continue with what is available; never
@@ -52,8 +53,14 @@ one-line note.
    yesterday's paper orders, checks stops, applies the loss limits, queues
    the next paper orders, and writes
    `reports\daily_two_strategy_<date>_postclose.md`.
-7. Summarise: coverage, actionable setups, desk decisions, paper actions,
-   warnings.
+   When `live.enabled`, the same run re-runs the live strategies (B, C) against
+   the real positions in the account snapshot and writes **live order
+   tickets** (Section D, item 3), sized on at most `live.capital`. No verified
+   snapshot from today means no new tickets, so step 1 must succeed.
+7. Summarise: **live tickets first** (side, symbol, qty, limit, stop, why;
+   "none" if empty), then live loss-limit status and warnings, then coverage,
+   actionable setups, desk decisions and paper actions. Say plainly that the
+   owner must place the tickets in the app; never offer to place them.
 
 ## Pre-market run (weekdays 08:30 ET)
 
@@ -65,7 +72,10 @@ one-line note.
    article before treating anything as material.
 4. Quotes: `get_equity_quotes` for the desk symbols, QQQ, SPY, open paper
    positions and actionable tickers → `snapshot quotes <file>`.
-5. `& $py -m agent_trading daily --no-paper --label premarket`.
+5. `& $py -m agent_trading daily --no-paper --label premarket`. The report
+   repeats the latest post-close tickets (it never issues new ones). Compare
+   them with the account snapshot: flag a ticket that was already placed or
+   filled, and any live position whose quote is at or below its stop.
 
 ## Midday check (weekdays, 12:30 ET, once)
 

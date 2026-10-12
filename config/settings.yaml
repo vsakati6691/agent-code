@@ -68,6 +68,12 @@ broker:                         # read-only snapshot checks; this code never pla
 paper:
   order_expiry_days: 3
 
+live:                           # manual live tickets: the code writes them, the owner places them in the app
+  enabled: true
+  capital: 1000.0               # never size on more than $1,000, whatever the account holds
+  strategies: [B-desk, C-gtaa]  # A-scanner stays paper-only (no edge in the backtest)
+  limit_buffer_pct: 0.005       # limit = last close +/- 0.5%
+
 scanner:                        # Strategy A: every current S&P 500 constituent
   index_fund: SPY               # constituents = SPY holdings (SEC fund-holdings filings)
   min_constituents: 495

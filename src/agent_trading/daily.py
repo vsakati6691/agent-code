@@ -6,8 +6,9 @@
   4. turn signals into intents and run the paper broker (fills, stops, limits)
   5. write the report: A scanner, B desk, C account and risk, D actions
 
-Nothing here can place a real order. "Orders awaiting authorization" is always
-empty because live execution is disabled.
+Nothing here can place a real order. When `live.enabled`, the post-close run
+also writes manual order tickets for the real account (see live.py); the
+account owner places them in the Robinhood app.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from . import live as live_mod
 from . import regime as regime_mod
 from .account import load_saved_snapshot, verify_snapshot
 from .config import Settings
@@ -25,12 +27,15 @@ from .data.service import MarketDataService
 from .data.snapshots import high_impact_events, load_snapshot
 from .data.universe import coverage, load_universe, universe_problems
 from .journal import Journal
+from .live import LiveLedger, LiveResult
 from .paper import Intent, PaperBroker, portfolio_state
+from .risk import PortfolioState
 from .strategies.desk import DeskDecision, Position, next_session, run_desk
 from .strategies.scanner import ScanResult, run_scan
 
-DISCLAIMER = ("> Research and paper-trading output only. Not investment advice. No live orders are placed. "
-              "Signals are hypotheses; confidence labels are rule counts, not probabilities.")
+DISCLAIMER = ("> Research output, not investment advice. This system never places orders: live tickets are "
+              "rule output for the account owner to review and place by hand. Signals are hypotheses; confidence "
+              "labels are rule counts, not probabilities.")
 
 
 @dataclass
@@ -54,6 +59,8 @@ class DailyContext:
     config_hash: str = ""
     spec_warning: str = ""
     manifest_path: str = ""
+    live: LiveResult | None = None
+    live_desk: list[DeskDecision] = field(default_factory=list)
 
 
 def _fmt(x, d=2):
@@ -134,14 +141,8 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
     ctx.desk_regime, ctx.desk = run_desk(loaded_desk.bars, settings, as_of, positions, events, lookup)
 
     # --- paper broker
-    intents: list[Intent] = []
-    for d in ctx.desk:
-        if d.action == "BUY" and d.stop is not None and d.price is not None:
-            intents.append(Intent(d.symbol, "buy", d.price, d.stop, "B-desk", f"desk BUY ({d.confidence})", 1.0))
-        elif d.action == "SELL/REDUCE":
-            intents.append(Intent(d.symbol, "sell", d.price or 0.0, None, "B-desk", "; ".join(d.reasons)))
+    intents: list[Intent] = _desk_intents(ctx.desk)
     if gtaa_assets:
-        from .indicators import atr as atr_fn
         from .strategies import gtaa as gtaa_mod
 
         ctx.gtaa = gtaa_mod.signals(loaded_desk.bars, pd.Timestamp(as_of), gtaa_assets, settings.gtaa.sma_months)
@@ -149,16 +150,7 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
         ctx.gtaa_rebalance = gtaa_mod.is_rebalance_day(cal_days, as_of)
         if ctx.gtaa_rebalance:
             held_c = set(open_df.loc[open_df["strategy"] == "C-gtaa", "symbol"]) if not open_df.empty and "strategy" in open_df else set()
-            for a, sig in ctx.gtaa.items():
-                df = loaded_desk.bars.get(a)
-                if sig["above"] is None or df is None:
-                    continue
-                close = float(df["close"].iloc[-1])
-                if sig["above"] and a not in held_c:
-                    stop = close - settings.risk.atr_stop_multiple * float(atr_fn(df, 14).iloc[-1])
-                    intents.append(Intent(a, "buy", close, stop, "C-gtaa", "GTAA: above 10-month average", 0.5))
-                elif not sig["above"] and a in held_c:
-                    intents.append(Intent(a, "sell", close, None, "C-gtaa", "GTAA: closed below 10-month average"))
+            intents += _gtaa_intents(settings, ctx.gtaa, loaded_desk.bars, held_c)
     if ctx.scan is not None:
         for s in ctx.scan.actionable:
             intents.append(Intent(s.ticker, "buy", s.entry_ref, s.stop, "A-scanner",
@@ -186,9 +178,70 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
         res = broker.run(all_bars, as_of, intents)
         ctx.paper_events, ctx.paper_warnings, ctx.proposals = res.events, res.warnings, res.new_orders
     ctx.status = broker.status(all_bars, as_of) if all_bars else None
+
+    # --- live tickets (manual: written here, placed by the owner in the app)
+    ctx.live = _run_live(settings, journal, ctx, loaded_desk.bars, all_bars, events, lookup, issue=run_paper)
     ctx.manifest_path = str(_write_manifest(settings, ctx, label, intents, broker, frozen))
     text = render(settings, ctx, journal, broker, all_bars)
     return text, ctx
+
+
+def _desk_intents(decisions: list[DeskDecision]) -> list[Intent]:
+    out = []
+    for d in decisions:
+        if d.action == "BUY" and d.stop is not None and d.price is not None:
+            out.append(Intent(d.symbol, "buy", d.price, d.stop, "B-desk", f"desk BUY ({d.confidence})", 1.0))
+        elif d.action == "SELL/REDUCE":
+            out.append(Intent(d.symbol, "sell", d.price or 0.0, None, "B-desk", "; ".join(d.reasons)))
+    return out
+
+
+def _gtaa_intents(settings: Settings, signals: dict, bars: dict[str, pd.DataFrame], held: set[str]) -> list[Intent]:
+    from .indicators import atr as atr_fn
+
+    out = []
+    for a, sig in signals.items():
+        df = bars.get(a)
+        if sig["above"] is None or df is None:
+            continue
+        close = float(df["close"].iloc[-1])
+        if sig["above"] and a not in held:
+            stop = close - settings.risk.atr_stop_multiple * float(atr_fn(df, 14).iloc[-1])
+            out.append(Intent(a, "buy", close, stop, "C-gtaa", "GTAA: above 10-month average", 0.5))
+        elif not sig["above"] and a in held:
+            out.append(Intent(a, "sell", close, None, "C-gtaa", "GTAA: closed below 10-month average"))
+    return out
+
+
+def _run_live(settings: Settings, journal: Journal, ctx: DailyContext, desk_bars, all_bars, events, lookup,
+              issue: bool) -> LiveResult:
+    """Re-run the live strategies against the REAL account's positions and write tickets.
+
+    Tickets are issued only by the main (post-close) cycle; other runs show the
+    latest issued tickets without changing them."""
+    ledger = LiveLedger(journal.path)
+    snap = load_saved_snapshot(settings)
+    res = live_mod.prepare(settings, ledger, snap, ctx.as_of, record=issue)
+    if not res.enabled:
+        return res
+    if not issue or not res.verified:
+        res.tickets_date, res.tickets = ledger.latest_tickets()
+        if issue:
+            res.warnings.append("no new tickets: the account snapshot is not verified")
+        return res
+    live_intents: list[Intent] = []
+    if "B-desk" in settings.live.strategies:
+        _, ctx.live_desk = run_desk(desk_bars, settings, ctx.as_of, res.positions, events, lookup)
+        live_intents += _desk_intents(ctx.live_desk)
+    if "C-gtaa" in settings.live.strategies and ctx.gtaa_rebalance:
+        live_intents += _gtaa_intents(settings, ctx.gtaa, desk_bars, set(res.positions))
+    if "A-scanner" in settings.live.strategies and ctx.scan is not None:
+        live_intents += [Intent(s.ticker, "buy", s.entry_ref, s.stop, "A-scanner", f"scanner rank {s.rank}", s.composite)
+                         for s in ctx.scan.actionable]
+    res = live_mod.build_tickets(settings, res, snap, live_intents, all_bars)
+    ledger.replace_tickets(ctx.as_of, res.tickets)
+    res.tickets_date = ctx.as_of.isoformat()
+    return res
 
 
 def _write_manifest(settings: Settings, ctx: DailyContext, label: str, intents, broker: PaperBroker, frozen) -> Path:
@@ -215,6 +268,11 @@ def _write_manifest(settings: Settings, ctx: DailyContext, label: str, intents, 
         "proposals": [p.__dict__ for p in ctx.proposals],
         "paper_events": ctx.paper_events, "paper_warnings": ctx.paper_warnings,
         "risk_status": None if ctx.status is None else ctx.status.__dict__,
+        "live": None if ctx.live is None or not ctx.live.enabled else {
+            "verified": ctx.live.verified, "account": ctx.live.account_note, "equity": ctx.live.equity,
+            "cash": ctx.live.cash, "status": None if ctx.live.status is None else ctx.live.status.__dict__,
+            "tickets_date": ctx.live.tickets_date, "tickets": [t.__dict__ for t in ctx.live.tickets],
+            "skipped": ctx.live.skipped, "warnings": ctx.live.warnings},
     }
     return write_manifest(settings, ctx.as_of, label, payload)
 
@@ -232,8 +290,11 @@ def _table(headers, rows):
 def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: PaperBroker, bars) -> str:
     as_of = ctx.as_of
     dirty = " (uncommitted changes)" if ctx.code.get("dirty") else ""
+    lv = ctx.live
+    mode = ("PAPER + LIVE TICKETS (" + ", ".join(settings.live.strategies) + "; placed by hand)"
+            if lv is not None and lv.enabled else "PAPER")
     out = [f"# Daily trading research: {as_of}", "",
-           f"**Mode: PAPER** · generated {datetime.now():%Y-%m-%d %H:%M} local · code {ctx.code.get('commit', '?')}{dirty} · "
+           f"**Mode: {mode}** · generated {datetime.now():%Y-%m-%d %H:%M} local · code {ctx.code.get('commit', '?')}{dirty} · "
            f"config {ctx.config_hash} · run log `{Path(ctx.manifest_path).name if ctx.manifest_path else 'n/a'}`", "",
            DISCLAIMER, ""]
     if ctx.spec_warning:
@@ -365,8 +426,25 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
                    f"{'verified' if not probs else 'NOT VERIFIED (' + '; '.join(probs) + ')'} as of {snap.fetched_at}; "
                    f"value ${snap.total_value:,.2f}, cash ${snap.cash:,.2f}, buying power ${snap.buying_power:,.2f}, "
                    f"{len(snap.positions)} positions, {len(snap.open_orders)} open orders")
-    state = portfolio_state(journal, settings, bars, pd.Timestamp(as_of))
     r = settings.risk
+    if lv is not None and lv.enabled:
+        if not lv.verified:
+            out.append(f"- **Live account: NOT VERIFIED** ({lv.account_note}); no new live tickets")
+        else:
+            out.append(f"- Live sizing: equity ${lv.equity:,.2f} and cash ${lv.cash:,.2f} available "
+                       f"(capped at ${settings.live.capital:,.0f}); planned open risk "
+                       f"${PortfolioState(lv.equity, lv.cash, live_mod.holdings_of(lv.positions)).open_risk(r.stop_risk_buffer):,.2f} "
+                       f"of ${lv.equity * r.max_open_risk_pct:,.2f}")
+            st_l = lv.status
+            if st_l is not None:
+                out.append(f"- Live loss limits: day P&L ${st_l.day_pnl:,.2f}, drawdown ${st_l.drawdown:,.2f} from peak "
+                           f"${st_l.peak_equity:,.2f}: **{'new entries allowed' if st_l.new_entries_allowed else st_l.reason}**")
+            if lv.positions:
+                out.append("- Live positions: " + "; ".join(
+                    f"{s} {p.quantity:g} @ {_fmt(p.entry_price)}, stop " + (_fmt(p.stop) if p.stop > 0 else "UNKNOWN")
+                    for s, p in lv.positions.items()))
+        out += [f"- ⚠ {w}" for w in lv.warnings]
+    state = portfolio_state(journal, settings, bars, pd.Timestamp(as_of))
     out.append(f"- Paper equity ${state.equity:,.2f}, cash ${state.cash:,.2f}, planned open risk "
                f"${state.open_risk(r.stop_risk_buffer):,.2f} of ${state.equity * r.max_open_risk_pct:,.2f}")
     st = ctx.status
@@ -402,8 +480,32 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     rejected = [p for p in ctx.proposals if not p.approved]
     if rejected:
         out.append("- Not sized: " + "; ".join(f"{p.symbol} ({p.reason})" for p in rejected))
-    out += ["", "**3. Orders awaiting your authorization:** none. Live execution is disabled in this system.", ""]
+    out += ["", *_render_tickets(settings, lv)]
     return "\n".join(out)
+
+
+def _render_tickets(settings: Settings, lv: LiveResult | None) -> list[str]:
+    if lv is None or not lv.enabled:
+        return ["**3. Live orders:** none. Live tickets are disabled (`live.enabled: false`).", ""]
+    acct = f"{settings.broker.account_nickname} ••{settings.broker.account_last4}"
+    when = f"issued after the close of {lv.tickets_date}" if lv.tickets_date else "none issued yet"
+    out = [f"**3. Live order tickets for you to place by hand** ({acct}; {when})", ""]
+    if not lv.tickets:
+        out.append("_No tickets. Nothing to place._")
+    else:
+        out += ["Place these yourself in the Robinhood app; this system never sends orders. Review each one first. "
+                "Place SELLs before BUYs, as day LIMIT orders at the price shown (skip a BUY if it does not fill that day). "
+                "After a BUY fills, add a good-till-cancelled STOP-LOSS SELL for the filled quantity at the stop price.", ""]
+        out.append(_table(["Side", "Symbol", "Qty", "Limit", "Stop-loss", "Notional", "Planned risk", "Strategy", "Why"],
+                          [[t.side.upper(), t.symbol, f"{t.quantity:g}", _fmt(t.limit_price),
+                            _fmt(t.stop_price) if t.stop_price else "-", _fmt(t.notional),
+                            _fmt(t.planned_risk) if t.side == "buy" else "-", t.strategy, t.reason] for t in lv.tickets]))
+        if any(t.fractional and t.side == "buy" for t in lv.tickets):
+            out.append("Fractional quantities: if the app will not accept a stop order for a fractional quantity, "
+                       "set a price alert at the stop and sell by hand when it triggers.")
+    out += [f"- Not ticketed: {s}" for s in lv.skipped]
+    out.append("")
+    return out
 
 
 def write(settings: Settings, text: str, as_of: date, label: str = "") -> Path:

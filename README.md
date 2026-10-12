@@ -146,9 +146,9 @@ tests/                        unit, integration (mocked services) and safety tes
 
 ## Roadmap
 
-1. Paper trade all three strategies for 3–6 months, giving the most weight to GTAA.
+1. Paper trade all three strategies, giving the most weight to GTAA.
 2. Compare paper results with the backtests.
-3. Only if the evidence justifies it, design a separate live phase: small limits, a kill switch, and authorization for every order (Robinhood trade approvals are already on for the agent account).
+3. **Live phase (started 2026-10-12, at the owner's request, before step 2 had evidence):** strategies B and C produce manual order tickets for the real Agent-trading account, sized on at most $1,000 with the same risk limits and loss stops (`live:` in `config/settings.yaml`, `src/agent_trading/live.py`). The code never sends orders; the owner places each ticket in the Robinhood app. Strategy A stays paper-only. The paper simulator keeps running alongside as the comparison.
 
 ## For AI assistants
 

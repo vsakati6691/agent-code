@@ -421,7 +421,7 @@ def test_daily_cycle_end_to_end(settings, tmp_path):
     assert ctx.coverage["expected"] == 11 and ctx.coverage["scanned"] == 10
     assert "MISSX" in ctx.coverage["missing"]
     for section in ["Section A: S&P 500 scanner", "Section B: Focused desk", "Section C: Account and portfolio risk",
-                    "Section D: Actions", "Orders awaiting your authorization:** none"]:
+                    "Section D: Actions", "Live order tickets for you to place by hand"]:
         assert section in text
     assert "incomplete scan" in text  # 10/11 < 95%
     assert {d.symbol for d in ctx.desk} == {"TQQQ", "SQQQ", "IBIT", "NVDA"}
