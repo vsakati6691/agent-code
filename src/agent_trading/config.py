@@ -35,6 +35,15 @@ class RiskConfig:
     max_correlation: float = 0.8
     max_correlated_risk_pct: float = 0.01
     correlation_lookback: int = 60
+    # Account-level circuit breakers (paper equity): no new entries after the
+    # day's loss reaches daily_loss_limit_pct; shut down after a drawdown of
+    # max_drawdown_pct from peak equity (exits still run).
+    daily_loss_limit_pct: float = 0.01
+    max_drawdown_pct: float = 0.08
+    # Instrument-specific controls (e.g. leveraged ETFs)
+    symbol_risk_pct: dict[str, float] = field(default_factory=dict)
+    max_holding_days: dict[str, int] = field(default_factory=dict)
+    exclusive_groups: list[list[str]] = field(default_factory=list)
     allow_short: bool = False
     allow_margin: bool = False
     allow_options: bool = False
@@ -126,6 +135,43 @@ class PaperConfig:
 
 
 @dataclass(frozen=True)
+class ScannerConfig:
+    """Strategy A: S&P 500 scanner."""
+    index_fund: str = "SPY"
+    min_constituents: int = 495
+    max_constituents: int = 510
+    universe_max_age_days: int = 10
+    min_coverage: float = 0.95
+    benchmark: str = "SPY"
+    min_price: float = 10.0
+    min_avg_dollar_volume: float = 50_000_000.0
+    max_spread_pct: float = 0.0025
+    earnings_blackout_days: int = 5
+    top_research: int = 10
+    top_actionable: int = 3
+    target_r_multiple: float = 2.0
+    weights: dict[str, float] = field(default_factory=lambda: {
+        "price_strength": 0.35, "volume": 0.10, "quality": 0.20, "valuation": 0.10, "risk": 0.25})
+
+
+@dataclass(frozen=True)
+class DeskConfig:
+    """Strategy B: focused daily desk."""
+    symbols: list[str] = field(default_factory=lambda: ["TQQQ", "SQQQ", "IBIT", "NVDA"])
+    underlying: str = "QQQ"
+    leveraged_long: str = "TQQQ"
+    leveraged_inverse: str = "SQQQ"
+    bitcoin_instrument: str = "IBIT"
+    nvda_benchmark: str = "SMH"
+    max_vol_long: float = 0.25
+    max_vol_inverse: float = 0.30
+    event_blackout_days: int = 1
+    earnings_blackout_days: int = 5
+    nasdaq_leaders: list[str] = field(default_factory=lambda: [
+        "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "AVGO", "TSLA"])
+
+
+@dataclass(frozen=True)
 class ReportConfig:
     earnings_warning_days: int = 7
 
@@ -152,6 +198,8 @@ class Settings:
     regime: RegimeConfig = field(default_factory=RegimeConfig)
     broker: BrokerConfig = field(default_factory=BrokerConfig)
     paper: PaperConfig = field(default_factory=PaperConfig)
+    scanner: ScannerConfig = field(default_factory=ScannerConfig)
+    desk: DeskConfig = field(default_factory=DeskConfig)
     reports: ReportConfig = field(default_factory=ReportConfig)
     paths: PathConfig = field(default_factory=PathConfig)
     base_dir: Path = Path(".")
@@ -205,6 +253,18 @@ def validate(settings: Settings) -> Settings:
         raise ConfigError("risk.max_correlated_risk_pct must be between risk_per_trade_pct and max_open_risk_pct")
     if r.correlation_lookback < 10:
         raise ConfigError("risk.correlation_lookback must be at least 10")
+    if not 0 < r.daily_loss_limit_pct <= 0.05:
+        raise ConfigError("risk.daily_loss_limit_pct must be in (0, 0.05]")
+    if not 0 < r.max_drawdown_pct <= 0.25:
+        raise ConfigError("risk.max_drawdown_pct must be in (0, 0.25]")
+    for sym, pct in r.symbol_risk_pct.items():
+        if not 0 < pct <= r.risk_per_trade_pct:
+            raise ConfigError(f"risk.symbol_risk_pct[{sym}] may only tighten the per-trade limit")
+    if any(d < 1 for d in r.max_holding_days.values()):
+        raise ConfigError("risk.max_holding_days values must be at least 1")
+    sc = settings.scanner
+    if abs(sum(sc.weights.values()) - 1.0) > 1e-6 or any(w < 0 for w in sc.weights.values()):
+        raise ConfigError("scanner.weights must be non-negative and sum to 1")
     if settings.paper_starting_equity <= 0:
         raise ConfigError("paper_starting_equity must be positive")
     c = settings.costs
@@ -241,6 +301,8 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
         "regime": RegimeConfig,
         "broker": BrokerConfig,
         "paper": PaperConfig,
+        "scanner": ScannerConfig,
+        "desk": DeskConfig,
         "reports": ReportConfig,
         "paths": PathConfig,
     }

@@ -12,7 +12,7 @@ same rules here:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
@@ -178,23 +178,68 @@ class RiskEngine:
             return reject("market data not verified (stale or incomplete)")
         if state.holds(symbol):
             return reject("already held")
+        for group in self.cfg.exclusive_groups:
+            if symbol in group:
+                clash = [h.symbol for h in state.holdings if h.symbol in group and h.symbol != symbol]
+                if clash:
+                    return reject(f"cannot hold {symbol} together with {', '.join(clash)}")
         if not (math.isfinite(entry_price) and math.isfinite(stop_price)):
             return reject("non-finite price")
+        cfg = self.cfg
+        if symbol in cfg.symbol_risk_pct:  # instrument-specific (tighter) per-trade risk
+            cfg = replace(cfg, risk_per_trade_pct=cfg.symbol_risk_pct[symbol])
         try:
             corr_remaining = None
             if state.holdings:
-                corr_remaining = state.equity * self.cfg.max_correlated_risk_pct - correlated_risk(
-                    symbol, state, returns, self.cfg
+                corr_remaining = state.equity * cfg.max_correlated_risk_pct - correlated_risk(
+                    symbol, state, returns, cfg
                 )
             d = size_position(
                 state.equity, state.cash, entry_price, stop_price,
-                state.open_risk(self.cfg.stop_risk_buffer), self.cfg, corr_remaining,
+                state.open_risk(cfg.stop_risk_buffer), cfg, corr_remaining,
             )
         except RiskViolation as exc:
             return reject(str(exc))
         if d.quantity <= 0:
             return reject(d.limited_by)
         return EntryDecision(symbol, True, d.quantity, d.risk_amount, d.notional, d.limited_by)
+
+
+# ---------------------------------------------------------------- circuit breakers
+
+@dataclass(frozen=True)
+class TradingStatus:
+    new_entries_allowed: bool
+    reason: str
+    day_pnl: float
+    drawdown: float
+    peak_equity: float
+
+
+def trading_status(equity_history: pd.Series, current_equity: float, cfg: RiskConfig,
+                   today: pd.Timestamp | None = None) -> TradingStatus:
+    """Daily-loss and max-drawdown circuit breakers.
+
+    `equity_history`: end-of-day paper equity by date (earlier days only, or
+    including today). The day's P&L is measured from the last close before today.
+    Fail-safe: a non-finite equity blocks new entries.
+    """
+    if not math.isfinite(current_equity):
+        return TradingStatus(False, "paper equity could not be computed", 0.0, 0.0, 0.0)
+    hist = equity_history.dropna()
+    prior = hist[hist.index < today] if today is not None else hist
+    base = float(prior.iloc[-1]) if not prior.empty else current_equity
+    peak = max([current_equity, *hist.tolist()]) if not hist.empty else current_equity
+    day_pnl = current_equity - base
+    drawdown = peak - current_equity
+    if drawdown >= peak * cfg.max_drawdown_pct - 1e-9:
+        return TradingStatus(False, f"SHUTDOWN: drawdown ${drawdown:.2f} from peak ${peak:.2f} "
+                                    f"reached the {cfg.max_drawdown_pct:.0%} limit; review before resuming",
+                             day_pnl, drawdown, peak)
+    if -day_pnl >= base * cfg.daily_loss_limit_pct - 1e-9:
+        return TradingStatus(False, f"daily loss ${-day_pnl:.2f} reached the {cfg.daily_loss_limit_pct:.0%} limit; "
+                                    "no new entries today", day_pnl, drawdown, peak)
+    return TradingStatus(True, "ok", day_pnl, drawdown, peak)
 
 
 # ---------------------------------------------------------------- order checks

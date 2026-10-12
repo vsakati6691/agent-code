@@ -131,6 +131,62 @@ def _account(settings: Settings):
     return None if snap is None else (snap, verify_snapshot(snap, settings))
 
 
+def cmd_universe(settings: Settings, args) -> int:
+    from .data.universe import UniverseError, import_universe, load_universe, universe_problems
+
+    if args.action == "import":
+        try:
+            u = import_universe(settings, Path(args.path))
+        except (UniverseError, ValueError, KeyError) as exc:
+            print(f"Constituent list rejected: {exc}")
+            return 2
+    else:
+        u = load_universe(settings)
+        if u is None:
+            print("No constituent list imported.")
+            return 1
+    print(f"{len(u.tickers)} constituents as of {u.as_of} ({u.source})")
+    if u.excluded:
+        print("Excluded rows: " + "; ".join(u.excluded))
+    problems = universe_problems(u, settings, args.as_of)
+    for p in problems:
+        print(f"WARNING: {p}")
+    if args.action == "symbols":
+        print(" ".join(u.tickers))
+    return 0 if not problems else 2
+
+
+def cmd_snapshot(settings: Settings, args) -> int:
+    from .data.snapshots import SnapshotDataError, import_snapshot_files
+
+    try:
+        snap = import_snapshot_files(settings, args.kind, [Path(p) for p in args.paths], merge=args.merge)
+    except (SnapshotDataError, ValueError, KeyError) as exc:
+        print(f"Snapshot rejected: {exc}")
+        return 2
+    print(f"{args.kind}: {len(snap.table)} rows stored ({snap.source})")
+    return 0
+
+
+def cmd_daily(settings: Settings, args) -> int:
+    from .daily import run_daily, write
+
+    text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper)
+    path = write(settings, text, args.as_of)
+    if ctx.coverage:
+        c = ctx.coverage
+        print(f"Strategy A: scanned {c['scanned']}/{c['expected']} constituents ({c['ratio']:.1%}); "
+              f"{len(ctx.scan.actionable) if ctx.scan else 0} actionable")
+    for d in ctx.desk:
+        print(f"Strategy B: {d.symbol:<5} {d.action} ({d.confidence})")
+    for e in ctx.paper_events:
+        print(f"Paper: {e}")
+    for w in ctx.paper_warnings:
+        print(f"Paper WARNING: {w}")
+    print(f"Report written: {path}")
+    return 0
+
+
 def cmd_account(settings: Settings, args) -> int:
     from .account import SnapshotError, import_snapshot
 
@@ -401,6 +457,24 @@ def build_parser() -> argparse.ArgumentParser:
     psub.add_parser("run", help="fill pending paper orders, check stops, queue new orders from today's signals")
     psub.add_parser("status", help="paper positions, P&L and pending orders")
     pp.set_defaults(func=cmd_paper)
+
+    u = sub.add_parser("universe", help="S&P 500 constituents (dynamic, from SPY holdings)")
+    usub = u.add_subparsers(dest="action", required=True)
+    ui = usub.add_parser("import", help="validate and store a saved Financial Datasets get_index_fund(SPY) JSON")
+    ui.add_argument("path")
+    usub.add_parser("show")
+    usub.add_parser("symbols", help="print the tickers (for data collection)")
+    u.set_defaults(func=cmd_universe)
+
+    sn = sub.add_parser("snapshot", help="import a saved MCP payload (fundamentals, quotes, news, filings, econ)")
+    sn.add_argument("kind", choices=["fundamentals", "quotes", "news", "filings", "econ"])
+    sn.add_argument("paths", nargs="+")
+    sn.add_argument("--merge", action="store_true", help="append to today's snapshot instead of replacing it")
+    sn.set_defaults(func=cmd_snapshot)
+
+    dl = sub.add_parser("daily", help="two-strategy cycle: S&P 500 scan, focused desk, paper broker, report")
+    dl.add_argument("--no-paper", action="store_true", help="report only; do not run the paper broker")
+    dl.set_defaults(func=cmd_daily)
 
     a = sub.add_parser("account", help="read-only broker account snapshot")
     asub = a.add_subparsers(dest="action", required=True)

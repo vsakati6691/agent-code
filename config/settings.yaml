@@ -19,6 +19,16 @@ risk:
   max_correlation: 0.8          # positions this correlated share one risk budget...
   max_correlated_risk_pct: 0.01 # ...of 1% of equity ($10 on $1,000)
   correlation_lookback: 60      # trading days of daily returns
+  daily_loss_limit_pct: 0.01    # $10 on $1,000: no new entries for the rest of the day
+  max_drawdown_pct: 0.08        # $80 from peak: shut down new entries until reviewed
+  symbol_risk_pct:              # leveraged ETFs: tighter per-trade risk ($2.50)
+    TQQQ: 0.0025
+    SQQQ: 0.0025
+  max_holding_days:             # leveraged ETFs decay; never hold them for long
+    TQQQ: 5
+    SQQQ: 5
+  exclusive_groups:             # never hold both sides at once
+    - [TQQQ, SQQQ]
   allow_short: false
   allow_margin: false
   allow_options: false
@@ -97,6 +107,40 @@ broker:                         # read-only snapshot checks; this code never pla
 paper:
   order_expiry_days: 3
   skip_entries_before_earnings: true
+
+scanner:                        # Strategy A: every current S&P 500 constituent
+  index_fund: SPY               # constituents = SPY holdings (SEC fund-holdings filings)
+  min_constituents: 495
+  max_constituents: 510
+  universe_max_age_days: 10
+  min_coverage: 0.95            # report "incomplete scan" below 95% coverage
+  benchmark: SPY
+  min_price: 10.0
+  min_avg_dollar_volume: 50000000
+  max_spread_pct: 0.0025        # 0.25% quoted spread, when a live quote is available
+  earnings_blackout_days: 5
+  top_research: 10
+  top_actionable: 3
+  target_r_multiple: 2.0
+  weights:                      # one factor per idea; no double counting (see strategies/scanner.py)
+    price_strength: 0.35
+    volume: 0.10
+    quality: 0.20
+    valuation: 0.10
+    risk: 0.25
+
+desk:                           # Strategy B: focused daily desk
+  symbols: [TQQQ, SQQQ, IBIT, NVDA]
+  underlying: QQQ
+  leveraged_long: TQQQ
+  leveraged_inverse: SQQQ
+  bitcoin_instrument: IBIT      # spot BTC-USD is not used (crypto stays disabled)
+  nvda_benchmark: SMH
+  max_vol_long: 0.25            # no TQQQ entries when QQQ 20-day vol > 25%
+  max_vol_inverse: 0.30
+  event_blackout_days: 1        # no leveraged entries within 1 day of high-impact US releases
+  earnings_blackout_days: 5
+  nasdaq_leaders: [NVDA, AAPL, MSFT, AMZN, GOOGL, META, AVGO, TSLA]
 
 reports:
   earnings_warning_days: 7

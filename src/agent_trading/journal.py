@@ -36,6 +36,9 @@ class Journal:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as conn, conn:
             conn.executescript(SCHEMA)
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(trades)")}
+            if "strategy" not in cols:  # migrate journals created before strategies A/B
+                conn.execute("ALTER TABLE trades ADD COLUMN strategy TEXT NOT NULL DEFAULT 'legacy'")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
@@ -51,12 +54,13 @@ class Journal:
         entry_date: date,
         thesis: str = "",
         fees: float = 0.0,
+        strategy: str = "legacy",
     ) -> int:
         with closing(self._connect()) as conn, conn:
             cur = conn.execute(
-                "INSERT INTO trades (mode, symbol, side, quantity, entry_date, entry_price, stop_price, thesis, fees)"
-                " VALUES ('paper', ?, 'long', ?, ?, ?, ?, ?, ?)",
-                (symbol.upper(), quantity, entry_date.isoformat(), entry_price, stop_price, thesis, fees),
+                "INSERT INTO trades (mode, symbol, side, quantity, entry_date, entry_price, stop_price, thesis, fees, strategy)"
+                " VALUES ('paper', ?, 'long', ?, ?, ?, ?, ?, ?, ?)",
+                (symbol.upper(), quantity, entry_date.isoformat(), entry_price, stop_price, thesis, fees, strategy),
             )
             return int(cur.lastrowid)
 

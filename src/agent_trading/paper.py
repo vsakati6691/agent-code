@@ -44,7 +44,20 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     CHECK (side = 'sell' OR (stop_price IS NOT NULL AND stop_price > 0 AND stop_price < ref_price))
 );
 CREATE TABLE IF NOT EXISTS paper_meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS paper_equity (date TEXT PRIMARY KEY, equity REAL NOT NULL);
 """
+
+
+@dataclass(frozen=True)
+class Intent:
+    """A strategy's request; the broker still applies every risk check."""
+    symbol: str
+    side: str                 # "buy" or "sell"
+    ref_price: float
+    stop: float | None = None
+    strategy: str = "legacy"
+    reason: str = ""
+    priority: float = 0.0     # higher first
 
 
 @dataclass(frozen=True)
@@ -161,6 +174,9 @@ class PaperBroker:
         self.commission = settings.costs.commission_per_order
         with closing(self._connect()) as conn, conn:
             conn.executescript(ORDERS_SCHEMA)
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(paper_orders)")}
+            if "strategy" not in cols:
+                conn.execute("ALTER TABLE paper_orders ADD COLUMN strategy TEXT NOT NULL DEFAULT 'legacy'")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.journal.path)
@@ -184,14 +200,29 @@ class PaperBroker:
             return pd.read_sql_query(sql, conn, params=(status,) if status else ())
 
     def _add_order(self, created: date, symbol: str, side: str, qty: float, ref: float,
-                   stop: float | None, reason: str, trade_id: int | None = None) -> int:
+                   stop: float | None, reason: str, trade_id: int | None = None, strategy: str = "legacy") -> int:
         with closing(self._connect()) as conn, conn:
             cur = conn.execute(
-                "INSERT INTO paper_orders (created_date, symbol, side, quantity, ref_price, stop_price, trade_id, reason)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (created.isoformat(), symbol, side, qty, ref, stop, trade_id, reason),
+                "INSERT INTO paper_orders (created_date, symbol, side, quantity, ref_price, stop_price, trade_id, reason, strategy)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (created.isoformat(), symbol, side, qty, ref, stop, trade_id, reason, strategy),
             )
             return int(cur.lastrowid)
+
+    def equity_history(self) -> pd.Series:
+        with closing(self._connect()) as conn:
+            df = pd.read_sql_query("SELECT date, equity FROM paper_equity ORDER BY date", conn)
+        return pd.Series(df["equity"].values, index=pd.to_datetime(df["date"]), dtype=float)
+
+    def _record_equity(self, as_of: date, equity: float) -> None:
+        with closing(self._connect()) as conn, conn:
+            conn.execute("INSERT OR REPLACE INTO paper_equity (date, equity) VALUES (?, ?)", (as_of.isoformat(), equity))
+
+    def status(self, bars: dict[str, pd.DataFrame], as_of: date):
+        from .risk import trading_status
+
+        equity = portfolio_state(self.journal, self.settings, bars, pd.Timestamp(as_of)).equity
+        return trading_status(self.equity_history(), equity, self.settings.risk, pd.Timestamp(as_of))
 
     def _finish_order(self, order_id: int, status: str, when: date | None = None,
                       price: float | None = None, trade_id: int | None = None, note: str = "") -> None:
@@ -207,10 +238,15 @@ class PaperBroker:
     def run(
         self,
         bars: dict[str, pd.DataFrame],
-        screen: pd.DataFrame,
+        screen: pd.DataFrame | None,
         earnings: EarningsData | None,
         as_of: date,
+        intents: list[Intent] | None = None,
     ) -> RunResult:
+        """Process fills/stops up to `as_of`, then queue orders from `intents`
+        (strategy A/B) or, when intents is None, from the legacy `screen`."""
+        from .risk import trading_status
+
         result = RunResult()
         last_processed = self._meta("last_processed_date")
         start = date.fromisoformat(last_processed) if last_processed else as_of
@@ -222,12 +258,90 @@ class PaperBroker:
         if last_processed is None or as_of > start:
             self._set_meta("last_processed_date", as_of.isoformat())
 
+        equity = portfolio_state(self.journal, self.settings, bars, pd.Timestamp(as_of)).equity
+        status = trading_status(self.equity_history(), equity, self.settings.risk, pd.Timestamp(as_of))
+        self._record_equity(as_of, equity)
+
         if self._meta("last_signal_date") == as_of.isoformat():
             result.warnings.append(f"signals for {as_of} were already generated; no new orders queued")
             return result
-        self._queue_signals(bars, screen, earnings, as_of, result)
+        self._queue_time_exits(bars, as_of, result)
+        if not status.new_entries_allowed:
+            result.warnings.append(f"new entries blocked: {status.reason}")
+        if intents is None:
+            self._queue_signals(bars, screen if screen is not None else pd.DataFrame(), earnings, as_of, result,
+                                allow_entries=status.new_entries_allowed)
+        else:
+            self._queue_intents(bars, intents, as_of, result, allow_entries=status.new_entries_allowed)
         self._set_meta("last_signal_date", as_of.isoformat())
         return result
+
+    def _queue_time_exits(self, bars, as_of: date, result: RunResult) -> None:
+        limits = self.settings.risk.max_holding_days
+        open_df = self.journal.open_trades()
+        pending = self.orders("pending")
+        pending_sells = set(pending.loc[pending["side"] == "sell", "symbol"]) if not pending.empty else set()
+        for t in open_df.itertuples() if not open_df.empty else []:
+            limit = limits.get(t.symbol)
+            if limit is None or t.symbol in pending_sells:
+                continue
+            held = int(np.busday_count(date.fromisoformat(t.entry_date), as_of))
+            if held >= limit:
+                last = _last_close(bars.get(t.symbol), pd.Timestamp(as_of)) or t.entry_price
+                self._add_order(as_of, t.symbol, "sell", t.quantity, float(last), None,
+                                f"max holding period ({limit} days)", int(t.id), getattr(t, "strategy", "legacy"))
+                result.events.append(f"queued SELL {t.symbol} (held {held} days, limit {limit})")
+
+    def _queue_intents(self, bars, intents: list[Intent], as_of: date, result: RunResult, allow_entries: bool) -> None:
+        pending = self.orders("pending")
+        pending_syms = set(pending["symbol"]) if not pending.empty else set()
+        open_df = self.journal.open_trades()
+        held = {t.symbol: t for t in open_df.itertuples()} if not open_df.empty else {}
+
+        for it in [i for i in intents if i.side == "sell"]:
+            t = held.get(it.symbol)
+            if t is None:
+                result.warnings.append(f"ignored SELL {it.symbol}: no paper position (short selling is not allowed)")
+            elif it.symbol not in pending_syms:
+                self._add_order(as_of, it.symbol, "sell", t.quantity, it.ref_price, None, it.reason, int(t.id), it.strategy)
+                pending_syms.add(it.symbol)
+                result.events.append(f"queued SELL {it.symbol} ({it.strategy}: {it.reason})")
+
+        buys = sorted([i for i in intents if i.side == "buy"], key=lambda i: -i.priority)
+        if not buys:
+            return
+        if not allow_entries:
+            for it in buys:
+                result.new_orders.append(Proposal(it.symbol, it.ref_price, it.stop or 0, 0, 0, 0, False,
+                                                  "blocked by loss limit"))
+            return
+        buy_pending = pending[pending["side"] == "buy"] if not pending.empty else pending
+        reserved = float((buy_pending["quantity"] * buy_pending["ref_price"]).sum()) if not buy_pending.empty else 0.0
+        state = portfolio_state(self.journal, self.settings, bars, pd.Timestamp(as_of), reserved)
+        if not buy_pending.empty:
+            state = replace(state, holdings=state.holdings + tuple(
+                Holding(o.symbol, o.quantity, o.ref_price, o.stop_price) for o in buy_pending.itertuples()))
+        engine = RiskEngine(self.settings)
+        returns = returns_frame(bars)
+        for it in buys:
+            if it.symbol in held or it.symbol in pending_syms:
+                result.new_orders.append(Proposal(it.symbol, it.ref_price, it.stop or 0, 0, 0, 0, False,
+                                                  "already held or pending (duplicate signal ignored)"))
+                continue
+            if it.stop is None:
+                result.new_orders.append(Proposal(it.symbol, it.ref_price, 0, 0, 0, 0, False, "no stop defined"))
+                continue
+            d = engine.evaluate_entry(it.symbol, it.ref_price, it.stop, state, returns)
+            result.new_orders.append(Proposal(it.symbol, it.ref_price, it.stop, d.quantity, d.risk_amount,
+                                              d.notional, d.approved, d.reason, note=it.strategy))
+            if not d.approved:
+                continue
+            self._add_order(as_of, it.symbol, "buy", d.quantity, it.ref_price, it.stop, it.reason, None, it.strategy)
+            pending_syms.add(it.symbol)
+            state = replace(state, cash=state.cash - d.notional,
+                            holdings=state.holdings + (Holding(it.symbol, d.quantity, it.ref_price, it.stop),))
+            result.events.append(f"queued BUY {it.symbol} x{d.quantity:g} ({it.strategy}; ref {it.ref_price:.2f}, "
+                                 f"stop {it.stop:.2f}, planned risk ${d.risk_amount:.2f})")
 
     def _fill_pending(self, day: pd.Timestamp, bars: dict[str, pd.DataFrame], result: RunResult) -> None:
         pending = self.orders("pending")
@@ -273,7 +387,8 @@ class PaperBroker:
             result.events.append(f"{day.date()} cancelled BUY {o.symbol}: {d.reason}")
             return
         qty = min(o.quantity, d.quantity)  # a higher open shrinks the size, never grows it
-        trade_id = self.journal.open_trade(o.symbol, qty, fill, o.stop_price, day.date(), o.reason or "", self.commission)
+        trade_id = self.journal.open_trade(o.symbol, qty, fill, o.stop_price, day.date(), o.reason or "",
+                                           self.commission, getattr(o, "strategy", "legacy"))
         self._finish_order(o.id, "filled", day.date(), fill, trade_id)
         result.events.append(f"{day.date()} BUY {o.symbol} x{qty:g} @ {fill:.2f}, stop {o.stop_price:.2f}")
 
@@ -307,7 +422,8 @@ class PaperBroker:
                 self._finish_order(o.id, "cancelled", note=f"expired after {age} business days without a valid bar")
                 result.events.append(f"expired {o.side.upper()} {o.symbol} (no valid price data)")
 
-    def _queue_signals(self, bars, screen: pd.DataFrame, earnings, as_of: date, result: RunResult) -> None:
+    def _queue_signals(self, bars, screen: pd.DataFrame, earnings, as_of: date, result: RunResult,
+                       allow_entries: bool = True) -> None:
         pending = self.orders("pending")
         pending_syms = set(pending["symbol"]) if not pending.empty else set()
         open_df = self.journal.open_trades()
@@ -323,6 +439,8 @@ class PaperBroker:
                                 None, "exit signal", int(t.id))
                 result.events.append(f"queued SELL {t.symbol} (exit signal) for next open")
 
+        if not allow_entries or screen.empty:
+            return
         reserved = float((pending.loc[pending["side"] == "buy", "quantity"] * pending.loc[pending["side"] == "buy", "ref_price"]).sum()) if not pending.empty else 0.0
         state = portfolio_state(self.journal, self.settings, bars, pd.Timestamp(as_of), reserved)
         pending_buys = pending[pending["side"] == "buy"] if not pending.empty else pending
