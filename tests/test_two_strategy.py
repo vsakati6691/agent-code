@@ -444,3 +444,60 @@ def test_spec_change_is_flagged(settings, tmp_path):
     broker._set_meta("spec_config_hash", "000000000000")
     text, ctx = run_daily(s, AS_OF, run_paper=False)
     assert "Spec changed" in text and "000000000000" in ctx.spec_warning
+
+
+# ---------------------------------------------------------------- missed scheduled runs
+
+def _postclose_log(s, day: str, label: str = "postclose"):
+    from agent_trading.manifest import runs_dir
+
+    d = runs_dir(s)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{day}_{label}_203000.json").write_text("{}", encoding="utf-8")
+
+
+def test_missed_postclose_uses_previous_trading_day(settings):
+    from agent_trading.manifest import missed_postclose
+
+    assert missed_postclose(settings, date(2026, 10, 12)) == date(2026, 10, 9)    # Monday -> Friday
+    assert missed_postclose(settings, date(2026, 11, 27)) == date(2026, 11, 25)   # skips Thanksgiving
+    _postclose_log(settings, "2026-10-09", label="intraday")                       # other labels don't count
+    assert missed_postclose(settings, date(2026, 10, 12)) == date(2026, 10, 9)
+    _postclose_log(settings, "2026-10-09")
+    assert missed_postclose(settings, date(2026, 10, 12)) is None
+
+
+def test_premarket_report_warns_on_missed_postclose(settings):
+    from agent_trading.daily import run_daily
+
+    s = small_settings(settings)
+    text, ctx = run_daily(s, AS_OF, run_paper=False, label="premarket")
+    assert "MISSED RUN" in text and "2026-10-09" in ctx.missed_run
+    log = json.loads(open(ctx.manifest_path, encoding="utf-8").read())
+    assert "2026-10-09" in log["missed_run"]
+
+    _postclose_log(s, "2026-10-09")
+    text, ctx = run_daily(s, AS_OF, run_paper=False, label="premarket")
+    assert "MISSED RUN" not in text and ctx.missed_run == ""
+
+
+def test_missed_run_check_is_premarket_only(settings):
+    from agent_trading.daily import run_daily
+
+    s = small_settings(settings)
+    for label in ("intraday", ""):
+        text, ctx = run_daily(s, AS_OF, run_paper=False, label=label)
+        assert "MISSED RUN" not in text and ctx.missed_run == ""
+
+
+def test_cli_prints_missed_run_warning(settings, tmp_path, capsys):
+    import shutil
+
+    from agent_trading.cli import main
+    from .conftest import ROOT
+
+    (tmp_path / "config").mkdir()
+    cfg = tmp_path / "config" / "settings.yaml"
+    shutil.copy(ROOT / "config" / "settings.yaml", cfg)
+    assert main(["--config", str(cfg), "--as-of", "2026-10-12", "daily", "--no-paper", "--label", "premarket"]) == 0
+    assert "WARNING: MISSED RUN: no post-close run log for 2026-10-09" in capsys.readouterr().out
