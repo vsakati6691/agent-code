@@ -27,7 +27,11 @@ Earnings calendar ────────────────┘           
 | Liquidity + trend/momentum screener | `screen.py` |
 | Baseline strategy rules | `strategy.py` |
 | Backtest with slippage and commissions; out-of-sample and walk-forward | `backtest/` |
-| Position sizing and hard guardrails | `risk.py` |
+| Central RiskEngine: per-trade, aggregate and correlated risk, gap buffer, cash-only | `risk.py` |
+| Simulated paper broker (next-open fills, stops, same costs as backtest) | `paper.py` |
+| Train/validation/holdout evaluation, benchmarks, bootstrap, sensitivity | `backtest/evaluation.py`, `benchmarks.py`, `stats.py` |
+| Market regime (trend, volatility) | `regime.py` |
+| Read-only broker account snapshot (masked, staleness-checked) | `account.py` |
 | Paper-trade journal (SQLite) | `journal.py` |
 | Daily report + HTML dashboard | `report.py` |
 | Command line | `cli.py` |
@@ -87,6 +91,12 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -m agent_trading screen
 & $py -m agent_trading backtest               # full + in-sample / out-of-sample
 & $py -m agent_trading walkforward
+& $py -m agent_trading evaluate               # train/validation + benchmarks, regimes, bootstrap, sensitivity
+& $py -m agent_trading evaluate --holdout     # also the untouched holdout (logged; use rarely)
+& $py -m agent_trading paper run              # fill paper orders at next open, check stops, queue new orders
+& $py -m agent_trading paper status
+& $py -m agent_trading account import <snapshot.json>   # read-only broker snapshot (masked)
+& $py -m agent_trading account show
 & $py -m agent_trading journal open NVDA 0.3 229 215 --thesis "trend + momentum"
 & $py -m agent_trading journal close 1 240 --reason "exit signal"
 & $py -m agent_trading journal list

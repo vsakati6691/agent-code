@@ -67,6 +67,14 @@ with the Robinhood MCP connected, ask Claude to call `get_equity_historicals`
 `import-robinhood` on the saved files. Robinhood bars are split-adjusted;
 gap-fill (interpolated) bars are skipped.
 
+Paper trading and evaluation:
+
+```powershell
+& $py -m agent_trading paper run         # after each close: fills, stops, new paper orders
+& $py -m agent_trading paper status      # positions, P&L, pending orders
+& $py -m agent_trading evaluate          # train/validation report in reports\evaluation_YYYY-MM-DD.md
+```
+
 `journal open` rejects any paper trade that would risk more than 0.5% of equity,
 push total open risk above 1.5%, exceed available cash, or exceed 25% of
 equity in one position.

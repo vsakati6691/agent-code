@@ -1,13 +1,21 @@
 """Position sizing and hard trading guardrails.
 
-Sizing: risk a fixed fraction of equity between entry and stop, capped by the
-aggregate open-risk limit, a per-position notional cap, and available cash
-(cash cap = no margin).
+Every entry (backtest, paper broker, report, manual journal) goes through the
+same rules here:
+
+* risk a fixed fraction of equity between entry and stop, planned with a
+  buffer for stops that fill worse than their price (gaps);
+* cap aggregate open risk, and the combined risk of highly correlated positions;
+* cap position notional, and never exceed available cash (no margin);
+* long-only, paper-only, stocks/ETFs only.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+import numpy as np
+import pandas as pd
 
 from .config import RiskConfig, Settings
 
@@ -33,8 +41,9 @@ def _floor(qty: float, fractional: bool) -> float:
     return float(math.floor(qty))
 
 
-def planned_risk(quantity: float, entry: float, stop: float) -> float:
-    return quantity * max(0.0, entry - stop)
+def planned_risk(quantity: float, entry: float, stop: float, buffer: float = 0.0) -> float:
+    """Dollar loss if the stop fills `buffer` x stop-distance worse than its price."""
+    return quantity * max(0.0, entry - stop) * (1 + buffer)
 
 
 def size_position(
@@ -44,6 +53,7 @@ def size_position(
     stop_price: float,
     open_risk: float,
     cfg: RiskConfig,
+    correlated_remaining: float | None = None,
 ) -> SizeDecision:
     if entry_price <= 0 or equity <= 0:
         return SizeDecision(0.0, 0.0, 0.0, "invalid equity or price")
@@ -52,16 +62,19 @@ def size_position(
     if stop_price <= 0:
         raise RiskViolation("stop must be positive")
 
-    per_share = entry_price - stop_price
-    per_trade = equity * cfg.risk_per_trade_pct
+    per_share = (entry_price - stop_price) * (1 + cfg.stop_risk_buffer)
     remaining = equity * cfg.max_open_risk_pct - open_risk
     if remaining <= 0:
         return SizeDecision(0.0, 0.0, 0.0, "aggregate open-risk limit reached")
-    risk_label = "risk per trade" if per_trade <= remaining else "aggregate open-risk limit"
-    budget = min(per_trade, remaining)
+    risk_caps = {"risk per trade": equity * cfg.risk_per_trade_pct, "aggregate open-risk limit": remaining}
+    if correlated_remaining is not None:
+        if correlated_remaining <= 0:
+            return SizeDecision(0.0, 0.0, 0.0, "correlated-risk limit reached")
+        risk_caps["correlated-risk limit"] = correlated_remaining
+    risk_label = min(risk_caps, key=risk_caps.get)
 
     candidates = {
-        risk_label: budget / per_share,
+        risk_label: risk_caps[risk_label] / per_share,
         "max position size": equity * cfg.max_position_pct / entry_price,
         "available cash": max(0.0, cash) / entry_price,
     }
@@ -71,8 +84,120 @@ def size_position(
         return SizeDecision(0.0, 0.0, 0.0, f"size rounds to zero ({limited_by})")
     if qty * entry_price < cfg.min_order_notional:
         return SizeDecision(0.0, 0.0, 0.0, f"below ${cfg.min_order_notional:g} minimum order ({limited_by})")
-    return SizeDecision(qty, planned_risk(qty, entry_price, stop_price), qty * entry_price, limited_by)
+    risk = planned_risk(qty, entry_price, stop_price, cfg.stop_risk_buffer)
+    return SizeDecision(qty, risk, qty * entry_price, limited_by)
 
+
+# ---------------------------------------------------------------- engine
+
+@dataclass(frozen=True)
+class Holding:
+    symbol: str
+    quantity: float
+    entry_price: float
+    stop_price: float
+
+
+@dataclass(frozen=True)
+class PortfolioState:
+    equity: float
+    cash: float
+    holdings: tuple[Holding, ...] = field(default_factory=tuple)
+
+    def open_risk(self, buffer: float) -> float:
+        return sum(planned_risk(h.quantity, h.entry_price, h.stop_price, buffer) for h in self.holdings)
+
+    def holds(self, symbol: str) -> bool:
+        return any(h.symbol == symbol for h in self.holdings)
+
+
+@dataclass(frozen=True)
+class EntryDecision:
+    symbol: str
+    approved: bool
+    quantity: float
+    risk_amount: float
+    notional: float
+    reason: str
+
+
+def correlated_risk(
+    symbol: str, state: PortfolioState, returns: pd.DataFrame | None, cfg: RiskConfig
+) -> float:
+    """Planned risk of holdings correlated with `symbol`.
+
+    Fail-safe: when correlation cannot be measured (missing or short history),
+    the holding is treated as correlated.
+    """
+    total = 0.0
+    min_obs = cfg.correlation_lookback // 2
+    x = None
+    cols: dict[str, int] = {}
+    if returns is not None and symbol in returns.columns:
+        window = returns.iloc[-cfg.correlation_lookback:]
+        arr = window.to_numpy(dtype=float)
+        cols = {c: i for i, c in enumerate(window.columns)}
+        x = arr[:, cols[symbol]]
+    for h in state.holdings:
+        corr = 1.0
+        if x is not None and h.symbol in cols:
+            y = arr[:, cols[h.symbol]]
+            mask = ~(np.isnan(x) | np.isnan(y))
+            if mask.sum() >= min_obs:
+                xs, ys = x[mask] - x[mask].mean(), y[mask] - y[mask].mean()
+                denom = np.sqrt((xs * xs).sum() * (ys * ys).sum())
+                if denom > 0:
+                    corr = float((xs * ys).sum() / denom)
+        if corr >= cfg.max_correlation:
+            total += planned_risk(h.quantity, h.entry_price, h.stop_price, cfg.stop_risk_buffer)
+    return total
+
+
+class RiskEngine:
+    """Single place where entries are approved and sized."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.cfg = settings.risk
+
+    def evaluate_entry(
+        self,
+        symbol: str,
+        entry_price: float,
+        stop_price: float,
+        state: PortfolioState,
+        returns: pd.DataFrame | None = None,
+        data_verified: bool = True,
+    ) -> EntryDecision:
+        def reject(reason: str) -> EntryDecision:
+            return EntryDecision(symbol, False, 0.0, 0.0, 0.0, reason)
+
+        if self.settings.mode != "paper":
+            return reject("only paper trading is enabled")
+        if not data_verified:
+            return reject("market data not verified (stale or incomplete)")
+        if state.holds(symbol):
+            return reject("already held")
+        if not (math.isfinite(entry_price) and math.isfinite(stop_price)):
+            return reject("non-finite price")
+        try:
+            corr_remaining = None
+            if state.holdings:
+                corr_remaining = state.equity * self.cfg.max_correlated_risk_pct - correlated_risk(
+                    symbol, state, returns, self.cfg
+                )
+            d = size_position(
+                state.equity, state.cash, entry_price, stop_price,
+                state.open_risk(self.cfg.stop_risk_buffer), self.cfg, corr_remaining,
+            )
+        except RiskViolation as exc:
+            return reject(str(exc))
+        if d.quantity <= 0:
+            return reject(d.limited_by)
+        return EntryDecision(symbol, True, d.quantity, d.risk_amount, d.notional, d.limited_by)
+
+
+# ---------------------------------------------------------------- order checks
 
 @dataclass(frozen=True)
 class ProposedOrder:
@@ -105,14 +230,15 @@ def check_order(order: ProposedOrder, settings: Settings, cash: float) -> None:
 def check_new_trade_risk(
     equity: float, open_risk: float, quantity: float, entry: float, stop: float, cfg: RiskConfig
 ) -> float:
-    """Validate a manually entered paper trade against the risk limits. Returns its risk."""
+    """Validate a manually entered paper trade against the risk limits. Returns its planned risk."""
     if stop >= entry:
         raise RiskViolation("stop must be below entry (long-only)")
-    risk = planned_risk(quantity, entry, stop)
+    risk = planned_risk(quantity, entry, stop, cfg.stop_risk_buffer)
     tolerance = 0.01  # one cent of rounding slack
     if risk > equity * cfg.risk_per_trade_pct + tolerance:
         raise RiskViolation(
-            f"trade risk ${risk:.2f} exceeds {cfg.risk_per_trade_pct:.2%} of equity (${equity * cfg.risk_per_trade_pct:.2f})"
+            f"trade risk ${risk:.2f} (incl. {cfg.stop_risk_buffer:.0%} stop buffer) exceeds "
+            f"{cfg.risk_per_trade_pct:.2%} of equity (${equity * cfg.risk_per_trade_pct:.2f})"
         )
     if open_risk + risk > equity * cfg.max_open_risk_pct + tolerance:
         raise RiskViolation(

@@ -56,6 +56,19 @@ file paths to:
 .\.venv\Scripts\python.exe -m agent_trading import-robinhood <file> [<file> ...]
 ```
 
+## Account snapshot (read-only)
+
+Read `get_portfolio`, `get_equity_positions` and `get_equity_orders` for the
+Agent-trading account, write a JSON file (shape documented in
+`src/agent_trading/account.py`, `account_number` may be just the last 4 digits)
+to the scratchpad, then run `account import <file>`. Never put the file in the repo.
+
+## Daily paper cycle
+
+`report` → `paper run` → `dashboard` (see `scripts/daily_report.ps1`). The paper
+broker is a local simulation only; it must never call MCP order tools.
+`tests/test_safety_guards.py` fails if source code references them.
+
 ## Conventions
 
 - Indicators and signals must stay causal (no look-ahead). Signals at day *t*

@@ -90,9 +90,9 @@ class Journal:
         df = self.trades()
         return df[df["exit_date"].notna()] if not df.empty else df
 
-    def open_risk(self) -> float:
+    def open_risk(self, buffer: float = 0.0) -> float:
         df = self.open_trades()
-        return float(sum(planned_risk(r.quantity, r.entry_price, r.stop_price) for r in df.itertuples()))
+        return float(sum(planned_risk(r.quantity, r.entry_price, r.stop_price, buffer) for r in df.itertuples()))
 
     def realized_pnl(self) -> float:
         df = self.closed_trades()
@@ -104,7 +104,7 @@ class Journal:
         committed = float((open_df["quantity"] * open_df["entry_price"] + open_df["fees"]).sum()) if not open_df.empty else 0.0
         return starting_equity + self.realized_pnl() - committed
 
-    def summary(self, starting_equity: float) -> dict:
+    def summary(self, starting_equity: float, buffer: float = 0.0) -> dict:
         closed = self.closed_trades()
         n = len(closed)
         wins = closed[closed["pnl"] > 0] if n else closed
@@ -120,5 +120,5 @@ class Journal:
             "win_rate": len(wins) / n if n else 0.0,
             "avg_r": float(closed["r_multiple"].mean()) if n else 0.0,
             "profit_factor": float(wins["pnl"].sum() / gross_loss) if n and gross_loss > 0 else None,
-            "open_risk": self.open_risk(),
+            "open_risk": self.open_risk(buffer),
         }
