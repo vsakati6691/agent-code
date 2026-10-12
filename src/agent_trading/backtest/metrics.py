@@ -64,4 +64,31 @@ def compute_metrics(
         "turnover": traded_notional / avg_equity / years if years > 0 and avg_equity > 0 else 0.0,
         "avg_holding_days": sum(holding) / len(holding) if holding else None,
         "total_costs": round(costs, 2),
+        **path_stats(equity, initial),
+    }
+
+
+def path_stats(equity: pd.Series, initial: float) -> dict:
+    """Max drawdown duration (calendar days), worst month, and calendar-year returns."""
+    curve = pd.concat([pd.Series([initial], index=[equity.index[0] - pd.Timedelta(days=1)]), equity])
+    peak = curve.cummax()
+    under = curve < peak - 1e-9
+    longest, start = 0, None
+    for ts, u in under.items():
+        if u and start is None:
+            start = ts
+        elif not u and start is not None:
+            longest = max(longest, (ts - start).days)
+            start = None
+    if start is not None:
+        longest = max(longest, (curve.index[-1] - start).days)
+    month_end = curve.groupby([curve.index.year, curve.index.month]).last()
+    monthly = month_end.pct_change().dropna()
+    year_end = curve.groupby(curve.index.year).last()
+    yearly = year_end.pct_change()
+    yearly.iloc[0] = year_end.iloc[0] / initial - 1
+    return {
+        "max_dd_duration_days": longest,
+        "worst_month": float(monthly.min()) if len(monthly) else None,
+        "calendar_years": {int(y): float(r) for y, r in yearly.items()},
     }

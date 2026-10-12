@@ -99,3 +99,55 @@ def test_scanner_backtest_uses_point_in_time_members(settings):
         assert set(m.picks) <= allowed
     summary = summarize(f)
     assert {"top", "spy", "universe", "ic_mean"} <= set(summary)
+
+
+def test_total_return_adjustment_scales_history_before_ex_date():
+    from agent_trading.data.dividends import total_return_bars
+
+    idx = pd.bdate_range("2024-01-01", periods=5)
+    df = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000}, index=idx)
+    divs = pd.Series([2.0], index=pd.DatetimeIndex([idx[3]], name="ex_date"), name="amount")
+    out = total_return_bars(df, divs)
+    assert out["close"].iloc[:3].tolist() == pytest.approx([98.0] * 3)   # x (1 - 2/100)
+    assert out["close"].iloc[3:].tolist() == [100.0, 100.0]
+    assert out["volume"].tolist() == df["volume"].tolist()
+    assert total_return_bars(df, None).equals(df)
+    huge = pd.Series([80.0], index=pd.DatetimeIndex([idx[3]]))            # implausible: skipped
+    assert total_return_bars(df, huge).equals(df)
+
+
+def test_dividend_import_handles_bom_and_empty(settings, tmp_path):
+    from agent_trading.data.dividends import import_dividends_file, load_dividends
+
+    p = tmp_path / "gld.json"
+    p.write_text('﻿{"symbol":"GLD","data":[]}', encoding="utf-8")
+    assert import_dividends_file(settings, "GLD", p).empty
+    assert load_dividends(settings, "GLD") is not None
+    c = tmp_path / "x.csv"
+    c.write_text("﻿ex_date,amount\n2024-03-01,0.5\n2024-06-03,0.6\n", encoding="utf-8")
+    s = import_dividends_file(settings, "XYZ", c)
+    assert s.tolist() == [0.5, 0.6]
+
+
+def test_path_stats_drawdown_duration_and_years():
+    from agent_trading.backtest.metrics import path_stats
+
+    idx = pd.to_datetime(["2023-12-29", "2024-01-31", "2024-02-29", "2024-03-29", "2025-01-31"])
+    eq = pd.Series([1000.0, 900.0, 950.0, 1100.0, 1210.0], index=idx)
+    st = path_stats(eq, 1000.0)
+    assert st["max_dd_duration_days"] == (idx[3] - idx[1]).days
+    assert st["worst_month"] == pytest.approx(-0.1)
+    assert st["calendar_years"][2023] == pytest.approx(0.0)
+    assert st["calendar_years"][2024] == pytest.approx(0.1)
+    assert st["calendar_years"][2025] == pytest.approx(0.1)
+
+
+def test_vol_managed_weights_scale_down_never_up():
+    calm = make_bars(n=400, drift=0.002, vol=0.002, start=100)
+    wild = make_bars(n=400, drift=0.004, vol=0.04, start=100, seed=5)
+    day = calm.index[-1]
+    base_calm = gtaa.weights({"C": calm}, day, ["C"], 10)
+    assert gtaa.vol_managed_weights({"C": calm}, day, ["C"], 10, 0.10) == base_calm   # capped at 1x
+    if gtaa.weights({"W": wild}, day, ["W"], 10):
+        w = gtaa.vol_managed_weights({"W": wild}, day, ["W"], 10, 0.10)["W"]
+        assert 0 < w < 1.0

@@ -67,6 +67,7 @@ def run_allocation(
     target: dict[str, float] | None = None
     pending_sells: set[str] = set()
     days_exposed, interest = 0, 0.0
+    invested_frac: list[float] = []
     prev_day: pd.Timestamp | None = None
 
     def close(sym: str, when: pd.Timestamp, raw: float, reason: str) -> None:
@@ -134,7 +135,9 @@ def run_allocation(
             credit = cash * float(rate_by_day.get(d, 0.0))
             cash += credit
             interest += credit
-        curve[d] = cash + sum(t.quantity * last_close[s] for s, t in positions.items())
+        invested = sum(t.quantity * last_close[s] for s, t in positions.items())
+        curve[d] = cash + invested
+        invested_frac.append(invested / curve[d] if curve[d] > 0 else 0.0)
 
         # 4. month-end: new target from data known at this close
         if is_month_end.get(d) and d != dates[-1]:
@@ -157,4 +160,5 @@ def run_allocation(
     )
     metrics["interest_earned"] = round(interest, 2)
     metrics["trading_pnl"] = round(sum(t.pnl for t in closed), 2)
+    metrics["avg_invested"] = float(sum(invested_frac) / len(invested_frac)) if invested_frac else 0.0
     return BacktestResult(equity, closed, metrics, params={"strategy": name})

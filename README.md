@@ -18,7 +18,7 @@ and one daily report:
 |---|---|---|
 | **A: S&P 500 scanner** (`strategies/scanner.py`) | Scans every current S&P 500 constituent (list refreshed from SPY's holdings filing). Ranks them by price strength, volume, quality, valuation and low volatility. Up to 3 that pass every filter become paper entries | ❌ On point-in-time S&P 500 lists (2019–2025, price factors only) it did **not** beat SPY. The score had no significant predictive power (rank IC ≈ 0). Research only |
 | **B: focused desk** (`strategies/desk.py`) | Daily BUY / SELL / HOLD / WAIT / NO TRADE for **TQQQ, SQQQ, IBIT** (Bitcoin ETF) and **NVDA**, each with its own rules | ⚠️ Trading-only edge near zero per instrument; weak combined evidence (validation Sharpe 95% CI 0.11–2.17) |
-| **C: GTAA** (`strategies/gtaa.py`) | Faber multi-asset trend: hold SPY, EFA, IEF, DBC, VNQ, TLT and GLD each while it trades above its 10-month average; rebalance at month-end | ✅ Validation (2019–2023) +5.7%/yr with −6.9% max drawdown, vs SPY +9.4% with −34%. Modest returns, small losses |
+| **C: GTAA** (`strategies/gtaa.py`) | Faber multi-asset trend: hold SPY, EFA, IEF, DBC, VNQ, TLT and GLD each while it trades above its 10-month average; rebalance at month-end | ✅ Validation (2019–2023, total return incl. dividends) +6.8%/yr, Sharpe 0.96, −6.9% max drawdown, vs SPY +11.1% with −34%. Train (2008–2019) only +3.6%/yr (Sharpe 0.53) vs SPY +10.5%. Modest returns, small losses; survives 3× costs |
 
 Backtests are evidence with limits, not proof. Past performance does not
 guarantee future results.
