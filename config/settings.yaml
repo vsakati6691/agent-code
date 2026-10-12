@@ -122,6 +122,7 @@ scanner:                        # Strategy A: every current S&P 500 constituent
   top_research: 10
   top_actionable: 3
   target_r_multiple: 2.0
+  max_missing_factors_actionable: 0   # actionable picks need every factor; no reweighting
   weights:                      # one factor per idea; no double counting (see strategies/scanner.py)
     price_strength: 0.35
     volume: 0.10

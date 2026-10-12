@@ -150,6 +150,9 @@ class ScannerConfig:
     top_research: int = 10
     top_actionable: int = 3
     target_r_multiple: float = 2.0
+    # Actionable candidates may have at most this many missing factors (0 = all
+    # factors required). Research ranking requires the price factors.
+    max_missing_factors_actionable: int = 0
     weights: dict[str, float] = field(default_factory=lambda: {
         "price_strength": 0.35, "volume": 0.10, "quality": 0.20, "valuation": 0.10, "risk": 0.25})
 

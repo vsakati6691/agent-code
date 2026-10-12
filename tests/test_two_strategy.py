@@ -183,6 +183,25 @@ def test_scanner_actionable_respects_filters(settings):
         assert any("spread" in r for r in res.rejected["UPA"])
 
 
+def test_missing_factor_blocks_actionable(settings):
+    bars = universe_bars()
+    spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
+    fund = pd.DataFrame([{"ticker": t, "operating_margin": 0.2, "roe": 0.2, "forward_pe": 20 if t != "UPB" else None,
+                          "sector_code": "311", "earnings_date": "2026-12-15"} for t in bars])
+    res = run_scan(bars, settings, AS_OF, fund, None, bench=spy)
+    assert all(s.ticker != "UPB" for s in res.actionable)
+    if "UPB" in res.rejected:
+        assert any("missing data: valuation" in r for r in res.rejected["UPB"])
+
+
+def test_no_score_without_price_factors(settings):
+    t = pd.DataFrame({"mom_12_1": [0.1, np.nan], "rs_63": [0.0, np.nan], "dist_200": [0.05, np.nan],
+                      "updown_volume": [1, 1], "vol_63": [0.2, np.nan], "uptrend": [True, True],
+                      "downtrend": [False, False]}, index=["A", "B"])
+    out = score(t, None, settings.scanner.weights)
+    assert pd.notna(out.loc["A", "composite"]) and pd.isna(out.loc["B", "composite"])
+
+
 def test_price_strength_is_a_single_factor(settings):
     t = pd.DataFrame({"mom_12_1": [0.1, 0.2], "rs_63": [0.0, 0.1], "dist_200": [0.05, 0.1], "updown_volume": [1, 1],
                       "vol_63": [0.2, 0.2], "uptrend": [True, True], "downtrend": [False, False]}, index=["A", "B"])
