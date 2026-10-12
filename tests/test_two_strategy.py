@@ -377,6 +377,25 @@ def test_desk_backtest_respects_leveraged_rules(settings):
                 assert b1 <= a2 or b2 <= a1
 
 
+def test_unlevered_baseline_and_cost_stress(settings):
+    from agent_trading.backtest.desk_backtest import (
+        run_desk_backtest,
+        run_unlevered_baseline,
+        with_cost_multiplier,
+    )
+
+    bars = desk_bars()
+    base = run_unlevered_baseline(bars, settings)
+    assert all(t.symbol == "QQQ" for t in base.trades)
+    for t in base.trades:  # same $2.50 risk budget and 5-day limit as TQQQ
+        assert t.quantity * (t.entry_price - t.stop) * (1 + settings.risk.stop_risk_buffer) <= 2.5 * 1.1
+    cheap = run_desk_backtest(bars, settings, ["TQQQ"])
+    pricey = run_desk_backtest(bars, with_cost_multiplier(settings, 3), ["TQQQ"])
+    assert with_cost_multiplier(settings, 2).costs.per_side == pytest.approx(2 * settings.costs.per_side)
+    if cheap.trades:
+        assert pricey.equity.iloc[-1] <= cheap.equity.iloc[-1] + 1e-9
+
+
 # ---------------------------------------------------------------- end-to-end daily cycle (all inputs mocked)
 
 def test_daily_cycle_end_to_end(settings, tmp_path):

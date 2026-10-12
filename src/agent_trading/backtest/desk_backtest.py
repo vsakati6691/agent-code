@@ -10,6 +10,7 @@ and include event-day risk the live rules avoid.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pandas as pd
 
@@ -71,3 +72,29 @@ def run_desk_backtest(bars: dict[str, pd.DataFrame], settings: Settings, symbols
     rows = desk_rows(bars, settings, symbols)
     traded = {s: bars[s] for s in rows}
     return run_backtest(traded, settings, start, end, prepared=rows, cash_rate=cash_rate)
+
+
+def run_unlevered_baseline(bars: dict[str, pd.DataFrame], settings: Settings, start=None, end=None) -> BacktestResult:
+    """The TQQQ rule traded on QQQ itself, with TQQQ's per-trade risk and holding
+    limit: isolates what the 3x leverage adds (or costs) versus the same signal."""
+    d = settings.desk
+    qqq = bars[d.underlying]
+    c = qqq["close"]
+    s20, s50, s200 = sma(c, 20), sma(c, 50), sma(c, 200)
+    vol = c.pct_change().rolling(20).std() * math.sqrt(252)
+    above = c > s20
+    entry = (c > s50) & (s50 > s200) & above & (vol <= d.max_vol_long)
+    rows = {d.underlying: _frame(qqq, entry, ~above).to_dict("index")}
+    r = settings.risk
+    same_limits = replace(settings, risk=replace(
+        r,
+        symbol_risk_pct={**r.symbol_risk_pct, d.underlying: r.symbol_risk_pct.get(d.leveraged_long, r.risk_per_trade_pct)},
+        max_holding_days={**r.max_holding_days, d.underlying: r.max_holding_days.get(d.leveraged_long, 5)},
+    ))
+    return run_backtest({d.underlying: qqq}, same_limits, start, end, prepared=rows)
+
+
+def with_cost_multiplier(settings: Settings, k: float) -> Settings:
+    """Same settings with slippage and spread scaled by k (cost stress test)."""
+    c = settings.costs
+    return replace(settings, costs=replace(c, slippage_bps=c.slippage_bps * k, spread_bps=c.spread_bps * k))

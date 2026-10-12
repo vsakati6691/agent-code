@@ -366,7 +366,7 @@ def cmd_evaluate(settings: Settings, args) -> int:
 def cmd_evaluate_desk(settings: Settings, args) -> int:
     """Strategy B rules on history: train + validation only (holdout untouched)."""
     from .backtest.benchmarks import buy_and_hold
-    from .backtest.desk_backtest import run_desk_backtest
+    from .backtest.desk_backtest import run_desk_backtest, run_unlevered_baseline, with_cost_multiplier
     from .backtest.evaluation import make_splits
     from .backtest.metrics import compute_metrics
     from .backtest.stats import block_bootstrap, warnings_for
@@ -395,26 +395,39 @@ def cmd_evaluate_desk(settings: Settings, args) -> int:
             lines.append(f"## {'+'.join(syms)}: skipped ({exc})\n")
             continue
         cash = daily_cash_rate(rates, pd.DatetimeIndex(dates))
-        lines += [f"## {' + '.join(syms)}", "",
-                  "| Period | Return | CAGR | Sharpe (95% CI) | Max DD | Trades | Win % | Exposure | QQQ B&H | "
-                  + ("Instrument B&H |" if len(syms) == 1 else "|"),
-                  "|---|---|---|---|---|---|---|---|---|" + ("---|" if len(syms) == 1 else "")]
+        lines += [f"## {' + '.join(syms)}", ""]
         for name, (start, end) in [("train", sp.train), ("validation", sp.validation)]:
-            res = run_desk_backtest(bars, settings, syms, start, end, cash)
-            m = res.metrics
-            boot = block_bootstrap(res.equity.pct_change(), 500, 20)
-            ci = "n/a" if boot.get("insufficient") else f"{boot['sharpe_ci'][0]:.2f} to {boot['sharpe_ci'][1]:.2f}"
-            qqq = compute_metrics(buy_and_hold(bars[d.underlying], start, end, 1000, settings.costs.per_side), [], 1000)
-            row = (f"| {name} {start.date()}..{end.date()} | {m['total_return']:+.1%} | {(m['cagr'] or 0):+.1%} | "
-                   f"{m['sharpe']:.2f} ({ci}) | {m['max_drawdown']:+.1%} | {m['trades']} | {m['win_rate']:.0%} | "
-                   f"{m['exposure']:.0%} | {qqq['total_return']:+.1%} |")
+            lines += [f"### {name}: {start.date()} to {end.date()}", "",
+                      "| Variant | Return | CAGR | Sharpe (95% CI) | Max DD | Trades | Win % | Exposure |",
+                      "|---|---|---|---|---|---|---|---|"]
+            warn = []
+
+            def row(label, m, boot=None):
+                ci = "" if boot is None else (" (n/a)" if boot.get("insufficient")
+                                              else f" ({boot['sharpe_ci'][0]:.2f} to {boot['sharpe_ci'][1]:.2f})")
+                trades = m.get("trades", "-") if m.get("trades") else "-"
+                win = f"{m['win_rate']:.0%}" if m.get("trades") else "-"
+                expo = f"{m['exposure']:.0%}" if m.get("exposure") is not None else "-"
+                lines.append(f"| {label} | {m['total_return']:+.1%} | {(m.get('cagr') or 0):+.1%} | {m['sharpe']:.2f}{ci} | "
+                             f"{m['max_drawdown']:+.1%} | {trades} | {win} | {expo} |")
+
+            for k in (1, 2, 3):
+                res = run_desk_backtest(bars, with_cost_multiplier(settings, k), syms, start, end, cash)
+                boot = block_bootstrap(res.equity.pct_change(), 500, 20) if k == 1 else None
+                row(f"Rules, {k}× costs", res.metrics, boot)
+                if k == 1:
+                    warn = warnings_for(res.metrics, boot, settings.evaluation.min_trades)
+            if syms == [d.leveraged_long]:
+                row("Same rule on QQQ (no leverage, same $ risk and 5-day limit)",
+                    run_unlevered_baseline(bars, settings, start, end).metrics)
+            if syms == [d.leveraged_inverse]:
+                lines.append("| Holding cash instead (trading P&L 0) | +0.0% | +0.0% | 0.00 | +0.0% | - | - | 0% |")
+            row(f"{d.underlying} buy & hold", compute_metrics(
+                buy_and_hold(bars[d.underlying], start, end, 1000, settings.costs.per_side), [], 1000, 1.0))
             if len(syms) == 1:
-                own = compute_metrics(buy_and_hold(bars[syms[0]], start, end, 1000, settings.costs.per_side), [], 1000)
-                row += f" {own['total_return']:+.1%} (DD {own['max_drawdown']:+.0%}) |"
-            lines.append(row)
-            for w in warnings_for(m, boot, settings.evaluation.min_trades):
-                lines.append(f"|  ⚠ {w} |" + " |" * (8 if len(syms) == 1 else 7))
-        lines.append("")
+                row(f"{syms[0]} buy & hold", compute_metrics(
+                    buy_and_hold(bars[syms[0]], start, end, 1000, settings.costs.per_side), [], 1000, 1.0))
+            lines += [""] + [f"> ⚠ {w}" for w in warn] + [""]
     text = "\n".join(lines)
     reports = settings.resolve(settings.paths.reports_dir)
     reports.mkdir(parents=True, exist_ok=True)
