@@ -20,7 +20,7 @@ def test_backtest_runs_and_accounts_consistently(settings, bars):
 
 def test_entries_fill_at_next_open_with_slippage(settings, bars):
     res = run_backtest(bars, settings)
-    slip = settings.costs.slippage_bps / 10_000
+    slip = settings.costs.per_side
     for t in res.trades:
         df = bars[t.symbol]
         idx = df.index.get_loc(pd.Timestamp(t.entry_date))

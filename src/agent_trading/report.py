@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from .account import AccountSnapshot
 from .config import Settings
 from .data.service import EarningsData, LoadResult
 from .journal import Journal
-from .risk import RiskViolation, size_position
 
 DISCLAIMER = (
     "> Research and paper-trading output only. Not investment advice. No live orders are placed by this system. "
@@ -66,12 +66,11 @@ def build_daily_report(
     journal: Journal,
     as_of: date,
     fetch_status: dict[str, str] | None = None,
+    account: tuple[AccountSnapshot, list[str]] | None = None,
 ) -> str:
+    from .paper import portfolio_state, propose_entries
+
     warn_days = settings.reports.earnings_warning_days
-    summary = journal.summary(settings.paper_starting_equity)
-    equity = summary["equity_realized"]
-    cash = journal.cash(settings.paper_starting_equity)
-    open_risk = summary["open_risk"]
     r = settings.risk
 
     out = [f"# Daily research report: {as_of}", "", "**Mode: PAPER** · generated "
@@ -119,36 +118,34 @@ def build_daily_report(
          for s, row in screen.iterrows()],
     ))
 
-    # --- candidates
+    # --- broker account (read-only snapshot)
+    out += ["## Broker account (read-only)", ""]
+    if account is None:
+        out.append("- **Not verified:** no account snapshot imported. Paper results below do not depend on it.\n")
+    else:
+        snap, problems = account
+        status = "verified" if not problems else "**NOT VERIFIED** (" + "; ".join(problems) + ")"
+        out.append(f"- {snap.nickname or 'account'} ••{snap.account_last4}: {status}, as of {snap.fetched_at}")
+        out.append(f"- Value {_money(snap.total_value)}, cash {_money(snap.cash)}, buying power {_money(snap.buying_power)}, "
+                   f"{len(snap.positions)} positions, {len(snap.open_orders)} open orders")
+        if snap.positions or snap.open_orders:
+            out.append("- ⚠ The agent account holds positions or open orders; this system did not place them.")
+        out.append("")
+
+    # --- candidates (same RiskEngine as the backtest and paper broker)
     open_df = journal.open_trades()
     held = set(open_df["symbol"]) if not open_df.empty else set()
+    state = portfolio_state(journal, settings, loaded.bars, pd.Timestamp(as_of))
     out += ["## Paper-trade candidates (for next session)", "",
-            f"Paper equity {_money(equity)}, cash {_money(cash)}, open risk {_money(open_risk)} of "
-            f"{_money(equity * r.max_open_risk_pct)} allowed. Size uses last close as the reference; "
-            f"the real fill will be at the next open.", ""]
+            f"Paper equity {_money(state.equity)}, cash {_money(state.cash)}, planned open risk "
+            f"{_money(state.open_risk(r.stop_risk_buffer))} of {_money(state.equity * r.max_open_risk_pct)} allowed "
+            f"(stops planned {r.stop_risk_buffer:.0%} worse for gaps). Size uses last close as the reference; "
+            f"the paper fill will be at the next open.", ""]
     rows = []
-    running_risk = open_risk
-    for s, row in screen[screen["entry_signal"]].iterrows():
-        if s in held:
-            continue
-        stop = row.close - r.atr_stop_multiple * row.atr
-        note = ""
-        try:
-            d = size_position(equity, cash, row.close, stop, running_risk, r)
-        except RiskViolation as exc:
-            rows.append([s, _num(row.close), _num(stop), "0", "-", "-", str(exc)])
-            continue
-        nxt = next_earnings(earnings, s, as_of)
-        if not earnings.available:
-            note = "earnings unverified"
-        elif nxt is not None and (nxt - as_of).days <= warn_days:
-            note = f"earnings {nxt}: consider waiting"
-        if d.quantity > 0:
-            running_risk += d.risk_amount
-            cash -= d.notional
-        rows.append([s, _num(row.close), _num(stop), f"{d.quantity:g}", _money(d.notional), _money(d.risk_amount),
-                     d.limited_by + (f"; {note}" if note else "")])
-    out.append(_table(["Symbol", "Ref price", "Stop", "Qty", "Notional", "Risk", "Sizing limit / notes"], rows))
+    for p in propose_entries(screen, loaded.bars, state, settings, earnings, as_of, held):
+        rows.append([p.symbol, _num(p.ref_price), _num(p.stop), f"{p.quantity:g}", _money(p.notional),
+                     _money(p.risk), ("" if p.approved else "not sized: ") + p.reason + (f"; {p.note}" if p.note else "")])
+    out.append(_table(["Symbol", "Ref price", "Stop", "Qty", "Notional", "Planned risk", "Sizing limit / notes"], rows))
 
     # --- open positions
     out += ["## Open paper positions", ""]
@@ -230,7 +227,7 @@ def _tile(label: str, value: str, cls: str = "") -> str:
 
 
 def build_dashboard(settings: Settings, journal: Journal, backtest: dict | None = None) -> str:
-    s = journal.summary(settings.paper_starting_equity)
+    s = journal.summary(settings.paper_starting_equity, settings.risk.stop_risk_buffer)
     closed = journal.closed_trades()
     sign = "pos" if s["realized_pnl"] > 0 else "neg" if s["realized_pnl"] < 0 else ""
     parts = [

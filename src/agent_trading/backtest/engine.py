@@ -2,10 +2,11 @@
 
 Timing model (no look-ahead):
   * signals are computed from day t's close;
-  * exits and entries are filled at day t+1's open, adjusted for slippage;
+  * exits and entries are filled at day t+1's open, adjusted for slippage and
+    half the assumed spread;
   * stops are checked against each day's low; a gap through the stop fills at
-    the open, otherwise at the stop, both less slippage.
-Sizing uses the same risk module as paper trading.
+    the open, otherwise at the stop, both less costs.
+Entries are approved and sized by the same RiskEngine as paper trading.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ import pandas as pd
 
 from ..config import Settings, StrategyConfig
 from ..indicators import add_indicators
-from ..risk import planned_risk, size_position
+from ..risk import Holding, PortfolioState, RiskEngine
 from ..strategy import generate_signals
 from .metrics import compute_metrics
 
@@ -78,9 +79,11 @@ def run_backtest(
     cfg = strategy or settings.strategy
     rows = prepared if prepared is not None else prepare(bars, cfg)
     risk_cfg = settings.risk
-    slip = settings.costs.slippage_bps / 10_000
+    engine = RiskEngine(settings)
+    slip = settings.costs.per_side
     commission = settings.costs.commission_per_order
     initial = initial_equity if initial_equity is not None else settings.paper_starting_equity
+    returns = pd.DataFrame({s: df["close"] for s, df in bars.items()}).sort_index().pct_change()
 
     dates = sorted(set().union(*(r.keys() for r in rows.values()))) if rows else []
     if start is not None:
@@ -96,6 +99,7 @@ def run_backtest(
     pending_exits: set[str] = set()
     curve: dict[pd.Timestamp, float] = {}
     days_exposed = 0
+    prev_day: pd.Timestamp | None = None
 
     def close(sym: str, when: pd.Timestamp, raw_price: float, reason: str) -> None:
         nonlocal cash
@@ -117,6 +121,10 @@ def run_backtest(
 
         # 2. entries signalled yesterday, strongest momentum first
         equity_est = cash + sum(t.quantity * last_close.get(s, t.entry_price) for s, t in positions.items())
+        # correlations only use returns known at yesterday's close
+        known_returns = None
+        if prev_day is not None and pending_entries:  # positions can open earlier in this same loop
+            known_returns = returns.loc[:prev_day].iloc[-risk_cfg.correlation_lookback:]
         for sym, atr_value, _ in sorted(pending_entries, key=lambda x: -x[2]):
             bar = rows[sym].get(d)
             if bar is None or sym in positions:
@@ -125,9 +133,12 @@ def run_backtest(
             stop = fill - risk_cfg.atr_stop_multiple * atr_value
             if stop <= 0:
                 continue
-            open_risk = sum(planned_risk(t.quantity, t.entry_price, t.stop) for t in positions.values())
-            decision = size_position(equity_est, cash - commission, fill, stop, open_risk, risk_cfg)
-            if decision.quantity <= 0:
+            state = PortfolioState(
+                equity_est, cash - commission,
+                tuple(Holding(s, t.quantity, t.entry_price, t.stop) for s, t in positions.items()),
+            )
+            decision = engine.evaluate_entry(sym, fill, stop, state, known_returns)
+            if not decision.approved:
                 continue
             cash -= decision.quantity * fill + commission
             positions[sym] = Trade(
@@ -162,6 +173,7 @@ def run_backtest(
                     pending_exits.add(sym)
             elif bar["entry"] and pd.notna(bar["atr"]):
                 pending_entries.append((sym, float(bar["atr"]), float(bar["momentum"])))
+        prev_day = d
 
     # Close anything still open at the final close so results are comparable.
     if dates:
@@ -173,7 +185,9 @@ def run_backtest(
     equity = pd.Series(curve, dtype=float).sort_index()
     exposure = days_exposed / len(dates) if dates else 0.0
     metrics = compute_metrics(
-        equity, [t.pnl for t in closed], initial, exposure, sum(t.costs for t in closed)
+        equity, [t.pnl for t in closed], initial, exposure, sum(t.costs for t in closed),
+        traded_notional=sum(t.quantity * (t.entry_price + t.exit_price) for t in closed),
+        holding_days=[(t.exit_date - t.entry_date).days for t in closed],
     )
     return BacktestResult(equity, closed, metrics, params=cfg.__dict__.copy())
 

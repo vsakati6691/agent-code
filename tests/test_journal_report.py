@@ -82,7 +82,9 @@ def test_cli_journal_enforces_risk(tmp_path, capsys):
 
     (cfg_dir / "settings.yaml").write_text((ROOT / "config" / "settings.yaml").read_text())
     cfg = str(cfg_dir / "settings.yaml")
-    assert main(["--config", cfg, "journal", "open", "NVDA", "1", "100", "95"]) == 0
+    # 1 share risks $5 x 1.2 stop buffer = $6 > $5 cap; 0.8 share plans $4.80
+    assert main(["--config", cfg, "journal", "open", "NVDA", "1", "100", "95"]) == 2
+    assert main(["--config", cfg, "journal", "open", "NVDA", "0.8", "100", "95"]) == 0
     # second trade risking $15 would exceed both the per-trade and aggregate limits
     assert main(["--config", cfg, "journal", "open", "AMD", "3", "100", "95"]) == 2
     assert main(["--config", cfg, "journal", "list"]) == 0

@@ -15,6 +15,10 @@ risk:
   atr_stop_multiple: 2.5        # initial stop = entry - 2.5 * ATR
   fractional_shares: true       # needed for meaningful sizing on a small account
   min_order_notional: 1.0       # skip "dust" positions below $1 (Robinhood fractional minimum)
+  stop_risk_buffer: 0.2         # plan for stops filling 20% of the stop distance worse (gaps)
+  max_correlation: 0.8          # positions this correlated share one risk budget...
+  max_correlated_risk_pct: 0.01 # ...of 1% of equity ($10 on $1,000)
+  correlation_lookback: 60      # trading days of daily returns
   allow_short: false
   allow_margin: false
   allow_options: false
@@ -22,7 +26,8 @@ risk:
 
 costs:
   commission_per_order: 0.0     # Robinhood equities are commission-free...
-  slippage_bps: 10              # ...but spread + slippage are real; 10 bps per side
+  slippage_bps: 10              # ...but slippage is real: 10 bps per side
+  spread_bps: 5                 # assumed full bid/ask spread; half paid per side (no historical spreads available)
 
 data:
   provider: alphavantage
@@ -54,6 +59,34 @@ walkforward:
     fast_ma: [10, 20]
     slow_ma: [50]
     momentum_lookback: [21, 63]
+
+evaluation:                     # chronological train / validation / untouched holdout
+  train_fraction: 0.6
+  validation_fraction: 0.2      # remaining 20% is the holdout; run it rarely (it is logged)
+  bootstrap_samples: 1000
+  bootstrap_block: 20           # days per block (keeps autocorrelation)
+  min_trades: 30                # fewer trades than this => "insufficient sample" warning
+  sensitivity_grid:
+    fast_ma: [10, 20, 30]
+    slow_ma: [50, 100]
+    momentum_lookback: [21, 63, 126]
+    atr_stop_multiple: [2.0, 2.5, 3.0]
+
+regime:
+  benchmark: SPY
+  fast_ma: 50
+  slow_ma: 200
+  vol_lookback: 20
+  high_vol_threshold: 0.25      # annualised 20-day realised volatility
+
+broker:                         # read-only snapshot checks; this code never places orders
+  account_last4: "8204"
+  account_nickname: Agent-trading
+  snapshot_max_age_hours: 24
+
+paper:
+  order_expiry_days: 3
+  skip_entries_before_earnings: true
 
 reports:
   earnings_warning_days: 7
