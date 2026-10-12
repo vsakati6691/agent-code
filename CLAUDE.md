@@ -22,7 +22,7 @@ Daily runbook: [docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md).
    positions, orders, quotes, historicals, tradability, `preview_scan`.
    - Never call `place_*`, `cancel_*`, `review_*` or `exercise_*` tools, or change account settings.
    - A BUY/SELL signal is never authorization to trade.
-   - Brokerage trade approvals are OFF on the agent account, so nothing at the broker would stop an order.
+   - Brokerage trade approvals are ON for the agent account (turned on 2026-10-12), a broker-side backstop. They can be switched off in the app at any time, so the rules above still apply.
 3. **Account:** only the agentic account nicknamed "Agent-trading". Never write
    full account numbers anywhere; snapshots store the last 4 digits only.
 4. **Allowed instruments:** stocks and ETFs, including TQQQ/SQQQ under their
