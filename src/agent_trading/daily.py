@@ -229,10 +229,21 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
         out.append(f"**QQQ regime:** {reg['trend']} trend, {'above' if reg['above_sma20'] else 'below'} 20-day SMA, "
                    f"20-day volatility {reg['vol20']:.0%} (as of {reg['date']}).\n")
     news = ctx.snapshots.get("news")
+    qsnap = ctx.snapshots.get("quotes")
+    live = {}
+    if qsnap is not None and qsnap.age_hours() <= 2 and not qsnap.table.empty:
+        live = {r.ticker: r for r in qsnap.table.itertuples()}
     proposals = {p.symbol: p for p in ctx.proposals}
     for d in ctx.desk:
         out.append(f"### {d.symbol}: **{d.action}** (confidence: {d.confidence})")
         out.append(f"- Price: {_fmt(d.price)} (close of {d.price_date}; latest verified daily bar)")
+        q = live.get(d.symbol)
+        if q is not None and pd.notna(q.price):
+            out.append(f"- Live quote: {_fmt(q.price)} at {q.price_time} ({q.session} session; Robinhood); "
+                       f"spread {_pct(q.spread_pct, 2) if pd.notna(q.spread_pct) else 'n/a'}")
+            if d.position and q.price <= d.position.stop:
+                out.append(f"- ⚠ **Live price is at or below the stop {_fmt(d.position.stop)}**; the paper stop is "
+                           "applied on the daily bar after the close")
         out.append(f"- Trend: {d.trend}")
         out.append("- Reasons: " + "; ".join(d.reasons))
         if d.action in ("BUY", "WAIT"):
@@ -307,9 +318,10 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     return "\n".join(out)
 
 
-def write(settings: Settings, text: str, as_of: date) -> Path:
+def write(settings: Settings, text: str, as_of: date, label: str = "") -> Path:
     d = settings.resolve(settings.paths.reports_dir)
     d.mkdir(parents=True, exist_ok=True)
-    path = d / f"daily_two_strategy_{as_of.isoformat()}.md"
+    suffix = f"_{label}" if label else ""
+    path = d / f"daily_two_strategy_{as_of.isoformat()}{suffix}.md"
     path.write_text(text, encoding="utf-8")
     return path

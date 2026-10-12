@@ -338,6 +338,26 @@ def test_loss_limit_blocks_new_entries(settings, broker):
     assert any("blocked" in w for w in r.warnings)
 
 
+# ---------------------------------------------------------------- Strategy B historical backtest
+
+def test_desk_backtest_respects_leveraged_rules(settings):
+    from agent_trading.backtest.desk_backtest import run_desk_backtest
+
+    bars = desk_bars()
+    res = run_desk_backtest(bars, settings, ["TQQQ", "SQQQ"])
+    for t in res.trades:
+        if t.symbol in ("TQQQ", "SQQQ") and t.exit_reason != "end of test":
+            held = int(np.busday_count(t.entry_date, t.exit_date))
+            assert held <= settings.risk.max_holding_days[t.symbol] + 1  # exit queued at the limit, filled next open
+        assert t.quantity * (t.entry_price - t.stop) * (1 + settings.risk.stop_risk_buffer) <= 2.5 * 1.1
+    # never both at once
+    spans = [(t.symbol, t.entry_date, t.exit_date) for t in res.trades]
+    for s1, a1, b1 in spans:
+        for s2, a2, b2 in spans:
+            if s1 != s2:
+                assert b1 <= a2 or b2 <= a1
+
+
 # ---------------------------------------------------------------- end-to-end daily cycle (all inputs mocked)
 
 def test_daily_cycle_end_to_end(settings, tmp_path):

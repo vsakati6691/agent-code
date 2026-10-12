@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+import numpy as np
 import pandas as pd
 
 from ..config import Settings, StrategyConfig
@@ -178,7 +179,9 @@ def run_backtest(
             if bar is None:
                 continue
             if sym in positions:
-                if bar["exit"]:
+                limit = risk_cfg.max_holding_days.get(sym)
+                held = int(np.busday_count(positions[sym].entry_date, d.date())) if limit else 0
+                if bar["exit"] or (limit and held >= limit):
                     pending_exits.add(sym)
             elif bar["entry"] and pd.notna(bar["atr"]):
                 pending_entries.append((sym, float(bar["atr"]), float(bar["momentum"])))

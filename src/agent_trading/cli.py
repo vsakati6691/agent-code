@@ -172,7 +172,7 @@ def cmd_daily(settings: Settings, args) -> int:
     from .daily import run_daily, write
 
     text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper)
-    path = write(settings, text, args.as_of)
+    path = write(settings, text, args.as_of, args.label or "")
     if ctx.coverage:
         c = ctx.coverage
         print(f"Strategy A: scanned {c['scanned']}/{c['expected']} constituents ({c['ratio']:.1%}); "
@@ -350,6 +350,68 @@ def cmd_evaluate(settings: Settings, args) -> int:
     return 0
 
 
+def cmd_evaluate_desk(settings: Settings, args) -> int:
+    """Strategy B rules on history: train + validation only (holdout untouched)."""
+    from .backtest.benchmarks import buy_and_hold
+    from .backtest.desk_backtest import run_desk_backtest
+    from .backtest.evaluation import make_splits
+    from .backtest.metrics import compute_metrics
+    from .backtest.stats import block_bootstrap, warnings_for
+    from .data.rates import daily_cash_rate, load_monthly_rates
+
+    d = settings.desk
+    args.symbols = list(dict.fromkeys([*d.symbols, d.underlying, d.nvda_benchmark]))
+    bars = _backtest_bars(settings, args)
+    rates = load_monthly_rates(settings)
+    lines = ["# Strategy B (desk) backtest", "",
+             "> Rules from strategies/desk.py on daily bars; costs and RiskEngine limits as configured. "
+             "Event and earnings blackouts are NOT modelled historically. Holdout (last 20%) untouched. "
+             "**Trading P&L only**: idle cash earns nothing here, so returns and Sharpe measure the rules, "
+             "not T-bill interest (with tiny positions, interest would dominate).", ""]
+    rates = None  # deliberately: isolate the rules' edge from cash interest
+    groups = [[d.leveraged_long], [d.leveraged_inverse], ["NVDA"], [d.bitcoin_instrument],
+              [d.leveraged_long, d.leveraged_inverse, "NVDA", d.bitcoin_instrument]]
+    for syms in groups:
+        syms = [s for s in syms if s in bars]
+        if not syms:
+            continue
+        dates = sorted(set().union(*(bars[s].index for s in syms)))
+        try:
+            sp = make_splits(dates, 200, settings.evaluation.train_fraction, settings.evaluation.validation_fraction)
+        except ValueError as exc:
+            lines.append(f"## {'+'.join(syms)}: skipped ({exc})\n")
+            continue
+        cash = daily_cash_rate(rates, pd.DatetimeIndex(dates))
+        lines += [f"## {' + '.join(syms)}", "",
+                  "| Period | Return | CAGR | Sharpe (95% CI) | Max DD | Trades | Win % | Exposure | QQQ B&H | "
+                  + ("Instrument B&H |" if len(syms) == 1 else "|"),
+                  "|---|---|---|---|---|---|---|---|---|" + ("---|" if len(syms) == 1 else "")]
+        for name, (start, end) in [("train", sp.train), ("validation", sp.validation)]:
+            res = run_desk_backtest(bars, settings, syms, start, end, cash)
+            m = res.metrics
+            boot = block_bootstrap(res.equity.pct_change(), 500, 20)
+            ci = "n/a" if boot.get("insufficient") else f"{boot['sharpe_ci'][0]:.2f} to {boot['sharpe_ci'][1]:.2f}"
+            qqq = compute_metrics(buy_and_hold(bars[d.underlying], start, end, 1000, settings.costs.per_side), [], 1000)
+            row = (f"| {name} {start.date()}..{end.date()} | {m['total_return']:+.1%} | {(m['cagr'] or 0):+.1%} | "
+                   f"{m['sharpe']:.2f} ({ci}) | {m['max_drawdown']:+.1%} | {m['trades']} | {m['win_rate']:.0%} | "
+                   f"{m['exposure']:.0%} | {qqq['total_return']:+.1%} |")
+            if len(syms) == 1:
+                own = compute_metrics(buy_and_hold(bars[syms[0]], start, end, 1000, settings.costs.per_side), [], 1000)
+                row += f" {own['total_return']:+.1%} (DD {own['max_drawdown']:+.0%}) |"
+            lines.append(row)
+            for w in warnings_for(m, boot, settings.evaluation.min_trades):
+                lines.append(f"|  ⚠ {w} |" + " |" * (8 if len(syms) == 1 else 7))
+        lines.append("")
+    text = "\n".join(lines)
+    reports = settings.resolve(settings.paths.reports_dir)
+    reports.mkdir(parents=True, exist_ok=True)
+    path = reports / f"desk_backtest_{args.as_of}.md"
+    path.write_text(text, encoding="utf-8")
+    print(text)
+    print(f"\nReport: {path}")
+    return 0
+
+
 def cmd_journal(settings: Settings, args) -> int:
     j = _journal(settings)
     equity = settings.paper_starting_equity + j.realized_pnl()
@@ -434,6 +496,10 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     ev.set_defaults(func=cmd_evaluate)
 
+    ed = sub.add_parser("evaluate-desk", help="backtest Strategy B rules (train + validation; holdout untouched)")
+    ed.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
+    ed.set_defaults(func=cmd_evaluate_desk, symbols=None)
+
     j = sub.add_parser("journal", help="paper-trade journal")
     jsub = j.add_subparsers(dest="action", required=True)
     jo = jsub.add_parser("open")
@@ -474,6 +540,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     dl = sub.add_parser("daily", help="two-strategy cycle: S&P 500 scan, focused desk, paper broker, report")
     dl.add_argument("--no-paper", action="store_true", help="report only; do not run the paper broker")
+    dl.add_argument("--label", choices=["premarket", "intraday", "postclose"], help="report file suffix")
     dl.set_defaults(func=cmd_daily)
 
     a = sub.add_parser("account", help="read-only broker account snapshot")
