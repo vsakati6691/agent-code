@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+import numpy as np
 import pandas as pd
 
 from ..config import Settings, StrategyConfig
@@ -75,7 +76,10 @@ def run_backtest(
     strategy: StrategyConfig | None = None,
     initial_equity: float | None = None,
     prepared: dict[str, dict] | None = None,
+    cash_rate: pd.Series | None = None,
 ) -> BacktestResult:
+    """`cash_rate`: optional per-day simple interest rate credited on positive cash
+    at each close (see data.rates.daily_cash_rate)."""
     cfg = strategy or settings.strategy
     rows = prepared if prepared is not None else prepare(bars, cfg)
     risk_cfg = settings.risk
@@ -100,6 +104,8 @@ def run_backtest(
     curve: dict[pd.Timestamp, float] = {}
     days_exposed = 0
     prev_day: pd.Timestamp | None = None
+    interest = 0.0
+    rate_by_day = cash_rate.to_dict() if cash_rate is not None else {}
 
     def close(sym: str, when: pd.Timestamp, raw_price: float, reason: str) -> None:
         nonlocal cash
@@ -161,6 +167,10 @@ def run_backtest(
                 last_close[sym] = bar["close"]
         if positions:
             days_exposed += 1
+        if cash > 0 and rate_by_day:
+            credit = cash * float(rate_by_day.get(d, 0.0))
+            cash += credit
+            interest += credit
         curve[d] = cash + sum(t.quantity * last_close[s] for s, t in positions.items())
 
         # 5. signals from today's close, acted on tomorrow
@@ -169,7 +179,9 @@ def run_backtest(
             if bar is None:
                 continue
             if sym in positions:
-                if bar["exit"]:
+                limit = risk_cfg.max_holding_days.get(sym)
+                held = int(np.busday_count(positions[sym].entry_date, d.date())) if limit else 0
+                if bar["exit"] or (limit and held >= limit):
                     pending_exits.add(sym)
             elif bar["entry"] and pd.notna(bar["atr"]):
                 pending_entries.append((sym, float(bar["atr"]), float(bar["momentum"])))
@@ -189,6 +201,8 @@ def run_backtest(
         traded_notional=sum(t.quantity * (t.entry_price + t.exit_price) for t in closed),
         holding_days=[(t.exit_date - t.entry_date).days for t in closed],
     )
+    metrics["interest_earned"] = round(interest, 2)
+    metrics["trading_pnl"] = round(sum(t.pnl for t in closed), 2)
     return BacktestResult(equity, closed, metrics, params=cfg.__dict__.copy())
 
 

@@ -12,7 +12,7 @@ import pandas as pd
 from ..config import Settings
 from .alphavantage import SOURCE_NAME, AlphaVantageClient, AlphaVantageError
 from .cache import cache_path, last_cached_date, merge_bars, read_cache, write_cache
-from .validation import DataQualityError, validate_bars
+from .validation import DataQualityError, trim_bad_history, validate_bars
 
 log = logging.getLogger(__name__)
 EARNINGS_FILE = "earnings_calendar.csv"
@@ -86,6 +86,8 @@ class MarketDataService:
         for sym in symbols:
             try:
                 df = read_cache(self.cache_dir, sym)
+                if df is not None and not df.empty:
+                    df, _ = trim_bad_history(df, sym)  # old anomalies trimmed; recent ones raise
                 result.bars[sym] = validate_bars(df, sym, as_of, d.max_staleness_days, d.min_history_bars)
             except DataQualityError as exc:
                 result.rejected[sym] = str(exc)

@@ -44,7 +44,8 @@ class WalkForwardResult:
     metrics: dict
 
 
-def walk_forward(bars: dict[str, pd.DataFrame], settings: Settings) -> WalkForwardResult:
+def walk_forward(bars: dict[str, pd.DataFrame], settings: Settings,
+                 cash_rate: pd.Series | None = None) -> WalkForwardResult:
     wf = settings.walkforward
     candidates = strategy_grid(settings.strategy, wf.grid)
     warm = max(warmup_bars(c) for c in candidates)
@@ -68,11 +69,13 @@ def walk_forward(bars: dict[str, pd.DataFrame], settings: Settings) -> WalkForwa
         train = dates[i : i + wf.train_bars]
         test = dates[i + wf.train_bars : i + wf.train_bars + wf.test_bars]
         scored = [
-            (run_backtest(bars, settings, train[0], train[-1], c, prepared=prepared[id(c)]).metrics.get("sharpe", 0.0), c)
+            (run_backtest(bars, settings, train[0], train[-1], c, prepared=prepared[id(c)],
+                          cash_rate=cash_rate).metrics.get("sharpe", 0.0), c)
             for c in candidates
         ]
         best_score, best = max(scored, key=lambda x: x[0])  # ties keep the earliest
-        result = run_backtest(bars, settings, test[0], test[-1], best, equity, prepared=prepared[id(best)])
+        result = run_backtest(bars, settings, test[0], test[-1], best, equity, prepared=prepared[id(best)],
+                              cash_rate=cash_rate)
         folds.append(
             {
                 "train": f"{train[0].date()}..{train[-1].date()}",

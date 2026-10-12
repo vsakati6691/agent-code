@@ -29,14 +29,27 @@ Earnings calendar ────────────────┘           
 | Backtest with slippage and commissions; out-of-sample and walk-forward | `backtest/` |
 | Central RiskEngine: per-trade, aggregate and correlated risk, gap buffer, cash-only | `risk.py` |
 | Simulated paper broker (next-open fills, stops, same costs as backtest) | `paper.py` |
-| Train/validation/holdout evaluation, benchmarks, bootstrap, sensitivity | `backtest/evaluation.py`, `benchmarks.py`, `stats.py` |
+| Train/validation/holdout evaluation, benchmarks, bootstrap, deflated Sharpe, sensitivity, cost and stress tables | `backtest/evaluation.py`, `benchmarks.py`, `stats.py` |
+| Target-weight allocation engine (month-end rebalance, same RiskEngine caps) | `backtest/portfolio.py` |
+| 3-month T-bill interest on idle cash (no look-ahead) | `data/rates.py` |
 | Market regime (trend, volatility) | `regime.py` |
 | Read-only broker account snapshot (masked, staleness-checked) | `account.py` |
 | Paper-trade journal (SQLite) | `journal.py` |
 | Daily report + HTML dashboard | `report.py` |
 | Command line | `cli.py` |
 
-## Strategy (a hypothesis, not a proven edge)
+## Strategies (paper only)
+
+| Strategy | What it does | Evidence so far |
+|---|---|---|
+| **A: S&P 500 scanner** (`strategies/scanner.py`) | Ranks every current constituent (price strength, volume, quality, valuation, low volatility); top 3 that pass all filters become paper entries | `evaluate-scanner`: point-in-time S&P 500 lists 2019–2023; see `reports/scanner_backtest_*.md` |
+| **B: focused desk** (`strategies/desk.py`) | TQQQ/SQQQ (QQQ regime, 5-day limit, never both, event blackout), NVDA (trend + RS vs SMH, earnings blackout), IBIT | `evaluate-desk`: trading-only edge near zero per instrument; weak combined evidence |
+| **C: GTAA** (`strategies/gtaa.py`) | 7 ETFs, hold each while above its 10-month average, month-end rebalance | `evaluate-gtaa`: modest returns, small drawdowns (validation +5.7%/yr, max DD −6.9%) |
+| Legacy trend (`strategy.py`) | The original 22-symbol trend rules | Kept as a baseline (`evaluate`) |
+
+Daily cycle: `daily` (see [docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md)).
+
+## Legacy strategy (a hypothesis, not a proven edge)
 
 Buy liquid names that are already trending up, cut losers quickly, and risk very
 little per trade.
@@ -93,6 +106,12 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -m agent_trading walkforward
 & $py -m agent_trading evaluate               # train/validation + benchmarks, regimes, bootstrap, sensitivity
 & $py -m agent_trading evaluate --holdout     # also the untouched holdout (logged; use rarely)
+& $py -m agent_trading daily [--no-paper] [--label premarket|intraday|postclose]   # two-strategy cycle + report
+& $py -m agent_trading evaluate-scanner       # Strategy A on point-in-time S&P 500 lists
+& $py -m agent_trading evaluate-desk          # Strategy B rules on history
+& $py -m agent_trading evaluate-gtaa          # Strategy C (GTAA)
+& $py -m agent_trading universe import|import-history|show|symbols
+& $py -m agent_trading snapshot fundamentals|quotes|news|filings|econ <files>
 & $py -m agent_trading paper run              # fill paper orders at next open, check stops, queue new orders
 & $py -m agent_trading paper status
 & $py -m agent_trading account import <snapshot.json>   # read-only broker snapshot (masked)
@@ -119,7 +138,9 @@ $py = ".\.venv\Scripts\python.exe"
 
 ## Known limitations
 
-- Free Alpha Vantage tier: ~100 bars per fetch and 25 requests/day. Long history is seeded from Robinhood via `import-robinhood`.
+- Free Alpha Vantage tier: ~100 bars per fetch and 25 requests/day. Long history (2007 onward, about 19 years) is seeded from Robinhood via `import-robinhood`. Never use Robinhood's `adjustment_type: all` daily bars; they are wrong.
+- Robinhood daily volume sometimes drops out for a few days (e.g. Aug 2010, Oct 2025) while prices stay correct; this is tolerated. Runs of flat price bars (dead feeds, pre-merger SPAC shells) are rejected, or trimmed from old history in backtests.
+- Dividends are not modelled (price return only), for both strategies and benchmarks.
 - Alpha Vantage daily bars are not split-adjusted; a split inside the cached history causes that symbol to be rejected.
 - Daily bars only: intraday stop fills, partial fills, halts and taxes are not modelled.
 - The Robinhood MCP is only available inside a Claude session; the Python code never talks to the broker.

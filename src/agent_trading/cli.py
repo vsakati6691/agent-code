@@ -53,9 +53,13 @@ def _fmt_metrics(m: dict) -> str:
 # ------------------------------------------------------------------ commands
 
 def cmd_fetch(settings: Settings, args) -> int:
+    from .data.rates import refresh_rates
+
     svc = _service(settings, with_client=True)
     status = svc.refresh(_symbols(settings, args.symbols), args.as_of)
     svc.refresh_earnings(args.as_of)
+    if refresh_rates(settings, svc.client, args.as_of):
+        print("T-bill rates updated")
     for sym, msg in status.items():
         print(f"{sym:<6} {msg}")
     print(f"API calls used this run: {svc.client.calls_made}")
@@ -127,6 +131,72 @@ def _account(settings: Settings):
     return None if snap is None else (snap, verify_snapshot(snap, settings))
 
 
+def cmd_universe(settings: Settings, args) -> int:
+    from .data.universe import UniverseError, import_universe, load_universe, universe_problems
+
+    if args.action == "import-history":
+        from .data.universe import import_universe_history
+
+        try:
+            for h in sorted(import_universe_history(settings, [Path(p) for p in args.paths]), key=lambda x: x.as_of):
+                print(f"{h.as_of}: {len(h.tickers)} constituents; unresolved {len(h.excluded)}")
+        except (UniverseError, ValueError, KeyError) as exc:
+            print(f"Historical list rejected: {exc}")
+            return 2
+        return 0
+    if args.action == "import":
+        try:
+            u = import_universe(settings, Path(args.path))
+        except (UniverseError, ValueError, KeyError) as exc:
+            print(f"Constituent list rejected: {exc}")
+            return 2
+    else:
+        u = load_universe(settings)
+        if u is None:
+            print("No constituent list imported.")
+            return 1
+    print(f"{len(u.tickers)} constituents as of {u.as_of} ({u.source})")
+    if u.excluded:
+        print("Excluded rows: " + "; ".join(u.excluded))
+    problems = universe_problems(u, settings, args.as_of)
+    for p in problems:
+        print(f"WARNING: {p}")
+    if args.action == "symbols":
+        print(" ".join(u.tickers))
+    return 0 if not problems else 2
+
+
+def cmd_snapshot(settings: Settings, args) -> int:
+    from .data.snapshots import SnapshotDataError, import_snapshot_files
+
+    try:
+        snap = import_snapshot_files(settings, args.kind, [Path(p) for p in args.paths], merge=args.merge)
+    except (SnapshotDataError, ValueError, KeyError) as exc:
+        print(f"Snapshot rejected: {exc}")
+        return 2
+    print(f"{args.kind}: {len(snap.table)} rows stored ({snap.source})")
+    return 0
+
+
+def cmd_daily(settings: Settings, args) -> int:
+    from .daily import run_daily, write
+
+    text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper)
+    path = write(settings, text, args.as_of, args.label or "")
+    if ctx.coverage:
+        c = ctx.coverage
+        print(f"Strategy A: scanned {c['scanned']}/{c['expected']} constituents ({c['ratio']:.1%}); "
+              f"{len(ctx.scan.actionable) if ctx.scan else 0} actionable")
+    for d in ctx.desk:
+        print(f"Strategy B: {d.symbol:<5} {d.action} ({d.confidence})")
+    for e in ctx.paper_events:
+        print(f"Paper: {e}")
+    for w in ctx.paper_warnings:
+        print(f"Paper WARNING: {w}")
+    print(f"Report written: {path}")
+    return 0
+
+
 def cmd_account(settings: Settings, args) -> int:
     from .account import SnapshotError, import_snapshot
 
@@ -182,17 +252,28 @@ def cmd_paper(settings: Settings, args) -> int:
 
 
 def _backtest_bars(settings: Settings, args) -> dict:
-    """Backtests validate completeness but not freshness (history may be older)."""
+    """Backtests validate completeness but not freshness (history may be older).
+
+    Old frozen stretches (pre-merger shells, thin pre-listing trading) are
+    trimmed off; a recent freeze excludes the symbol.
+    """
     from .data.cache import read_cache
-    from .data.validation import DataQualityError, validate_bars
+    from .data.validation import DataQualityError, trim_frozen_history, validate_bars
 
     cache_dir = settings.resolve(settings.data.cache_dir)
+    since = getattr(args, "since", None)
     bars = {}
     for sym in _symbols(settings, args.symbols):
         df = read_cache(cache_dir, sym)
         try:
-            last = df.index[-1].date() if df is not None and not df.empty else args.as_of
-            bars[sym] = validate_bars(df, sym, last, 0, settings.data.min_history_bars)
+            if df is None or df.empty:
+                raise DataQualityError(f"{sym}: no data")
+            if since is not None:
+                df = df.loc[str(since):]
+            df, note = trim_frozen_history(df, sym)
+            if note:
+                log.warning("%s", note)
+            bars[sym] = validate_bars(df, sym, df.index[-1].date(), 0, settings.data.min_history_bars)
         except DataQualityError as exc:
             log.warning("Excluded from backtest: %s", exc)
     return bars
@@ -250,6 +331,13 @@ def cmd_evaluate(settings: Settings, args) -> int:
     if args.holdout and holdout_uses(settings) > 0:
         print(f"Note: the holdout has already been evaluated {holdout_uses(settings)} time(s); "
               "repeated use turns it into a tuning set.")
+    from .data.rates import load_monthly_rates, refresh_rates
+
+    if settings.evaluation.cash_interest and load_monthly_rates(settings) is None:
+        try:
+            refresh_rates(settings, _service(settings, with_client=True).client, args.as_of)
+        except ConfigError as exc:
+            print(f"T-bill rates unavailable ({exc}); cash will earn no interest in this evaluation.")
     bars = _backtest_bars(settings, args)
     try:
         rep = evaluate(bars, settings, use_holdout=args.holdout)
@@ -269,6 +357,189 @@ def cmd_evaluate(settings: Settings, args) -> int:
         print(f"Sensitivity: {ss['share_positive_sharpe']:.0%} of {ss['combinations']} combos Sharpe>0; "
               f"fragile={ss['fragile']}")
     print(f"\nReport: {md}\nTrades: {csv}")
+    return 0
+
+
+def cmd_evaluate_desk(settings: Settings, args) -> int:
+    """Strategy B rules on history: train + validation only (holdout untouched)."""
+    from .backtest.benchmarks import buy_and_hold
+    from .backtest.desk_backtest import run_desk_backtest
+    from .backtest.evaluation import make_splits
+    from .backtest.metrics import compute_metrics
+    from .backtest.stats import block_bootstrap, warnings_for
+    from .data.rates import daily_cash_rate, load_monthly_rates
+
+    d = settings.desk
+    args.symbols = list(dict.fromkeys([*d.symbols, d.underlying, d.nvda_benchmark]))
+    bars = _backtest_bars(settings, args)
+    rates = load_monthly_rates(settings)
+    lines = ["# Strategy B (desk) backtest", "",
+             "> Rules from strategies/desk.py on daily bars; costs and RiskEngine limits as configured. "
+             "Event and earnings blackouts are NOT modelled historically. Holdout (last 20%) untouched. "
+             "**Trading P&L only**: idle cash earns nothing here, so returns and Sharpe measure the rules, "
+             "not T-bill interest (with tiny positions, interest would dominate).", ""]
+    rates = None  # deliberately: isolate the rules' edge from cash interest
+    groups = [[d.leveraged_long], [d.leveraged_inverse], ["NVDA"], [d.bitcoin_instrument],
+              [d.leveraged_long, d.leveraged_inverse, "NVDA", d.bitcoin_instrument]]
+    for syms in groups:
+        syms = [s for s in syms if s in bars]
+        if not syms:
+            continue
+        dates = sorted(set().union(*(bars[s].index for s in syms)))
+        try:
+            sp = make_splits(dates, 200, settings.evaluation.train_fraction, settings.evaluation.validation_fraction)
+        except ValueError as exc:
+            lines.append(f"## {'+'.join(syms)}: skipped ({exc})\n")
+            continue
+        cash = daily_cash_rate(rates, pd.DatetimeIndex(dates))
+        lines += [f"## {' + '.join(syms)}", "",
+                  "| Period | Return | CAGR | Sharpe (95% CI) | Max DD | Trades | Win % | Exposure | QQQ B&H | "
+                  + ("Instrument B&H |" if len(syms) == 1 else "|"),
+                  "|---|---|---|---|---|---|---|---|---|" + ("---|" if len(syms) == 1 else "")]
+        for name, (start, end) in [("train", sp.train), ("validation", sp.validation)]:
+            res = run_desk_backtest(bars, settings, syms, start, end, cash)
+            m = res.metrics
+            boot = block_bootstrap(res.equity.pct_change(), 500, 20)
+            ci = "n/a" if boot.get("insufficient") else f"{boot['sharpe_ci'][0]:.2f} to {boot['sharpe_ci'][1]:.2f}"
+            qqq = compute_metrics(buy_and_hold(bars[d.underlying], start, end, 1000, settings.costs.per_side), [], 1000)
+            row = (f"| {name} {start.date()}..{end.date()} | {m['total_return']:+.1%} | {(m['cagr'] or 0):+.1%} | "
+                   f"{m['sharpe']:.2f} ({ci}) | {m['max_drawdown']:+.1%} | {m['trades']} | {m['win_rate']:.0%} | "
+                   f"{m['exposure']:.0%} | {qqq['total_return']:+.1%} |")
+            if len(syms) == 1:
+                own = compute_metrics(buy_and_hold(bars[syms[0]], start, end, 1000, settings.costs.per_side), [], 1000)
+                row += f" {own['total_return']:+.1%} (DD {own['max_drawdown']:+.0%}) |"
+            lines.append(row)
+            for w in warnings_for(m, boot, settings.evaluation.min_trades):
+                lines.append(f"|  ⚠ {w} |" + " |" * (8 if len(syms) == 1 else 7))
+        lines.append("")
+    text = "\n".join(lines)
+    reports = settings.resolve(settings.paths.reports_dir)
+    reports.mkdir(parents=True, exist_ok=True)
+    path = reports / f"desk_backtest_{args.as_of}.md"
+    path.write_text(text, encoding="utf-8")
+    print(text)
+    print(f"\nReport: {path}")
+    return 0
+
+
+def cmd_evaluate_scanner(settings: Settings, args) -> int:
+    """Strategy A on point-in-time S&P 500 lists (train + validation; holdout untouched)."""
+    from .backtest.scanner_backtest import run_account_backtest, run_signal_backtest, summarize
+    from .data.universe import load_universe_history
+
+    history = {d: t for d, t in load_universe_history(settings).items()}
+    if len(history) < 2:
+        print("Need historical constituent snapshots (universe import-history).")
+        return 1
+    args.symbols = sorted(set().union(*history.values()) | {settings.scanner.benchmark})
+    bars = _backtest_bars(settings, args)
+    spy = bars.pop(settings.scanner.benchmark, None)
+    if spy is None:
+        print("Benchmark data missing.")
+        return 1
+    bt = run_signal_backtest(bars, spy, history, settings, top_n=args.top)
+    frame = bt.frame()
+    n = len(frame)
+    t_end, v_end = int(n * settings.evaluation.train_fraction), int(n * (settings.evaluation.train_fraction + settings.evaluation.validation_fraction))
+    parts = {"train": frame.iloc[:t_end], "validation": frame.iloc[t_end:v_end]}
+    snaps = sorted(history)
+    lines = ["# Strategy A (S&P 500 scanner) point-in-time backtest", "",
+             f"> Universe each month = latest stored S&P 500 snapshot on or before that date ({len(snaps)} snapshots, "
+             f"{snaps[0]} to {snaps[-1]}; quarterly N-PORT lists to {snaps[-2]}, so later months reuse that list and miss "
+             "newer additions). Price factors only (fundamentals are not point-in-time). Top "
+             f"{args.top} eligible names, equal weight, next open to next month-end, net of "
+             f"{settings.costs.per_side * 1e4:.1f} bps per side on turnover. Holdout = last "
+             f"{n - v_end} months, untouched. Delisted names Robinhood no longer carries are missing (survivorship gap).", ""]
+    for name, part in parts.items():
+        if part.empty:
+            continue
+        s = summarize(part)
+        lines += [f"## {name}: {part.index[0]} to {part.index[-1]} ({s['top']['months']} months)", "",
+                  "| | Total | CAGR | Sharpe | Max DD |", "|---|---|---|---|---|"]
+        for label, key in [(f"Top {args.top} (strategy)", "top"), ("All eligible, equal weight", "universe"), ("SPY", "spy")]:
+            st = s[key]
+            lines.append(f"| {label} | {st['total']:+.1%} | {st['cagr']:+.1%} | {st['sharpe']:.2f} | {st['max_dd']:+.1%} |")
+        lines += ["",
+                  f"- Mean monthly excess vs SPY {s['excess_vs_spy_mean_monthly']:+.2%} (t = {s['excess_t_stat']:.2f}); "
+                  f"beat SPY in {s['hit_rate_vs_spy']:.0%} of months.",
+                  f"- Rank IC (score vs next-month return, all scored names): mean {s['ic_mean']:+.3f} (t = {s['ic_t_stat']:.2f}).",
+                  f"- Coverage: {s['avg_members']:.0f} listed members/month, {s['avg_scored']:.0f} scored, "
+                  f"{s['avg_eligible']:.0f} eligible; average turnover {s['avg_turnover']:.0%} of picks per month.",
+                  "- ⚠ |t| < 2: not statistically distinguishable from zero." if abs(s["excess_t_stat"]) < 2 else "", ""]
+    if not parts["validation"].empty:
+        start, end = pd.Timestamp(parts["train"].index[0]), pd.Timestamp(parts["validation"].index[-1]) + pd.offsets.MonthEnd(1)
+        acct = run_account_backtest(bars | {settings.scanner.benchmark: spy}, spy, history, settings, start, end, args.top)
+        m = acct.metrics
+        lines += ["## Under the real account limits ($5/trade, $15 total, $250 max, 2.5×ATR stops; trading P&L only)", "",
+                  f"{m['start']} to {m['end']}: return {m['total_return']:+.1%}, CAGR {(m['cagr'] or 0):+.1%}, Sharpe "
+                  f"{m['sharpe']:.2f}, max DD {m['max_drawdown']:+.1%}, {m['trades']} trades, win rate {m['win_rate']:.0%}, "
+                  f"exposure {m['exposure']:.0%}.", ""]
+    text = "\n".join(l for l in lines if l is not None)
+    reports = settings.resolve(settings.paths.reports_dir)
+    reports.mkdir(parents=True, exist_ok=True)
+    path = reports / f"scanner_backtest_{args.as_of}.md"
+    path.write_text(text, encoding="utf-8")
+    frame.to_csv(reports / f"scanner_backtest_months_{args.as_of}.csv")
+    print(text)
+    print(f"\nReport: {path}")
+    return 0
+
+
+def cmd_evaluate_gtaa(settings: Settings, args) -> int:
+    """Strategy C (GTAA) on history: train + validation; holdout untouched."""
+    from dataclasses import replace
+
+    from .backtest.benchmarks import buy_and_hold, equal_weight
+    from .backtest.evaluation import make_splits
+    from .backtest.metrics import compute_metrics
+    from .backtest.portfolio import run_allocation
+    from .backtest.stats import block_bootstrap
+    from .data.rates import daily_cash_rate, load_monthly_rates
+    from .strategies import gtaa
+
+    g = settings.gtaa
+    args.symbols = list(g.assets)
+    bars = _backtest_bars(settings, args)
+    missing = [a for a in g.assets if a not in bars]
+    dates = sorted(set().union(*(df.index for df in bars.values())))
+    sp = make_splits(dates, 21 * g.sma_months + 5, settings.evaluation.train_fraction, settings.evaluation.validation_fraction)
+
+    def wfn(day, hist):
+        return gtaa.weights(hist, day, list(g.assets), g.sma_months)
+
+    # Signal view: the published rule at full 1/N weights (per-trade caps relaxed, no stops) to check it works.
+    # Account view: the real RiskEngine limits; trading P&L only (idle cash earns nothing).
+    signal_settings = replace(settings, risk=replace(settings.risk, risk_per_trade_pct=1.0, max_open_risk_pct=1.0,
+                                                     max_correlated_risk_pct=1.0, max_position_pct=1.0 / len(g.assets) + 1e-9,
+                                                     stop_risk_buffer=0.0))
+    cash = daily_cash_rate(load_monthly_rates(settings), pd.DatetimeIndex(dates))
+    lines = ["# Strategy C (GTAA) backtest", "",
+             f"> Assets {', '.join(g.assets)}; month-end {g.sma_months}-month SMA rule; next-open fills; "
+             f"{settings.costs.per_side * 1e4:.1f} bps per side. Holdout {sp.holdout[0].date()} to {sp.holdout[1].date()} untouched. "
+             "Price return only (no dividends; bond/REIT ETFs understated)." + (f" Missing data: {missing}." if missing else ""), ""]
+    for name, (start, end) in [("train", sp.train), ("validation", sp.validation)]:
+        sig = run_allocation(bars, signal_settings, wfn, start, end, cash_rate=cash, name="GTAA signal view",
+                             use_stops=False)
+        acct = run_allocation(bars, settings, wfn, start, end, name="GTAA account view")
+        spy = compute_metrics(buy_and_hold(bars["SPY"], start, end, 1000, settings.costs.per_side), [], 1000)
+        ew = compute_metrics(equal_weight(bars, start, end, 1000, settings.costs.per_side), [], 1000)
+        b = block_bootstrap(sig.equity.pct_change(), 500, 20)
+        ci = "n/a" if b.get("insufficient") else f"{b['sharpe_ci'][0]:.2f} to {b['sharpe_ci'][1]:.2f}"
+        lines += [f"## {name}: {start.date()} to {end.date()}", "",
+                  "| | Total | CAGR | Sharpe | Max DD | Trades |", "|---|---|---|---|---|---|"]
+        for label, m in [("GTAA signal view (1/7 weights, T-bill on cash)", sig.metrics),
+                         ("GTAA under account limits (trading P&L only)", acct.metrics),
+                         ("SPY buy & hold", spy), ("7-asset equal weight buy & hold", ew)]:
+            lines.append(f"| {label} | {m['total_return']:+.1%} | {(m.get('cagr') or 0):+.1%} | {m['sharpe']:.2f} | "
+                         f"{m['max_drawdown']:+.1%} | {m.get('trades', '-')} |")
+        lines += ["", f"Signal-view Sharpe 95% interval: {ci}.", ""]
+    text = "\n".join(lines)
+    reports = settings.resolve(settings.paths.reports_dir)
+    reports.mkdir(parents=True, exist_ok=True)
+    path = reports / f"gtaa_backtest_{args.as_of}.md"
+    path.write_text(text, encoding="utf-8")
+    print(text)
+    print(f"\nReport: {path}")
     return 0
 
 
@@ -342,16 +613,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     b = sub.add_parser("backtest", help="full-period plus in-sample/out-of-sample backtest")
     b.add_argument("--symbols", nargs="*")
+    b.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     b.set_defaults(func=cmd_backtest)
 
     w = sub.add_parser("walkforward", help="walk-forward optimisation and out-of-sample evaluation")
     w.add_argument("--symbols", nargs="*")
+    w.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     w.set_defaults(func=cmd_walkforward)
 
     ev = sub.add_parser("evaluate", help="train/validation(/holdout) evaluation with benchmarks, regimes, bootstrap, sensitivity")
     ev.add_argument("--symbols", nargs="*")
     ev.add_argument("--holdout", action="store_true", help="also evaluate the untouched holdout (logged; use sparingly)")
+    ev.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     ev.set_defaults(func=cmd_evaluate)
+
+    ed = sub.add_parser("evaluate-desk", help="backtest Strategy B rules (train + validation; holdout untouched)")
+    ed.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
+    ed.set_defaults(func=cmd_evaluate_desk, symbols=None)
+
+    es = sub.add_parser("evaluate-scanner", help="point-in-time backtest of Strategy A (holdout untouched)")
+    es.add_argument("--top", type=int, default=10)
+    es.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
+    es.set_defaults(func=cmd_evaluate_scanner, symbols=None)
+
+    eg = sub.add_parser("evaluate-gtaa", help="backtest Strategy C (GTAA): signal view and account-limits view")
+    eg.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
+    eg.set_defaults(func=cmd_evaluate_gtaa, symbols=None)
 
     j = sub.add_parser("journal", help="paper-trade journal")
     jsub = j.add_subparsers(dest="action", required=True)
@@ -376,6 +663,27 @@ def build_parser() -> argparse.ArgumentParser:
     psub.add_parser("run", help="fill pending paper orders, check stops, queue new orders from today's signals")
     psub.add_parser("status", help="paper positions, P&L and pending orders")
     pp.set_defaults(func=cmd_paper)
+
+    u = sub.add_parser("universe", help="S&P 500 constituents (dynamic, from SPY holdings)")
+    usub = u.add_subparsers(dest="action", required=True)
+    ui = usub.add_parser("import", help="validate and store a saved Financial Datasets get_index_fund(SPY) JSON")
+    ui.add_argument("path")
+    usub.add_parser("show")
+    usub.add_parser("symbols", help="print the tickers (for data collection)")
+    uh = usub.add_parser("import-history", help="store historical get_index_fund(SPY, as_of=...) snapshots")
+    uh.add_argument("paths", nargs="+")
+    u.set_defaults(func=cmd_universe)
+
+    sn = sub.add_parser("snapshot", help="import a saved MCP payload (fundamentals, quotes, news, filings, econ)")
+    sn.add_argument("kind", choices=["fundamentals", "quotes", "news", "filings", "econ"])
+    sn.add_argument("paths", nargs="+")
+    sn.add_argument("--merge", action="store_true", help="append to today's snapshot instead of replacing it")
+    sn.set_defaults(func=cmd_snapshot)
+
+    dl = sub.add_parser("daily", help="two-strategy cycle: S&P 500 scan, focused desk, paper broker, report")
+    dl.add_argument("--no-paper", action="store_true", help="report only; do not run the paper broker")
+    dl.add_argument("--label", choices=["premarket", "intraday", "postclose"], help="report file suffix")
+    dl.set_defaults(func=cmd_daily)
 
     a = sub.add_parser("account", help="read-only broker account snapshot")
     asub = a.add_subparsers(dest="action", required=True)

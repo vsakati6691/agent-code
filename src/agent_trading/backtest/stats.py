@@ -1,9 +1,10 @@
-"""Statistical uncertainty and parameter-sensitivity analysis."""
+"""Statistical uncertainty, multiple-testing correction, and robustness checks."""
 from __future__ import annotations
 
 import itertools
 import math
 from dataclasses import replace
+from statistics import NormalDist
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,8 @@ from .engine import prepare, run_backtest
 
 TRADING_DAYS = 252
 STRATEGY_FIELDS = {f for f in StrategyConfig.__dataclass_fields__}
+EULER_GAMMA = 0.5772156649
+_N = NormalDist()
 
 
 def _sharpe(r: np.ndarray) -> float:
@@ -51,7 +54,44 @@ def block_bootstrap(
     }
 
 
-def warnings_for(metrics: dict, boot: dict, min_trades: int) -> list[str]:
+def deflated_sharpe(returns: pd.Series, n_trials: int, trial_sharpes_annual: list[float]) -> dict:
+    """Bailey & López de Prado (2014) Deflated Sharpe Ratio.
+
+    Probability that the true Sharpe exceeds the best Sharpe expected from
+    `n_trials` unskilled configurations, given the variance of the Sharpes
+    actually observed across those trials. Accounts for skew and fat tails.
+    """
+    r = returns.dropna().to_numpy()
+    t = len(r)
+    if t < 30 or n_trials < 1 or r.std(ddof=1) == 0:
+        return {"dsr": None, "n_trials": n_trials, "reason": "insufficient data"}
+    sr = r.mean() / r.std(ddof=1)  # per-day Sharpe
+    trial = np.asarray(trial_sharpes_annual, dtype=float) / math.sqrt(TRADING_DAYS)
+    var_trials = float(trial.var(ddof=1)) if len(trial) > 1 else 0.0
+    if n_trials > 1 and var_trials > 0:
+        sr0 = math.sqrt(var_trials) * (
+            (1 - EULER_GAMMA) * _N.inv_cdf(1 - 1 / n_trials)
+            + EULER_GAMMA * _N.inv_cdf(1 - 1 / (n_trials * math.e))
+        )
+    else:
+        sr0 = 0.0
+    centered = r - r.mean()
+    m2 = (centered**2).mean()
+    skew = float((centered**3).mean() / m2**1.5)
+    kurt = float((centered**4).mean() / m2**2)  # Pearson (normal = 3)
+    denom = 1 - skew * sr + (kurt - 1) / 4 * sr**2
+    if denom <= 0:
+        return {"dsr": None, "n_trials": n_trials, "reason": "degenerate moments"}
+    z = (sr - sr0) * math.sqrt(t - 1) / math.sqrt(denom)
+    return {
+        "dsr": _N.cdf(z),
+        "n_trials": n_trials,
+        "sharpe_annual": sr * math.sqrt(TRADING_DAYS),
+        "expected_max_sharpe_annual": sr0 * math.sqrt(TRADING_DAYS),
+    }
+
+
+def warnings_for(metrics: dict, boot: dict, min_trades: int, dsr: dict | None = None) -> list[str]:
     out = []
     if metrics.get("trades", 0) < min_trades:
         out.append(f"only {metrics.get('trades', 0)} trades (< {min_trades}): too few to draw conclusions")
@@ -59,11 +99,15 @@ def warnings_for(metrics: dict, boot: dict, min_trades: int) -> list[str]:
         out.append(f"only {boot.get('n_days')} days: confidence intervals not computed")
     elif boot["sharpe_ci"][0] <= 0:
         out.append("95% interval for Sharpe includes zero: performance is not statistically distinguishable from zero")
+    if dsr and dsr.get("dsr") is not None and dsr["dsr"] < 0.95:
+        out.append(f"deflated Sharpe probability {dsr['dsr']:.0%} after {dsr['n_trials']} configurations tried "
+                   "(< 95%): the result may be luck from testing many settings")
     return out
 
 
 def sensitivity(
-    bars: dict[str, pd.DataFrame], settings: Settings, grid: dict[str, list], start, end
+    bars: dict[str, pd.DataFrame], settings: Settings, grid: dict[str, list], start, end,
+    cash_rate: pd.Series | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Run every grid combination on [start, end]; summarise robustness.
 
@@ -81,7 +125,7 @@ def sensitivity(
         s = replace(settings, strategy=strat, risk=risk)
         if strat not in prepared_cache:
             prepared_cache[strat] = prepare(bars, strat)
-        m = run_backtest(bars, s, start, end, strat, prepared=prepared_cache[strat]).metrics
+        m = run_backtest(bars, s, start, end, strat, prepared=prepared_cache[strat], cash_rate=cash_rate).metrics
         rows.append({**params, "sharpe": m.get("sharpe", 0.0), "total_return": m.get("total_return", 0.0),
                      "max_drawdown": m.get("max_drawdown", 0.0), "trades": m.get("trades", 0)})
     table = pd.DataFrame(rows).sort_values("sharpe", ascending=False).reset_index(drop=True)
@@ -102,3 +146,35 @@ def sensitivity(
         "fragile": share_pos < 0.6 or spread > 1.0,
     }
     return table, summary
+
+
+def cost_sensitivity(
+    bars: dict[str, pd.DataFrame], settings: Settings, start, end, levels_bps: list[float],
+    cash_rate: pd.Series | None = None,
+) -> tuple[list[dict], bool]:
+    """Re-run at several all-in per-side costs. A real edge should degrade
+    steadily as costs rise; non-monotonic results suggest noise."""
+    prepared = prepare(bars, settings.strategy)
+    rows = []
+    for bps in levels_bps:
+        s = replace(settings, costs=replace(settings.costs, slippage_bps=bps, spread_bps=0.0))
+        m = run_backtest(bars, s, start, end, prepared=prepared, cash_rate=cash_rate).metrics
+        rows.append({"cost_bps_per_side": bps, "cagr": m.get("cagr"), "sharpe": m.get("sharpe"),
+                     "trades": m.get("trades")})
+    cagrs = [r["cagr"] if r["cagr"] is not None else float("-inf") for r in rows]
+    monotonic = all(a >= b - 1e-9 for a, b in zip(cagrs, cagrs[1:]))
+    return rows, monotonic
+
+
+def window_returns(equity: pd.Series, windows: dict[str, list[str]]) -> dict[str, float | None]:
+    """Total return inside each named [start, end] window (None if not covered)."""
+    out = {}
+    for name, (start, end) in windows.items():
+        w = equity.loc[start:end]
+        if len(w) < 2 or equity.index[0] > pd.Timestamp(start):
+            out[name] = None
+            continue
+        prior = equity.loc[:pd.Timestamp(start) - pd.Timedelta(days=1)]
+        base = prior.iloc[-1] if not prior.empty else w.iloc[0]
+        out[name] = float(w.iloc[-1] / base - 1)
+    return out

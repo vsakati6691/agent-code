@@ -59,6 +59,66 @@ def test_unadjusted_split_rejected():
         check(df)
 
 
+def test_frozen_feed_rejected():
+    df = make_bars()
+    for i in (250, 251, 252):  # HON-style: flat $200 bars with almost no volume
+        df.iloc[i, :4] = 200.0
+        df.iloc[i, df.columns.get_loc("volume")] = 401
+    df.iloc[253:, :4] = df.iloc[253:, :4] * (200 / df.iloc[253]["open"])  # avoid a split-like jump
+    with pytest.raises(DataQualityError, match="frozen"):
+        check(df)
+
+
+def test_volume_dropout_with_normal_prices_is_kept():
+    # Vendor glitch seen on NVDA (Aug 2010) and XLE (Oct 2025): prices fine, volume missing
+    df = make_bars()
+    df.iloc[100:104, df.columns.get_loc("volume")] = 0
+    assert len(check(df)) == 300
+
+
+def test_trim_frozen_history_keeps_data_after_old_shell_period():
+    from agent_trading.data.validation import trim_frozen_history
+
+    df = make_bars()
+    df.iloc[20:24, :4] = 10.0  # SPAC-shell style flat bars early on
+    df.iloc[24:, :4] = df.iloc[24:, :4] * (10 / df.iloc[24]["open"])
+    trimmed, note = trim_frozen_history(df, "VRT")
+    assert trimmed.index[0] == df.index[24] and "dropped" in note
+    assert len(check(trimmed, min_bars=200)) == 276
+
+
+def test_trim_frozen_history_rejects_recent_freeze():
+    from agent_trading.data.validation import trim_frozen_history
+
+    df = make_bars()
+    df.iloc[-10:-6, :4] = df.iloc[-11]["close"]
+    with pytest.raises(DataQualityError, match="recently"):
+        trim_frozen_history(df, "HON")
+
+
+def test_large_genuine_gap_kept_but_split_ratio_rejected():
+    df = make_bars()
+    df.iloc[150:, :4] = df.iloc[150:, :4] * 1.7  # +70% jump (like ECHO on 2025-08-26): not a split ratio
+    assert len(check(df)) == 300
+    df2 = make_bars()
+    df2.iloc[150:, :4] = df2.iloc[150:, :4] * 4.0  # 1:4 reverse split left unadjusted (like SQQQ 2019)
+    with pytest.raises(DataQualityError, match="split"):
+        check(df2)
+
+
+def test_old_split_trimmed_recent_split_rejected():
+    from agent_trading.data.validation import trim_bad_history
+
+    df = make_bars()
+    df.iloc[50:, :4] = df.iloc[50:, :4] * 4.0
+    trimmed, note = trim_bad_history(df, "SQQQ")
+    assert trimmed.index[0] == df.index[51] and "split" in note
+    recent = make_bars()
+    recent.iloc[-5:, :4] = recent.iloc[-5:, :4] / 2.0
+    with pytest.raises(DataQualityError, match="recent"):
+        trim_bad_history(recent, "X")
+
+
 def test_empty_rejected():
     with pytest.raises(DataQualityError):
         check(None)
