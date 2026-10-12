@@ -60,7 +60,7 @@ Daily runbook: [docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md).
 10. **Git:**
     - Work on `feature/research-system`.
     - Before committing: run the tests and scan the staged diff for secrets.
-    - Pushing that branch is pre-approved when tests pass and the diff is clean.
+    - Commit and push that branch right after every change set (pre-approved when tests pass and the diff is clean); never leave finished work unpushed.
     - Merging into `main` happens through a pull request, and only on the user's instruction.
     - No force-push, history rewrites or destructive commands.
 
