@@ -26,11 +26,16 @@ one-line note.
 
 ## Post-close run (weekdays 16:30 ET) — the main daily cycle
 
-1. **Account (read-only):** `get_portfolio`, `get_equity_positions`,
+1. **Account (read-only):** `get_accounts` (for the Agent-trading row's
+   `unsettled_funds` and `type`), `get_portfolio`, `get_equity_positions`,
    `get_equity_orders` for the Agent-trading account. Write
    `{"fetched_at": <UTC ISO>, "account_number": "8204", "nickname": "Agent-trading",
+   "unsettled_funds": <from get_accounts>, "account_type": <type from get_accounts>,
    "portfolio": {...}, "positions": [...], "orders": [...]}` and run
-   `& $py -m agent_trading account import <file>`.
+   `& $py -m agent_trading account import <file>`. Without `unsettled_funds`
+   the order gate blocks every buy ticket (settled cash unknown). Take the
+   snapshot **after 16:00 ET**: tickets need a snapshot from the ticket day
+   that is under 6 hours old.
 2. **Constituents** (Mondays, or when `universe show` warns it is old):
    Financial Datasets `get_index_fund` (ticker `SPY`, limit `1000`) →
    `& $py -m agent_trading universe import <file>`.
@@ -61,6 +66,29 @@ one-line note.
    "none" if empty), then live loss-limit status and warnings, then coverage,
    actionable setups, desk decisions and paper actions. Say plainly that the
    owner must place the tickets in the app; never offer to place them.
+
+### Order gate and kill switch (every ticket run)
+
+Before tickets are written, `order_gate.py` re-checks every hard account limit
+and fails closed:
+- $100 per buy, $200 and 3 new entries per day, $800 max exposure, $200 cash reserve;
+- settled cash only, and no leveraged or inverse ETFs (TQQQ/SQQQ stay paper-only);
+- only `account_limits.live_allowed_symbols`;
+- a fresh, reconciled snapshot from the ticket day, and an NYSE trading day;
+- no open buy order at the broker.
+
+Rejected tickets are listed as "Not ticketed: … order gate: …".
+
+A 5% drawdown from the account's high-water mark **engages the kill switch**.
+While engaged, no tickets of any kind are written, including after a restart.
+- Check it with `& $py -m agent_trading kill-switch status`.
+- Only the owner releases it, after reviewing the account:
+  `kill-switch release --confirm "I have reviewed the account"`.
+- A scheduled session must never release it.
+- Anyone may engage it: `kill-switch engage --reason "..."`.
+
+The kill switch never sells anything. During an outage, do not liquidate:
+reconcile the account first, then decide by hand.
 
 ## Pre-market run (weekdays 08:30 ET)
 

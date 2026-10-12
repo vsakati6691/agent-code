@@ -12,9 +12,9 @@ from agent_trading.paper import Intent
 AS_OF = date(2026, 10, 12)
 
 
-def snap(total=1000.0, cash=1000.0, positions=(), orders=(), last4="8204", age_h=1.0):
+def snap(total=1000.0, cash=1000.0, positions=(), orders=(), last4="8204", age_h=1.0, unsettled=0.0):
     fetched = (datetime.now(timezone.utc) - timedelta(hours=age_h)).isoformat(timespec="seconds")
-    return AccountSnapshot(fetched, last4, "Agent-trading", total, cash, cash, list(positions), list(orders))
+    return AccountSnapshot(fetched, last4, "Agent-trading", total, cash, cash, list(positions), list(orders), unsettled)
 
 
 @pytest.fixture
@@ -50,7 +50,22 @@ def test_buy_sized_on_capped_equity_with_limit_and_stop(settings, ledger):
     assert t.side == "buy" and t.limit_price == 100.5 and t.stop_price == 95.0
     r = settings.risk
     assert t.planned_risk <= 1000 * r.risk_per_trade_pct + 1e-9
-    assert t.notional <= 1000 * r.max_position_pct + 1e-9
+    assert t.notional <= settings.account_limits.max_order_notional + 1e-9  # hard $100 per order
+
+
+def test_buys_respect_daily_entry_and_purchase_limits(settings, ledger):
+    intents = [buy(s, ref=50.0, stop=49.0) for s in ("SPY", "EFA", "IEF", "GLD")]
+    res = run(settings, ledger, snap(), intents)
+    al = settings.account_limits
+    assert len(res.tickets) == 2  # $100 each, then the $200/day purchase limit is used up
+    assert any("no room under the account limits" in m for m in res.skipped)
+    assert sum(t.notional for t in res.tickets) <= al.max_daily_purchases + 1e-9
+    assert all(t.notional <= al.max_order_notional + 1e-9 for t in res.tickets)
+
+
+def test_unknown_settled_cash_blocks_buys(settings, ledger):
+    res = run(settings, ledger, snap(unsettled=None), [buy()])
+    assert res.tickets == [] and "settled cash unknown" in res.skipped[0]
 
 
 def test_only_live_strategies_ticketed(settings, ledger):

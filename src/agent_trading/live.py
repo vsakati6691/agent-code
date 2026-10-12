@@ -29,7 +29,8 @@ import pandas as pd
 from .account import AccountSnapshot, verify_snapshot
 from .config import Settings
 from .paper import Intent, returns_frame
-from .risk import Holding, PortfolioState, RiskEngine, TradingStatus, trading_status
+from . import order_gate
+from .risk import Holding, PortfolioState, RiskEngine, TradingStatus, _floor, planned_risk, trading_status
 from .strategies.desk import Position
 
 LIVE_SCHEMA = """
@@ -248,6 +249,14 @@ def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, in
     state = PortfolioState(res.equity, res.cash, holdings_of(res.positions))
     engine = RiskEngine(settings)
     returns = returns_frame(bars)
+    # hard account limits (order_gate.py re-checks them independently before the tickets are written)
+    invested = sum(p.quantity * (float(bars[s]["close"].iloc[-1]) if s in bars and not bars[s].empty else p.entry_price)
+                   for s, p in res.positions.items())
+    cash = order_gate.spendable_cash(snap, settings.live.capital, invested)
+    if cash is None:
+        res.skipped += [f"{i.symbol}: settled cash unknown (snapshot has no unsettled_funds)" for i in buys]
+        return res
+    bought, entries = 0.0, 0
     for it in buys:
         if it.symbol in res.positions or it.symbol in selling:
             res.skipped.append(f"{it.symbol}: already held in the account")
@@ -261,7 +270,15 @@ def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, in
         if not d.approved:
             res.skipped.append(f"{it.symbol}: {d.reason}")
             continue
-        res.tickets.append(Ticket(it.symbol, "buy", d.quantity, limit, stop, it.strategy, it.reason, d.risk_amount))
-        state = PortfolioState(state.equity, state.cash - d.notional,
-                               state.holdings + (Holding(it.symbol, d.quantity, limit, stop),))
+        room = order_gate.buy_headroom(settings.account_limits, cash, invested, bought, entries)
+        qty = _floor(min(d.quantity, room / limit), settings.risk.fractional_shares)
+        if qty <= 0 or qty * limit < settings.risk.min_order_notional:
+            res.skipped.append(f"{it.symbol}: no room under the account limits (${room:,.2f} left)")
+            continue
+        risk = planned_risk(qty, limit, stop, settings.risk.stop_risk_buffer)
+        res.tickets.append(Ticket(it.symbol, "buy", qty, limit, stop, it.strategy, it.reason, risk))
+        state = PortfolioState(state.equity, state.cash - qty * limit,
+                               state.holdings + (Holding(it.symbol, qty, limit, stop),))
+        bought += qty * limit
+        entries += 1
     return res

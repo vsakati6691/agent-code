@@ -11,6 +11,8 @@ Input JSON shape:
   "fetched_at": "2026-10-12T14:00:00+00:00",
   "account_number": "...",            # full or last-4; masked on import
   "nickname": "Agent-trading",
+  "unsettled_funds": "0",             # from get_accounts; required for live buy tickets
+  "account_type": "limited_margin",   # from get_accounts (informational)
   "portfolio": {"total_value": "1000", "cash": "1000", "buying_power": {"buying_power": "1000"}},
   "positions": [{"symbol": "SPY", "quantity": "1", "average_buy_price": "500"}],
   "orders": [{"symbol": "SPY", "side": "buy", "state": "queued", "quantity": "1"}]
@@ -43,6 +45,15 @@ class AccountSnapshot:
     buying_power: float
     positions: list[dict] = field(default_factory=list)
     open_orders: list[dict] = field(default_factory=list)
+    unsettled_funds: float | None = None   # None = not captured (live buys are then blocked)
+    account_type: str = ""
+
+    @property
+    def settled_cash(self) -> float | None:
+        """Cash that is settled and spendable without margin, or None when unknown."""
+        if self.unsettled_funds is None:
+            return None
+        return max(0.0, min(self.cash, self.buying_power) - self.unsettled_funds)
 
     @property
     def fetched(self) -> datetime:
@@ -92,6 +103,8 @@ def parse_snapshot(raw: dict) -> AccountSnapshot:
         buying_power=_num(bp_value, "buying_power"),
         positions=positions,
         open_orders=orders,
+        unsettled_funds=None if raw.get("unsettled_funds") in (None, "") else _num(raw["unsettled_funds"], "unsettled_funds"),
+        account_type=str(raw.get("account_type", "")),
     )
 
 

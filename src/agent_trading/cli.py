@@ -505,6 +505,26 @@ def cmd_evaluate_gtaa(settings: Settings, args) -> int:
     return 0
 
 
+def cmd_kill_switch(settings: Settings, args) -> int:
+    """Persistent kill switch for live tickets. Engaging is always allowed;
+    releasing needs the owner's exact confirmation phrase."""
+    from . import killswitch
+
+    if args.action == "engage":
+        st = killswitch.engage(settings, args.reason or "engaged by the owner", by="owner")
+    elif args.action == "release":
+        try:
+            st = killswitch.release(settings, args.confirm or "")
+        except ValueError as exc:
+            print(f"Not released: {exc}", file=sys.stderr)
+            return 2
+    else:
+        st = killswitch.status(settings)
+    print(f"Kill switch: {'ENGAGED' if st.engaged else 'off'}"
+          + (f" since {st.engaged_at} by {st.by}: {st.reason}" if st.engaged else ""))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="agent-trading", description="Research and paper-trading toolkit (no live trading).")
     p.add_argument("--config", default="config/settings.yaml")
@@ -575,6 +595,12 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("path")
     asub.add_parser("show")
     a.set_defaults(func=cmd_account)
+
+    k = sub.add_parser("kill-switch", help="persistent block on all live tickets (status | engage | release)")
+    k.add_argument("action", choices=["status", "engage", "release"])
+    k.add_argument("--reason", help="why it is engaged")
+    k.add_argument("--confirm", help='release only: the exact phrase "I have reviewed the account"')
+    k.set_defaults(func=cmd_kill_switch)
     return p
 
 
