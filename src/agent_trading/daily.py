@@ -50,6 +50,10 @@ class DailyContext:
     snapshots: dict = field(default_factory=dict)
     gtaa: dict = field(default_factory=dict)
     gtaa_rebalance: bool = False
+    code: dict = field(default_factory=dict)
+    config_hash: str = ""
+    spec_warning: str = ""
+    manifest_path: str = ""
 
 
 def _fmt(x, d=2):
@@ -79,8 +83,12 @@ def _earnings_lookup(fund: pd.DataFrame | None, cal, as_of: date):
     return lookup
 
 
-def run_daily(settings: Settings, as_of: date, run_paper: bool = True) -> tuple[str, DailyContext]:
+def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: str = "") -> tuple[str, DailyContext]:
+    from .manifest import code_version, config_hash
+
     ctx = DailyContext(as_of)
+    ctx.code = code_version(settings.base_dir)
+    ctx.config_hash = config_hash(settings)
     svc = MarketDataService(settings)
     journal = Journal(settings.resolve(settings.paths.journal_db))
 
@@ -166,12 +174,49 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True) -> tuple[
     if ctx.scan is not None:
         all_bars.update(loaded.bars)
     broker = PaperBroker(settings, journal)
+    frozen = broker._meta("spec_config_hash")
+    if run_paper and frozen is None:
+        broker._set_meta("spec_config_hash", ctx.config_hash)
+        broker._set_meta("spec_start_date", as_of.isoformat())
+        frozen = ctx.config_hash
+    if frozen is not None and frozen != ctx.config_hash:
+        ctx.spec_warning = (f"configuration changed during the paper evaluation (frozen {frozen}, now {ctx.config_hash}); "
+                            "results after the change are a new experiment, not the same out-of-sample period")
     if run_paper and all_bars:
         res = broker.run(all_bars, None, cal, as_of, intents=intents)
         ctx.paper_events, ctx.paper_warnings, ctx.proposals = res.events, res.warnings, res.new_orders
     ctx.status = broker.status(all_bars, as_of) if all_bars else None
+    ctx.manifest_path = str(_write_manifest(settings, ctx, label, intents, broker, frozen))
     text = render(settings, ctx, journal, broker, all_bars)
     return text, ctx
+
+
+def _write_manifest(settings: Settings, ctx: DailyContext, label: str, intents, broker: PaperBroker, frozen) -> Path:
+    from .manifest import write_manifest
+
+    scan = ctx.scan
+    payload = {
+        "as_of": ctx.as_of, "label": label, "mode": settings.mode,
+        "code": ctx.code, "config_hash": ctx.config_hash, "frozen_spec_hash": frozen,
+        "spec_start_date": broker._meta("spec_start_date"), "spec_warning": ctx.spec_warning or None,
+        "inputs": {k: (None if s is None else {"source": s.source, "fetched_at": s.fetched_at, "rows": len(s.table)})
+                   for k, s in ctx.snapshots.items()},
+        "universe": ctx.universe_note, "coverage": ctx.coverage, "data_notes": ctx.data_notes,
+        "scanner": None if scan is None else {
+            "scanned": len(scan.table),
+            "research_top": [{"ticker": s.ticker, "rank": s.rank, "score": s.composite, "setup": s.setup} for s in scan.research],
+            "actionable": [{"ticker": s.ticker, "entry_ref": s.entry_ref, "stop": s.stop, "target": s.target,
+                            "evidence": s.evidence, "risks": s.risks} for s in scan.actionable],
+            "rejected": scan.rejected, "bearish": scan.bearish},
+        "desk": [{"symbol": d.symbol, "action": d.action, "confidence": d.confidence, "price": d.price,
+                  "price_date": d.price_date, "stop": d.stop, "reasons": d.reasons} for d in ctx.desk],
+        "gtaa": {"rebalance_day": ctx.gtaa_rebalance, "signals": ctx.gtaa},
+        "intents": [i.__dict__ for i in intents],
+        "proposals": [p.__dict__ for p in ctx.proposals],
+        "paper_events": ctx.paper_events, "paper_warnings": ctx.paper_warnings,
+        "risk_status": None if ctx.status is None else ctx.status.__dict__,
+    }
+    return write_manifest(settings, ctx.as_of, label, payload)
 
 
 # ---------------------------------------------------------------- rendering
@@ -186,9 +231,14 @@ def _table(headers, rows):
 
 def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: PaperBroker, bars) -> str:
     as_of = ctx.as_of
+    dirty = " (uncommitted changes)" if ctx.code.get("dirty") else ""
     out = [f"# Daily trading research: {as_of}", "",
-           f"**Mode: PAPER** · generated {datetime.now():%Y-%m-%d %H:%M} local", "", DISCLAIMER, "",
-           "## Data sources and freshness", ""]
+           f"**Mode: PAPER** · generated {datetime.now():%Y-%m-%d %H:%M} local · code {ctx.code.get('commit', '?')}{dirty} · "
+           f"config {ctx.config_hash} · run log `{Path(ctx.manifest_path).name if ctx.manifest_path else 'n/a'}`", "",
+           DISCLAIMER, ""]
+    if ctx.spec_warning:
+        out += [f"> ⚠ **Spec changed:** {ctx.spec_warning}", ""]
+    out += ["## Data sources and freshness", ""]
     out += [f"- {n}" for n in ctx.data_notes]
     out += [f"- S&P 500 constituents: {ctx.universe_note}", ""]
 

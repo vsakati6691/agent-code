@@ -181,7 +181,10 @@ def cmd_snapshot(settings: Settings, args) -> int:
 def cmd_daily(settings: Settings, args) -> int:
     from .daily import run_daily, write
 
-    text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper)
+    text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper, label=args.label or "")
+    print(f"Run log: {ctx.manifest_path}")
+    if ctx.spec_warning:
+        print(f"WARNING: {ctx.spec_warning}")
     path = write(settings, text, args.as_of, args.label or "")
     if ctx.coverage:
         c = ctx.coverage

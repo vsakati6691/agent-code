@@ -388,3 +388,21 @@ def test_daily_cycle_end_to_end(settings, tmp_path):
     assert "incomplete scan" in text  # 10/11 < 95%
     assert {d.symbol for d in ctx.desk} == {"TQQQ", "SQQQ", "IBIT", "NVDA"}
     assert "CPI" in text
+
+    # reproducibility: a run log with inputs, every signal and the frozen spec
+    log = json.loads(open(ctx.manifest_path, encoding="utf-8").read())
+    assert log["config_hash"] == ctx.config_hash and log["frozen_spec_hash"] == ctx.config_hash
+    assert {"inputs", "scanner", "desk", "gtaa", "intents", "proposals", "risk_status"} <= set(log)
+    assert log["inputs"]["econ"]["source"].startswith("Bigdata")
+    assert f"config {ctx.config_hash}" in text and "Spec changed" not in text
+
+
+def test_spec_change_is_flagged(settings, tmp_path):
+    from agent_trading.daily import run_daily
+    from agent_trading.paper import PaperBroker
+
+    s = small_settings(settings)
+    broker = PaperBroker(s, Journal(s.resolve(s.paths.journal_db)))
+    broker._set_meta("spec_config_hash", "000000000000")
+    text, ctx = run_daily(s, AS_OF, run_paper=False)
+    assert "Spec changed" in text and "000000000000" in ctx.spec_warning
