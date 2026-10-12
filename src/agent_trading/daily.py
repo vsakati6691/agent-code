@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from . import killswitch, order_gate
 from . import live as live_mod
 from . import regime as regime_mod
 from .account import load_saved_snapshot, verify_snapshot
@@ -239,6 +240,15 @@ def _run_live(settings: Settings, journal: Journal, ctx: DailyContext, desk_bars
         live_intents += [Intent(s.ticker, "buy", s.entry_ref, s.stop, "A-scanner", f"scanner rank {s.rank}", s.composite)
                          for s in ctx.scan.actionable]
     res = live_mod.build_tickets(settings, res, snap, live_intents, all_bars)
+    # final fail-closed gate: only approved tickets are ever written
+    gate = order_gate.check_tickets(settings, res.tickets, snap, ctx.as_of, all_bars, res.status)
+    if gate.engage_kill_switch:
+        killswitch.engage(settings, gate.engage_kill_switch)
+        res.warnings.append(f"KILL SWITCH ENGAGED: {gate.engage_kill_switch}. Review the account, then release it "
+                            "with `kill-switch release`")
+    res.warnings += [f"order gate blocked all tickets: {b}" for b in gate.blockers]
+    res.skipped += [f"{t.symbol} ({t.side}): order gate: {why}" for t, why in gate.rejected if not gate.blockers]
+    res.tickets = gate.approved
     ledger.replace_tickets(ctx.as_of, res.tickets)
     res.tickets_date = ctx.as_of.isoformat()
     return res
@@ -427,6 +437,16 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
                    f"{'verified' if not probs else 'NOT VERIFIED (' + '; '.join(probs) + ')'} as of {snap.fetched_at}; "
                    f"value ${snap.total_value:,.2f}, cash ${snap.cash:,.2f}, buying power ${snap.buying_power:,.2f}, "
                    f"{len(snap.positions)} positions, {len(snap.open_orders)} open orders")
+    ks = killswitch.status(settings)
+    al = settings.account_limits
+    out.append(f"- Kill switch: **{'ENGAGED since ' + ks.engaged_at + ': ' + ks.reason if ks.engaged else 'off'}**. "
+               f"Hard account limits: ${al.max_order_notional:g}/order, ${al.max_daily_purchases:g} and "
+               f"{al.max_daily_entries} entries/day, ${al.max_total_exposure:g} max exposure, "
+               f"${al.min_cash_reserve:g} cash reserve, no leveraged/inverse ETFs")
+    if snap is not None:
+        settled = snap.settled_cash
+        out.append(f"- Settled cash: {'UNKNOWN (no unsettled_funds in the snapshot; buys blocked)' if settled is None else f'${settled:,.2f}'}"
+                   + (f"; broker account type `{snap.account_type}` (margin is never used)" if snap.account_type else ""))
     r = settings.risk
     if lv is not None and lv.enabled:
         if not lv.verified:

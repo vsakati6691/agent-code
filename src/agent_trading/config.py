@@ -163,6 +163,53 @@ class LiveConfig:
     limit_buffer_pct: float = 0.005   # buy limit = close x (1 + buffer); sell limit = close x (1 - buffer)
 
 
+# Hard ceilings for the real $1,000 account (master prompt, 2026-10-12). The
+# config may only be stricter than these; loosening one needs a code change
+# that tests/test_order_gate.py will flag.
+HARD_LIMITS = {
+    "max_order_notional": 100.0,     # $ per buy ticket
+    "max_total_exposure": 800.0,     # $ market value of all positions after the buys
+    "min_cash_reserve": 200.0,       # $ cash left after the buys
+    "max_daily_purchases": 200.0,    # $ of new buys per ticket day
+    "max_daily_entries": 3,          # new positions per ticket day
+    "daily_loss_limit_pct": 0.01,    # of start-of-day account value
+    "drawdown_review_pct": 0.05,     # from the high-water mark: suspend entries, engage the kill switch
+    "ticket_snapshot_max_age_hours": 6.0,
+    "reconcile_tolerance_pct": 0.02,
+}
+
+# Leveraged and inverse ETFs: never ticketed for the real account, whatever
+# the strategy says. Defence in depth: `live_allowed_symbols` is checked too.
+LEVERAGED_INVERSE_ETFS = frozenset({
+    "TQQQ", "SQQQ", "QLD", "QID", "SSO", "SDS", "UPRO", "SPXU", "SPXL", "SPXS", "SH", "PSQ", "DOG", "DXD",
+    "SDOW", "UDOW", "TNA", "TZA", "SOXL", "SOXS", "TECL", "TECS", "FAS", "FAZ", "LABU", "LABD",
+    "TMF", "TMV", "TBT", "TBF", "UBT", "UVXY", "SVXY", "VXX", "VIXY", "UVIX", "SVIX", "NUGT", "DUST",
+    "JNUG", "JDST", "ERX", "ERY", "GUSH", "DRIP", "YINN", "YANG", "BITX", "BITI", "SBIT", "BITU",
+    "NVDL", "NVDU", "NVDD", "NVDQ", "TSLL", "TSLQ", "TSLZ", "CONL", "MSTU", "MSTX", "AAPU", "AMZU",
+    "MSFU", "GGLL", "METU", "FNGU", "FNGD", "BULZ", "WEBL", "DPST", "NAIL", "CURE", "DFEN", "UCO",
+    "SCO", "BOIL", "KOLD", "AGQ", "ZSL", "UGL", "GLL", "USD", "SSG", "ROM", "REW", "UYG", "SKF",
+    "EUO", "YCS", "ULE", "EFZ", "EUM", "MYY", "SBB", "RWM", "TWM", "UWM", "SAA", "MVV", "MZZ",
+})
+
+
+@dataclass(frozen=True)
+class AccountLimitsConfig:
+    """Hard limits for tickets on the real account, checked by order_gate.py
+    immediately before a ticket is written. Fail closed."""
+    max_order_notional: float = 100.0
+    max_total_exposure: float = 800.0
+    min_cash_reserve: float = 200.0
+    max_daily_purchases: float = 200.0
+    max_daily_entries: int = 3
+    daily_loss_limit_pct: float = 0.01
+    drawdown_review_pct: float = 0.05
+    ticket_snapshot_max_age_hours: float = 6.0
+    reconcile_tolerance_pct: float = 0.02
+    live_allowed_symbols: list[str] = field(default_factory=lambda: [
+        "SPY", "EFA", "IEF", "DBC", "VNQ", "TLT", "GLD", "NVDA", "IBIT"])
+    kill_switch_file: str = "data/KILL_SWITCH.json"
+
+
 @dataclass(frozen=True)
 class PathConfig:
     journal_db: str = "data/journal.db"
@@ -186,6 +233,7 @@ class Settings:
     desk: DeskConfig = field(default_factory=DeskConfig)
     gtaa: GTAAConfig = field(default_factory=GTAAConfig)
     live: LiveConfig = field(default_factory=LiveConfig)
+    account_limits: AccountLimitsConfig = field(default_factory=AccountLimitsConfig)
     paths: PathConfig = field(default_factory=PathConfig)
     base_dir: Path = Path(".")
 
@@ -272,7 +320,26 @@ def validate(settings: Settings) -> Settings:
         raise ConfigError(f"live.strategies has unknown entries {sorted(bad)}; allowed: {list(LIVE_STRATEGIES)}")
     if lv.enabled and len(settings.broker.account_last4) != 4:
         raise ConfigError("live.enabled requires broker.account_last4")
+    _validate_account_limits(settings.account_limits)
     return settings
+
+
+def _validate_account_limits(al: AccountLimitsConfig) -> None:
+    """Account limits may only be stricter than HARD_LIMITS."""
+    h = HARD_LIMITS
+    upper = ("max_order_notional", "max_total_exposure", "max_daily_purchases", "max_daily_entries",
+             "daily_loss_limit_pct", "drawdown_review_pct", "ticket_snapshot_max_age_hours", "reconcile_tolerance_pct")
+    for name in upper:
+        value = getattr(al, name)
+        if not 0 < value <= h[name]:
+            raise ConfigError(f"account_limits.{name}={value} must be in (0, {h[name]}] (hard limit; may only tighten)")
+    if al.min_cash_reserve < h["min_cash_reserve"]:
+        raise ConfigError(f"account_limits.min_cash_reserve must be at least {h['min_cash_reserve']} (hard limit)")
+    bad = {s.upper() for s in al.live_allowed_symbols} & LEVERAGED_INVERSE_ETFS
+    if bad:
+        raise ConfigError(f"account_limits.live_allowed_symbols contains leveraged/inverse ETFs {sorted(bad)}")
+    if not al.kill_switch_file:
+        raise ConfigError("account_limits.kill_switch_file must be set")
 
 
 def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
@@ -294,6 +361,7 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
         "desk": DeskConfig,
         "gtaa": GTAAConfig,
         "live": LiveConfig,
+        "account_limits": AccountLimitsConfig,
         "paths": PathConfig,
     }
     top_level = {"mode", "paper_starting_equity", "universe", *sections}

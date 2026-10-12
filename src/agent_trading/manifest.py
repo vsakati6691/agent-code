@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import subprocess
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime, timezone
@@ -20,6 +21,8 @@ from pathlib import Path
 from .config import Settings
 
 RUNS_DIR = "runs"
+# git is often not on PATH on Windows; the run log must still record the commit
+GIT_FALLBACKS = ("C:/Program Files/Git/cmd/git.exe", "C:/Program Files/Git/bin/git.exe")
 
 
 def config_hash(settings: Settings, config_path: Path | None = None) -> str:
@@ -31,9 +34,11 @@ def config_hash(settings: Settings, config_path: Path | None = None) -> str:
 
 def code_version(base_dir: Path) -> dict:
     """Git commit and whether the working tree has uncommitted changes ('unknown' if git is unavailable)."""
+    exe = shutil.which("git") or next((p for p in GIT_FALLBACKS if Path(p).exists()), "git")
+
     def git(*args):
         try:
-            r = subprocess.run(["git", *args], cwd=base_dir, capture_output=True, text=True, timeout=10)
+            r = subprocess.run([exe, *args], cwd=base_dir, capture_output=True, text=True, timeout=10)
             return r.stdout.strip() if r.returncode == 0 else None
         except (OSError, subprocess.SubprocessError):
             return None

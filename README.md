@@ -64,7 +64,7 @@ flowchart TD
     RECON --> STOPS{"Every position has<br/>a stop-loss order?"}
     STOPS -- no --> WARN["Warn: Add stop"]
     STOPS -- yes --> LIMITS
-    WARN --> LIMITS{"Daily loss under $10 and<br/>drawdown under $80?"}
+    WARN --> LIMITS{"Daily loss under $10 and<br/>drawdown under $50?"}
     LIMITS -- no --> HALT["No new buys<br/>alert: HALTED"]
     LIMITS -- yes --> SIGNALS["Run B (desk) and C (GTAA)<br/>on the REAL positions"]
     HALT -- sells only --> SELLS
@@ -72,7 +72,9 @@ flowchart TD
     SELLS -- if not halted --> BUYS["BUY candidates"]
     BUYS --> SIZE{"RiskEngine:<br/>$5 risk, $15 total, $250 max,<br/>correlation, cash"}
     SIZE -- rejected --> SKIP["Listed as not ticketed"]
-    SIZE -- approved --> TICKET["BUY ticket:<br/>qty, limit, stop-loss"]
+    SIZE -- approved --> GATE{"Order gate (fail closed):<br/>$100/order, $200 + 3 entries/day,<br/>$800 exposure, $200 cash reserve,<br/>no leveraged ETFs, kill switch off"}
+    GATE -- rejected --> SKIP
+    GATE -- approved --> TICKET["BUY ticket:<br/>qty, limit, stop-loss"]
     TICKET --> OUT["Report + phone alert<br/>Trades to place"]
 ```
 
@@ -133,7 +135,9 @@ guarantee future results.
 | Max position size | 25% ($250), never more than cash (no margin) |
 | Stops | 2.5 × ATR(14); sizing assumes the stop fills 20% worse (gaps) |
 | Daily loss limit | 1% ($10): no new entries for the rest of the day |
-| Drawdown shutdown | 8% ($80) from peak: no new entries until reviewed |
+| Drawdown shutdown | 5% ($50) from peak: no new entries; the **kill switch engages** until the owner releases it |
+| **Real account only** (order gate, `account_limits`) | $100 per order; $200 and 3 new entries per day; $800 max exposure; $200 cash reserve; settled cash only; no leveraged or inverse ETFs (TQQQ/SQQQ are paper-only); fresh reconciled snapshot from the ticket day |
+| Kill switch | `kill-switch status|engage|release`; persists across restarts; only the owner releases it |
 | Costs | 10 bps slippage + 5 bps half-spread per side |
 
 A stop price never guarantees the loss limit: gaps can fill worse.
@@ -227,6 +231,8 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -m agent_trading evaluate-scanner             # Strategy A: point-in-time lists + factor ablation
 & $py -m agent_trading evaluate-desk                # Strategy B: 1x/2x/3x costs + baselines
 & $py -m agent_trading evaluate-gtaa                # Strategy C: C0/C1/C2, total return
+& $py -m agent_trading tournament [--no-test]       # all candidates vs benchmarks -> research/registry.jsonl
+& $py -m agent_trading kill-switch status|engage|release
 ```
 
 Every evaluation reports train and validation periods only. The most recent 20%
@@ -248,6 +254,17 @@ src/agent_trading/
 docs/DAILY_ROUTINE.md         the runbook the scheduled Claude sessions follow
 tests/                        unit, integration (mocked services) and safety tests
 ```
+
+## Strategy tournament (2026-10-12)
+
+`tournament` runs 12 pre-registered candidates (4 benchmarks, 8 strategies) through one engine:
+- same data, costs, train/validation/test periods and metrics;
+- walk-forward, cost stress, deflated Sharpe;
+- an append-only registry in `research/`.
+
+**Result: no candidate passed the acceptance rules.** GTAA (Strategy C) remains the lowest-drawdown option but trails SPY. Details:
+- [research/TOURNAMENT_2026-10-12.md](research/TOURNAMENT_2026-10-12.md);
+- [docs/FINAL_REPORT_2026-10-12.md](docs/FINAL_REPORT_2026-10-12.md).
 
 ## Known limitations
 

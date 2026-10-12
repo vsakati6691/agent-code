@@ -62,9 +62,11 @@ def vol_managed_weights(history: dict[str, pd.DataFrame], day: pd.Timestamp, ass
 
 
 def is_rebalance_day(trading_days: list[pd.Timestamp], day: date) -> bool:
-    """Last trading day of the month (from the calendar of known trading days),
-    or a weekday whose next weekday falls in a new month when `day` is the latest bar."""
+    """Last trading day of the month: from the known trading days (backtests), or
+    from the NYSE holiday calendar when `day` is the latest bar."""
+    from ..market_calendar import next_trading_day
+
     ts = pd.Timestamp(day)
     later = [d for d in trading_days if d > ts]
-    nxt = later[0] if later else ts + pd.offsets.BDay(1)
+    nxt = later[0] if later else pd.Timestamp(next_trading_day(ts.date()))
     return nxt.month != ts.month

@@ -88,9 +88,11 @@ def qqq_regime(qqq: pd.DataFrame) -> dict:
 
 
 def next_session(d: date) -> date:
-    """Next weekday after d (exchange holidays are not modelled; a missing bar
-    simply delays the paper fill)."""
-    return (pd.Timestamp(d) + pd.offsets.BDay(1)).date()
+    """Next NYSE trading day after d (an unlisted special closure simply delays
+    the paper fill)."""
+    from ..market_calendar import next_trading_day
+
+    return next_trading_day(d)
 
 
 def _days_held(p: Position, as_of: date) -> int:

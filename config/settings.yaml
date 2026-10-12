@@ -20,7 +20,7 @@ risk:
   max_correlated_risk_pct: 0.01 # ...of 1% of equity ($10 on $1,000)
   correlation_lookback: 60      # trading days of daily returns
   daily_loss_limit_pct: 0.01    # $10 on $1,000: no new entries for the rest of the day
-  max_drawdown_pct: 0.08        # $80 from peak: shut down new entries until reviewed
+  max_drawdown_pct: 0.05        # $50 from peak: shut down new entries until reviewed (tightened from 8% on 2026-10-12)
   symbol_risk_pct:              # leveraged ETFs: tighter per-trade risk ($2.50)
     TQQQ: 0.0025
     SQQQ: 0.0025
@@ -73,6 +73,19 @@ live:                           # manual live tickets: the code writes them, the
   capital: 1000.0               # never size on more than $1,000, whatever the account holds
   strategies: [B-desk, C-gtaa]  # A-scanner stays paper-only (no edge in the backtest)
   limit_buffer_pct: 0.005       # limit = last close +/- 0.5%
+
+account_limits:                 # hard limits for tickets on the REAL account (order_gate.py; fail closed)
+  max_order_notional: 100.0     # $ per buy ticket
+  max_total_exposure: 800.0     # $ in positions after the buys
+  min_cash_reserve: 200.0       # $ cash left after the buys
+  max_daily_purchases: 200.0    # $ of new buys per day
+  max_daily_entries: 3          # new positions per day
+  daily_loss_limit_pct: 0.01    # of the start-of-day account value: no new buys
+  drawdown_review_pct: 0.05     # from the high-water mark: kill switch engages, risk review required
+  ticket_snapshot_max_age_hours: 6.0
+  reconcile_tolerance_pct: 0.02 # cash + positions x close must match the account value within 2%
+  live_allowed_symbols: [SPY, EFA, IEF, DBC, VNQ, TLT, GLD, NVDA, IBIT]   # no leveraged/inverse ETFs
+  kill_switch_file: data/KILL_SWITCH.json
 
 scanner:                        # Strategy A: every current S&P 500 constituent
   index_fund: SPY               # constituents = SPY holdings (SEC fund-holdings filings)
