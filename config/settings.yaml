@@ -48,49 +48,10 @@ data:
   request_pause_seconds: 12.5   # spacing between API calls
   daily_request_budget: 24      # free tier is 25/day; leave one spare
 
-strategy:                       # baseline trend/momentum rules (a research hypothesis, not an edge)
-  fast_ma: 20
-  slow_ma: 50
-  momentum_lookback: 63
-  rsi_period: 14
-  rsi_max_entry: 75.0
-  atr_period: 14
-  volume_lookback: 20
-
-screen:
-  min_price: 5.0
-  min_avg_dollar_volume: 50000000   # $50M/day, 20-day average
-
-walkforward:
-  train_bars: 252
-  test_bars: 63
-  oos_fraction: 0.3
-  grid:
-    fast_ma: [10, 20]
-    slow_ma: [50]
-    momentum_lookback: [21, 63]
-
 evaluation:                     # chronological train / validation / untouched holdout
   train_fraction: 0.6
-  validation_fraction: 0.2      # remaining 20% is the holdout; run it rarely (it is logged)
-  bootstrap_samples: 1000
-  bootstrap_block: 20           # days per block (keeps autocorrelation)
+  validation_fraction: 0.2      # remaining 20% is the holdout; the evaluate-* commands never touch it
   min_trades: 30                # fewer trades than this => "insufficient sample" warning
-  sensitivity_grid:
-    fast_ma: [10, 20, 30]
-    slow_ma: [50, 100]
-    momentum_lookback: [21, 63, 126]
-    atr_stop_multiple: [2.0, 2.5, 3.0]
-  cash_interest: true           # idle cash earns the prior month's 3-month T-bill yield
-  cost_levels_bps: [0, 12.5, 25, 50]   # all-in cost per side for the cost-sensitivity table
-  stress_windows:               # windows inside the holdout are skipped automatically
-    GFC tail: ["2008-10-01", "2009-03-09"]
-    Aug 2011: ["2011-07-22", "2011-10-03"]
-    2015-16 selloff: ["2015-08-01", "2016-02-11"]
-    Q4 2018: ["2018-10-01", "2018-12-24"]
-    COVID crash: ["2020-02-19", "2020-03-23"]
-    2022 bear: ["2022-01-03", "2022-10-12"]
-    Apr 2025 tariffs: ["2025-04-01", "2025-04-30"]
 
 regime:
   benchmark: SPY
@@ -106,7 +67,12 @@ broker:                         # read-only snapshot checks; this code never pla
 
 paper:
   order_expiry_days: 3
-  skip_entries_before_earnings: true
+
+live:                           # manual live tickets: the code writes them, the owner places them in the app
+  enabled: true
+  capital: 1000.0               # never size on more than $1,000, whatever the account holds
+  strategies: [B-desk, C-gtaa]  # A-scanner stays paper-only (no edge in the backtest)
+  limit_buffer_pct: 0.005       # limit = last close +/- 0.5%
 
 scanner:                        # Strategy A: every current S&P 500 constituent
   index_fund: SPY               # constituents = SPY holdings (SEC fund-holdings filings)
@@ -122,6 +88,7 @@ scanner:                        # Strategy A: every current S&P 500 constituent
   top_research: 10
   top_actionable: 3
   target_r_multiple: 2.0
+  max_missing_factors_actionable: 0   # actionable picks need every factor; no reweighting
   weights:                      # one factor per idea; no double counting (see strategies/scanner.py)
     price_strength: 0.35
     volume: 0.10
@@ -147,15 +114,13 @@ gtaa:                           # Strategy C: Faber GTAA multi-asset trend (pape
   assets: [SPY, EFA, IEF, DBC, VNQ, TLT, GLD]
   sma_months: 10                # hold an asset only while above its 10-month average
 
-reports:
-  earnings_warning_days: 7
-
 paths:
   journal_db: data/journal.db
   reports_dir: reports
   logs_dir: logs
 
-# Liquid US stocks and ETFs. Themes are research areas, not predictions.
+# Default symbol list for `fetch` (Alpha Vantage fallback; the routine imports
+# Robinhood bars instead). `fetch` also refreshes the earnings calendar.
 # 22 symbols + 1 earnings-calendar call fits the free 25 requests/day limit.
 universe:
   broad_market_etfs: [SPY, QQQ]

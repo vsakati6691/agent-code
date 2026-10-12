@@ -2,16 +2,14 @@
 from dataclasses import replace
 from datetime import date
 
-import numpy as np
 import pandas as pd
 import pytest
 
 from agent_trading.account import SnapshotError, parse_snapshot, verify_snapshot
-from agent_trading.data.service import EarningsData
+from agent_trading.indicators import atr
 from agent_trading.journal import Journal
-from agent_trading.paper import PaperBroker
+from agent_trading.paper import Intent, PaperBroker
 from agent_trading.risk import RiskViolation
-from agent_trading.screen import run_screen
 
 from .conftest import make_bars
 
@@ -29,26 +27,32 @@ def window(bars, end):
     return {s: df.loc[:end] for s, df in bars.items()}
 
 
-def sig(bars, settings, entry=True, exit_=False):
-    """Real screen metrics with the signal flags forced, so broker mechanics are
-    tested independently of the strategy rules."""
-    table = run_screen(bars, settings)
-    table["entry_signal"] = entry
-    table["exit_signal"] = exit_
-    return table
+def buys(bars, settings):
+    """A buy intent per symbol at the last close with a 2.5 x ATR stop, so broker
+    mechanics are tested independently of the strategy rules."""
+    out = []
+    for sym, df in bars.items():
+        close = float(df["close"].iloc[-1])
+        stop = close - settings.risk.atr_stop_multiple * float(atr(df, 14).iloc[-1])
+        out.append(Intent(sym, "buy", close, stop, "test", "test entry"))
+    return out
+
+
+def sells(bars):
+    return [Intent(sym, "sell", float(df["close"].iloc[-1]), None, "test", "test exit") for sym, df in bars.items()]
 
 
 def test_signal_then_fill_at_next_open(settings, broker):
     bars = {"UPA": uptrend(seed=1), "UPB": uptrend(seed=2)}
     d1 = pd.Timestamp("2026-10-08")
     b1 = window(bars, d1)
-    r1 = broker.run(b1, sig(b1, settings), None, d1.date())
+    broker.run(b1, d1.date(), buys(b1, settings))
     queued = broker.orders("pending")
     assert len(queued) >= 1 and set(queued["side"]) == {"buy"}
     assert broker.journal.open_trades().empty  # nothing filled on the signal day
 
     d2 = pd.Timestamp("2026-10-09")
-    broker.run(bars, sig(bars, settings), None, d2.date())
+    broker.run(bars, d2.date(), [])
     trades = broker.journal.open_trades()
     assert not trades.empty
     for t in trades.itertuples():
@@ -61,9 +65,9 @@ def test_signal_then_fill_at_next_open(settings, broker):
 def test_rerun_same_day_is_idempotent(settings, broker):
     bars = {"UPA": uptrend()}
     d = date(2026, 10, 9)
-    broker.run(bars, sig(bars, settings), None, d)
+    broker.run(bars, d, buys(bars, settings))
     n = len(broker.orders())
-    r = broker.run(bars, sig(bars, settings), None, d)
+    r = broker.run(bars, d, buys(bars, settings))
     assert len(broker.orders()) == n
     assert any("already generated" in w for w in r.warnings)
 
@@ -77,7 +81,7 @@ def test_stop_hit_closes_trade_with_gap_fill(settings, broker):
     crash = df.copy()
     day = df.index[-2]
     crash.loc[day, ["open", "high", "low", "close"]] = [90.0, 91.0, 89.0, 90.5]  # gaps below the stop
-    broker.run({"UPA": crash}, sig({"UPA": crash}, settings, entry=False), None, df.index[-1].date())
+    broker.run({"UPA": crash}, df.index[-1].date(), [])
     closed = j.closed_trades()
     assert len(closed) == 1
     row = closed.iloc[0]
@@ -89,14 +93,14 @@ def test_buy_cancelled_when_open_gaps_below_stop(settings, broker):
     bars = {"UPA": uptrend()}
     d1 = bars["UPA"].index[-2]
     b1 = window(bars, d1)
-    broker.run(b1, sig(b1, settings), None, d1.date())
+    broker.run(b1, d1.date(), buys(b1, settings))
     order = broker.orders("pending").iloc[0]
     crashed = bars["UPA"].copy()
     last = crashed.index[-1]
     crashed.loc[last, ["open", "low"]] = order["stop_price"] * 0.9
     crashed.loc[last, "close"] = crashed.loc[last, "open"]
     crashed.loc[last, "high"] = max(crashed.loc[last, "high"], crashed.loc[last, "open"])
-    broker.run({"UPA": crashed}, sig({"UPA": crashed}, settings, entry=False), None, last.date())
+    broker.run({"UPA": crashed}, last.date(), [])
     assert broker.journal.open_trades().empty
     assert "below stop" in broker.orders("cancelled").iloc[0]["note"]
 
@@ -111,9 +115,9 @@ def test_exit_signal_sells_next_open(settings, broker):
     d1 = falling.index[-2]
     broker._set_meta("last_processed_date", falling.index[-3].date().isoformat())
     b1 = {"UPA": falling.loc[:d1]}
-    broker.run(b1, sig(b1, settings, entry=False, exit_=True), None, d1.date())
+    broker.run(b1, d1.date(), sells(b1))
     assert (broker.orders("pending")["side"] == "sell").any()
-    broker.run({"UPA": falling}, sig({"UPA": falling}, settings, entry=False), None, falling.index[-1].date())
+    broker.run({"UPA": falling}, falling.index[-1].date(), [])
     closed = j.closed_trades()
     assert len(closed) == 1 and closed.iloc[0]["id"] == tid
     assert closed.iloc[0]["exit_price"] == pytest.approx(falling["open"].iloc[-1] * (1 - settings.costs.per_side))
@@ -123,7 +127,7 @@ def test_entries_respect_risk_limits(settings, broker):
     bars = {f"S{i}": uptrend(seed=i) for i in range(8)}
     d1 = bars["S0"].index[-2]
     b1 = window(bars, d1)
-    broker.run(b1, sig(b1, settings), None, d1.date())
+    broker.run(b1, d1.date(), buys(b1, settings))
     pending = broker.orders("pending")
     buffer = settings.risk.stop_risk_buffer
     risk = (pending["quantity"] * (pending["ref_price"] - pending["stop_price"]) * (1 + buffer)).sum()
@@ -131,20 +135,17 @@ def test_entries_respect_risk_limits(settings, broker):
     assert (pending["quantity"] * pending["ref_price"]).max() <= 250 + 1e-6
 
 
-def test_earnings_blackout_blocks_entry(settings, broker):
+def test_sell_intent_without_position_is_ignored(settings, broker):
     bars = {"UPA": uptrend()}
-    d = date(2026, 10, 9)
-    table = pd.DataFrame({"symbol": ["UPA"], "reportDate": [date(2026, 10, 13)], "fiscalDateEnding": ["x"], "estimate": [1]})
-    earnings = EarningsData(table, "test", "now")
-    r = broker.run(bars, sig(bars, settings), earnings, d)
+    r = broker.run(bars, date(2026, 10, 9), sells(bars))
     assert broker.orders("pending").empty
-    assert any(not p.approved and "earnings" in p.reason for p in r.new_orders)
+    assert any("short selling is not allowed" in w for w in r.warnings)
 
 
 def test_missing_data_for_held_position_warns(settings, broker):
     broker.journal.open_trade("GONE", 1, 10, 9, date(2026, 10, 1))
     bars = {"UPA": uptrend()}
-    r = broker.run(bars, sig(bars, settings), None, date(2026, 10, 9))
+    r = broker.run(bars, date(2026, 10, 9), buys(bars, settings))
     assert any("GONE" in w for w in r.warnings)
 
 

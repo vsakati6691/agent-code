@@ -43,6 +43,7 @@ class MonthResult:
     spy_return: float
     turnover: float
     ic: float
+    gross_return: float = math.nan  # top-N return before costs (for cost stress)
 
 
 @dataclass
@@ -55,6 +56,12 @@ class ScannerBacktest:
 
 def _rank_month(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: list[str], d: pd.Timestamp,
                 settings: Settings) -> pd.DataFrame:
+    raw = _features_month(bars, spy, members, d)
+    return raw if raw.empty else score(raw, None, settings.scanner.weights)
+
+
+def _features_month(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: list[str],
+                    d: pd.Timestamp) -> pd.DataFrame:
     rows = {}
     bench = spy.loc[:d].iloc[-LOOKBACK_BARS:]
     for t in members:
@@ -67,9 +74,7 @@ def _rank_month(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: list[
         f = features(hist.iloc[-LOOKBACK_BARS:], bench)
         if f is not None and not math.isnan(f["mom_12_1"]):
             rows[t] = f
-    if not rows:
-        return pd.DataFrame()
-    return score(pd.DataFrame.from_dict(rows, orient="index"), None, settings.scanner.weights)
+    return pd.DataFrame.from_dict(rows, orient="index") if rows else pd.DataFrame()
 
 
 def _eligible(table: pd.DataFrame, settings: Settings) -> pd.DataFrame:
@@ -87,14 +92,54 @@ def _fwd(df: pd.DataFrame, entry_day: pd.Timestamp, exit_day: pd.Timestamp) -> f
     return float(c / o - 1) if o > 0 else None
 
 
-def run_signal_backtest(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, history: dict[date, list[str]],
-                        settings: Settings, top_n: int = 10, start: date | None = None) -> ScannerBacktest:
+# Ablation variants, declared before running (none tuned on results). Each adds
+# ONE idea to the momentum baseline so its marginal value is visible.
+VARIANTS = {
+    "momentum": "12-1 momentum only; liquidity/price filter only",
+    "momentum+trend": "momentum, only names above their 200-day SMA",
+    "momentum+trend+volume": "momentum+trend, plus the up/down volume factor",
+    "momentum+trend+lowvol": "momentum+trend, plus the low-volatility factor",
+    "full": "production composite and eligibility (bullish setup, RSI < 75, liquidity)",
+}
+
+
+def _liquid(t: pd.DataFrame, settings: Settings) -> pd.DataFrame:
+    sc = settings.scanner
+    return t[(t["close"] >= sc.min_price) & (t["avg_dollar_volume"] >= sc.min_avg_dollar_volume)]
+
+
+def variant_scores(table: pd.DataFrame, variant: str, settings: Settings) -> tuple[pd.Series, pd.Series]:
+    """(score used for the IC, eligible names ordered best first) for one variant.
+    `table` is the output of score() for the month."""
+    if variant == "full":
+        elig = _eligible(table, settings)
+        return table["composite"], elig["composite"].sort_values(ascending=False)
+    if variant not in VARIANTS:
+        raise ValueError(f"unknown variant {variant}")
+    w = settings.scanner.weights
+    base = _liquid(table, settings)
+    if variant != "momentum":
+        base = base[base["dist_200"] > 0]
+    parts = {"price_strength": base["mom_12_1"].rank(pct=True)}
+    if variant.endswith("+volume"):
+        parts["volume"] = base["updown_volume"].rank(pct=True).fillna(0.5)
+    if variant.endswith("+lowvol"):
+        parts["risk"] = base["vol_63"].rank(pct=True, ascending=False).fillna(0.5)
+    s = sum(parts[k] * w[k] for k in parts) / sum(w[k] for k in parts)
+    s = s.dropna().sort_values(ascending=False)
+    return s, s
+
+
+def run_ablation(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, history: dict[date, list[str]],
+                 settings: Settings, top_n: int = 10, start: date | None = None,
+                 variants: tuple[str, ...] = tuple(VARIANTS)) -> dict[str, ScannerBacktest]:
+    """All variants on the same months; features are computed once per month."""
     days = list(spy.index)
     flags = month_end_flags(days)
     month_ends = [d for d, f in zip(days, flags) if f]
     first_snap = min(history)
-    out = ScannerBacktest()
-    prev: set[str] = set()
+    out = {v: ScannerBacktest() for v in variants}
+    prev: dict[str, set[str]] = {v: set() for v in variants}
     cost = settings.costs.per_side
     for i, d in enumerate(month_ends[:-1]):
         if d.date() < max(first_snap, start or first_snap):
@@ -105,20 +150,35 @@ def run_signal_backtest(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, histor
         table = _rank_month(bars, spy, members, d, settings)
         if table.empty:
             continue
-        elig = _eligible(table, settings)
-        picks = list(elig.index[:top_n])
         fwd = {t: _fwd(bars[t], entry, exit_) for t in table.index}
-        fwd = {t: r for t, r in fwd.items() if r is not None}
-        top = [fwd[t] for t in picks if t in fwd]
-        univ = [fwd[t] for t in elig.index if t in fwd]
-        turnover = len(set(picks) - prev) / max(len(picks), 1) if picks else 0.0
-        top_ret = (float(np.mean(top)) if top else 0.0) - 2 * cost * turnover
-        both = pd.DataFrame({"s": table["composite"], "r": pd.Series(fwd)}).dropna()
-        ic = float(both["s"].rank().corr(both["r"].rank())) if len(both) > 20 else float("nan")
-        out.months.append(MonthResult(d.date(), len(members), len(table), len(elig), picks, top_ret,
-                                      float(np.mean(univ)) if univ else 0.0,
-                                      _fwd(spy, entry, exit_) or 0.0, turnover, ic))
-        prev = set(picks)
+        fwd = pd.Series({t: r for t, r in fwd.items() if r is not None}, dtype=float)
+        spy_ret = _fwd(spy, entry, exit_) or 0.0
+        for v in variants:
+            ic_score, elig = variant_scores(table, v, settings)
+            picks = list(elig.index[:top_n])
+            top = [fwd[t] for t in picks if t in fwd]
+            univ = [fwd[t] for t in elig.index if t in fwd]
+            turnover = len(set(picks) - prev[v]) / max(len(picks), 1) if picks else 0.0
+            gross = float(np.mean(top)) if top else 0.0
+            both = pd.DataFrame({"s": ic_score, "r": fwd}).dropna()
+            ic = float(both["s"].rank().corr(both["r"].rank())) if len(both) > 20 else float("nan")
+            out[v].months.append(MonthResult(d.date(), len(members), len(table), len(elig), picks,
+                                             gross - 2 * cost * turnover, float(np.mean(univ)) if univ else 0.0,
+                                             spy_ret, turnover, ic, gross))
+            prev[v] = set(picks)
+    return out
+
+
+def run_signal_backtest(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, history: dict[date, list[str]],
+                        settings: Settings, top_n: int = 10, start: date | None = None) -> ScannerBacktest:
+    """The production composite only (see run_ablation for the variants)."""
+    return run_ablation(bars, spy, history, settings, top_n, start, ("full",))["full"]
+
+
+def with_cost_multiplier(frame: pd.DataFrame, cost_per_side: float, k: float) -> pd.DataFrame:
+    """Monthly frame with top_return recomputed at k x the per-side cost."""
+    out = frame.copy()
+    out["top_return"] = out["gross_return"] - 2 * k * cost_per_side * out["turnover"]
     return out
 
 

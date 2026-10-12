@@ -11,8 +11,11 @@ Each idea is counted once, to avoid double counting correlated indicators:
   valuation       forward earnings yield (1 / forward P/E), ranked within sector
   risk            lower 63-day realised volatility ranks higher
 
-composite = weighted mean of the factors that are available; missing factors are
-reported, and their weight is redistributed (never silently treated as zero).
+composite = weighted mean of the factors that are available. Price strength and
+risk are required (no score without them). Other missing factors are listed for
+every name; for research ranking their weight is redistributed, but an
+actionable candidate must have no more than `max_missing_factors_actionable`
+missing (default 0: every factor present).
 
 A high rank is a research candidate, not a trade. "Actionable" additionally
 requires: a bullish setup, liquidity, fresh data, no earnings inside the
@@ -33,6 +36,7 @@ from ..config import Settings
 from ..indicators import atr, macd, rsi, sma
 
 FACTORS = ["price_strength", "volume", "quality", "valuation", "risk"]
+REQUIRED_FACTORS = ("price_strength", "risk")
 
 
 def features(df: pd.DataFrame, bench: pd.DataFrame | None) -> dict | None:
@@ -99,6 +103,9 @@ def score(table: pd.DataFrame, fundamentals: pd.DataFrame | None, weights: dict[
     w = pd.Series(weights)
     avail = t[FACTORS].notna()
     t["composite"] = (t[FACTORS].fillna(0) * w).sum(axis=1) / (avail * w).sum(axis=1).replace(0, np.nan)
+    # Price-based factors are required for any ranking; without them there is no score.
+    t.loc[t[list(REQUIRED_FACTORS)].isna().any(axis=1), "composite"] = np.nan
+    t["missing_count"] = (~avail).sum(axis=1)
     t["missing_factors"] = avail.apply(lambda r: ", ".join(f for f in FACTORS if not r[f]), axis=1)
     t["setup"] = np.where(t["uptrend"] & (t["mom_12_1"] > 0) & (t["rs_63"] > 0), "bullish",
                           np.where(t["downtrend"] & (t["mom_12_1"] < 0), "bearish", "neutral"))
@@ -197,6 +204,7 @@ def run_scan(
     table = score(table, fundamentals, sc.weights)
     spreads = quotes.set_index("ticker")["spread_pct"] if quotes is not None and not quotes.empty else pd.Series(dtype=float)
 
+    table = table[table["composite"].notna()]
     research, actionable, rejected, bearish = [], [], {}, []
     for i, (t, row) in enumerate(table.iterrows(), start=1):
         nxt = _earnings(t, row, earnings_table, as_of)
@@ -220,8 +228,9 @@ def run_scan(
         spread = spreads.get(t)
         if spread is not None and pd.notna(spread) and spread > sc.max_spread_pct:
             reasons.append(f"spread {spread:.2%} > {sc.max_spread_pct:.2%}")
-        if row["missing_factors"].count(",") >= 1:
-            reasons.append(f"too much missing data ({row['missing_factors']})")
+        if row["missing_count"] > sc.max_missing_factors_actionable:
+            reasons.append(f"missing data: {row['missing_factors']} (actionable requires at most "
+                           f"{sc.max_missing_factors_actionable} missing factors)")
         if reasons:
             if i <= sc.top_research * 3:
                 rejected[t] = reasons

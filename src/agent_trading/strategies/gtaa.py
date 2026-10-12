@@ -46,6 +46,21 @@ def weights(history: dict[str, pd.DataFrame], day: pd.Timestamp, assets: list[st
     return {a: 1.0 / len(assets) for a, s in sig.items() if s["above"]}
 
 
+def vol_managed_weights(history: dict[str, pd.DataFrame], day: pd.Timestamp, assets: list[str], sma_months: int,
+                        target_vol: float = 0.10, lookback: int = 63, max_exposure: float = 1.0) -> dict[str, float]:
+    """C2 hypothesis (declared before testing): the GTAA weights scaled so the
+    trailing `lookback`-day volatility of the selected basket is at most
+    `target_vol`, never above `max_exposure` (no leverage). Uses only data up to `day`."""
+    base = weights(history, day, assets, sma_months)
+    if not base:
+        return {}
+    rets = pd.DataFrame({a: history[a]["close"].loc[:day].pct_change() for a in base}).iloc[-lookback:]
+    port = (rets * pd.Series(base)).sum(axis=1)
+    vol = float(port.std() * (252 ** 0.5)) if len(port.dropna()) > 20 else float("nan")
+    scale = min(max_exposure, target_vol / vol) if vol and vol == vol and vol > 0 else 1.0
+    return {a: w * scale for a, w in base.items()}
+
+
 def is_rebalance_day(trading_days: list[pd.Timestamp], day: date) -> bool:
     """Last trading day of the month (from the calendar of known trading days),
     or a weekday whose next weekday falls in a new month when `day` is the latest bar."""

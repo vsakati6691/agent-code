@@ -1,15 +1,13 @@
-from dataclasses import replace
-
+"""Metrics, benchmarks, regimes, bootstrap intervals and chronological splits."""
 import numpy as np
 import pandas as pd
 import pytest
 
 from agent_trading import regime
-from agent_trading.backtest import run_backtest
-from agent_trading.backtest.benchmarks import buy_and_hold, equal_weight, trend_timing
-from agent_trading.backtest.evaluation import evaluate, holdout_uses, make_splits, render_markdown
+from agent_trading.backtest.benchmarks import buy_and_hold, equal_weight
+from agent_trading.backtest.evaluation import make_splits
 from agent_trading.backtest.metrics import compute_metrics
-from agent_trading.backtest.stats import block_bootstrap, sensitivity, warnings_for
+from agent_trading.backtest.stats import block_bootstrap, warnings_for
 from agent_trading.config import RegimeConfig
 
 from .conftest import make_bars
@@ -31,16 +29,6 @@ def test_buy_and_hold_costs_and_values():
     assert eq.iloc[-1] == pytest.approx(1000 / (df["open"].iloc[0] * 1.001) * df["close"].iloc[-1])
 
 
-def test_trend_timing_has_no_lookahead():
-    df = make_bars(n=300, drift=0.001)
-    base = trend_timing(df, df.index[250], df.index[-1], 1000, 0.0)
-    shocked = df.copy()
-    shocked.iloc[-1, :4] *= 0.5
-    shocked.iloc[-1, shocked.columns.get_loc("high")] = shocked.iloc[-1][["open", "close"]].max()
-    after = trend_timing(shocked, df.index[250], df.index[-1], 1000, 0.0)
-    pd.testing.assert_series_equal(base.iloc[:-1], after.iloc[:-1])
-
-
 def test_equal_weight_handles_misaligned_dates():
     a = make_bars(n=60, seed=1)
     b = make_bars(n=60, seed=2).drop(make_bars(n=60, seed=2).index[30])
@@ -58,15 +46,6 @@ def test_regime_labels():
     assert regime.current(wild, cfg)["volatility"] == "high"
     labels = regime.classify(up, cfg)
     assert labels["trend"].iloc[:199].isna().all()  # not enough history for the 200-day MA
-
-
-def test_performance_by_regime_partitions_days():
-    df = make_bars(n=400, drift=0.0005, vol=0.015)
-    regimes = regime.classify(df, RegimeConfig())
-    eq = 1000 * df["close"] / df["close"].iloc[0]
-    table = regime.performance_by_regime(eq, regimes)
-    assert table["days"].sum() == len(eq) - 1  # every day is attributed
-    assert "unclassified" in set(table["trend"])  # warm-up days are shown, not dropped
 
 
 def test_bootstrap_intervals_contain_point_estimate():
@@ -92,38 +71,3 @@ def test_splits_are_chronological_and_disjoint():
         make_splits(dates[:150], 100, 0.6, 0.2)
 
 
-def test_sensitivity_flags_and_ranks(settings):
-    bars = {"A": make_bars(n=400, seed=4, drift=0.001), "B": make_bars(n=400, seed=6, drift=0.0005)}
-    dates = bars["A"].index
-    table, summary = sensitivity(bars, settings, {"fast_ma": [10, 20], "atr_stop_multiple": [2.0, 2.5]},
-                                 dates[100], dates[-1])
-    assert summary["combinations"] == 4 and len(table) == 4
-    assert summary["default_rank"] is not None
-    assert "fragile" in summary
-
-
-@pytest.fixture
-def long_bars():
-    spy = make_bars(n=760, seed=11, drift=0.0006, vol=0.01, start=400, volume=5e7)
-    return {"SPY": spy, **{f"S{i}": make_bars(n=760, seed=20 + i, drift=0.0008, vol=0.015, volume=5e6) for i in range(4)}}
-
-
-def test_evaluate_does_not_touch_holdout_by_default(settings, long_bars):
-    s = replace(settings, evaluation=replace(settings.evaluation, bootstrap_samples=100,
-                                             sensitivity_grid={"fast_ma": [10, 20]}))
-    rep = evaluate(long_bars, s)
-    assert all("HOLDOUT" not in p.name for p in rep.periods)
-    assert holdout_uses(s) == 0
-    for p in rep.periods:
-        assert pd.Timestamp(p.end) < rep.splits.holdout[0]
-        assert "SPY buy & hold" in p.benchmarks
-    md = render_markdown(rep)
-    assert "survivorship bias" in md and "Walk-forward" in md
-
-
-def test_evaluate_holdout_is_logged(settings, long_bars):
-    s = replace(settings, evaluation=replace(settings.evaluation, bootstrap_samples=50, sensitivity_grid={}))
-    rep1 = evaluate(long_bars, s, use_holdout=True)
-    assert rep1.holdout_uses == 1 and rep1.periods[-1].name.startswith("HOLDOUT")
-    rep2 = evaluate(long_bars, s, use_holdout=True)
-    assert any("no longer untouched" in w for w in rep2.periods[-1].warnings)

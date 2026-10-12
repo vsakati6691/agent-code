@@ -1,4 +1,4 @@
-﻿"""Strategy A (S&P 500 scanner), Strategy B (desk), new risk limits, and the daily cycle.
+"""Strategy A (S&P 500 scanner), Strategy B (desk), new risk limits, and the daily cycle.
 
 All external services are mocked with saved-payload fixtures."""
 import json
@@ -22,7 +22,7 @@ from agent_trading.data.universe import UniverseError, coverage, import_universe
 from agent_trading.journal import Journal
 from agent_trading.paper import Intent, PaperBroker
 from agent_trading.risk import Holding, PortfolioState, RiskEngine, trading_status
-from agent_trading.strategies.desk import Position, leveraged_blockers, qqq_regime, run_desk
+from agent_trading.strategies.desk import Position, leveraged_blockers, run_desk
 from agent_trading.strategies.scanner import run_scan, score
 
 from .conftest import make_bars
@@ -183,6 +183,25 @@ def test_scanner_actionable_respects_filters(settings):
         assert any("spread" in r for r in res.rejected["UPA"])
 
 
+def test_missing_factor_blocks_actionable(settings):
+    bars = universe_bars()
+    spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
+    fund = pd.DataFrame([{"ticker": t, "operating_margin": 0.2, "roe": 0.2, "forward_pe": 20 if t != "UPB" else None,
+                          "sector_code": "311", "earnings_date": "2026-12-15"} for t in bars])
+    res = run_scan(bars, settings, AS_OF, fund, None, bench=spy)
+    assert all(s.ticker != "UPB" for s in res.actionable)
+    if "UPB" in res.rejected:
+        assert any("missing data: valuation" in r for r in res.rejected["UPB"])
+
+
+def test_no_score_without_price_factors(settings):
+    t = pd.DataFrame({"mom_12_1": [0.1, np.nan], "rs_63": [0.0, np.nan], "dist_200": [0.05, np.nan],
+                      "updown_volume": [1, 1], "vol_63": [0.2, np.nan], "uptrend": [True, True],
+                      "downtrend": [False, False]}, index=["A", "B"])
+    out = score(t, None, settings.scanner.weights)
+    assert pd.notna(out.loc["A", "composite"]) and pd.isna(out.loc["B", "composite"])
+
+
 def test_price_strength_is_a_single_factor(settings):
     t = pd.DataFrame({"mom_12_1": [0.1, 0.2], "rs_63": [0.0, 0.1], "dist_200": [0.05, 0.1], "updown_volume": [1, 1],
                       "vol_63": [0.2, 0.2], "uptrend": [True, True], "downtrend": [False, False]}, index=["A", "B"])
@@ -293,7 +312,7 @@ def test_intents_dedupe_no_short_and_exclusive(settings, broker):
                Intent("TQQQ", "buy", close, close * 0.9, "B-desk", "dup", 1),
                Intent("SQQQ", "buy", 30, 27, "B-desk", "other side", 0.5),
                Intent("NVDA", "sell", 100, None, "B-desk", "no position")]
-    r = broker.run(b1, None, None, d, intents=intents)
+    r = broker.run(b1, d, intents)
     pending = broker.orders("pending")
     assert list(pending["symbol"]) == ["TQQQ"]
     reasons = {p.symbol + str(i): p.reason for i, p in enumerate(r.new_orders)}
@@ -310,12 +329,12 @@ def test_fill_reduced_when_open_gaps_up(settings, broker):
     d1 = days[-2]
     b1 = {s: df.loc[:d1] for s, df in bars.items()}
     close = float(b1["NVDA"]["close"].iloc[-1])
-    broker.run(b1, None, None, d1.date(), intents=[Intent("NVDA", "buy", close, close - 2, "B-desk", "t", 1)])
+    broker.run(b1, d1.date(), [Intent("NVDA", "buy", close, close - 2, "B-desk", "t", 1)])
     order = broker.orders("pending").iloc[0]
     gapped = {s: df.copy() for s, df in bars.items()}
     g = gapped["NVDA"]
     g.loc[days[-1], ["open", "high"]] = [close * 1.01, max(close * 1.02, g.loc[days[-1], "high"])]
-    broker.run(gapped, None, None, days[-1].date(), intents=[])
+    broker.run(gapped, days[-1].date(), [])
     t = broker.journal.open_trades().iloc[0]
     assert t["quantity"] <= order["quantity"] and t["strategy"] == "B-desk"
 
@@ -323,7 +342,7 @@ def test_fill_reduced_when_open_gaps_up(settings, broker):
 def test_time_exit_queued_for_leveraged(settings, broker):
     bars = desk_bars()
     broker.journal.open_trade("TQQQ", 0.1, 40, 30, date(2026, 9, 28), strategy="B-desk")
-    broker.run(bars, None, None, bars["TQQQ"].index[-1].date(), intents=[])
+    broker.run(bars, bars["TQQQ"].index[-1].date(), [])
     sells = broker.orders("pending")
     assert (sells["side"] == "sell").any() and "max holding" in sells.iloc[0]["reason"]
 
@@ -333,7 +352,7 @@ def test_loss_limit_blocks_new_entries(settings, broker):
     d = bars["NVDA"].index[-1].date()
     broker._record_equity(d - timedelta(days=1), 1100.0)  # pretend yesterday's equity was $1,100
     close = float(bars["NVDA"]["close"].iloc[-1])
-    r = broker.run(bars, None, None, d, intents=[Intent("NVDA", "buy", close, close - 2, "B-desk", "t")])
+    r = broker.run(bars, d, [Intent("NVDA", "buy", close, close - 2, "B-desk", "t")])
     assert broker.orders("pending").empty
     assert any("blocked" in w for w in r.warnings)
 
@@ -356,6 +375,25 @@ def test_desk_backtest_respects_leveraged_rules(settings):
         for s2, a2, b2 in spans:
             if s1 != s2:
                 assert b1 <= a2 or b2 <= a1
+
+
+def test_unlevered_baseline_and_cost_stress(settings):
+    from agent_trading.backtest.desk_backtest import (
+        run_desk_backtest,
+        run_unlevered_baseline,
+        with_cost_multiplier,
+    )
+
+    bars = desk_bars()
+    base = run_unlevered_baseline(bars, settings)
+    assert all(t.symbol == "QQQ" for t in base.trades)
+    for t in base.trades:  # same $2.50 risk budget and 5-day limit as TQQQ
+        assert t.quantity * (t.entry_price - t.stop) * (1 + settings.risk.stop_risk_buffer) <= 2.5 * 1.1
+    cheap = run_desk_backtest(bars, settings, ["TQQQ"])
+    pricey = run_desk_backtest(bars, with_cost_multiplier(settings, 3), ["TQQQ"])
+    assert with_cost_multiplier(settings, 2).costs.per_side == pytest.approx(2 * settings.costs.per_side)
+    if cheap.trades:
+        assert pricey.equity.iloc[-1] <= cheap.equity.iloc[-1] + 1e-9
 
 
 # ---------------------------------------------------------------- end-to-end daily cycle (all inputs mocked)
@@ -383,8 +421,26 @@ def test_daily_cycle_end_to_end(settings, tmp_path):
     assert ctx.coverage["expected"] == 11 and ctx.coverage["scanned"] == 10
     assert "MISSX" in ctx.coverage["missing"]
     for section in ["Section A: S&P 500 scanner", "Section B: Focused desk", "Section C: Account and portfolio risk",
-                    "Section D: Actions", "Orders awaiting your authorization:** none"]:
+                    "Section D: Actions", "Live order tickets for you to place by hand"]:
         assert section in text
     assert "incomplete scan" in text  # 10/11 < 95%
     assert {d.symbol for d in ctx.desk} == {"TQQQ", "SQQQ", "IBIT", "NVDA"}
     assert "CPI" in text
+
+    # reproducibility: a run log with inputs, every signal and the frozen spec
+    log = json.loads(open(ctx.manifest_path, encoding="utf-8").read())
+    assert log["config_hash"] == ctx.config_hash and log["frozen_spec_hash"] == ctx.config_hash
+    assert {"inputs", "scanner", "desk", "gtaa", "intents", "proposals", "risk_status"} <= set(log)
+    assert log["inputs"]["econ"]["source"].startswith("Bigdata")
+    assert f"config {ctx.config_hash}" in text and "Spec changed" not in text
+
+
+def test_spec_change_is_flagged(settings, tmp_path):
+    from agent_trading.daily import run_daily
+    from agent_trading.paper import PaperBroker
+
+    s = small_settings(settings)
+    broker = PaperBroker(s, Journal(s.resolve(s.paths.journal_db)))
+    broker._set_meta("spec_config_hash", "000000000000")
+    text, ctx = run_daily(s, AS_OF, run_paper=False)
+    assert "Spec changed" in text and "000000000000" in ctx.spec_warning

@@ -28,6 +28,20 @@ def make_bars(n: int = 300, start: float = 100.0, drift: float = 0.001, vol: flo
     return df
 
 
+def trend_rows(bars: dict[str, pd.DataFrame]) -> dict[str, dict]:
+    """Prepared engine rows for a simple trend rule (enter above rising SMAs,
+    exit below the 50-day): exercises the engine independently of any strategy."""
+    from agent_trading.backtest.desk_backtest import _frame
+    from agent_trading.indicators import sma
+
+    rows = {}
+    for sym, df in bars.items():
+        c = df["close"]
+        s20, s50 = sma(c, 20), sma(c, 50)
+        rows[sym] = _frame(df, (c > s20) & (s20 > s50), c < s50).to_dict("index")
+    return rows
+
+
 @pytest.fixture
 def settings(tmp_path):
     s = load_settings(ROOT / "config" / "settings.yaml")

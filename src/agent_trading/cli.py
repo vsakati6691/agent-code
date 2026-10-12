@@ -11,7 +11,7 @@ import pandas as pd
 
 from .config import ConfigError, Settings, get_api_key, load_settings
 from .logging_setup import setup_logging
-from .risk import ProposedOrder, RiskViolation, check_new_trade_risk, check_order
+from .risk import RiskViolation
 
 log = logging.getLogger("agent_trading")
 
@@ -34,20 +34,6 @@ def _journal(settings: Settings):
 
 def _symbols(settings: Settings, arg: list[str] | None) -> list[str]:
     return [s.upper() for s in arg] if arg else settings.symbols
-
-
-def _fmt_metrics(m: dict) -> str:
-    keys = ["start", "end", "bars", "final_equity", "total_return", "cagr", "sharpe", "max_drawdown",
-            "trades", "win_rate", "profit_factor", "exposure", "total_costs"]
-    lines = []
-    for k in keys:
-        v = m.get(k)
-        if isinstance(v, float) and k in ("total_return", "cagr", "max_drawdown", "win_rate", "exposure"):
-            v = f"{v:+.2%}"
-        elif isinstance(v, float):
-            v = f"{v:.3f}"
-        lines.append(f"  {k:<14} {v}")
-    return "\n".join(lines)
 
 
 # ------------------------------------------------------------------ commands
@@ -89,39 +75,6 @@ def _load(settings: Settings, args):
     for reason in loaded.rejected.values():
         log.warning("Rejected: %s", reason)
     return svc, loaded
-
-
-def cmd_screen(settings: Settings, args) -> int:
-    from .screen import run_screen
-
-    _, loaded = _load(settings, args)
-    table = run_screen(loaded.bars, settings)
-    if table.empty:
-        print("No valid data. Run `fetch` first.")
-        return 1
-    cols = ["close", "change_pct", "momentum", "rsi", "atr_pct", "uptrend", "entry_signal", "exit_signal", "liquid"]
-    with pd.option_context("display.width", 160, "display.float_format", "{:.3f}".format):
-        print(table[cols])
-    return 0
-
-
-def cmd_report(settings: Settings, args) -> int:
-    from .report import build_daily_report, write_report
-    from .screen import run_screen
-
-    status = None
-    if not args.no_fetch:
-        svc = _service(settings, with_client=True)
-        status = svc.refresh(settings.symbols, args.as_of)
-        svc.refresh_earnings(args.as_of)
-    svc, loaded = _load(settings, args)
-    text = build_daily_report(
-        settings, loaded, run_screen(loaded.bars, settings), svc.earnings(args.as_of),
-        _journal(settings), args.as_of, status, _account(settings),
-    )
-    path = write_report(settings, text, args.as_of)
-    print(f"Report written: {path}")
-    return 0
 
 
 def _account(settings: Settings):
@@ -178,10 +131,22 @@ def cmd_snapshot(settings: Settings, args) -> int:
     return 0
 
 
+def cmd_dividends(settings: Settings, args) -> int:
+    from .data.dividends import import_dividends_file
+
+    s = import_dividends_file(settings, args.symbol.upper(), Path(args.path))
+    span = f"{s.index.min().date()} to {s.index.max().date()}" if len(s) else "none"
+    print(f"{args.symbol.upper()}: {len(s)} dividends ({span})")
+    return 0
+
+
 def cmd_daily(settings: Settings, args) -> int:
     from .daily import run_daily, write
 
-    text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper)
+    text, ctx = run_daily(settings, args.as_of, run_paper=not args.no_paper, label=args.label or "")
+    print(f"Run log: {ctx.manifest_path}")
+    if ctx.spec_warning:
+        print(f"WARNING: {ctx.spec_warning}")
     path = write(settings, text, args.as_of, args.label or "")
     if ctx.coverage:
         c = ctx.coverage
@@ -220,24 +185,15 @@ def cmd_account(settings: Settings, args) -> int:
 
 
 def cmd_paper(settings: Settings, args) -> int:
+    """Paper status (positions marked to the latest cached close). The paper
+    broker itself runs inside `daily`."""
     from .paper import PaperBroker
-    from .screen import run_screen
 
-    svc, loaded = _load(settings, args)
     broker = PaperBroker(settings, _journal(settings))
-    if args.action == "run":
-        if not loaded.bars:
-            print("No valid market data; paper run skipped (fail-safe).")
-            return 2
-        result = broker.run(loaded.bars, run_screen(loaded.bars, settings), svc.earnings(args.as_of), args.as_of)
-        for line in result.events:
-            print(line)
-        for line in result.warnings:
-            print(f"WARNING: {line}")
-        if not result.events:
-            print("No fills, stops, or new orders.")
-        return 0
-    positions = broker.positions(loaded.bars, args.as_of)
+    held = broker.journal.open_trades()
+    args.symbols = sorted(set(held["symbol"])) if not held.empty else []
+    bars = _load(settings, args)[1].bars if args.symbols else {}
+    positions = broker.positions(bars, args.as_of)
     pending = broker.orders("pending")
     s = broker.journal.summary(settings.paper_starting_equity, settings.risk.stop_risk_buffer)
     cash = broker.journal.cash(settings.paper_starting_equity)
@@ -279,91 +235,10 @@ def _backtest_bars(settings: Settings, args) -> dict:
     return bars
 
 
-def cmd_backtest(settings: Settings, args) -> int:
-    from .backtest import in_out_of_sample, run_backtest
-    from .report import save_backtest
-
-    bars = _backtest_bars(settings, args)
-    if not bars:
-        print("No usable data. Run `fetch` or `import-csv` first.")
-        return 1
-    full = run_backtest(bars, settings)
-    print(f"Full period ({len(bars)} symbols, slippage {settings.costs.slippage_bps} bps/side):")
-    print(_fmt_metrics(full.metrics))
-    try:
-        ins, oos = in_out_of_sample(bars, settings)
-        print("\nIn-sample:")
-        print(_fmt_metrics(ins.metrics))
-        print("\nOut-of-sample (the number that matters):")
-        print(_fmt_metrics(oos.metrics))
-    except ValueError as exc:
-        print(f"\nOut-of-sample split skipped: {exc}")
-    reports = settings.resolve(settings.paths.reports_dir)
-    reports.mkdir(parents=True, exist_ok=True)
-    full.trades_frame().to_csv(reports / "backtest_trades.csv", index=False)
-    save_backtest(settings, "full period", full.metrics, full.equity)
-    print(f"\nTrades: {reports / 'backtest_trades.csv'}")
-    return 0
-
-
-def cmd_walkforward(settings: Settings, args) -> int:
-    from .backtest import walk_forward
-    from .report import save_backtest
-
-    bars = _backtest_bars(settings, args)
-    try:
-        result = walk_forward(bars, settings)
-    except ValueError as exc:
-        print(f"Walk-forward not possible: {exc}")
-        return 1
-    for f in result.folds:
-        print(f"train {f['train']}  test {f['test']}  params {f['chosen']}  "
-              f"train sharpe {f['train_sharpe']:.2f}  test return {f['test_return']:+.2%}  trades {f['test_trades']}")
-    print("\nStitched out-of-sample result:")
-    print(_fmt_metrics(result.metrics))
-    save_backtest(settings, "walk-forward OOS", result.metrics, result.equity, {"folds": result.folds})
-    return 0
-
-
-def cmd_evaluate(settings: Settings, args) -> int:
-    from .backtest.evaluation import evaluate, holdout_uses, save
-
-    if args.holdout and holdout_uses(settings) > 0:
-        print(f"Note: the holdout has already been evaluated {holdout_uses(settings)} time(s); "
-              "repeated use turns it into a tuning set.")
-    from .data.rates import load_monthly_rates, refresh_rates
-
-    if settings.evaluation.cash_interest and load_monthly_rates(settings) is None:
-        try:
-            refresh_rates(settings, _service(settings, with_client=True).client, args.as_of)
-        except ConfigError as exc:
-            print(f"T-bill rates unavailable ({exc}); cash will earn no interest in this evaluation.")
-    bars = _backtest_bars(settings, args)
-    try:
-        rep = evaluate(bars, settings, use_holdout=args.holdout)
-    except ValueError as exc:
-        print(f"Evaluation not possible: {exc}")
-        return 1
-    md, csv = save(rep, settings, args.as_of)
-    for p in rep.periods:
-        m = p.strategy
-        spy = next((v for k, v in p.benchmarks.items() if "buy & hold" in k and "Equal" not in k), {})
-        print(f"{p.name:<30} {p.start}..{p.end}  return {m.get('total_return', 0):+.2%}  sharpe {m.get('sharpe', 0):.2f}  "
-              f"maxDD {m.get('max_drawdown', 0):+.2%}  trades {m.get('trades')}  | SPY {spy.get('total_return', float('nan')):+.2%}")
-        for w in p.warnings:
-            print(f"    ! {w}")
-    if rep.sensitivity_summary:
-        ss = rep.sensitivity_summary
-        print(f"Sensitivity: {ss['share_positive_sharpe']:.0%} of {ss['combinations']} combos Sharpe>0; "
-              f"fragile={ss['fragile']}")
-    print(f"\nReport: {md}\nTrades: {csv}")
-    return 0
-
-
 def cmd_evaluate_desk(settings: Settings, args) -> int:
     """Strategy B rules on history: train + validation only (holdout untouched)."""
     from .backtest.benchmarks import buy_and_hold
-    from .backtest.desk_backtest import run_desk_backtest
+    from .backtest.desk_backtest import run_desk_backtest, run_unlevered_baseline, with_cost_multiplier
     from .backtest.evaluation import make_splits
     from .backtest.metrics import compute_metrics
     from .backtest.stats import block_bootstrap, warnings_for
@@ -392,26 +267,39 @@ def cmd_evaluate_desk(settings: Settings, args) -> int:
             lines.append(f"## {'+'.join(syms)}: skipped ({exc})\n")
             continue
         cash = daily_cash_rate(rates, pd.DatetimeIndex(dates))
-        lines += [f"## {' + '.join(syms)}", "",
-                  "| Period | Return | CAGR | Sharpe (95% CI) | Max DD | Trades | Win % | Exposure | QQQ B&H | "
-                  + ("Instrument B&H |" if len(syms) == 1 else "|"),
-                  "|---|---|---|---|---|---|---|---|---|" + ("---|" if len(syms) == 1 else "")]
+        lines += [f"## {' + '.join(syms)}", ""]
         for name, (start, end) in [("train", sp.train), ("validation", sp.validation)]:
-            res = run_desk_backtest(bars, settings, syms, start, end, cash)
-            m = res.metrics
-            boot = block_bootstrap(res.equity.pct_change(), 500, 20)
-            ci = "n/a" if boot.get("insufficient") else f"{boot['sharpe_ci'][0]:.2f} to {boot['sharpe_ci'][1]:.2f}"
-            qqq = compute_metrics(buy_and_hold(bars[d.underlying], start, end, 1000, settings.costs.per_side), [], 1000)
-            row = (f"| {name} {start.date()}..{end.date()} | {m['total_return']:+.1%} | {(m['cagr'] or 0):+.1%} | "
-                   f"{m['sharpe']:.2f} ({ci}) | {m['max_drawdown']:+.1%} | {m['trades']} | {m['win_rate']:.0%} | "
-                   f"{m['exposure']:.0%} | {qqq['total_return']:+.1%} |")
+            lines += [f"### {name}: {start.date()} to {end.date()}", "",
+                      "| Variant | Return | CAGR | Sharpe (95% CI) | Max DD | Trades | Win % | Exposure |",
+                      "|---|---|---|---|---|---|---|---|"]
+            warn = []
+
+            def row(label, m, boot=None):
+                ci = "" if boot is None else (" (n/a)" if boot.get("insufficient")
+                                              else f" ({boot['sharpe_ci'][0]:.2f} to {boot['sharpe_ci'][1]:.2f})")
+                trades = m.get("trades", "-") if m.get("trades") else "-"
+                win = f"{m['win_rate']:.0%}" if m.get("trades") else "-"
+                expo = f"{m['exposure']:.0%}" if m.get("exposure") is not None else "-"
+                lines.append(f"| {label} | {m['total_return']:+.1%} | {(m.get('cagr') or 0):+.1%} | {m['sharpe']:.2f}{ci} | "
+                             f"{m['max_drawdown']:+.1%} | {trades} | {win} | {expo} |")
+
+            for k in (1, 2, 3):
+                res = run_desk_backtest(bars, with_cost_multiplier(settings, k), syms, start, end, cash)
+                boot = block_bootstrap(res.equity.pct_change(), 500, 20) if k == 1 else None
+                row(f"Rules, {k}× costs", res.metrics, boot)
+                if k == 1:
+                    warn = warnings_for(res.metrics, boot, settings.evaluation.min_trades)
+            if syms == [d.leveraged_long]:
+                row("Same rule on QQQ (no leverage, same $ risk and 5-day limit)",
+                    run_unlevered_baseline(bars, settings, start, end).metrics)
+            if syms == [d.leveraged_inverse]:
+                lines.append("| Holding cash instead (trading P&L 0) | +0.0% | +0.0% | 0.00 | +0.0% | - | - | 0% |")
+            row(f"{d.underlying} buy & hold", compute_metrics(
+                buy_and_hold(bars[d.underlying], start, end, 1000, settings.costs.per_side), [], 1000, 1.0))
             if len(syms) == 1:
-                own = compute_metrics(buy_and_hold(bars[syms[0]], start, end, 1000, settings.costs.per_side), [], 1000)
-                row += f" {own['total_return']:+.1%} (DD {own['max_drawdown']:+.0%}) |"
-            lines.append(row)
-            for w in warnings_for(m, boot, settings.evaluation.min_trades):
-                lines.append(f"|  ⚠ {w} |" + " |" * (8 if len(syms) == 1 else 7))
-        lines.append("")
+                row(f"{syms[0]} buy & hold", compute_metrics(
+                    buy_and_hold(bars[syms[0]], start, end, 1000, settings.costs.per_side), [], 1000, 1.0))
+            lines += [""] + [f"> ⚠ {w}" for w in warn] + [""]
     text = "\n".join(lines)
     reports = settings.resolve(settings.paths.reports_dir)
     reports.mkdir(parents=True, exist_ok=True)
@@ -424,7 +312,7 @@ def cmd_evaluate_desk(settings: Settings, args) -> int:
 
 def cmd_evaluate_scanner(settings: Settings, args) -> int:
     """Strategy A on point-in-time S&P 500 lists (train + validation; holdout untouched)."""
-    from .backtest.scanner_backtest import run_account_backtest, run_signal_backtest, summarize
+    from .backtest.scanner_backtest import VARIANTS, run_ablation, run_account_backtest, summarize, with_cost_multiplier
     from .data.universe import load_universe_history
 
     history = {d: t for d, t in load_universe_history(settings).items()}
@@ -437,11 +325,12 @@ def cmd_evaluate_scanner(settings: Settings, args) -> int:
     if spy is None:
         print("Benchmark data missing.")
         return 1
-    bt = run_signal_backtest(bars, spy, history, settings, top_n=args.top)
-    frame = bt.frame()
+    ablation = run_ablation(bars, spy, history, settings, top_n=args.top)
+    frame = ablation["full"].frame()
     n = len(frame)
     t_end, v_end = int(n * settings.evaluation.train_fraction), int(n * (settings.evaluation.train_fraction + settings.evaluation.validation_fraction))
     parts = {"train": frame.iloc[:t_end], "validation": frame.iloc[t_end:v_end]}
+    cost = settings.costs.per_side
     snaps = sorted(history)
     lines = ["# Strategy A (S&P 500 scanner) point-in-time backtest", "",
              f"> Universe each month = latest stored S&P 500 snapshot on or before that date ({len(snaps)} snapshots, "
@@ -466,6 +355,26 @@ def cmd_evaluate_scanner(settings: Settings, args) -> int:
                   f"- Coverage: {s['avg_members']:.0f} listed members/month, {s['avg_scored']:.0f} scored, "
                   f"{s['avg_eligible']:.0f} eligible; average turnover {s['avg_turnover']:.0%} of picks per month.",
                   "- ⚠ |t| < 2: not statistically distinguishable from zero." if abs(s["excess_t_stat"]) < 2 else "", ""]
+    lines += ["## Factor ablation (does each idea add anything over plain momentum?)", "",
+              f"{len(VARIANTS)} variants, all declared before running and evaluated on the same months; top {args.top} "
+              "names each. **Multiple testing:** with 5 tries, at least one |t| > 2 would appear by chance about 20% of "
+              "the time, so a single good row is weak evidence.", ""]
+    lines += [f"- **{v}**: {desc}" for v, desc in VARIANTS.items()] + [""]
+    for name, (lo, hi) in {"train": (0, t_end), "validation": (t_end, v_end)}.items():
+        lines += [f"### {name}", "",
+                  "| Variant | Gross CAGR | Net CAGR | Net CAGR at 3× costs | Sharpe | Excess vs SPY/mo (t) | IC (t) | Turnover | Eligible |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for v, bt_v in ablation.items():
+            part = bt_v.frame().iloc[lo:hi]
+            if part.empty:
+                continue
+            s = summarize(part)
+            gross = summarize(part.assign(top_return=part["gross_return"]))["top"]["cagr"]
+            stress = summarize(with_cost_multiplier(part, cost, 3))["top"]["cagr"]
+            lines.append(f"| {v} | {gross:+.1%} | {s['top']['cagr']:+.1%} | {stress:+.1%} | {s['top']['sharpe']:.2f} | "
+                         f"{s['excess_vs_spy_mean_monthly']:+.2%} ({s['excess_t_stat']:.2f}) | "
+                         f"{s['ic_mean']:+.3f} ({s['ic_t_stat']:.2f}) | {s['avg_turnover']:.0%} | {s['avg_eligible']:.0f} |")
+        lines.append("")
     if not parts["validation"].empty:
         start, end = pd.Timestamp(parts["train"].index[0]), pd.Timestamp(parts["validation"].index[-1]) + pd.offsets.MonthEnd(1)
         acct = run_account_backtest(bars | {settings.scanner.benchmark: spy}, spy, history, settings, start, end, args.top)
@@ -497,42 +406,95 @@ def cmd_evaluate_gtaa(settings: Settings, args) -> int:
     from .data.rates import daily_cash_rate, load_monthly_rates
     from .strategies import gtaa
 
+    from .backtest.desk_backtest import with_cost_multiplier
+    from .data.dividends import load_dividends, total_return_bars
+
     g = settings.gtaa
     args.symbols = list(g.assets)
-    bars = _backtest_bars(settings, args)
-    missing = [a for a in g.assets if a not in bars]
+    price_bars = _backtest_bars(settings, args)
+    missing = [a for a in g.assets if a not in price_bars]
+    no_divs = [a for a in price_bars if load_dividends(settings, a) is None]
+    bars = {s: total_return_bars(df, load_dividends(settings, s)) for s, df in price_bars.items()}
     dates = sorted(set().union(*(df.index for df in bars.values())))
     sp = make_splits(dates, 21 * g.sma_months + 5, settings.evaluation.train_fraction, settings.evaluation.validation_fraction)
+    assets = list(g.assets)
+    c2_target_vol, c2_max_exposure = 0.10, 1.0  # C2 hypothesis, fixed before the first run (not tuned)
 
     def wfn(day, hist):
-        return gtaa.weights(hist, day, list(g.assets), g.sma_months)
+        return gtaa.weights(hist, day, assets, g.sma_months)
 
-    # Signal view: the published rule at full 1/N weights (per-trade caps relaxed, no stops) to check it works.
-    # Account view: the real RiskEngine limits; trading P&L only (idle cash earns nothing).
-    signal_settings = replace(settings, risk=replace(settings.risk, risk_per_trade_pct=1.0, max_open_risk_pct=1.0,
-                                                     max_correlated_risk_pct=1.0, max_position_pct=1.0 / len(g.assets) + 1e-9,
-                                                     stop_risk_buffer=0.0))
+    def c2_wfn(day, hist):
+        return gtaa.vol_managed_weights(hist, day, assets, g.sma_months, c2_target_vol, 63, c2_max_exposure)
+
+    def spy_timing(day, hist):
+        return {"SPY": 1.0} if gtaa.weights(hist, day, ["SPY"], g.sma_months) else {}
+
+    def relaxed(max_pos):
+        # research views: per-trade caps relaxed, no stops; position cap = the rule's own weight
+        return replace(settings, risk=replace(settings.risk, risk_per_trade_pct=1.0, max_open_risk_pct=1.0,
+                                              max_correlated_risk_pct=1.0, max_position_pct=max_pos + 1e-9,
+                                              stop_risk_buffer=0.0))
+
+    signal_settings, single_settings = relaxed(1.0 / len(assets)), relaxed(1.0)
     cash = daily_cash_rate(load_monthly_rates(settings), pd.DatetimeIndex(dates))
+    cost = settings.costs.per_side
     lines = ["# Strategy C (GTAA) backtest", "",
-             f"> Assets {', '.join(g.assets)}; month-end {g.sma_months}-month SMA rule; next-open fills; "
-             f"{settings.costs.per_side * 1e4:.1f} bps per side. Holdout {sp.holdout[0].date()} to {sp.holdout[1].date()} untouched. "
-             "Price return only (no dividends; bond/REIT ETFs understated)." + (f" Missing data: {missing}." if missing else ""), ""]
+             f"> Assets {', '.join(assets)}; month-end {g.sma_months}-month SMA rule; next-open fills; "
+             f"{cost * 1e4:.1f} bps per side. Holdout {sp.holdout[0].date()} to {sp.holdout[1].date()} untouched. "
+             "**Total return**: prices back-adjusted for cash dividends (reinvested at the ex-date close)."
+             + (f" No dividend file (treated as price-only): {no_divs}." if no_divs else "")
+             + (f" Missing data: {missing}." if missing else ""), "",
+             "Variants (all declared before running; none tuned on these results):",
+             "- **C0** research baseline: the published rule, 1/7 per asset above its SMA, rest in T-bills, no stops.",
+             "- **C1** the same signals under the account's real limits (RiskEngine sizing, ATR stops), trading P&L only.",
+             f"- **C2** separate hypothesis: C0 scaled at entry so trailing 63-day basket volatility ≤ {c2_target_vol:.0%}, "
+             f"exposure ≤ {c2_max_exposure:.0%} (no leverage); T-bills on cash.",
+             f"- Benchmarks: SPY {g.sma_months}-month SMA timing (T-bills when out), SPY buy & hold, 7-asset equal weight; "
+             "all total return.",
+             "", "Multiple testing: 3 GTAA variants are reported; treat any single one's best period with caution.", ""]
+    header = ["| | Total | CAGR | Vol | Sharpe | Max DD | DD days | Worst month | Avg invested | Turnover | Trades |",
+              "|---|---|---|---|---|---|---|---|---|---|---|"]
+
+    def row(label, m):
+        wm = f"{m['worst_month']:+.1%}" if m.get("worst_month") is not None else "-"
+        inv = f"{m['avg_invested']:.0%}" if m.get("avg_invested") is not None else "100%"
+        return (f"| {label} | {m['total_return']:+.1%} | {(m.get('cagr') or 0):+.1%} | {(m.get('volatility') or 0):.1%} | "
+                f"{m['sharpe']:.2f} | {m['max_drawdown']:+.1%} | {m.get('max_dd_duration_days', '-')} | {wm} | {inv} | "
+                f"{m.get('turnover', 0):.2f} | {m.get('trades') or '-'} |")
+
     for name, (start, end) in [("train", sp.train), ("validation", sp.validation)]:
-        sig = run_allocation(bars, signal_settings, wfn, start, end, cash_rate=cash, name="GTAA signal view",
-                             use_stops=False)
-        acct = run_allocation(bars, settings, wfn, start, end, name="GTAA account view")
-        spy = compute_metrics(buy_and_hold(bars["SPY"], start, end, 1000, settings.costs.per_side), [], 1000)
-        ew = compute_metrics(equal_weight(bars, start, end, 1000, settings.costs.per_side), [], 1000)
-        b = block_bootstrap(sig.equity.pct_change(), 500, 20)
+        c0 = run_allocation(bars, signal_settings, wfn, start, end, cash_rate=cash, name="C0", use_stops=False)
+        c0_price = run_allocation(price_bars, signal_settings, wfn, start, end, cash_rate=cash, name="C0 price",
+                                  use_stops=False)
+        c1 = run_allocation(bars, settings, wfn, start, end, name="C1")
+        c2 = run_allocation(bars, signal_settings, c2_wfn, start, end, cash_rate=cash, name="C2", use_stops=False)
+        timing = run_allocation(bars, single_settings, spy_timing, start, end, cash_rate=cash, name="SPY timing",
+                                use_stops=False)
+        spy = compute_metrics(buy_and_hold(bars["SPY"], start, end, 1000, cost), [], 1000, 1.0)
+        ew = compute_metrics(equal_weight(bars, start, end, 1000, cost), [], 1000, 1.0)
+        b = block_bootstrap(c0.equity.pct_change(), 500, 20)
         ci = "n/a" if b.get("insufficient") else f"{b['sharpe_ci'][0]:.2f} to {b['sharpe_ci'][1]:.2f}"
-        lines += [f"## {name}: {start.date()} to {end.date()}", "",
-                  "| | Total | CAGR | Sharpe | Max DD | Trades |", "|---|---|---|---|---|---|"]
-        for label, m in [("GTAA signal view (1/7 weights, T-bill on cash)", sig.metrics),
-                         ("GTAA under account limits (trading P&L only)", acct.metrics),
+        lines += [f"## {name}: {start.date()} to {end.date()}", "", *header]
+        for label, m in [("C0 GTAA research baseline (total return)", c0.metrics),
+                         ("C0 on price-only bars (old method, for comparison)", c0_price.metrics),
+                         ("C1 GTAA under account limits (trading P&L only)", c1.metrics),
+                         ("C2 GTAA volatility-managed", c2.metrics),
+                         (f"SPY {g.sma_months}-month timing", timing.metrics),
                          ("SPY buy & hold", spy), ("7-asset equal weight buy & hold", ew)]:
-            lines.append(f"| {label} | {m['total_return']:+.1%} | {(m.get('cagr') or 0):+.1%} | {m['sharpe']:.2f} | "
-                         f"{m['max_drawdown']:+.1%} | {m.get('trades', '-')} |")
-        lines += ["", f"Signal-view Sharpe 95% interval: {ci}.", ""]
+            lines.append(row(label, m))
+        lines += ["", "Cost stress (C0):", ""]
+        for k in (2, 3):
+            m = run_allocation(bars, with_cost_multiplier(signal_settings, k), wfn, start, end, cash_rate=cash,
+                               use_stops=False).metrics
+            lines.append(f"- {k}× costs: total {m['total_return']:+.1%}, CAGR {(m.get('cagr') or 0):+.1%}, "
+                         f"Sharpe {m['sharpe']:.2f} (1×: {c0.metrics['sharpe']:.2f}).")
+        years = sorted(set(c0.metrics["calendar_years"]) | set(spy["calendar_years"]))
+        lines += ["", "Calendar years (partial first/last years marked by the period dates):", "",
+                  "| Year | C0 | C2 | SPY timing | SPY |", "|---|---|---|---|---|"]
+        for y in years:
+            cells = [r.get("calendar_years", {}).get(y) for r in (c0.metrics, c2.metrics, timing.metrics, spy)]
+            lines.append(f"| {y} | " + " | ".join("-" if v is None else f"{v:+.1%}" for v in cells) + " |")
+        lines += ["", f"C0 Sharpe 95% interval (block bootstrap): {ci}.", ""]
     text = "\n".join(lines)
     reports = settings.resolve(settings.paths.reports_dir)
     reports.mkdir(parents=True, exist_ok=True)
@@ -540,46 +502,6 @@ def cmd_evaluate_gtaa(settings: Settings, args) -> int:
     path.write_text(text, encoding="utf-8")
     print(text)
     print(f"\nReport: {path}")
-    return 0
-
-
-def cmd_journal(settings: Settings, args) -> int:
-    j = _journal(settings)
-    equity = settings.paper_starting_equity + j.realized_pnl()
-    if args.action == "open":
-        cash = j.cash(settings.paper_starting_equity)
-        check_order(ProposedOrder(args.symbol, "buy", args.quantity, args.entry), settings, cash)
-        buffer = settings.risk.stop_risk_buffer
-        risk = check_new_trade_risk(equity, j.open_risk(buffer), args.quantity, args.entry, args.stop, settings.risk)
-        tid = j.open_trade(args.symbol, args.quantity, args.entry, args.stop, args.as_of, args.thesis or "")
-        print(f"Opened paper trade #{tid}: {args.symbol.upper()} x{args.quantity:g} @ {args.entry} stop {args.stop} (risk ${risk:.2f})")
-    elif args.action == "close":
-        open_df = j.open_trades()
-        match = open_df[open_df["id"] == args.id] if not open_df.empty else open_df
-        if match.empty:
-            print(f"No open trade #{args.id}")
-            return 1
-        row = match.iloc[0]
-        check_order(ProposedOrder(row.symbol, "sell", row.quantity, args.price, held_quantity=row.quantity), settings, 0)
-        j.close_trade(args.id, args.price, args.as_of, args.reason or "")
-        print(f"Closed paper trade #{args.id} @ {args.price}")
-    else:
-        df = j.trades()
-        print("No trades yet." if df.empty else df.drop(columns=["mode", "side"]).to_string(index=False))
-        s = j.summary(settings.paper_starting_equity, settings.risk.stop_risk_buffer)
-        print(f"\nEquity (realized) ${s['equity_realized']:.2f} · open risk ${s['open_risk']:.2f} "
-              f"(limit ${equity * settings.risk.max_open_risk_pct:.2f})")
-    return 0
-
-
-def cmd_dashboard(settings: Settings, args) -> int:
-    from .report import build_dashboard, load_backtest
-
-    reports = settings.resolve(settings.paths.reports_dir)
-    reports.mkdir(parents=True, exist_ok=True)
-    path = reports / "dashboard.html"
-    path.write_text(build_dashboard(settings, _journal(settings), load_backtest(settings)), encoding="utf-8")
-    print(f"Dashboard written: {path}")
     return 0
 
 
@@ -603,30 +525,6 @@ def build_parser() -> argparse.ArgumentParser:
     ir.add_argument("paths", nargs="+")
     ir.set_defaults(func=cmd_import_robinhood)
 
-    s = sub.add_parser("screen", help="screen cached data")
-    s.add_argument("--symbols", nargs="*")
-    s.set_defaults(func=cmd_screen)
-
-    r = sub.add_parser("report", help="fetch data and write the daily research report")
-    r.add_argument("--no-fetch", action="store_true", help="use cached data only")
-    r.set_defaults(func=cmd_report)
-
-    b = sub.add_parser("backtest", help="full-period plus in-sample/out-of-sample backtest")
-    b.add_argument("--symbols", nargs="*")
-    b.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
-    b.set_defaults(func=cmd_backtest)
-
-    w = sub.add_parser("walkforward", help="walk-forward optimisation and out-of-sample evaluation")
-    w.add_argument("--symbols", nargs="*")
-    w.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
-    w.set_defaults(func=cmd_walkforward)
-
-    ev = sub.add_parser("evaluate", help="train/validation(/holdout) evaluation with benchmarks, regimes, bootstrap, sensitivity")
-    ev.add_argument("--symbols", nargs="*")
-    ev.add_argument("--holdout", action="store_true", help="also evaluate the untouched holdout (logged; use sparingly)")
-    ev.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
-    ev.set_defaults(func=cmd_evaluate)
-
     ed = sub.add_parser("evaluate-desk", help="backtest Strategy B rules (train + validation; holdout untouched)")
     ed.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     ed.set_defaults(func=cmd_evaluate_desk, symbols=None)
@@ -636,31 +534,12 @@ def build_parser() -> argparse.ArgumentParser:
     es.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     es.set_defaults(func=cmd_evaluate_scanner, symbols=None)
 
-    eg = sub.add_parser("evaluate-gtaa", help="backtest Strategy C (GTAA): signal view and account-limits view")
+    eg = sub.add_parser("evaluate-gtaa", help="backtest Strategy C (GTAA, total return): C0/C1/C2 variants vs benchmarks")
     eg.add_argument("--since", type=date.fromisoformat, help="ignore history before YYYY-MM-DD")
     eg.set_defaults(func=cmd_evaluate_gtaa, symbols=None)
 
-    j = sub.add_parser("journal", help="paper-trade journal")
-    jsub = j.add_subparsers(dest="action", required=True)
-    jo = jsub.add_parser("open")
-    jo.add_argument("symbol")
-    jo.add_argument("quantity", type=float)
-    jo.add_argument("entry", type=float)
-    jo.add_argument("stop", type=float)
-    jo.add_argument("--thesis")
-    jc = jsub.add_parser("close")
-    jc.add_argument("id", type=int)
-    jc.add_argument("price", type=float)
-    jc.add_argument("--reason")
-    jsub.add_parser("list")
-    j.set_defaults(func=cmd_journal)
-
-    d = sub.add_parser("dashboard", help="write the HTML performance dashboard")
-    d.set_defaults(func=cmd_dashboard)
-
     pp = sub.add_parser("paper", help="simulated paper broker (never touches a real account)")
     psub = pp.add_subparsers(dest="action", required=True)
-    psub.add_parser("run", help="fill pending paper orders, check stops, queue new orders from today's signals")
     psub.add_parser("status", help="paper positions, P&L and pending orders")
     pp.set_defaults(func=cmd_paper)
 
@@ -679,6 +558,11 @@ def build_parser() -> argparse.ArgumentParser:
     sn.add_argument("paths", nargs="+")
     sn.add_argument("--merge", action="store_true", help="append to today's snapshot instead of replacing it")
     sn.set_defaults(func=cmd_snapshot)
+
+    dv = sub.add_parser("dividends", help="import cash dividends (Alpha Vantage DIVIDENDS JSON or ex_date,amount CSV)")
+    dv.add_argument("symbol")
+    dv.add_argument("path")
+    dv.set_defaults(func=cmd_dividends)
 
     dl = sub.add_parser("daily", help="two-strategy cycle: S&P 500 scan, focused desk, paper broker, report")
     dl.add_argument("--no-paper", action="store_true", help="report only; do not run the paper broker")

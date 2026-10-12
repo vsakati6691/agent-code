@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from agent_trading.config import StrategyConfig
-from agent_trading.indicators import add_indicators, atr, macd, rate_of_change, rsi, sma, true_range, volume_ratio
+from agent_trading.indicators import atr, macd, rate_of_change, rsi, sma, true_range
 
 from .conftest import make_bars
 
@@ -38,20 +37,16 @@ def test_atr_positive_after_warmup():
 def test_indicators_are_causal():
     """Changing a future bar must not change any earlier indicator value."""
     df = make_bars(n=200)
-    cfg = StrategyConfig()
-    base = add_indicators(df, cfg)
     shocked = df.copy()
     shocked.iloc[150:, shocked.columns.get_loc("close")] *= 1.5
     shocked["high"] = shocked[["high", "close"]].max(axis=1)
-    after = add_indicators(shocked, cfg)
-    cols = ["sma_fast", "sma_slow", "momentum", "rsi", "atr", "macd", "vol_ratio"]
-    pd.testing.assert_frame_equal(base.iloc[:150][cols], after.iloc[:150][cols])
+    for f in (lambda d: sma(d["close"], 20), lambda d: rsi(d["close"], 14), lambda d: atr(d, 14),
+              lambda d: rate_of_change(d["close"], 63), lambda d: macd(d["close"])["macd"]):
+        pd.testing.assert_series_equal(f(df).iloc[:150], f(shocked).iloc[:150])
 
 
-def test_macd_and_roc_and_volume_ratio():
+def test_macd_and_roc():
     close = make_bars()["close"]
     m = macd(close)
     assert {"macd", "macd_signal", "macd_hist"} <= set(m.columns)
     assert rate_of_change(pd.Series([100.0, 110.0]), 1).iloc[-1] == pytest.approx(0.10)
-    v = volume_ratio(pd.Series([100.0] * 20 + [300.0]), 20)
-    assert v.iloc[-1] == pytest.approx(3.0)
