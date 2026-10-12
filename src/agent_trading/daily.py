@@ -272,7 +272,8 @@ def _write_manifest(settings: Settings, ctx: DailyContext, label: str, intents, 
             "verified": ctx.live.verified, "account": ctx.live.account_note, "equity": ctx.live.equity,
             "cash": ctx.live.cash, "status": None if ctx.live.status is None else ctx.live.status.__dict__,
             "tickets_date": ctx.live.tickets_date, "tickets": [t.__dict__ for t in ctx.live.tickets],
-            "skipped": ctx.live.skipped, "warnings": ctx.live.warnings},
+            "skipped": ctx.live.skipped, "warnings": ctx.live.warnings,
+            "previous_date": ctx.live.previous_date, "previous": ctx.live.previous},
     }
     return write_manifest(settings, ctx.as_of, label, payload)
 
@@ -489,7 +490,12 @@ def _render_tickets(settings: Settings, lv: LiveResult | None) -> list[str]:
         return ["**3. Live orders:** none. Live tickets are disabled (`live.enabled: false`).", ""]
     acct = f"{settings.broker.account_nickname} ••{settings.broker.account_last4}"
     when = f"issued after the close of {lv.tickets_date}" if lv.tickets_date else "none issued yet"
-    out = [f"**3. Live order tickets for you to place by hand** ({acct}; {when})", ""]
+    out = []
+    if lv.previous:
+        out += [f"**Previous tickets ({lv.previous_date}): status in the account**", ""]
+        out += [f"- {p}" for p in lv.previous]
+        out.append("")
+    out += [f"**3. Live order tickets for you to place by hand** ({acct}; {when})", ""]
     if not lv.tickets:
         out.append("_No tickets. Nothing to place._")
     else:

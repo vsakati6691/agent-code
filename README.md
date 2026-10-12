@@ -1,13 +1,103 @@
 # agent-code
 
-An AI-assisted trading **research and paper-trading** system for US stocks and
-ETFs, run from Claude Code with the Robinhood MCP (read-only) and other market
-data connectors.
+An AI-assisted trading **research, paper-trading and live-ticket** system for US
+stocks and ETFs. It runs from scheduled Claude Code sessions with the Robinhood
+MCP (read-only) and other market data connectors.
 
-> **Paper trading only.** This code cannot place, modify, or cancel brokerage
-> orders, move money, use margin, sell short, or trade options or crypto. The
-> config loader refuses to start if any of that is enabled, and a test fails if
-> any broker order call appears in the source. Nothing here is investment advice.
+> **The system never places orders.** Since 2026-10-12, strategies B and C
+> write **order tickets** for the real Robinhood "Agent-trading" account
+> ($1,000 cap), and the owner places each one by hand in the Robinhood app. The
+> code cannot place, modify or cancel brokerage orders, move money, use margin,
+> sell short, or trade options or crypto. The config loader refuses to start
+> if any of that is enabled, and a test fails if any broker order call appears
+> in the source. Nothing here is investment advice.
+
+## Architecture
+
+### System overview
+
+```mermaid
+flowchart LR
+    subgraph Sources["Data sources (read-only)"]
+        RH["Robinhood MCP<br/>account, prices, quotes,<br/>fundamentals"]
+        FD["Financial Datasets<br/>S&P 500 list, news"]
+        BD["Bigdata.com<br/>economic calendar, news"]
+    end
+
+    subgraph Session["Scheduled Claude Code session"]
+        COLLECT["Collect data<br/>save JSON to scratchpad"]
+        IMPORT["Import and validate<br/>reject stale or bad data"]
+    end
+
+    subgraph Engine["agent_trading (Python)"]
+        A["A: S&P 500 scanner"]
+        B["B: Desk<br/>TQQQ, SQQQ, IBIT, NVDA"]
+        C["C: GTAA<br/>7 ETFs, monthly"]
+        RISK["RiskEngine<br/>sizing and loss limits"]
+        PAPER["Paper broker<br/>simulated fills"]
+        LIVE["Live tickets<br/>real account, $1,000 cap"]
+        REPORT["Daily report<br/>and run log"]
+    end
+
+    OWNER(["Owner places tickets<br/>in the Robinhood app"])
+    PHONE(["Phone alert"])
+
+    RH --> COLLECT
+    FD --> COLLECT
+    BD --> COLLECT
+    COLLECT --> IMPORT --> A & B & C
+    A -- paper only --> RISK
+    B --> RISK
+    C --> RISK
+    RISK --> PAPER --> REPORT
+    RISK --> LIVE --> REPORT
+    REPORT --> PHONE --> OWNER
+```
+
+### From signal to ticket (post-close run)
+
+```mermaid
+flowchart TD
+    START["Post-close run<br/>(about 4:40 PM ET)"] --> SNAP{"Account snapshot<br/>fresh and from ••8204?"}
+    SNAP -- no --> FAIL["No tickets<br/>alert: run FAILED"]
+    SNAP -- yes --> RECON["Check previous tickets:<br/>filled, open or not placed"]
+    RECON --> STOPS{"Every position has<br/>a stop-loss order?"}
+    STOPS -- no --> WARN["Warn: Add stop"]
+    STOPS -- yes --> LIMITS
+    WARN --> LIMITS{"Daily loss under $10 and<br/>drawdown under $80?"}
+    LIMITS -- no --> HALT["No new buys<br/>alert: HALTED"]
+    LIMITS -- yes --> SIGNALS["Run B (desk) and C (GTAA)<br/>on the REAL positions"]
+    HALT -- sells only --> SELLS
+    SIGNALS --> SELLS["SELL tickets for held<br/>positions the rules exit"]
+    SELLS -- if not halted --> BUYS["BUY candidates"]
+    BUYS --> SIZE{"RiskEngine:<br/>$5 risk, $15 total, $250 max,<br/>correlation, cash"}
+    SIZE -- rejected --> SKIP["Listed as not ticketed"]
+    SIZE -- approved --> TICKET["BUY ticket:<br/>qty, limit, stop-loss"]
+    TICKET --> OUT["Report + phone alert<br/>Trades to place"]
+```
+
+### A day in the system
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as Scheduled session
+    participant R as Robinhood (read-only)
+    participant P as Python engine
+    participant O as Owner
+    Note over S,O: ~8:40 AM ET, pre-market
+    S->>R: account, quotes
+    S->>P: daily --no-paper
+    P-->>S: repeats last tickets, flags stops
+    S-->>O: alert only if something needs action
+    Note over O,R: 9:30 AM ET onward
+    O->>R: places tickets by hand (limit buy, then GTC stop-loss)
+    Note over S,O: ~4:40 PM ET, post-close
+    S->>R: account, positions, orders, prices
+    S->>P: daily (paper broker + live tickets)
+    P-->>S: report with tickets
+    S-->>O: alert: trades to place, add stop, failed or halted
+```
 
 ## What it does
 
@@ -16,9 +106,9 @@ and one daily report:
 
 | Strategy | What it does | Evidence so far (backtests, costs included) |
 |---|---|---|
-| **A: S&P 500 scanner** (`strategies/scanner.py`) | Scans every current S&P 500 constituent (list refreshed from SPY's holdings filing). Ranks them by price strength, volume, quality, valuation and low volatility. Up to 3 that pass every filter become paper entries | ❌ On point-in-time S&P 500 lists (2019–2025, price factors only) it did **not** beat SPY. The score had no significant predictive power (rank IC ≈ 0). A factor ablation shows the full composite adds nothing over plain 12-1 momentum, at twice the turnover (no variant has \|t\| > 2). Research only |
-| **B: focused desk** (`strategies/desk.py`) | Daily BUY / SELL / HOLD / WAIT / NO TRADE for **TQQQ, SQQQ, IBIT** (Bitcoin ETF) and **NVDA**, each with its own rules | ⚠️ Trading-only edge near zero per instrument; weak combined evidence (validation Sharpe 95% CI 0.11–2.17) |
-| **C: GTAA** (`strategies/gtaa.py`) | Faber multi-asset trend: hold SPY, EFA, IEF, DBC, VNQ, TLT and GLD each while it trades above its 10-month average; rebalance at month-end | ✅ Validation (2019–2023, total return incl. dividends) +6.8%/yr, Sharpe 0.96, −6.9% max drawdown, vs SPY +11.1% with −34%. Train (2008–2019) only +3.6%/yr (Sharpe 0.53) vs SPY +10.5%. Modest returns, small losses; survives 3× costs |
+| **A: S&P 500 scanner** (`strategies/scanner.py`) · *paper only* | Scans every current S&P 500 constituent (list refreshed from SPY's holdings filing). Ranks them by price strength, volume, quality, valuation and low volatility. Up to 3 that pass every filter become paper entries | ❌ On point-in-time S&P 500 lists (2019–2025, price factors only) it did **not** beat SPY. The score had no significant predictive power (rank IC ≈ 0). A factor ablation shows the full composite adds nothing over plain 12-1 momentum, at twice the turnover (no variant has \|t\| > 2). Research only |
+| **B: focused desk** (`strategies/desk.py`) · *paper + live tickets* | Daily BUY / SELL / HOLD / WAIT / NO TRADE for **TQQQ, SQQQ, IBIT** (Bitcoin ETF) and **NVDA**, each with its own rules | ⚠️ Trading-only edge near zero per instrument; weak combined evidence (validation Sharpe 95% CI 0.11–2.17) |
+| **C: GTAA** (`strategies/gtaa.py`) · *paper + live tickets* | Faber multi-asset trend: hold SPY, EFA, IEF, DBC, VNQ, TLT and GLD each while it trades above its 10-month average; rebalance at month-end | ✅ Validation (2019–2023, total return incl. dividends) +6.8%/yr, Sharpe 0.96, −6.9% max drawdown, vs SPY +11.1% with −34%. Train (2008–2019) only +3.6%/yr (Sharpe 0.53) vs SPY +10.5%. Modest returns, small losses; survives 3× costs |
 
 Backtests are evidence with limits, not proof. Past performance does not
 guarantee future results.
@@ -48,6 +138,26 @@ guarantee future results.
 
 A stop price never guarantees the loss limit: gaps can fill worse.
 
+With $5 per trade and a $15 total, **at most about 3 positions are open at
+once**, typically $100–250 each, so much of the $1,000 stays in cash. That is
+deliberate: the limits cap losses, and they also cap gains.
+
+## Live tickets (real account)
+
+| Setting (`live:` in `config/settings.yaml`) | Value |
+|---|---|
+| Account | Robinhood "Agent-trading" (••8204) only; snapshot must be under 24 hours old |
+| Capital used for sizing | At most $1,000, whatever the account holds |
+| Strategies | B (desk) and C (GTAA). A stays paper-only |
+| Order type | Day limit order at the last close ± 0.5%; after a buy fills, a GTC stop-loss sell at the ticket's stop |
+| Blocks | No new buys while any buy order is open, after a loss limit, or with an unverified snapshot |
+| Positions opened by hand | Stop unknown, so their whole value counts as risk (blocks new buys) |
+| Checks each run | Previous tickets (filled / still open / not placed); positions without a stop-loss order |
+| Alerts | One phone alert only for: trades to place, a missing stop, a failed run, or a halt |
+
+GTAA tickets appear only on the last trading day of a month. Desk tickets
+appear only when its rules fire, so most days have no tickets.
+
 ## How it runs
 
 The Python code cannot call MCP tools, so each run is a **Claude Code session**
@@ -56,20 +166,22 @@ runs the analysis ([docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md)):
 
 | When (weekdays, US Eastern) | Run | What it does |
 |---|---|---|
-| 08:30 | Pre-market | Account snapshot, economic calendar, news, quotes → pre-market report |
+| 08:30 | Pre-market | Account snapshot, economic calendar, news, quotes → pre-market report; repeats the last live tickets |
 | 12:30 | Midday check | Quotes and news; flags stop breaches and changed decisions (no paper trades) |
-| 16:30 | Post-close | Prices, constituents, fundamentals, calendar → paper fills, stops, loss limits, new paper orders, full report |
+| 16:30 | Post-close | Prices, constituents, fundamentals, calendar, account → paper fills, stops, loss limits, new paper orders, **live tickets**, full report |
 | Fri 17:30 | Weekly review | Local files only: paper P&L per strategy vs SPY, loss-limit headroom, missed runs |
 
-These are Claude Code scheduled tasks. They run only while the Claude app is
-open; if it's closed, a run happens the next time it opens.
+These are Claude Code scheduled tasks (times have a few minutes of jitter).
+They run only while the laptop is on and the Claude app is open; if it's
+closed, a run happens the next time it opens. A missed post-close run means no
+tickets that day, which is safe.
 
 The daily report (`reports\daily_two_strategy_<date>_<label>.md`) has these sections:
 - **A: Scanner.** Market regime, coverage (scanned vs expected constituents), top 10, actionable setups with entry, stop, target and evidence, and rejections.
 - **B: Desk.** One section per instrument: signal, reasons, live quote, sizing, catalysts.
 - **C: GTAA.** The current signals.
-- **C (account):** Broker snapshot, paper positions, risk and loss-limit status.
-- **D: Actions.** Research findings, paper actions, and orders awaiting authorization (always none).
+- **C (account):** Broker snapshot, live sizing, live loss limits and positions, paper positions, risk status.
+- **D: Actions.** Research findings, paper actions, the status of the previous live tickets, and the **live order tickets** to place by hand.
 
 ## Data sources
 
@@ -128,6 +240,7 @@ src/agent_trading/
   strategies/                 scanner.py (A), desk.py (B), gtaa.py (C)
   risk.py                     RiskEngine, loss limits, order checks
   paper.py                    simulated broker (next-open fills, stops, time exits)
+  live.py                     live order tickets for the real account (never sends orders)
   daily.py                    daily cycle + report
   data/                       validation, cache, universe, snapshots, rates, imports
   backtest/                   desk engine, allocation engine (GTAA), scanner backtest, splits, stats

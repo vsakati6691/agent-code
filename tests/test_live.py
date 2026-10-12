@@ -99,6 +99,21 @@ def test_tickets_are_idempotent_per_day(settings, ledger):
     assert day == AS_OF.isoformat() and tickets == [t]
 
 
+def test_previous_tickets_reconciled_and_missing_stop_flagged(settings, ledger):
+    ledger.replace_tickets(date(2026, 10, 9), [Ticket("NVDA", "buy", 2, 101, 95, "B-desk", "x", 5),
+                                               Ticket("GLD", "buy", 1, 300, 290, "C-gtaa", "x", 10),
+                                               Ticket("IBIT", "buy", 3, 60, 55, "B-desk", "x", 5)])
+    s = snap(total=1000, cash=800, positions=[{"symbol": "NVDA", "quantity": 2.0, "average_buy_price": 100.0}],
+             orders=[{"symbol": "GLD", "side": "buy", "state": "queued", "quantity": "1"}])
+    res = prepare(settings, ledger, s, AS_OF)
+    assert res.previous_date == "2026-10-09"
+    status = dict(line.split(": ", 1) for line in res.previous)
+    assert status["BUY NVDA 2"].startswith("filled")
+    assert status["BUY GLD 1"] == "order still open"
+    assert status["BUY IBIT 3"].startswith("not in the account")
+    assert any("NVDA: no open sell order" in w and "95.00" in w for w in res.warnings)
+
+
 def test_config_rejects_unknown_live_strategy(settings):
     with pytest.raises(ConfigError, match="live.strategies"):
         validate(replace(settings, live=replace(settings.live, strategies=["Z-yolo"])))
