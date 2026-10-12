@@ -26,7 +26,7 @@ from .data.snapshots import high_impact_events, load_snapshot
 from .data.universe import coverage, load_universe, universe_problems
 from .journal import Journal
 from .paper import Intent, PaperBroker, portfolio_state
-from .strategies.desk import DeskDecision, Position, run_desk
+from .strategies.desk import DeskDecision, Position, next_session, run_desk
 from .strategies.scanner import ScanResult, run_scan
 
 DISCLAIMER = ("> Research and paper-trading output only. Not investment advice. No live orders are placed. "
@@ -118,7 +118,7 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True) -> tuple[
     open_df = journal.open_trades()
     positions = {t.symbol: Position(t.quantity, t.entry_price, t.stop_price, date.fromisoformat(t.entry_date))
                  for t in open_df.itertuples()} if not open_df.empty else {}
-    events = high_impact_events(snaps["econ"], as_of, settings.desk.event_blackout_days)
+    events = high_impact_events(snaps["econ"], next_session(as_of), settings.desk.event_blackout_days)
     ctx.desk_regime, ctx.desk = run_desk(loaded_desk.bars, settings, as_of, positions, events, lookup)
 
     # --- paper broker

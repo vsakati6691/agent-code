@@ -87,6 +87,12 @@ def qqq_regime(qqq: pd.DataFrame) -> dict:
     return s
 
 
+def next_session(d: date) -> date:
+    """Next weekday after d (exchange holidays are not modelled; a missing bar
+    simply delays the paper fill)."""
+    return (pd.Timestamp(d) + pd.offsets.BDay(1)).date()
+
+
 def _days_held(p: Position, as_of: date) -> int:
     return int(np.busday_count(p.entry_date, as_of))
 
@@ -242,8 +248,11 @@ def run_desk(
                                           [f"{d.underlying} data missing or too short for the regime rules"],
                                           "-", None, "-", "valid QQQ data", position=positions.get(sym)))
     else:
+        # A signal at as_of's close fills at the next session's open, so the
+        # blackout window is measured from that fill day, not the signal day.
+        fill_day = next_session(as_of)
         leaders = {s: earnings_lookup(s)[0] for s in d.nasdaq_leaders}
-        blockers = leveraged_blockers(events, leaders, as_of, d.event_blackout_days)
+        blockers = leveraged_blockers(events, leaders, fill_day, d.event_blackout_days)
         for sym, direction, other in [(d.leveraged_long, "long", d.leveraged_inverse),
                                       (d.leveraged_inverse, "inverse", d.leveraged_long)]:
             decisions.append(_leveraged(sym, direction, bars.get(sym), regime, settings, blockers,

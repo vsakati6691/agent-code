@@ -96,6 +96,29 @@ def test_trim_frozen_history_rejects_recent_freeze():
         trim_frozen_history(df, "HON")
 
 
+def test_large_genuine_gap_kept_but_split_ratio_rejected():
+    df = make_bars()
+    df.iloc[150:, :4] = df.iloc[150:, :4] * 1.7  # +70% jump (like ECHO on 2025-08-26): not a split ratio
+    assert len(check(df)) == 300
+    df2 = make_bars()
+    df2.iloc[150:, :4] = df2.iloc[150:, :4] * 4.0  # 1:4 reverse split left unadjusted (like SQQQ 2019)
+    with pytest.raises(DataQualityError, match="split"):
+        check(df2)
+
+
+def test_old_split_trimmed_recent_split_rejected():
+    from agent_trading.data.validation import trim_bad_history
+
+    df = make_bars()
+    df.iloc[50:, :4] = df.iloc[50:, :4] * 4.0
+    trimmed, note = trim_bad_history(df, "SQQQ")
+    assert trimmed.index[0] == df.index[51] and "split" in note
+    recent = make_bars()
+    recent.iloc[-5:, :4] = recent.iloc[-5:, :4] / 2.0
+    with pytest.raises(DataQualityError, match="recent"):
+        trim_bad_history(recent, "X")
+
+
 def test_empty_rejected():
     with pytest.raises(DataQualityError):
         check(None)

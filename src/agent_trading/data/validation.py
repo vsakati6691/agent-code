@@ -7,10 +7,14 @@ import numpy as np
 import pandas as pd
 
 REQUIRED_COLUMNS = ("open", "high", "low", "close", "volume")
-# A one-day move beyond these ratios in a liquid large-cap almost always means
-# an unadjusted split or a bad print rather than a real move.
+# An overnight gap beyond these ratios is checked against common split ratios.
 SPLIT_SUSPECT_LOW = 0.55
 SPLIT_SUSPECT_HIGH = 1.8
+# Gaps within this tolerance of a split ratio are treated as unadjusted splits
+# (e.g. SQQQ's 2019 reverse split). Large gaps that match no split ratio are
+# genuine moves (e.g. ECHO +70% on 2025-08-26) and are kept.
+SPLIT_RATIOS = [2, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50]
+SPLIT_TOLERANCE = 0.06
 
 
 FROZEN_RUN = 3                 # consecutive flat bars that mark a frozen feed
@@ -46,19 +50,41 @@ def frozen_feed_start(df: pd.DataFrame) -> pd.Timestamp | None:
     return runs[0][0] if runs else None
 
 
-def trim_frozen_history(df: pd.DataFrame, symbol: str) -> tuple[pd.DataFrame, str | None]:
-    """Drop history up to the last frozen run, for backtests over long periods.
+def split_suspects(df: pd.DataFrame) -> list[pd.Timestamp]:
+    """Dates whose overnight gap looks like an unadjusted split (ratio near a split ratio)."""
+    ratio = (df["open"] / df["close"].shift(1)).dropna()
+    big = ratio[(ratio < SPLIT_SUSPECT_LOW) | (ratio > SPLIT_SUSPECT_HIGH)]
+    out = []
+    for day, r in big.items():
+        mult = r if r >= 1 else 1 / r
+        if any(abs(mult / s - 1) <= SPLIT_TOLERANCE for s in SPLIT_RATIOS):
+            out.append(day)
+    return out
 
-    Raises if the frozen run is recent, since the current feed is then unreliable.
+
+def trim_bad_history(df: pd.DataFrame, symbol: str) -> tuple[pd.DataFrame, str | None]:
+    """Drop history up to the last data anomaly (frozen run or unadjusted split).
+
+    An anomaly years ago should not block today's analysis; one inside the last
+    RECENT_BARS bars means the current feed is unreliable, so that raises.
     """
-    runs = frozen_runs(df)
-    if not runs:
+    marks = [(end, f"frozen bars {start.date()} to {end.date()}") for start, end in frozen_runs(df)]
+    marks += [(d, f"unadjusted split on {d.date()}") for d in split_suspects(df)]
+    if not marks:
         return df, None
-    last_end = runs[-1][1]
-    if df.index.get_loc(last_end) >= len(df) - RECENT_BARS:
-        raise DataQualityError(f"{symbol}: feed frozen recently ({runs[-1][0].date()} to {last_end.date()})")
-    trimmed = df.loc[df.index > last_end]
-    return trimmed, f"{symbol}: history before {trimmed.index[0].date()} dropped (frozen bars ending {last_end.date()})"
+    last, why = max(marks, key=lambda m: m[0])
+    if df.index.get_loc(last) >= len(df) - RECENT_BARS:
+        raise DataQualityError(f"{symbol}: recent data anomaly ({why}); feed unreliable")
+    trimmed = df.loc[df.index > last]
+    return trimmed, f"{symbol}: history before {trimmed.index[0].date()} dropped ({why})"
+
+
+def trim_frozen_history(df: pd.DataFrame, symbol: str) -> tuple[pd.DataFrame, str | None]:
+    """Backward-compatible name for trim_bad_history."""
+    try:
+        return trim_bad_history(df, symbol)
+    except DataQualityError as exc:
+        raise DataQualityError(str(exc).replace("recent data anomaly", "feed frozen recently")) from None
 
 
 def validate_bars(
@@ -95,11 +121,10 @@ def validate_bars(
         if ((df[col] > df["high"] + tol) | (df[col] < df["low"] - tol)).any():
             raise DataQualityError(f"{symbol}: {col} outside high/low range")
 
-    ratio = (df["open"] / df["close"].shift(1)).dropna()
-    if ((ratio < SPLIT_SUSPECT_LOW) | (ratio > SPLIT_SUSPECT_HIGH)).any():
-        bad = ratio[(ratio < SPLIT_SUSPECT_LOW) | (ratio > SPLIT_SUSPECT_HIGH)].index[0]
+    suspects = split_suspects(df)
+    if suspects:
         raise DataQualityError(
-            f"{symbol}: overnight gap on {bad.date()} looks like an unadjusted split or bad print"
+            f"{symbol}: overnight gap on {suspects[0].date()} looks like an unadjusted split or bad print"
         )
 
     frozen = frozen_feed_start(df)

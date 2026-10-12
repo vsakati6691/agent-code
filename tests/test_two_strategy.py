@@ -228,6 +228,21 @@ def test_desk_blackout_and_missing_calendar_block_leveraged(settings):
     assert len(blockers) == 2
 
 
+def test_blackout_measured_from_fill_day(settings, tmp_path):
+    """Signal Monday, fill Tuesday, CPI Wednesday: inside the 1-day blackout."""
+    from agent_trading.strategies.desk import next_session
+
+    assert next_session(date(2026, 10, 12)) == date(2026, 10, 13)
+    assert next_session(date(2026, 10, 9)) == date(2026, 10, 12)  # Friday -> Monday
+    p = tmp_path / "econ.json"
+    p.write_text(json.dumps({"events": [{"date": "2026-10-14T12:30:00Z", "country": "US", "name": "CPI", "impact": "HIGH"}]}))
+    import_snapshot_files(settings, "econ", [p])
+    ev = high_impact_events(load_snapshot(settings, "econ"), next_session(AS_OF), settings.desk.event_blackout_days)
+    _, ds = run_desk(desk_bars(), settings, AS_OF, {}, ev, no_earnings)
+    t = by_symbol(ds)["TQQQ"]
+    assert t.action != "BUY" and any("CPI" in r for r in t.reasons)
+
+
 def test_desk_downtrend_considers_sqqq(settings):
     reg, ds = run_desk(desk_bars(qqq_drift=-0.002), settings, AS_OF, {}, pd.DataFrame(columns=["name", "date"]), no_earnings)
     assert reg["trend"] == "down"
