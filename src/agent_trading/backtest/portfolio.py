@@ -40,7 +40,11 @@ def run_allocation(
     initial_equity: float | None = None,
     cash_rate: pd.Series | None = None,
     name: str = "allocation",
+    use_stops: bool = True,
 ) -> BacktestResult:
+    """`use_stops=False` is for research on the raw allocation rule only: the
+    position gets a nominal stop at 1% of the entry price (for sizing) that
+    practically never triggers. Paper/live-like runs always use ATR stops."""
     risk_cfg = settings.risk
     engine = RiskEngine(settings)
     slip = settings.costs.per_side
@@ -97,7 +101,7 @@ def run_allocation(
                 if atr_prev is None or not math.isfinite(atr_prev):
                     continue
                 fill = bar["open"] * (1 + slip)
-                stop = fill - risk_cfg.atr_stop_multiple * atr_prev
+                stop = fill - risk_cfg.atr_stop_multiple * atr_prev if use_stops else fill * 0.01
                 if stop <= 0:
                     continue
                 state = PortfolioState(equity_est, cash - commission,

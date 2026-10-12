@@ -48,6 +48,8 @@ class DailyContext:
     proposals: list = field(default_factory=list)
     status: object = None
     snapshots: dict = field(default_factory=dict)
+    gtaa: dict = field(default_factory=dict)
+    gtaa_rebalance: bool = False
 
 
 def _fmt(x, d=2):
@@ -101,7 +103,9 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True) -> tuple[
 
     # --- Strategy A
     sc = settings.scanner
-    desk_syms = list(dict.fromkeys([*settings.desk.symbols, settings.desk.underlying, settings.desk.nvda_benchmark, sc.benchmark]))
+    gtaa_assets = list(settings.gtaa.assets) if settings.gtaa.enabled else []
+    desk_syms = list(dict.fromkeys([*settings.desk.symbols, settings.desk.underlying, settings.desk.nvda_benchmark,
+                                    sc.benchmark, *gtaa_assets]))
     loaded_desk = svc.load(desk_syms, as_of)
     bench = loaded_desk.bars.get(sc.benchmark)
     if bench is not None:
@@ -128,6 +132,25 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True) -> tuple[
             intents.append(Intent(d.symbol, "buy", d.price, d.stop, "B-desk", f"desk BUY ({d.confidence})", 1.0))
         elif d.action == "SELL/REDUCE":
             intents.append(Intent(d.symbol, "sell", d.price or 0.0, None, "B-desk", "; ".join(d.reasons)))
+    if gtaa_assets:
+        from .indicators import atr as atr_fn
+        from .strategies import gtaa as gtaa_mod
+
+        ctx.gtaa = gtaa_mod.signals(loaded_desk.bars, pd.Timestamp(as_of), gtaa_assets, settings.gtaa.sma_months)
+        cal_days = list(bench.index) if bench is not None else []
+        ctx.gtaa_rebalance = gtaa_mod.is_rebalance_day(cal_days, as_of)
+        if ctx.gtaa_rebalance:
+            held_c = set(open_df.loc[open_df["strategy"] == "C-gtaa", "symbol"]) if not open_df.empty and "strategy" in open_df else set()
+            for a, sig in ctx.gtaa.items():
+                df = loaded_desk.bars.get(a)
+                if sig["above"] is None or df is None:
+                    continue
+                close = float(df["close"].iloc[-1])
+                if sig["above"] and a not in held_c:
+                    stop = close - settings.risk.atr_stop_multiple * float(atr_fn(df, 14).iloc[-1])
+                    intents.append(Intent(a, "buy", close, stop, "C-gtaa", "GTAA: above 10-month average", 0.5))
+                elif not sig["above"] and a in held_c:
+                    intents.append(Intent(a, "sell", close, None, "C-gtaa", "GTAA: closed below 10-month average"))
     if ctx.scan is not None:
         for s in ctx.scan.actionable:
             intents.append(Intent(s.ticker, "buy", s.entry_ref, s.stop, "A-scanner",
@@ -195,7 +218,10 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
             out.append("")
     scan = ctx.scan
     if scan is not None and not scan.table.empty:
-        out += ["### Top 10 research candidates (ranked by composite score)", "",
+        out += ["> ⚠ **Evidence:** a point-in-time backtest of this ranking (price factors, S&P 500 lists 2019–2025, "
+                "`evaluate-scanner`) did **not** beat SPY and its score had no significant predictive power (rank IC ≈ 0). "
+                "Treat these as research candidates; paper results will show whether fundamentals add anything.", "",
+                "### Top 10 research candidates (ranked by composite score)", "",
                 "Score = 0.35 price strength (12-1 momentum, RS vs SPY, distance above 200-day, one combined factor) "
                 "+ 0.10 up/down volume + 0.20 quality (operating margin, ROE) + 0.10 valuation (forward earnings yield within sector) "
                 "+ 0.25 low volatility. Missing factors are reweighted and listed.", ""]
@@ -265,6 +291,18 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
             for h in heads.itertuples():
                 out.append(f"- News (UNVERIFIED headline, {h.source}, {h.date}): {h.title}")
         out.append("")
+
+    # ---------------- Strategy C (GTAA)
+    if ctx.gtaa:
+        out += ["## Strategy C: GTAA multi-asset trend (month-end)", "",
+                f"Rule: hold each asset (1/{len(ctx.gtaa)} target, sized by the RiskEngine) while its month-end close is above its "
+                f"{settings.gtaa.sma_months}-month average. "
+                + ("**Today is a rebalance day**: signals below are acted on at the next open." if ctx.gtaa_rebalance
+                   else "Not a rebalance day; signals below use the current month's latest close and are informational."), ""]
+        out.append(_table(["Asset", "Latest close", f"{settings.gtaa.sma_months}-month avg", "Signal"],
+                          [[a, _fmt(s["close"]), _fmt(s["sma"]),
+                            "n/a: " + s["reason"] if s["above"] is None else ("hold" if s["above"] else "cash")]
+                           for a, s in ctx.gtaa.items()]))
 
     # ---------------- Section C
     out += ["## Section C: Account and portfolio risk", ""]

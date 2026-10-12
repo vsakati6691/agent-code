@@ -172,6 +172,14 @@ class DeskConfig:
 
 
 @dataclass(frozen=True)
+class GTAAConfig:
+    """Strategy C: Faber multi-asset trend, rebalanced at month-end."""
+    enabled: bool = True
+    assets: list[str] = field(default_factory=lambda: ["SPY", "EFA", "IEF", "DBC", "VNQ", "TLT", "GLD"])
+    sma_months: int = 10
+
+
+@dataclass(frozen=True)
 class ReportConfig:
     earnings_warning_days: int = 7
 
@@ -200,6 +208,7 @@ class Settings:
     paper: PaperConfig = field(default_factory=PaperConfig)
     scanner: ScannerConfig = field(default_factory=ScannerConfig)
     desk: DeskConfig = field(default_factory=DeskConfig)
+    gtaa: GTAAConfig = field(default_factory=GTAAConfig)
     reports: ReportConfig = field(default_factory=ReportConfig)
     paths: PathConfig = field(default_factory=PathConfig)
     base_dir: Path = Path(".")
@@ -303,6 +312,7 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
         "paper": PaperConfig,
         "scanner": ScannerConfig,
         "desk": DeskConfig,
+        "gtaa": GTAAConfig,
         "reports": ReportConfig,
         "paths": PathConfig,
     }

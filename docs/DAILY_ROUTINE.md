@@ -34,7 +34,8 @@ one-line note.
    Financial Datasets `get_index_fund` (ticker `SPY`, limit `1000`) →
    `& $py -m agent_trading universe import <file>`.
 3. **Prices:** `& $py -m agent_trading universe symbols` lists the tickers. Add
-   `TQQQ SQQQ IBIT QQQ SMH SPY`. Call `get_equity_historicals` (interval `day`,
+   `TQQQ SQQQ IBIT QQQ SMH SPY` and the GTAA assets `EFA IEF DBC VNQ TLT GLD`.
+   Call `get_equity_historicals` (interval `day`,
    start 10 calendar days ago, default split adjustment, ≤10 symbols per call)
    for all of them, then `& $py -m agent_trading import-robinhood <files...>`.
 4. **Fundamentals** (earnings dates change): Robinhood `preview_scan` with
@@ -74,6 +75,21 @@ paper positions → `snapshot quotes <file>`; market news → `snapshot news
 Report only changes: a live price at or below a paper stop, a new
 high-impact event, or a desk decision that changed since the last run. The
 paper broker does NOT run intraday; signals use daily closes.
+
+## Data source outages
+
+- **Financial Datasets** (constituents, news, filings) is prepaid. On 2026-10-12
+  its balance ran out ("prepaid balance is exhausted"). Until it is topped up:
+  keep using the last stored constituent list (the report flags it once it is
+  more than 10 days old), take news from Bigdata `bigdata_search` instead, and
+  say that filings were not checked. Never retry a billing error in a loop.
+- **FMP** economic data needs a paid plan; use Bigdata's economic calendar.
+
+## Month-end (GTAA)
+
+On the last trading day of a month the post-close run also rebalances
+Strategy C (GTAA): assets above their 10-month average get paper buy orders,
+held GTAA assets below it get paper sell orders, all sized by the RiskEngine.
 
 ## Recovery
 

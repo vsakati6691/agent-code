@@ -142,6 +142,11 @@ desk:                           # Strategy B: focused daily desk
   earnings_blackout_days: 5
   nasdaq_leaders: [NVDA, AAPL, MSFT, AMZN, GOOGL, META, AVGO, TSLA]
 
+gtaa:                           # Strategy C: Faber GTAA multi-asset trend (paper)
+  enabled: true
+  assets: [SPY, EFA, IEF, DBC, VNQ, TLT, GLD]
+  sma_months: 10                # hold an asset only while above its 10-month average
+
 reports:
   earnings_warning_days: 7
 

@@ -36,7 +36,27 @@ class Universe:
         return list(self.table["ticker"])
 
 
-def parse_index_fund(raw: dict, settings: Settings) -> Universe:
+_SUFFIXES = re.compile(
+    r"\b(INC|INCORPORATED|CORP|CORPORATION|CO|COMPANY|PLC|LTD|LIMITED|NV|N\.V|SA|AG|LP|LLC|HOLDINGS?|GROUP|"
+    r"CLASS [A-Z]|CL [A-Z]|THE|COM|SHS|ORD|REIT|TRUST)\b")
+
+
+def normalize_name(name: str) -> str:
+    """Company name key for matching filings that omit the ticker."""
+    s = re.sub(r"[^A-Z0-9 ]", " ", (name or "").upper().replace("&", " AND "))
+    s = _SUFFIXES.sub(" ", s)
+    return " ".join(s.split())
+
+
+def _clean_ticker(t: str | None) -> str:
+    return (t or "").strip().upper().replace("/", ".")
+
+
+def parse_index_fund(raw: dict, settings: Settings, name_map: dict[str, str] | None = None,
+                     min_count: int | None = None) -> Universe:
+    """`name_map`: normalized company name -> ticker, used when a filing row has no
+    ticker (N-PORT often omits them for foreign-domiciled companies).
+    `min_count`: lower bound override for historical snapshots."""
     fund = raw.get("fund") or {}
     holdings = raw.get("holdings")
     if not isinstance(holdings, list) or not holdings:
@@ -46,7 +66,9 @@ def parse_index_fund(raw: dict, settings: Settings) -> Universe:
         raise UniverseError("index-fund response has no as-of date")
     rows, excluded = [], []
     for h in holdings:
-        t = (h.get("ticker") or "").strip().upper()
+        t = _clean_ticker(h.get("ticker"))
+        if not t and name_map:
+            t = name_map.get(normalize_name(h.get("name", "")), "")
         if h.get("asset_class") != "equity":
             excluded.append(f"{t or h.get('name')}: asset class {h.get('asset_class')!r}")
         elif not TICKER_RE.match(t):
@@ -55,8 +77,9 @@ def parse_index_fund(raw: dict, settings: Settings) -> Universe:
             rows.append({"ticker": t, "name": h.get("name", ""), "weight": float(h.get("weight") or 0.0)})
     table = pd.DataFrame(rows).drop_duplicates("ticker")
     sc = settings.scanner
-    if not sc.min_constituents <= len(table) <= sc.max_constituents:
-        raise UniverseError(f"{len(table)} valid constituents, expected {sc.min_constituents}-{sc.max_constituents}")
+    lo = sc.min_constituents if min_count is None else min_count
+    if not lo <= len(table) <= sc.max_constituents:
+        raise UniverseError(f"{len(table)} valid constituents, expected {lo}-{sc.max_constituents}")
     source = f"Financial Datasets get_index_fund({fund.get('name', settings.scanner.index_fund)}), filing {fund.get('filing_date')}"
     return Universe(date.fromisoformat(as_of), source, table.reset_index(drop=True), excluded)
 
@@ -82,6 +105,32 @@ def import_universe(settings: Settings, source: Path) -> Universe:
     return u
 
 
+def import_universe_history(settings: Settings, sources: list[Path], min_count: int = 400) -> list[Universe]:
+    """Import historical (point-in-time) constituent snapshots.
+
+    Tickers missing from a filing are resolved by company name using every
+    snapshot that does carry them (including the current list). Unresolved rows
+    are kept in the snapshot's excluded list so coverage gaps stay visible.
+    """
+    raws = [json.loads(Path(p).read_text(encoding="utf-8")) for p in sources]
+    name_map: dict[str, str] = {}
+    current = load_universe(settings)
+    if current is not None:
+        for r in current.table.itertuples():
+            name_map.setdefault(normalize_name(r.name), r.ticker)
+    for raw in raws:
+        for h in raw.get("holdings") or []:
+            t = _clean_ticker(h.get("ticker"))
+            if TICKER_RE.match(t):
+                name_map.setdefault(normalize_name(h.get("name", "")), t)
+    out = []
+    for raw in raws:
+        u = parse_index_fund(raw, settings, name_map, min_count)
+        save_universe(settings, u)
+        out.append(u)
+    return out
+
+
 def load_universe(settings: Settings) -> Universe | None:
     d = _dir(settings)
     files = sorted(d.glob("sp500_*.csv")) if d.exists() else []
@@ -90,6 +139,22 @@ def load_universe(settings: Settings) -> Universe | None:
     path = files[-1]
     meta = json.loads(path.with_suffix(".meta.json").read_text(encoding="utf-8"))
     return Universe(date.fromisoformat(meta["as_of"]), meta["source"], pd.read_csv(path), meta.get("excluded", []))
+
+
+def load_universe_history(settings: Settings) -> dict[date, list[str]]:
+    """All stored constituent snapshots, by as-of date (for point-in-time backtests)."""
+    d = _dir(settings)
+    out: dict[date, list[str]] = {}
+    for path in sorted(d.glob("sp500_*.csv")) if d.exists() else []:
+        as_of = date.fromisoformat(path.stem.removeprefix("sp500_"))
+        out[as_of] = list(pd.read_csv(path)["ticker"])
+    return out
+
+
+def members_on(history: dict[date, list[str]], day: date) -> list[str]:
+    """Constituents from the latest snapshot on or before `day` (empty if none)."""
+    past = [d for d in history if d <= day]
+    return history[max(past)] if past else []
 
 
 def universe_problems(u: Universe | None, settings: Settings, today: date) -> list[str]:
