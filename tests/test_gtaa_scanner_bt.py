@@ -101,6 +101,51 @@ def test_scanner_backtest_uses_point_in_time_members(settings):
     assert {"top", "spy", "universe", "ic_mean"} <= set(summary)
 
 
+def test_ablation_variants_share_months_and_full_matches_production(settings):
+    from dataclasses import replace
+
+    from agent_trading.backtest.scanner_backtest import VARIANTS, run_ablation, with_cost_multiplier
+
+    s = replace(settings, scanner=replace(settings.scanner, min_avg_dollar_volume=1e6))
+    end = "2026-09-30"
+    bars = {f"S{c}": make_bars(n=420, seed=i, drift=0.0008 * (i % 3), vol=0.012, volume=4e6, start=40 + i, end=end)
+            for i, c in enumerate("ABCDEFGH")}
+    spy = make_bars(n=420, seed=99, drift=0.0004, vol=0.008, volume=8e7, start=300, end=end)
+    hist = {spy.index[280].date(): list(bars)}
+    ab = run_ablation(bars, spy, hist, s, top_n=3)
+    assert set(ab) == set(VARIANTS)
+    dates = [m.signal_date for m in ab["full"].months]
+    assert all([m.signal_date for m in ab[v].months] == dates for v in ab)
+    assert [m.picks for m in run_signal_backtest(bars, spy, hist, s, top_n=3).months] == [m.picks for m in ab["full"].months]
+    for m in ab["momentum"].months:   # momentum baseline picks are the top 12-1 momentum names
+        assert len(m.picks) <= 3
+    f = ab["momentum"].frame()
+    cost = s.costs.per_side
+    assert np.allclose(f["top_return"], f["gross_return"] - 2 * cost * f["turnover"])
+    f3 = with_cost_multiplier(f, cost, 3)
+    assert (f3["top_return"] <= f["top_return"] + 1e-12).all()
+
+
+def test_variant_scores_add_one_factor_at_a_time(settings):
+    from agent_trading.backtest.scanner_backtest import variant_scores
+
+    t = pd.DataFrame({"close": [50.0] * 4, "avg_dollar_volume": [1e9] * 4,
+                      "mom_12_1": [0.4, 0.3, 0.2, 0.1], "dist_200": [0.1, -0.05, 0.1, 0.1],
+                      "updown_volume": [0.5, 1.0, 3.0, 2.0], "vol_63": [0.6, 0.2, 0.2, 0.1],
+                      "composite": [0.9, 0.8, 0.7, 0.6], "setup": ["bullish"] * 4, "rsi": [50.0] * 4},
+                     index=["A", "B", "C", "D"])
+    _, mom = variant_scores(t, "momentum", settings)
+    assert list(mom.index) == ["A", "B", "C", "D"]
+    _, trend = variant_scores(t, "momentum+trend", settings)
+    assert "B" not in trend.index and list(trend.index) == ["A", "C", "D"]
+    _, vol = variant_scores(t, "momentum+trend+volume", settings)
+    assert vol["C"] > trend["C"] and vol["A"] < trend["A"]   # best up/down volume lifts C, weak A falls
+    _, low = variant_scores(t, "momentum+trend+lowvol", settings)
+    assert low["A"] < trend["A"] and low["D"] > trend["D"]   # high-vol A penalised, low-vol D rewarded
+    with pytest.raises(ValueError):
+        variant_scores(t, "made-up", settings)
+
+
 def test_total_return_adjustment_scales_history_before_ex_date():
     from agent_trading.data.dividends import total_return_bars
 
@@ -120,11 +165,11 @@ def test_dividend_import_handles_bom_and_empty(settings, tmp_path):
     from agent_trading.data.dividends import import_dividends_file, load_dividends
 
     p = tmp_path / "gld.json"
-    p.write_text('﻿{"symbol":"GLD","data":[]}', encoding="utf-8")
+    p.write_text('\ufeff{"symbol":"GLD","data":[]}', encoding="utf-8")
     assert import_dividends_file(settings, "GLD", p).empty
     assert load_dividends(settings, "GLD") is not None
     c = tmp_path / "x.csv"
-    c.write_text("﻿ex_date,amount\n2024-03-01,0.5\n2024-06-03,0.6\n", encoding="utf-8")
+    c.write_text("\ufeffex_date,amount\n2024-03-01,0.5\n2024-06-03,0.6\n", encoding="utf-8")
     s = import_dividends_file(settings, "XYZ", c)
     assert s.tolist() == [0.5, 0.6]
 

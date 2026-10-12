@@ -449,7 +449,7 @@ def cmd_evaluate_desk(settings: Settings, args) -> int:
 
 def cmd_evaluate_scanner(settings: Settings, args) -> int:
     """Strategy A on point-in-time S&P 500 lists (train + validation; holdout untouched)."""
-    from .backtest.scanner_backtest import run_account_backtest, run_signal_backtest, summarize
+    from .backtest.scanner_backtest import VARIANTS, run_ablation, run_account_backtest, summarize, with_cost_multiplier
     from .data.universe import load_universe_history
 
     history = {d: t for d, t in load_universe_history(settings).items()}
@@ -462,11 +462,12 @@ def cmd_evaluate_scanner(settings: Settings, args) -> int:
     if spy is None:
         print("Benchmark data missing.")
         return 1
-    bt = run_signal_backtest(bars, spy, history, settings, top_n=args.top)
-    frame = bt.frame()
+    ablation = run_ablation(bars, spy, history, settings, top_n=args.top)
+    frame = ablation["full"].frame()
     n = len(frame)
     t_end, v_end = int(n * settings.evaluation.train_fraction), int(n * (settings.evaluation.train_fraction + settings.evaluation.validation_fraction))
     parts = {"train": frame.iloc[:t_end], "validation": frame.iloc[t_end:v_end]}
+    cost = settings.costs.per_side
     snaps = sorted(history)
     lines = ["# Strategy A (S&P 500 scanner) point-in-time backtest", "",
              f"> Universe each month = latest stored S&P 500 snapshot on or before that date ({len(snaps)} snapshots, "
@@ -491,6 +492,26 @@ def cmd_evaluate_scanner(settings: Settings, args) -> int:
                   f"- Coverage: {s['avg_members']:.0f} listed members/month, {s['avg_scored']:.0f} scored, "
                   f"{s['avg_eligible']:.0f} eligible; average turnover {s['avg_turnover']:.0%} of picks per month.",
                   "- ⚠ |t| < 2: not statistically distinguishable from zero." if abs(s["excess_t_stat"]) < 2 else "", ""]
+    lines += ["## Factor ablation (does each idea add anything over plain momentum?)", "",
+              f"{len(VARIANTS)} variants, all declared before running and evaluated on the same months; top {args.top} "
+              "names each. **Multiple testing:** with 5 tries, at least one |t| > 2 would appear by chance about 20% of "
+              "the time, so a single good row is weak evidence.", ""]
+    lines += [f"- **{v}**: {desc}" for v, desc in VARIANTS.items()] + [""]
+    for name, (lo, hi) in {"train": (0, t_end), "validation": (t_end, v_end)}.items():
+        lines += [f"### {name}", "",
+                  "| Variant | Gross CAGR | Net CAGR | Net CAGR at 3× costs | Sharpe | Excess vs SPY/mo (t) | IC (t) | Turnover | Eligible |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for v, bt_v in ablation.items():
+            part = bt_v.frame().iloc[lo:hi]
+            if part.empty:
+                continue
+            s = summarize(part)
+            gross = summarize(part.assign(top_return=part["gross_return"]))["top"]["cagr"]
+            stress = summarize(with_cost_multiplier(part, cost, 3))["top"]["cagr"]
+            lines.append(f"| {v} | {gross:+.1%} | {s['top']['cagr']:+.1%} | {stress:+.1%} | {s['top']['sharpe']:.2f} | "
+                         f"{s['excess_vs_spy_mean_monthly']:+.2%} ({s['excess_t_stat']:.2f}) | "
+                         f"{s['ic_mean']:+.3f} ({s['ic_t_stat']:.2f}) | {s['avg_turnover']:.0%} | {s['avg_eligible']:.0f} |")
+        lines.append("")
     if not parts["validation"].empty:
         start, end = pd.Timestamp(parts["train"].index[0]), pd.Timestamp(parts["validation"].index[-1]) + pd.offsets.MonthEnd(1)
         acct = run_account_backtest(bars | {settings.scanner.benchmark: spy}, spy, history, settings, start, end, args.top)
