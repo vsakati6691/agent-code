@@ -505,6 +505,25 @@ def cmd_evaluate_gtaa(settings: Settings, args) -> int:
     return 0
 
 
+def cmd_tournament(settings: Settings, args) -> int:
+    """Strategy tournament (research only): same data, costs, periods and metrics for every candidate."""
+    from .research import report, tournament
+
+    registry = settings.base_dir / "research" / "registry.jsonl"
+    t, tested, meta = tournament.run(settings, registry, run_test=not args.no_test)
+    text = report.render(t, tested, meta)
+    out = settings.base_dir / "research" / f"TOURNAMENT_{args.as_of}.md"
+    out.write_text(text, encoding="utf-8")
+    for n, e in t.entries.items():
+        sel = e.selection
+        print(f"{n:18s} Sharpe {sel['sharpe']:.2f}  CAGR {sel['cagr']:+.1%}  MDD {sel['max_drawdown']:+.1%}  "
+              f"{e.decision or 'benchmark'}")
+    print(f"
+Registry: {registry} (run {meta['run_id']})
+Report: {out}")
+    return 0
+
+
 def cmd_kill_switch(settings: Settings, args) -> int:
     """Persistent kill switch for live tickets. Engaging is always allowed;
     releasing needs the owner's exact confirmation phrase."""
@@ -595,6 +614,10 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("path")
     asub.add_parser("show")
     a.set_defaults(func=cmd_account)
+
+    tn = sub.add_parser("tournament", help="strategy tournament: candidates vs benchmarks, walk-forward, registry")
+    tn.add_argument("--no-test", action="store_true", help="selection only; leave the test period untouched")
+    tn.set_defaults(func=cmd_tournament)
 
     k = sub.add_parser("kill-switch", help="persistent block on all live tickets (status | engage | release)")
     k.add_argument("action", choices=["status", "engage", "release"])
