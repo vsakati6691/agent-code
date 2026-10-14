@@ -1,5 +1,7 @@
 """Static CSS and JavaScript for the dashboard site (no external scripts, fonts or trackers)."""
 
+from .assets_scan import CSS as SCAN_CSS, JS as SCAN_JS
+
 CSS = r"""
 :root {
   color-scheme: light;
@@ -313,18 +315,31 @@ JS = r"""
     var search = document.querySelector('[data-search="' + table.id + '"]');
     var sector = document.querySelector('[data-sector="' + table.id + '"]');
     var count = document.querySelector('[data-count="' + table.id + '"]');
+    var filters = Array.from(document.querySelectorAll('[data-filter="' + table.id + '"]'));
+    var empty = document.querySelector('[data-empty="' + table.id + '"]');
     function filter() {
       var q = search ? search.value.trim().toLowerCase() : '';
       var s = sector ? sector.value : '';
       var all = items(), shown = 0;
       all.forEach(function (it) {
-        var ok = (!q || it.textContent.toLowerCase().indexOf(q) >= 0) && (!s || it.dataset.sector === s);
+        var ok = (!q || it.textContent.toLowerCase().indexOf(q) >= 0) && (!s || it.dataset.sector === s) &&
+          filters.every(function (f) { return !f.value || it.dataset[f.dataset.field] === f.value; });
         it.hidden = !ok; if (ok) shown++;
       });
       if (count) count.textContent = shown + ' of ' + all.length + ' shown';
+      if (empty) empty.hidden = shown > 0;
     }
     if (search) search.addEventListener('input', filter);
     if (sector) sector.addEventListener('change', filter);
+    filters.forEach(function (f) { f.addEventListener('change', filter); });
+    document.addEventListener('pinschange', filter);
+    var reset = document.querySelector('[data-reset="' + table.id + '"]');
+    if (reset) reset.addEventListener('click', function () {
+      if (search) search.value = '';
+      if (sector) sector.value = '';
+      filters.forEach(function (f) { f.value = ''; });
+      filter();
+    });
     table.querySelectorAll('th[data-sort]').forEach(function (th) {
       var dir = 1;
       th.setAttribute('tabindex', '0');
@@ -337,7 +352,12 @@ JS = r"""
           var ca = head(a).cells[col], cb = head(b).cells[col];
           var x = ca.dataset.v !== undefined ? ca.dataset.v : ca.textContent;
           var y = cb.dataset.v !== undefined ? cb.dataset.v : cb.textContent;
-          if (numeric) { x = parseFloat(x); y = parseFloat(y); if (isNaN(x)) x = -Infinity; if (isNaN(y)) y = -Infinity; return (x - y) * dir; }
+          if (numeric) {
+            x = parseFloat(x); y = parseFloat(y);
+            if (isNaN(x)) return isNaN(y) ? 0 : 1;
+            if (isNaN(y)) return -1;
+            return (x - y) * dir;
+          }
           return String(x).localeCompare(String(y)) * dir;
         });
         table.querySelectorAll('th[data-sort]').forEach(function (o) { o.setAttribute('aria-sort', 'none'); });
@@ -383,3 +403,6 @@ JS = r"""
   });
 })();
 """
+
+CSS += SCAN_CSS
+JS += SCAN_JS

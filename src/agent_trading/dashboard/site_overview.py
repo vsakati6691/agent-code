@@ -10,6 +10,7 @@ from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval, trackin
 from .scenarios import implied_growth_text
 from .site_options import status_block, watchlist_cards
 from .site_research import datasets_line, quality_badge
+from .site_scan import candidate_scan, market_context, scan_header
 
 E = html.escape
 GROWTH_KEYS = ("large", "mid", "small")
@@ -547,18 +548,23 @@ def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict |
              prev_snap: dict | None = None) -> str:
     counts = " · ".join(f'{E(band_title(k, snap["bands"][k]))}: {len(snap["bands"][k]["candidates"])}'
                         for k in ordered(snap["bands"]))
-    opts = bool((snap.get("options") or {}).get("enabled"))
     o_status = status_block(snap)
     o_link = (' <a href="options.html">Options watchlist</a> ·' if o_status["state"] == "available" else
               f' <a href="options.html">Options watchlist</a> ({E(o_status["label"].lower())}) ·')
-    return f"""<h1>{"Growth &amp; Options" if opts else "Growth"} Research Dashboard</h1>
-<p class="lede">Week ending {E(snap["as_of"])} · {counts} ·{o_link}
+    return f"""{scan_header(snap, prev_snap)}
+{market_context(snap)}
+{candidate_scan(snap)}
+<details class="context-details" id="research-briefing"><summary>Research briefing · changes, earnings, risks and data coverage</summary>
+{panels(snap, tracking, dates, prev_snap)}</details>
+<details class="context-details"><summary>Full research lists · growth, options and long-term scenarios</summary>
+<p class="small">Snapshot {E(snap["as_of"])} · {counts} ·{o_link}
 <a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>
 <div class="overview">
-<div class="ov-panels">{panels(snap, tracking, dates, prev_snap)}
+<div class="ov-panels">
 <details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details></div>
 <div class="ov-lists">{watchlist_cards(snap)}
 {growth_section(snap)}
 {multibagger_section(snap)}</div>
 </div>
+</details>
 <p class="small muted">{len(dates)} weekly snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""
