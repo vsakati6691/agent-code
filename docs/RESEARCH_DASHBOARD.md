@@ -192,6 +192,11 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
 - **Methods:**
   - **Companies:** revenue x EV/Sales to 2030 under the growth lists' bear/base/bull rules, plus net cash, divided by
     diluted shares. Unavailable without positive revenue, positive EV and at least 4 reported quarters.
+    - **Margin link** (spec 2026-10-14.3): each scenario also carries an FCF-margin path to 2030. It starts from
+      today's TTM FCF margin, or the operating margin, and moves -5, 0 or +5 points by 2030. That gives 2030 FCF
+      and the implied EV/FCF multiple.
+    - A value with negative 2030 FCF, or above 60x EV/FCF, is flagged as not supported by cash generation. The
+      price itself is unchanged.
   - **Unleveraged ETFs:** exposure-class total-return assumptions, minus an assumed fee and an assumed distribution
     yield, give a price return. The class comes from the fund name, using the keyword table in `spec.py`. With no
     class the scenario is unavailable. Company formulas are never applied to funds.
