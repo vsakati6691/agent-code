@@ -67,11 +67,24 @@ Daily runbook: [docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md).
    - Don't claim an edge the backtests don't show (currently: A has none, B is weak, C is modest).
    - Signals are research output, not advice.
 10. **Git:**
-    - Work on `feature/research-system`.
+    - Work on `feature/research-system`. The `research-data` branch is written only by the dashboard workflow.
     - Before committing: run the tests and scan the staged diff for secrets.
     - Commit and push that branch right after every change set (pre-approved when tests pass and the diff is clean); never leave finished work unpushed.
     - Merging into `main` happens through a pull request, and only on the user's instruction.
     - No force-push, history rewrites or destructive commands.
+
+## Research dashboard (`src/agent_trading/dashboard/`, GitHub Pages)
+
+- Public market data only. Never add account, position, order, ticket or journal data, and never import
+  `account`, `live`, `order_gate`, `killswitch`, `journal`, `paper`, `execution` or `daily` from it
+  (`tests/test_dashboard_http.py` enforces this).
+- Network access only through `dashboard/http.py` (GET, allow-listed hosts). Never print secrets.
+- The rules in `dashboard/spec.py` are pre-registered. Change them only with a new `SPEC_VERSION` and a
+  `SPEC_CHANGELOG` reason, never to improve tracked results.
+- Snapshots on the `research-data` branch are immutable, and `audit.jsonl` is append-only. Never rewrite them
+  or force-push.
+- Outputs are research comparisons, not advice. No probabilities without documented out-of-sample calibration.
+  The workflow sends no messages.
 
 ## Commands
 

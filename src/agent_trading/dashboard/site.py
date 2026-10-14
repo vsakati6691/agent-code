@@ -334,7 +334,10 @@ def options_page(snap: dict) -> str:
 not "best calls to buy". Buying a call can lose the entire premium.</p>
 <div class="banner warn"><strong>Delta is not a probability of profit</strong>{E(spec.DELTA_STATEMENT)}</div>
 <div class="banner info"><strong>Data</strong>Cboe delayed quotes, end-of-session snapshot for {E(snap["as_of"])}.
-Quotes are delayed and can be stale; every contract carries its flags. Black-Scholes values are model estimates.</div>"""
+Quotes are delayed and can be stale; every contract carries its flags. Black-Scholes values are model estimates.</div>
+<div class="banner warn"><strong>Events checked</strong>Scheduled earnings dates (Alpha Vantage, unverified) are listed per contract.
+Ex-dividend dates and other corporate events are <em>not</em> checked. A stock usually drops by about the dividend on its
+ex-date, and the payoff and sensitivity tables here assume no dividends.</div>"""
     if not o.get("enabled") or o.get("status") != "ok":
         return head + f'<div class="banner bad"><strong>Options data unavailable</strong>{E(o.get("status", "not collected"))}. ' \
                       'No contracts, prices or Greeks are shown rather than inventing them.</div>'

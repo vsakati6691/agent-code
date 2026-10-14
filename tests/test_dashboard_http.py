@@ -67,6 +67,23 @@ def test_retries_are_bounded_and_permanent_errors_fail_fast():
     assert len(s.calls) == 1
 
 
+def test_rate_limit_honours_retry_after_and_slows_the_provider():
+    waits = []
+    c, s = client([Resp(429, headers={"Retry-After": "30"}), Resp(429), Resp(429), Resp(200, b"ok")])
+    c.sleep = waits.append
+    assert c.get_bytes("https://cdn-api.cboe.com/x") == b"ok"
+    assert 30 in waits and len(s.calls) == 4                         # 429 gets more than the usual 3 attempts
+    assert c.limits["cboe"].min_interval > 0 and c.usage()["rate_limited"]["cboe"] == 3
+    from agent_trading.dashboard.http import DEFAULT_LIMITS
+    d = HttpClient(None, "ua x@y.z", session=Session([Resp(429), Resp(200)]), sleep=lambda x: None)
+    d.get_bytes("https://cdn-api.cboe.com/y")
+    assert DEFAULT_LIMITS["cboe"].min_interval == 0.5 < d.limits["cboe"].min_interval   # defaults untouched
+    c, s = client([Resp(429)] * 9)
+    c.sleep = lambda x: None
+    with pytest.raises(FetchError, match="after 5 attempts"):
+        c.get_bytes("https://cdn-api.cboe.com/x")
+
+
 def test_budget_is_enforced():
     c, s = client([Resp(200)] * 5, budget=2)
     c.get_bytes("https://data.sec.gov/a")

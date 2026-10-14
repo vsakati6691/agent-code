@@ -5,7 +5,9 @@
 * Per-provider request budgets; once spent, further calls raise BudgetExceeded so
   the pipeline marks the remaining items "not evaluated: request budget spent".
 * Bounded retries (3 attempts, exponential backoff) for timeouts, connection
-  errors, HTTP 429 and 5xx only; other errors fail immediately.
+  errors and 5xx; HTTP 429 gets up to 5 attempts, honours Retry-After, and
+  permanently slows that provider (adaptive throttling, capped at MAX_INTERVAL).
+  Other errors fail immediately.
 * An on-disk cache keyed by URL with a maximum age, so a rerun inside the same
   week does not refetch everything.
 * Query strings are never logged (API keys travel there); errors carry the host only.
@@ -35,6 +37,8 @@ ALLOWED_HOSTS = {
     "www.alphavantage.co": "alphavantage",
 }
 RETRY_STATUS = {429, 500, 502, 503, 504}
+RATE_LIMIT_ATTEMPTS = 5
+MAX_INTERVAL = 3.0           # slowest pacing adaptive throttling will go to (seconds between requests)
 
 
 class FetchError(RuntimeError):
@@ -53,7 +57,7 @@ class ProviderLimits:
 
 DEFAULT_LIMITS = {
     "sec": ProviderLimits(0.15, 4000),          # ~6.7 requests/s, under the SEC's 10/s
-    "cboe": ProviderLimits(0.25, 7000),
+    "cboe": ProviderLimits(0.5, 7000),         # undocumented limit; HTTP 429 seen at 4 requests/s
     "nasdaqtrader": ProviderLimits(1.0, 10),
     "wikipedia": ProviderLimits(1.0, 10),
     "alphavantage": ProviderLimits(13.0, 3),    # free key: 25/day; the dashboard needs 1
@@ -64,7 +68,8 @@ DEFAULT_LIMITS = {
 class HttpClient:
     cache_dir: Path | None
     user_agent: str
-    limits: dict[str, ProviderLimits] = field(default_factory=lambda: dict(DEFAULT_LIMITS))
+    limits: dict[str, ProviderLimits] = field(   # copied: throttling changes a client's own pacing only
+        default_factory=lambda: {k: ProviderLimits(v.min_interval, v.budget) for k, v in DEFAULT_LIMITS.items()})
     timeout: float = 30.0
     attempts: int = 3
     backoff: float = 2.0
@@ -72,6 +77,7 @@ class HttpClient:
     sleep: callable = time.sleep
     clock: callable = time.monotonic
     used: dict[str, int] = field(default_factory=dict)
+    throttled: dict[str, int] = field(default_factory=dict)
     cache_hits: int = 0
     _last: dict[str, float] = field(default_factory=dict)
 
@@ -109,8 +115,9 @@ class HttpClient:
         return self.limits[provider].budget - self.used.get(provider, 0)
 
     def usage(self) -> dict:
-        return {"requests": dict(self.used), "cache_hits": self.cache_hits,
-                "budgets": {k: v.budget for k, v in self.limits.items()}}
+        return {"requests": dict(self.used), "cache_hits": self.cache_hits, "rate_limited": dict(self.throttled),
+                "budgets": {k: v.budget for k, v in self.limits.items()},
+                "final_interval_s": {k: round(v.min_interval, 2) for k, v in self.limits.items()}}
 
     # --- internals ---------------------------------------------------------------------
     @staticmethod
@@ -123,7 +130,9 @@ class HttpClient:
     def _fetch(self, provider: str, url: str, params: dict | None) -> bytes:
         host = urlsplit(url).hostname
         last_error = ""
-        for attempt in range(1, self.attempts + 1):
+        attempt, limit = 0, self.attempts
+        while attempt < limit:
+            attempt += 1
             if self.used.get(provider, 0) >= self.limits[provider].budget:
                 raise BudgetExceeded(f"{provider}: request budget of {self.limits[provider].budget} spent")
             self._pace(provider)
@@ -148,11 +157,21 @@ class HttpClient:
                 if resp.status_code not in RETRY_STATUS:
                     raise FetchError(f"{host}: HTTP {resp.status_code}")
                 last_error = f"HTTP {resp.status_code}"
-            if attempt < self.attempts:
-                wait = self.backoff * 2 ** (attempt - 1)
-                log.info("%s: %s, retry %d/%d in %.0fs", host, last_error, attempt, self.attempts - 1, wait)
+            wait = self.backoff * 2 ** (attempt - 1)
+            if last_error == "HTTP 429":
+                limit = max(limit, RATE_LIMIT_ATTEMPTS)
+                self.throttled[provider] = self.throttled.get(provider, 0) + 1
+                lim = self.limits[provider]
+                lim.min_interval = min(MAX_INTERVAL, lim.min_interval * 1.5 + 0.1)
+                try:
+                    wait = max(wait, float(resp.headers.get("Retry-After", 0)))
+                except (TypeError, ValueError):
+                    pass
+                wait = max(wait, 5.0)
+            if attempt < limit:
+                log.info("%s: %s, retry %d/%d in %.0fs", host, last_error, attempt, limit - 1, wait)
                 self.sleep(wait)
-        raise FetchError(f"{host}: {last_error} after {self.attempts} attempts")
+        raise FetchError(f"{host}: {last_error} after {attempt} attempts")
 
     def _pace(self, provider: str) -> None:
         wait = self.limits[provider].min_interval - (self.clock() - self._last.get(provider, -1e9))

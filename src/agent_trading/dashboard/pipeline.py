@@ -51,6 +51,7 @@ class Context:
     problems: list[str] = field(default_factory=list)
     excluded: dict[str, dict[str, str]] = field(default_factory=lambda: {b.key: {} for b in spec.BANDS})
     budget_hit: set[str] = field(default_factory=set)
+    transient_failures: int = 0          # requests that still failed after their retries (429/5xx/timeouts)
     limit: int | None = None
     quotes: dict = field(default_factory=dict)
     histories: dict = field(default_factory=dict)
@@ -72,6 +73,8 @@ def _guard(ctx: Context, provider: str, fn, *args):
         ctx.problems.append(str(exc))
         return None, "not evaluated: request budget spent"
     except FetchError as exc:
+        if "attempts" in str(exc):
+            ctx.transient_failures += 1
         return None, f"data unavailable ({exc})"
 
 
@@ -207,7 +210,9 @@ def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, s
              bench: pd.Series) -> list[dict]:
     """Score each (ticker, cik, name, sector) for `band`; exclusions are recorded on ctx."""
     out = []
-    for t, cik, name, sector in tickers:
+    for i, (t, cik, name, sector) in enumerate(tickers, 1):
+        if i % 100 == 0:
+            log.info("%s: evaluated %d of %d", band.key, i, len(tickers))
         df, why, pflags = latest_bars(ctx, t)
         if df is None:
             ctx.exclude(band.key, t, why)
@@ -410,10 +415,14 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         sp_list = sp_list[:limit]
 
     broad, broad_reasons = broad_universe(ctx, ref)
+    log.info("reference data: %d S&P 500 members, %d listings, %d eligible broad-universe stocks",
+             len(sp), len(ref["dirs"]), len(broad))
     lo = min(b.min_cap for b in spec.BANDS if b.universe == "broad")
     hi = max(b.max_cap for b in spec.BANDS if b.universe == "broad")
     prelim = []
-    for t, r in broad.iterrows():
+    for n, (t, r) in enumerate(broad.iterrows(), 1):
+        if n % 500 == 0:
+            log.info("broad pre-screen: %d of %d quoted, %d in range", n, len(broad), len(prelim))
         q, why = _quote(ctx, t)
         if q is None or not q.close:
             broad_reasons[why or "no quote"] = broad_reasons.get(why or "no quote", 0) + 1
@@ -486,6 +495,9 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
                                   "earnings_note": earn_note, "delta_statement": spec.DELTA_STATEMENT,
                                   "underlying_rule": spec.OPTION_UNDERLYINGS, "status": "ok"})
 
+    if ctx.transient_failures:
+        ctx.problems.append(f"{ctx.transient_failures} request(s) still failed after retries (rate limits or server "
+                            "errors); the affected stocks are listed as excluded with that reason")
     status = "ok" if not ctx.problems and not ctx.budget_hit else "partial"
     return _clean({
         "as_of": as_of, "run_started": ctx.started,

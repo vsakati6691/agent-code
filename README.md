@@ -19,6 +19,11 @@ scanner, risk headroom, data checks and headlines. It is a snapshot that a
 Claude session refreshes after a run, not a live feed. Runs write the full
 reports to `reports/`, which stays out of git.
 
+**Weekly research dashboard (GitHub Pages):** a separate, public-data-only site. GitHub Actions rebuilds it
+every weekend: large-cap, mid-cap and speculative growth research candidates, plus S&P 500 call-option
+comparisons. Every rule was fixed before results were seen, and the weekly snapshots are immutable and tracked
+against benchmarks. Research comparisons only, not advice. See [docs/RESEARCH_DASHBOARD.md](docs/RESEARCH_DASHBOARD.md).
+
 ## Architecture
 
 ### System overview
@@ -260,6 +265,8 @@ src/agent_trading/
   backtest/                   desk engine, allocation engine (GTAA), scanner backtest, splits, stats
   account.py, journal.py, regime.py, cli.py
 docs/DAILY_ROUTINE.md         the runbook the scheduled Claude sessions follow
+src/agent_trading/dashboard/  weekly research dashboard (public data only; see docs/RESEARCH_DASHBOARD.md)
+.github/workflows/            research-dashboard.yml: weekly run, research-data branch, GitHub Pages
 tests/                        unit, integration (mocked services) and safety tests
 ```
 
