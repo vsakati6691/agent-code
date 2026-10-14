@@ -27,6 +27,7 @@ from .site_overview import band_title, excluded_page, overview
 from .site_symbol import symbol_index, symbol_page
 
 _SYMBOLS: dict[str, str] = {}      # ticker -> name, for the header search (set by build_site)
+_SITE = {"options": True}          # whether the latest snapshot publishes options (set by build_site)
 from .site_watchlist import watchlist_csv, watchlist_page
 from .store import Store, find_private_keys
 
@@ -39,10 +40,15 @@ COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", 
 
 # --- page shell -------------------------------------------------------------------------------------
 
+def brand() -> str:
+    """Site name: options appear in it only while the latest snapshot publishes them."""
+    return "Growth & Options Research" if _SITE["options"] else "Growth Research"
+
+
 def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "") -> str:
     up = "../" * depth
     nav = "".join(f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>'
-                  for href, label in NAV)
+                  for href, label in NAV if _SITE["options"] or href != "options.html")
     opts = "".join(f'<option value="{E(t)}">{E(n)}</option>' for t, n in _SYMBOLS.items())
     search = (f'<form class="symsearch" role="search" data-base="{up}symbol/" onsubmit="return false">'
               f'<label class="sr-only" for="symq">Find a ticker</label><input id="symq" type="search" list="symlist" '
@@ -51,12 +57,12 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
               f'<datalist id="symlist">{opts}</datalist></form>' if _SYMBOLS else "")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{E(title)} · Growth &amp; Options Research</title>
+<title>{E(title)} · {E(brand())}</title>
 <meta name="robots" content="noindex">
 <script>try{{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}}catch(e){{}}</script>
 <link rel="stylesheet" href="{up}assets/style.css">
 <link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
-<body><header class="site"><div class="inner"><a class="brand" href="{up}index.html">Growth &amp; Options Research</a>
+<body><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
 <nav>{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
 <main>{freshness}{body}
 <footer>{E(spec.DISCLAIMER)} Methodology version {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
@@ -473,7 +479,7 @@ def atom_feed(snaps: list[dict]) -> str:
             f"Research comparisons only, not advice.</summary></entry>")
     updated = stamp(max(snaps, key=lambda s: str(s["as_of"]))) if snaps else "1970-01-01T00:00:00Z"
     return ('<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">'
-            "<title>Growth &amp; Options Research: weekly reports</title>"
+            f"<title>{x(brand())}: weekly reports</title>"
             "<id>urn:agent-code:research-dashboard</id><link rel=\"self\" href=\"feed.xml\"/>"
             '<link rel="alternate" type="text/html" href="history.html"/>'
             f"<updated>{x(updated)}</updated><author><name>agent-code research dashboard</name></author>"
@@ -506,11 +512,12 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     status = store.status()
     if not dates:
         msg = (status or {}).get("message", "no weekly snapshot has been produced yet")
-        body = f'<h1>Growth &amp; Options Research Dashboard</h1><div class="banner bad"><strong>No research data available</strong>{E(msg)}</div>'
+        body = f'<h1>{E(brand())} Dashboard</h1><div class="banner bad"><strong>No research data available</strong>{E(msg)}</div>'
         (out / "index.html").write_text(page("Overview", body, "index.html"), encoding="utf-8")
         (out / "methodology.html").write_text(page("Methodology", methodology_page(), "methodology.html"), encoding="utf-8")
         return {"pages": 2, "snapshot": None}
     snap = store.load(dates[-1])
+    _SITE["options"] = bool((snap.get("options") or {}).get("enabled"))
     _SYMBOLS.clear()
     _SYMBOLS.update(symbol_index(snap))
     hits = find_private_keys(snap)

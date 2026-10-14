@@ -455,3 +455,113 @@ def test_site_shows_verified_8k_dates(site):
     assert "verified (8-K)" in page and "last results 2026-07-30" in page and "unverified" in page
     index = (site / "index.html").read_text(encoding="utf-8")
     assert "S04</strong> 2026-10-30" in index and "verified (8-K)" in index
+
+
+# --- review of the live site (2026-10-14): readable reasons, options-off naming, phone order -----------
+
+def test_exclusion_groups_keep_the_rule_and_drop_each_stocks_value():
+    from agent_trading.dashboard.site_overview import NOT_CHECKED, group_exclusions, reason_group
+    assert reason_group("gate failed: TTM revenue growth 6% (needs >= 15%)") == \
+        ("gate failed: TTM revenue growth below 15%", "6%")
+    assert reason_group("gate failed: dilution 9% (needs <= 8%)") == ("gate failed: dilution above 8%", "9%")
+    assert reason_group("illiquid: 20-day median dollar volume $1.5M < $5M") == \
+        ("illiquid: 20-day median dollar volume below $5M", "$1.5M")
+    assert reason_group("market cap $0.83B outside the band") == ("market cap outside the band", "$0.83B")
+    assert reason_group("too little evidence: 5 of 21 sub-metrics missing") == \
+        ("too little evidence (too many sub-metrics missing)", "5 of 21")
+    assert reason_group("price 1.20 below 2") == ("price below $2", "$1.20")
+    assert reason_group("Robinhood tradability not yet verified") == (NOT_CHECKED, "")
+    assert reason_group("no CIK for this S&P 500 member") == ("no CIK for this S&P 500 member", "")
+    assert reason_group("gate input unavailable: 3-year revenue growth")[0] == "gate input unavailable: 3-year revenue growth"
+    assert reason_group("price data rejected: ADIG: only 41 bars, need 60") == \
+        ("price data rejected: too little price history (needs 60 daily bars)", "41 bars")
+    assert reason_group("price data rejected: KOD: recent data anomaly (unadjusted split on 2026-09-30); "
+                        "feed unreliable") == \
+        ("price data rejected: recent data anomaly (unadjusted split); feed unreliable", "2026-09-30")
+    assert reason_group("price data rejected: PPIH: negative volume") == ("price data rejected: negative volume", "")
+    groups = group_exclusions([{"ticker": "A", "reason": "gate failed: TTM revenue growth 6% (needs >= 15%)"},
+                               {"ticker": "B", "reason": "gate failed: TTM revenue growth 4% (needs >= 15%)"}])
+    assert groups == [("gate failed: TTM revenue growth below 15%", [("A", "6%"), ("B", "4%")])]
+
+
+def test_excluded_summaries_on_the_site_have_no_placeholder_dots(site):
+    page = (site / "index.html").read_text(encoding="utf-8")
+    for summary in re.findall(r"Most common: (.*?)</span>", page):
+        assert "…" not in summary, summary
+
+
+def test_missing_earnings_calendar_is_not_reported_as_no_earnings():
+    from agent_trading.dashboard.site_overview import panels
+    snap = {"bands": {}, "as_of": "2026-10-13", "universe": {}, "events": {
+        "window_days": 45, "items": [], "note": "Earnings dates unavailable: data unavailable (key not configured)"}}
+    html = panels(snap, None, ["2026-10-13"])
+    assert "No earnings scheduled" not in html and "could not be collected" in html
+    snap["events"]["note"] = "Scheduled earnings dates from Alpha Vantage's calendar."
+    assert "No earnings scheduled in the next 45 days" in panels(snap, None, ["2026-10-13"])
+
+
+def test_flags_shared_by_most_names_collapse_to_a_count():
+    from agent_trading.dashboard.site_overview import FLAG_LIST_MAX, _flag_item
+    short = _flag_item("Negative free cash flow", ["A", "B"], 35)
+    assert "<details>" not in short and "A, B" in short
+    many = [f"T{i}" for i in range(FLAG_LIST_MAX + 1)]
+    long = _flag_item("5-year drawdown worse than -50%", many, 35)
+    assert "<details>" in long and f"{FLAG_LIST_MAX + 1} of 35 listed names" in long
+
+
+def test_options_disappear_from_name_and_menu_when_the_snapshot_has_none(tmp_path):
+    from agent_trading.dashboard.site import build_site
+    from agent_trading.dashboard.store import Store
+    data, out = demo_site(tmp_path / "a", two_weeks=False)
+    on = (out / "index.html").read_text(encoding="utf-8")
+    assert "Growth &amp; Options Research" in on and 'href="options.html"' in on
+    snap = Store(data).load(Store(data).dates()[-1])
+    snap["options"] = {"enabled": False, "status": "disabled in configuration"}
+    off_data, off_out = tmp_path / "off-data", tmp_path / "off-site"
+    Store(off_data).write_snapshot(snap, "test")
+    build_site(off_data, off_out)
+    for name in ("index.html", "watchlist.html", "methodology.html"):
+        page = (off_out / name).read_text(encoding="utf-8")
+        assert "Options Research" not in page and "Growth Research" in page, name
+        assert not re.search(r'<nav>.*href="options\.html"', page), name
+    assert 'href="options.html"' not in (off_out / "index.html").read_text(encoding="utf-8")
+    assert "<title>Growth Research: weekly reports</title>" in (off_out / "feed.xml").read_text(encoding="utf-8")
+
+
+def test_phones_show_the_ranked_lists_before_the_context_panels(site):
+    from agent_trading.dashboard.assets import CSS
+    page = (site / "index.html").read_text(encoding="utf-8")
+    assert page.index('class="ov-panels"') < page.index('class="ov-lists"')      # desktop keeps the panels on top
+    phone = CSS[CSS.index("@media (max-width: 700px)"):]
+    assert ".ov-panels { order: 2; }" in phone and ".ov-lists { order: 1; }" in phone
+
+
+def test_watchlist_fund_type_label_is_plain():
+    from agent_trading.dashboard.site_watchlist import tidy
+    old = "other security (not common stock (warrant, right, unit, preferred, note, fund or blank-check))"
+    assert tidy(old) == "other security (not common stock)"
+    assert tidy(f"no scenario method for this security type ({old})") == \
+        "no scenario method for this security type (other security (not common stock))"
+    assert tidy(None) == ""
+
+
+def test_listed_fund_shares_resolve_as_a_fund_not_a_nested_label():
+    import pandas as pd
+    from agent_trading.dashboard.watchlist import resolve
+    dirs = pd.DataFrame([{"ticker": "RVX", "name": "Example Ventures Fund I Common Shares of Beneficial Interest",
+                          "exchange": "NYSE", "test_issue": False, "etf": False, "financial_status": ""},
+                         {"ticker": "WTX", "name": "Example Corp Warrants", "exchange": "Nasdaq", "test_issue": False,
+                          "etf": False, "financial_status": ""}]).set_index("ticker")
+    sec = pd.DataFrame(columns=["cik", "name", "exchange"])
+    assert resolve("RVX", dirs, sec)["asset_type"] == "fund or trust (not an operating company)"
+    assert resolve("WTX", dirs, sec)["asset_type"].startswith("other security: ")
+
+
+def test_earnings_panel_shows_five_dates_and_folds_the_rest():
+    from agent_trading.dashboard.site_overview import EARNINGS_SHOWN, panels
+    items = [{"ticker": f"T{i}", "date": f"2026-10-{15 + i}", "list": "large"} for i in range(9)]
+    snap = {"bands": {}, "as_of": "2026-10-13", "universe": {}, "events": {"window_days": 45, "items": items, "note": ""}}
+    html = panels(snap, None, ["2026-10-13"])
+    shown, folded = html.split("<details", 1)
+    assert all(f"<strong>T{i}</strong>" in shown for i in range(EARNINGS_SHOWN))
+    assert f"{9 - EARNINGS_SHOWN} more" in folded and "<strong>T8</strong>" in folded
