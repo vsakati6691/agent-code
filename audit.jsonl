@@ -6,3 +6,5 @@
 {"as_of": "2026-10-13", "at": "2026-10-14T17:35:52+00:00", "event": "run_skipped", "reason": "snapshot already exists (immutable)"}
 {"at": "2026-10-14T18:10:23+00:00", "checked_at": "2026-10-14", "event": "tradability_imported", "files": 1, "symbols_updated": 43}
 {"as_of": "2026-10-13", "at": "2026-10-14T23:04:49+00:00", "event": "run_skipped", "reason": "snapshot already exists (immutable)"}
+{"as_of": "2026-10-14", "at": "2026-10-14T23:10:12+00:00", "commit": "6686121f8abb31552ec367ec394c97a23b3a4fc0", "event": "refresh_started"}
+{"as_of": "2026-10-14", "at": "2026-10-14T23:10:38+00:00", "event": "refresh_finished", "reason": "saved", "status": "ok", "usage": {"budgets": {"alphavantage": 1, "cboe": 80, "nasdaqtrader": 0, "sec": 0, "wikipedia": 0}, "cache_hits": 0, "final_interval_s": {"alphavantage": 13.0, "cboe": 0.5, "nasdaqtrader": 1.0, "sec": 0.15, "wikipedia": 1.0}, "rate_limited": {}, "requests": {"alphavantage": 1, "cboe": 47}}}
