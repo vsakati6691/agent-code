@@ -63,7 +63,16 @@ th, td { padding: 6px 7px; border-bottom: 1px solid var(--border); text-align: l
 td.val { white-space: normal; min-width: 92px; }
 td.dist { white-space: normal; min-width: 120px; }
 th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
-th[data-sort] { cursor: pointer; } th[data-sort]::after { content: " \2195"; color: var(--text-muted); }
+/* sortable headers hold a real button; the arrow shows the current order */
+th[data-sort] .sortbtn { font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0;
+  cursor: pointer; text-align: inherit; }
+th[data-sort] .sortbtn::after { content: " \2195"; color: var(--text-muted); }
+th[aria-sort="ascending"] .sortbtn::after { content: " \25B2"; color: var(--text-primary); }
+th[aria-sort="descending"] .sortbtn::after { content: " \25BC"; color: var(--text-primary); }
+.sortbtn:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.linkbtn { font: inherit; font-size: 13px; background: none; border: 0; padding: 0 0 0 8px; color: var(--link);
+  text-decoration: underline; cursor: pointer; }
+.lazy[aria-busy="true"] { opacity: 0.7; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 12px; border: 1px solid var(--border);
@@ -256,13 +265,37 @@ JS = r"""
     var want = [hash, first].filter(function (k) { return k && group.querySelector('button[data-tab="' + k + '"]'); })[0];
     if (want) show(want, false);
   });
+  // evidence blocks on the list pages are separate small files, fetched the first time their row opens
+  function lazyLoad(box) {
+    if (!box || box.dataset.state === 'loading' || box.dataset.state === 'loaded') return;
+    box.dataset.state = 'loading';
+    box.setAttribute('aria-busy', 'true');
+    fetch(box.dataset.src, {credentials: 'same-origin'}).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      box.innerHTML = j.html;
+      box.dataset.state = 'loaded';
+    }).catch(function () {
+      box.dataset.state = '';
+      box.textContent = 'The evidence could not be loaded. ';
+      var a = document.createElement('a');
+      a.href = box.dataset.page;
+      a.textContent = 'Open the full research page';
+      box.appendChild(a);
+      box.appendChild(document.createTextNode(', or select the ticker again to retry.'));
+    }).then(function () { box.removeAttribute('aria-busy'); });
+  }
   // expandable rows (evidence, assumptions, payoffs)
   document.querySelectorAll('.rowtoggle').forEach(function (b) {
     b.addEventListener('click', function () {
       var row = document.getElementById(b.getAttribute('aria-controls'));
       var open = b.getAttribute('aria-expanded') === 'true';
       b.setAttribute('aria-expanded', open ? 'false' : 'true');
-      if (row) row.hidden = open;
+      if (row) {
+        row.hidden = open;
+        if (!open) row.querySelectorAll('.lazy[data-src]').forEach(lazyLoad);
+      }
     });
   });
   // two-dimensional tabs (option type x expiry horizon)
@@ -301,7 +334,21 @@ JS = r"""
     window.addEventListener('hashchange', function () { if (fromHash()) render(false); });
     render(false);
   });
-  // sortable + searchable + sector-filtered tables; grouped tables move each <tbody class="item"> as a unit
+  // sortable + searchable + sector-filtered tables; grouped tables move each <tbody class="item"> as a unit.
+  // Each header is a real button, and sort changes are announced politely. The last search, sector and sort of a
+  // table are remembered on this device only (localStorage, per page and table); a restored view is always shown
+  // as such, with a "Reset view" control next to the row count, and is never applied silently.
+  var announce = document.createElement('div');
+  announce.className = 'sr-only';
+  announce.setAttribute('role', 'status');
+  announce.setAttribute('aria-live', 'polite');
+  document.body.appendChild(announce);
+  function remember(key, value) {
+    try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+  function recall(key) {
+    try { var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
   document.querySelectorAll('table[data-table]').forEach(function (table) {
     var grouped = table.hasAttribute('data-grouped');
     var holder = grouped ? table : table.tBodies[0];
@@ -310,45 +357,91 @@ JS = r"""
                      : Array.prototype.slice.call(table.tBodies[0].rows);
     }
     function head(it) { return grouped ? it.rows[0] : it; }
+    var original = items().slice();
     var search = document.querySelector('[data-search="' + table.id + '"]');
     var sector = document.querySelector('[data-sector="' + table.id + '"]');
     var count = document.querySelector('[data-count="' + table.id + '"]');
+    var ths = Array.prototype.slice.call(table.querySelectorAll('th[data-sort]'));
+    var key = 'view:' + location.pathname + ':' + table.id;
+    var view = {q: '', s: '', col: null, label: '', dir: 1};    // dir: 1 ascending, -1 descending
+    var reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'linkbtn';
+    reset.textContent = 'Reset view';
+    reset.hidden = true;
+    if (count && count.parentNode) count.parentNode.insertBefore(reset, count.nextSibling);
+    function isDefault() { return !view.q && !view.s && view.col === null; }
     function filter() {
-      var q = search ? search.value.trim().toLowerCase() : '';
-      var s = sector ? sector.value : '';
+      view.q = search ? search.value.trim() : '';
+      view.s = sector ? sector.value : '';
+      var q = view.q.toLowerCase(), s = view.s;
       var all = items(), shown = 0;
       all.forEach(function (it) {
         var ok = (!q || it.textContent.toLowerCase().indexOf(q) >= 0) && (!s || it.dataset.sector === s);
         it.hidden = !ok; if (ok) shown++;
       });
       if (count) count.textContent = shown + ' of ' + all.length + ' shown';
+      reset.hidden = isDefault();
+      remember(key, isDefault() ? null : view);
     }
+    function applySort(th, dir) {
+      var col = Array.prototype.indexOf.call(th.parentNode.children, th);
+      var numeric = th.dataset.sort === 'num';
+      var all = items();
+      all.sort(function (a, b) {
+        var ca = head(a).cells[col], cb = head(b).cells[col];
+        var x = ca.dataset.v !== undefined ? ca.dataset.v : ca.textContent;
+        var y = cb.dataset.v !== undefined ? cb.dataset.v : cb.textContent;
+        if (numeric) { x = parseFloat(x); y = parseFloat(y); if (isNaN(x)) x = -Infinity; if (isNaN(y)) y = -Infinity; return (x - y) * dir; }
+        return String(x).localeCompare(String(y)) * dir;
+      });
+      ths.forEach(function (o) { o.setAttribute('aria-sort', 'none'); });
+      th.setAttribute('aria-sort', dir > 0 ? 'ascending' : 'descending');
+      all.forEach(function (it) { holder.appendChild(it); });
+      return col;
+    }
+    ths.forEach(function (th) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sortbtn';
+      while (th.firstChild) btn.appendChild(th.firstChild);
+      th.appendChild(btn);
+      th.setAttribute('aria-sort', 'none');
+      btn.addEventListener('click', function () {
+        var dir = th.getAttribute('aria-sort') === 'ascending' ? -1 : 1;
+        view.col = applySort(th, dir);
+        view.label = btn.textContent.trim();
+        view.dir = dir;
+        announce.textContent = 'Sorted by ' + view.label + ', ' + (dir > 0 ? 'ascending' : 'descending') + '.';
+        filter();
+      });
+    });
     if (search) search.addEventListener('input', filter);
     if (sector) sector.addEventListener('change', filter);
-    table.querySelectorAll('th[data-sort]').forEach(function (th) {
-      var dir = 1;
-      th.setAttribute('tabindex', '0');
-      th.setAttribute('aria-sort', 'none');
-      function sort() {
-        var col = Array.prototype.indexOf.call(th.parentNode.children, th);
-        var all = items();
-        var numeric = th.dataset.sort === 'num';
-        all.sort(function (a, b) {
-          var ca = head(a).cells[col], cb = head(b).cells[col];
-          var x = ca.dataset.v !== undefined ? ca.dataset.v : ca.textContent;
-          var y = cb.dataset.v !== undefined ? cb.dataset.v : cb.textContent;
-          if (numeric) { x = parseFloat(x); y = parseFloat(y); if (isNaN(x)) x = -Infinity; if (isNaN(y)) y = -Infinity; return (x - y) * dir; }
-          return String(x).localeCompare(String(y)) * dir;
-        });
-        table.querySelectorAll('th[data-sort]').forEach(function (o) { o.setAttribute('aria-sort', 'none'); });
-        th.setAttribute('aria-sort', dir > 0 ? 'ascending' : 'descending');
-        dir = -dir;
-        all.forEach(function (it) { holder.appendChild(it); });
-      }
-      th.addEventListener('click', sort);
-      th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sort(); } });
+    reset.addEventListener('click', function () {
+      if (search) search.value = '';
+      if (sector) sector.value = '';
+      view.col = null; view.label = ''; view.dir = 1;
+      ths.forEach(function (o) { o.setAttribute('aria-sort', 'none'); });
+      original.forEach(function (it) { holder.appendChild(it); });
+      filter();
+      announce.textContent = 'View reset to the default order and filters.';
     });
+    var saved = recall(key);
+    if (saved && typeof saved === 'object') {
+      if (search && typeof saved.q === 'string') search.value = saved.q;
+      if (sector && typeof saved.s === 'string' &&
+          Array.prototype.some.call(sector.options, function (o) { return o.value === saved.s; })) sector.value = saved.s;
+      var th = ths.filter(function (t) {
+        return Array.prototype.indexOf.call(t.parentNode.children, t) === saved.col &&
+               t.querySelector('.sortbtn').textContent.trim() === saved.label;
+      })[0];
+      if (th && (saved.dir === 1 || saved.dir === -1)) {
+        view.col = applySort(th, saved.dir); view.label = saved.label; view.dir = saved.dir;
+      }
+    }
     filter();
+    if (!isDefault()) announce.textContent = 'Saved view restored for this table. Use Reset view to clear it.';
   });
   // line chart crosshair + tooltip
   document.querySelectorAll('.chart[data-series]').forEach(function (box) {

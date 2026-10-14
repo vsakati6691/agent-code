@@ -26,10 +26,11 @@ from .assets import CSS, JS
 from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval,
                   tracking_schedule)
 from .scenarios import RETURN_WINDOWS, implied_growth_text
+from .site_ai import ai_page, methodology_ai, top20_block
 from .site_compare import compare_page
 from .site_options import lists_of, options_page
 from .site_research import changes_section, datasets_table, lab_section, quality_block, research_section
-from .site_overview import band_title, excluded_page, overview, scenario_flags_html
+from .site_overview import band_title, evidence_fragments, excluded_page, overview, scenario_flags_html
 from .site_symbol import symbol_index, symbol_page
 
 _SYMBOLS: dict[str, str] = {}      # ticker -> name, for the header search (set by build_site)
@@ -38,8 +39,8 @@ from .site_watchlist import watchlist_csv, watchlist_page
 from .store import Store, find_private_keys
 
 E = html.escape
-NAV = [("index.html", "Overview"), ("options.html", "Options"), ("watchlist.html", "Watchlist 2030"),
-       ("compare.html", "Compare"),
+NAV = [("index.html", "Overview"), ("ai.html", "AI stocks"), ("options.html", "Options"),
+       ("watchlist.html", "Watchlist 2030"), ("compare.html", "Compare"),
        ("history.html", "History & tracking"), ("methodology.html", "Methodology"), ("audit.html", "Audit trail")]
 COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", "balance": "Balance", "runway": "Runway",
               "valuation": "Value", "momentum": "Mom.", "relative": "Rel."}
@@ -282,6 +283,7 @@ summary of evidence, not a recommendation.</p>
 </tbody></table></div><p class="small muted">* quarter derived from cumulative or annual filings. Source: {E(c["sources"]["fundamentals"])},
 facts filed on or before {E(snap["as_of"])} only.</p>
 <h2>Bear / base / bull valuation ranges</h2>{scen_html}
+{top20_block(c)}
 {lab_section(lab.inputs(c))}
 <div class="banner info"><strong>Probability</strong>{summary_details(SUMMARIES["probability"], c["probability"], "Why")}</div>
 <h2>Key business risks</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["risks"])}</ul>
@@ -398,6 +400,7 @@ GitHub Actions cannot reach it; no account data is stored.</p>
 <h3>Not scored</h3><ul>{''.join(f'<li>{E(k.replace("_", " "))}: {E(v)}</li>' for k, v in spec.NOT_SCORED_FACTORS.items())}</ul>
 <p>The strongest counterargument is the input with the largest weighted shortfall (missing critical data first).</p>
 <h2>Scenarios</h2><p>{E(spec.SCENARIO_METHOD)}</p><p>{E(spec.MULTIBAGGER_DEFINITION)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p>
+{methodology_ai()}
 <h2>Options (calls and puts)</h2><p>{E(spec.OPTION_UNDERLYINGS)}</p><ul>{hz}</ul><p>Eligibility: {E(OPTION_RULES_TEXT)}.</p>
 <p>Ranking (higher is better; maximum upside is not an input):</p><ul>{rk}</ul><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>{E(spec.DELTA_STATEMENT)}</p><p>{E(spec.PREMIUM_ASSUMPTION)} Puts: breakeven = strike - premium; payoff = max(strike - price, 0) -
@@ -628,6 +631,7 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     tracking = store.read_json("tracking.json")
     prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
     write("index.html", "Overview", overview(snap, status, dates, tracking, prev_snap), "index.html")
+    write("ai.html", "AI stocks", ai_page(snap), "ai.html")
     write("options.html", "Options research", options_page(snap), "options.html")
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
     write("history.html", "History", history_page(dates, tracking), "history.html")
@@ -641,6 +645,9 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "downloads").mkdir()
     (out / "data").mkdir()
     (out / "symbol").mkdir()
+    (out / "fragments").mkdir()
+    for rel, text in evidence_fragments(snap["bands"]).items():       # evidence rows load on demand (see assets.JS)
+        (out / rel).write_text(text, encoding="utf-8")
     history = [snap if d == dates[-1] else store.load(d) for d in dates]
     for t in _SYMBOLS:
         write(f"symbol/{t}.html", f"{t} · symbol", symbol_page(t, snap, history), "", 1)
@@ -674,4 +681,4 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     if leaks:
         shutil.rmtree(out)
         raise RuntimeError(f"refusing to publish: secret values found in {len(leaks)} file(s)")
-    return {"pages": 6 + n + len(dates), "snapshot": dates[-1], "integrity_problems": integrity}
+    return {"pages": 7 + n + len(dates), "snapshot": dates[-1], "integrity_problems": integrity}

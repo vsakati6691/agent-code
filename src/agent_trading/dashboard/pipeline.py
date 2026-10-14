@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from . import ai as ai_mod
 from . import options as opt
 from . import scenarios, scoring, spec
 from .fundamentals import Fundamentals, build as build_fundamentals
@@ -662,11 +663,13 @@ def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability
 
 def run(providers: Providers, as_of: date, previous: dict | None = None, options_enabled: bool = True,
         limit: int | None = None, tradability: Tradability | None = None,
-        todo_out: list | None = None, watchlist: WatchlistConfig | None = None) -> dict:
+        todo_out: list | None = None, watchlist: WatchlistConfig | None = None,
+        ai_private: dict | None = None) -> dict:
     """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
 
     `tradability`: stored Robinhood verdicts (None = none stored: nothing can be published).
-    `todo_out`: filled with the symbols that need a Robinhood check, even when the run fails."""
+    `todo_out`: filled with the symbols that need a Robinhood check, even when the run fails.
+    `ai_private`: validated private-company records for the AI page (None = read config/ai_private_companies.json)."""
     trad = tradability or Tradability()
     todo = todo_out if todo_out is not None else []
     if not is_trading_day(as_of):
@@ -734,10 +737,24 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         if limit and len(prelim) >= limit:
             break
 
+    # spec 2026-10-14.7: the AI-exposed universe is a fixed list; names that cannot be evaluated keep their reason
+    ai_pool, ai_rejects, ladder = [], {}, ai_mod.size_ladder({})
+    if any(b.universe == "ai" for b in spec.BANDS):
+        ai_pool, ai_rejects = ai_mod.resolve_universe(sec, ref["dirs"], sp)
+        if limit:
+            ai_pool = ai_pool[:limit]
+    roles = ai_mod.roles()
+
     results, payload_bands = {}, {}
     for band in spec.BANDS:
         if band.universe == "sp500":
             rows = evaluate(ctx, band, sp_list, bench[band.benchmark])
+            # today's size ladder (top-20 market-cap bar) from the S&P 500 members evaluated in this run
+            ladder = ai_mod.size_ladder({r["ticker"]: r["metrics"].get("market_cap") for r in rows})
+        elif band.universe == "ai":
+            for t, why in ai_rejects.items():
+                ctx.exclude(band.key, t, why)
+            rows = evaluate(ctx, band, ai_pool, bench[band.benchmark])
         else:
             sp_set = set(sp.index)
             pool = list(prelim)
@@ -756,6 +773,10 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
                 r["sector"] = sector_from_sic(sub.get("sic")) if sub else "Unknown"
         results[band.key] = (rows, ranked, top)
         details = [candidate_detail(ctx, band, r, bench[band.benchmark], earnings) for r in top]
+        if band.universe == "ai":
+            for d in details:
+                d["ai_role"] = roles.get(d["ticker"])
+                d["top20_test"] = ai_mod.top20_test(d, ladder)
         prev_band = None
         if previous:
             prev_band = [{"ticker": c["ticker"], "rank": c["rank"], "components": c["components"],
@@ -819,14 +840,21 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             e["earnings_check"] = _clean(verify_earnings(ctx, e.get("cik"), earnings.get(e["ticker"])))
     upcoming = []
     horizon_end = as_of + timedelta(days=45)
+    seen_events: dict[tuple[str, str], dict] = {}
     for key, b in payload_bands.items():
         for c in b["candidates"]:
             if c.get("next_earnings") and c["next_earnings"] <= horizon_end.isoformat():
+                ev_key = (c["ticker"], c["next_earnings"])
+                if ev_key in seen_events:       # a stock on two lists (for example large and AI large) is listed once
+                    seen_events[ev_key]["list"] += f", {key}"
+                    continue
                 ec = c.get("earnings_check") or {}
-                upcoming.append({"ticker": c["ticker"], "date": c["next_earnings"], "list": key,
-                                 "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
-                                 "last_results": ec.get("last_results"), "last_results_status": ec.get("last_results_status"),
-                                 "cadence_check": ec.get("cadence_check")})
+                seen_events[ev_key] = {"ticker": c["ticker"], "date": c["next_earnings"], "list": key,
+                                       "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+                                       "last_results": ec.get("last_results"),
+                                       "last_results_status": ec.get("last_results_status"),
+                                       "cadence_check": ec.get("cadence_check")}
+                upcoming.append(seen_events[ev_key])
     for e in watch_payload.get("entries", []):
         d = earnings.get(e["ticker"])
         if d and d <= horizon_end.isoformat():
@@ -837,6 +865,18 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
     if ctx.transient_failures:
         ctx.problems.append(f"{ctx.transient_failures} request(s) still failed after retries (rate limits or server "
                             "errors); the affected stocks are listed as excluded with that reason")
+    ai_payload = None
+    if any(b.universe == "ai" for b in spec.BANDS):
+        try:
+            private = ai_private if ai_private is not None else ai_mod.load_private()
+        except (ai_mod.PrivateConfigError, ValueError, OSError) as exc:    # never crash the run over context data
+            private = {"reviewed_on": None, "note": None, "companies": []}
+            ctx.problems.append(f"the private-company file was rejected and no private companies are shown: {exc}")
+        ai_payload = {"definition": spec.AI_UNIVERSE_DEFINITION, "top20_rule": spec.AI_TOP20_RULE,
+                      "private_rule": spec.AI_PRIVATE_RULE, "probability_note": spec.AI_PROBABILITY_NOTE,
+                      "universe": {"defined": len(spec.AI_UNIVERSE), "resolved": len(ai_pool), "unresolved": ai_rejects,
+                                   "roles": roles},
+                      "ladder": ladder, "private": private}
     status = "ok" if not ctx.problems and not ctx.budget_hit else "partial"
     return _clean({
         "as_of": as_of, "run_started": ctx.started,
@@ -855,7 +895,7 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             "definitions": {"universe": spec.UNIVERSE_DEFINITION, "market_cap": spec.MARKET_CAP_DEFINITION},
         },
         "benchmarks": {b: {"close": float(s.iloc[-1]), "date": as_of} for b, s in bench.items()},
-        "bands": payload_bands, "options": options_payload, "watchlist": _clean(watch_payload),
+        "bands": payload_bands, "options": options_payload, "watchlist": _clean(watch_payload), "ai": ai_payload,
         "events": {"window_days": 45, "items": upcoming, **earn_status, "note": earn_note or
                    "Scheduled earnings dates from Alpha Vantage's calendar. They are not independently verified; "
                    "other dated catalysts are not tracked."},

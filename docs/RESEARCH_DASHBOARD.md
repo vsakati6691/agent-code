@@ -5,8 +5,8 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 - Code: `src/agent_trading/dashboard/`
 - Workflow: `.github/workflows/research-dashboard.yml`
 - Rules: `src/agent_trading/dashboard/spec.py` (pre-registered and hashed)
-- Tests: `tests/test_dashboard.py`, `tests/test_dashboard_v2.py`, `tests/test_dashboard_http.py`, `tests/test_dashboard_site.py` (builds a two-snapshot demo site and checks it: links, page size, table labels, one h1 per page, no raw values)
-- Site modules: `site.py` (shell, detail pages, history, methodology, audit, build), `site_overview.py`, `site_options.py`, `site_watchlist.py`, `fmt.py`
+- Tests: `tests/test_dashboard.py`, `tests/test_dashboard_v2.py`, `tests/test_dashboard_http.py`, `tests/test_dashboard_site.py` (builds a two-snapshot demo site and checks it: links, page size, table labels, one h1 per page, no raw values), `tests/test_dashboard_ai.py` (AI lists, scenario test, private-company validation, page weight)
+- Site modules: `site.py` (shell, detail pages, history, methodology, audit, build), `site_overview.py`, `site_ai.py`, `site_options.py`, `site_watchlist.py`, `fmt.py`; AI logic in `ai.py`
 
 ## What the site shows
 
@@ -16,6 +16,7 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 <ul><li>upcoming earnings (scheduled, unverified)</li><li>new entrants, departures and rank moves</li><li>sector concentration and downside-risk flags</li><li>performance vs benchmarks from immutable snapshots</li><li>data coverage, freshness and missing-data warnings</li></ul>Then **Growth stocks**: tabs for the large-, mid- and small-cap top 10. Each tab states its market-cap definition and universe (large cap = S&P 500 members only). Its columns are rank, ticker/company, sector, market cap, price, revenue growth, earnings/FCF growth, valuation, research score, 3M/6M/1Y returns, 1Y vs benchmark, and main risk. Selecting a ticker expands its evidence, thesis, bear case, 8-quarter trend, base-case assumptions and invalidation. Then **Speculative multibagger research candidates**: top 5, 5-10 year horizon, with growth evidence, cash/runway, debt/dilution/valuation risk, bear/base/bull at 1/3/5/10 years, what must happen, and what would invalidate it |
 | Compare (`compare.html`) | Pick 2-4 companies (ranked names and watchlist operating companies) and see growth, margins and cash flow, valuation, debt and dilution, returns and drawdowns with their exact windows, score components and evidence quality side by side. A banner flags anything that does not line up (TTM windows ending more than 45 days apart, different scoring profiles or benchmarks, watchlist names that are not scored), and each missing cell says why. Price paths are rebased to 100 on the dates every selected name shares, never interpolated. Every column links to its SEC sources. Selection is kept in the URL hash, e.g. `compare.html#MU,FIX` |
 | Stock detail (one per candidate) | **What changed since the previous snapshot** (new filings with EDGAR links, deterioration, dilution, thesis-condition breaches, data-availability changes, or why no comparison is possible); a **company research panel** (observed quarterly trends, supporting and counter-evidence, two earnings-quality checks, assumptions, verified/scheduled/estimated events, the thesis conditions recorded when the name first appeared with their current status, missing information, sources and dates); an **evidence-quality** check (passed checks, warnings, next checks); then price, market cap, sector, sources, timestamps; earnings dates (next: scheduled, unverified; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; a **scenario calculator** (your own starting growth, exit EV/Sales, dilution and FCF margin through the published formula, with a reset to the published assumptions; nothing is stored or published); risks; invalidation conditions; "probability not established" |
+| AI stocks (`ai.html`) | Spec 2026-10-14.7. Top 5 AI-exposed large-cap and top 5 mid-cap stocks (same fixed scoring as the growth lists, from a curated AI universe with each company's role in the AI chain); a **top-20 market-cap scenario test** against today's 20th-largest S&P 500 market cap (conditional, never a probability, which the page states is not established); the universe by role with the reason any name was not ranked; and **private AI companies** (OpenAI, Anthropic, Databricks, Mistral...) for context, with reported valuations shown only with a dated source link and an "unverified" label |
 | Options (`options.html`) | **Options watchlist**: a Calls/Puts control x 3M/6M/1Y tabs, six independently ranked lists of **up to 5** contracts each (spec 2026-10-14.6; 10 before), at most 2 per underlying, on the week's large-cap candidates only. The page is always linked and opens with a plain-language status (not collected / collection failed / stale / partial / available) and the owner setup step when collection is off. Each list shows how many qualified, why it is short, and why other contracts were left out. A compact row shows the underlying, contract symbol, expiry date and days remaining, strike, premium (ask x 100), breakeven with the required move, **maximum loss (visible on phones)**, spread, volume, open interest, IV, delta, theta, earnings status (scheduled / none scheduled / **unknown** when the calendar was not collected), the research score with its three parts, and the probability verdict. Expanding a row separates **observed facts** (delayed quote, snapshot time in UTC, source, delay, the underlying's and the contract's own last trade), **assumptions** (ask premium, breakeven, implied move, no fees, model notes), **unknown or missing** items, the **research score**, plain-language liquidity / time-decay / volatility / event risks, exact payoffs at expiration (before fees), a labelled 30-day Black-Scholes estimate, and "Probability not established". The page names the snapshot's methodology version next to the renderer's. CSV per list |
 | Watchlist 2030 | The owner's ticker list (imported 2026-10-14, not synchronised). Each symbol is verified (name, exchange, type, listing status), with the latest verified price and timestamp. Conditional year-end-2030 bear/base/bull PRICE scenarios (% change and annualized) come from a company, ETF or leveraged-ETF method, with expandable assumptions, catalysts, bear case, invalidation, sources, evidence quality and missing information. Also: a range chart, theme concentration, sorting, filters and CSV. Unresolved or unmodellable symbols stay visible as 'Scenario unavailable' with the reason |
 | Symbol pages (`symbol/<TICKER>.html`) | Everything known about one symbol: list ranks, listed option contracts, its watchlist scenario (or what would unlock one), and its ranks in every stored snapshot. Reached from the header's 'Find a ticker' box, which works offline from an inline list |
@@ -47,7 +48,54 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 - **Long definitions** (multibagger, probabilities, scenario method) are one sentence plus a toggle on the overview and
   detail pages. The methodology page has the full text.
 
+### Spec 2026-10-14.7: AI stocks page
+
+Registered on 2026-10-14 before any snapshot was evaluated with it. The 2026-10-13 snapshot has no AI lists and stays
+as published under 2026-10-14.3; its AI page explains that, and the first weekly snapshot collected under .7 adds them.
+Nothing about the growth lists, scoring scales or weights, option rules or tracking rules changed.
+
+- **Two new lists** (`ai_large`: market cap of $10B or more; `ai_mid`: $2B to $10B), up to **5 stocks each**, shown only
+  on `ai.html` (not as growth tabs). Same standard scoring profile, scales, weights, liquidity floors, Robinhood
+  tradability rule and benchmarks (SPY, IJH) as the growth lists; the only new rule is the universe.
+- **The universe is a fixed, curated list** (`spec.AI_UNIVERSE`, about 60 US-listed common stocks in ten roles of the AI
+  supply chain: chips, memory and storage, chip equipment, networking and optical, servers, cloud platforms, AI software
+  and data, neoclouds and data centers, power and cooling, and a diversified group that includes a frontier AI lab). It
+  is hashed with the rest of the spec, so adding or removing a name is a new methodology version. Membership is a
+  recorded judgement, not a measurement. Foreign filers without US-GAAP XBRL (TSMC, ASML) cannot be scored. A name that
+  cannot be evaluated (not listed, a new listing with little history, outside both cap bands, tradability unverified)
+  keeps its reason on `excluded-ai_large.html` / `excluded-ai_mid.html`; unverified names go on the Robinhood
+  to-check list like any other list.
+- **Top-20 market-cap scenario test** (`dashboard/ai.py`). The bar is the 20th-largest market cap among the S&P 500
+  members with valid data in the same run. For each listed AI stock the page shows the market cap implied by its bear,
+  base and bull scenario at 5 and 10 years (value per share x scenario share count) as a multiple of that bar. The bar is
+  held at today's level and will probably rise, so "above" means above today's bar, not "a top-20 company". It is a
+  conditional comparison, never a probability.
+- **No probabilities.** A probability that a company reaches the top 20 needs an out-of-sample calibration record
+  (`PROBABILITY_GATE`); none exists, so the page says "Probability not established" and offers the scenario test instead.
+- **Private AI companies** (`config/ai_private_companies.json`, context only). A valuation is accepted only with a
+  currency, basis, date, source label and https source link, and is shown as reported and unverified, never as a market
+  cap; the run degrades to a visible problem (status `partial`) instead of publishing a record without a source. A
+  USD valuation is placed against today's largest S&P 500 market caps in words ("between #10 and #11"); other
+  currencies are not converted. Companies without a corroborated valuation (reports conflict or are unconfirmed) are
+  listed as "also watched" with the reason, with no number. Not ranked, scored or tradable, and no price. The file was
+  reviewed on 2026-10-14 from press and law-firm reports; update it by editing the file with sources and re-running.
+  When a private company lists, it joins the ranked lists only through a new methodology version.
+- **Context at review time (reported, not verified):** SpaceX (SPCX, which reportedly absorbed xAI in February 2026) and
+  Cerebras (CBRS) have listed and are in the universe; OpenAI and Anthropic are reported to have filed confidentially for
+  IPOs with no listing date announced.
+
 ### Fixes on 2026-10-14 (improvement cycle; no methodology change, so no new spec version)
+
+- **Lighter overview.** The evidence block of every listed stock is a small JSON file under `fragments/` fetched when its
+  row first opens, instead of being inline: the overview of the 2026-10-13 snapshot goes from 222 KB to 131 KB of HTML
+  (about 37 KB to 28 KB compressed on the wire). A failed fetch shows a link to the full research page and retries on
+  the next open. Search covers the visible row text, not the unopened evidence. Printing includes only rows that were
+  opened.
+- **Sortable headers are real buttons**, with `aria-sort`, a visible arrow for the current order, and a polite
+  screen-reader announcement ("Sorted by Score, descending.").
+- **Saved views.** The last search, sector filter and sort of each table are remembered in this browser only
+  (localStorage, per page and table, silently skipped when storage is blocked). A restored view is announced, the row
+  count shows what is hidden, and **Reset view** clears it. Tabs are still never restored silently.
 
 - **Tracking counts NYSE sessions.** `tracking.forward_return` decided "pending" or "prices stop (possible
   delisting)" by counting weekdays, which overstates elapsed sessions by one per exchange holiday. On the day a

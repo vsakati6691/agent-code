@@ -22,7 +22,10 @@ CANDIDATE = _obj("One ranked stock in a list.", {
     "ticker": _f("string", "Exchange ticker (share classes as BRK.B)."),
     "name": _f("string", "Security name from the exchange listing."),
     "sector": _f("string", "GICS sector (S&P 500) or a coarse sector from the SEC SIC code."),
-    "band": _f("string", "List key: large, mid, small or multibagger."),
+    "band": _f("string", "List key: large, mid, small, multibagger, ai_large or ai_mid."),
+    "ai_role": _f("string", "AI lists only: where the company sits in the AI supply chain (spec.AI_UNIVERSE)."),
+    "top20_test": _f("object", "AI lists only: bear, base and bull scenario market caps at 5 and 10 years against today's "
+                               "20th-largest S&P 500 market cap; conditional scenarios, never a probability."),
     "rank": _f("integer", "Rank within the list after the Robinhood tradability filter (1 = highest score)."),
     "composite": _f("number", "Research score 0-100 from the fixed component weights."),
     "components": _f("object", "Component scores 0-1 by component key (null = all inputs missing)."),
@@ -134,7 +137,21 @@ SCHEMA = {
                                     "2026-10-14.5, the oldest and newest check times (no account data)."),
         "universe": _f("object", "Universe sizes, S&P 500 members and broad-universe exclusion counts."),
         "benchmarks": _f("object", "Benchmark closes on the as-of date."),
-        "bands": {"type": "object", "additionalProperties": BAND, "description": "Lists by key: large, mid, small, multibagger."},
+        "bands": {"type": "object", "additionalProperties": BAND,
+                  "description": "Lists by key: large, mid, small, multibagger and, from 2026-10-14.7, ai_large and ai_mid."},
+        "ai": _obj("From 2026-10-14.7: the AI page's data (null in older snapshots).", {
+            "definition": _f("string", "How the AI-exposed universe is defined (spec.AI_UNIVERSE_DEFINITION)."),
+            "top20_rule": _f("string", "How the top-20 market-cap scenario test works (spec.AI_TOP20_RULE)."),
+            "private_rule": _f("string", "Rules for the private-company context (spec.AI_PRIVATE_RULE)."),
+            "probability_note": _f("string", "Why no probability is shown (spec.AI_PROBABILITY_NOTE)."),
+            "universe": _f("object", "How many names the fixed universe defines and resolved, those that could not be "
+                                     "evaluated with their reasons, and each name's role in the AI chain."),
+            "ladder": _f("object", "The largest S&P 500 market caps in the run and the 20th-largest as the bar "
+                                   "(threshold, threshold_ticker, members)."),
+            "private": _f("object", "Private AI companies: reviewed_on, note and companies. A valuation always has a "
+                                    "currency (in billions), basis, date, source label and https source link, and is "
+                                    "reported and unverified; a company without one gives the reason."),
+        }),
         "options": _obj("Option comparisons: 3m/6m/12m horizons, each with calls and puts lists.", {
             "3m": _obj("About 3 months.", {"calls": _obj("Ranked calls.", {"rows": {"type": "array", "items": CONTRACT}}),
                                            "puts": _obj("Ranked puts.", {"rows": {"type": "array", "items": CONTRACT}})}),

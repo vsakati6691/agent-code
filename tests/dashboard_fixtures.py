@@ -182,10 +182,33 @@ def option_row(under: str, exp: date, strike: float, bid: float, ask: float, del
             "rho": 0.1, "last_trade_time": f"{AS_OF}T15:59:00", "last_price": (bid + ask) / 2}
 
 
+FAKE_AI_LARGE = tuple(f"AIL{i}" for i in range(7))        # market caps about $15B to $45B
+FAKE_AI_MID = tuple(f"AIM{i}" for i in range(6))          # about $3B to $8B
+FAKE_AI_UNIVERSE = (tuple((t, "Accelerators and AI chips") for t in FAKE_AI_LARGE) +
+                    tuple((t, "Power, cooling and electrical") for t in FAKE_AI_MID) +
+                    (("AIGONE", "Memory and storage"),))   # never listed: shows an unresolved name
+
+
+def add_ai_names(p: FakeProviders, fillers: int = 10) -> None:
+    """Fake AI-exposed companies with controlled market caps, plus filler S&P 500 members so that the 20th-largest
+    S&P 500 market cap exists (the top-20 bar needs 20 members with data)."""
+    for i in range(fillers):
+        p.add(f"F{i:02d}", 200 + i, growth=0.01, drift=0.0002, shares=3e8)
+    for i, t in enumerate(FAKE_AI_LARGE + FAKE_AI_MID):
+        cik = 500 + i
+        large = t in FAKE_AI_LARGE
+        target = 15e9 + 5e9 * i if large else 3e9 + 1e9 * (i - len(FAKE_AI_LARGE))
+        p.add(t, cik, sp=False, shares=1e8, drift=0.0004, growth=0.10 + 0.03 * i)
+        px = float(p.bars[t]["close"].iloc[-1])
+        p.facts[cik] = make_facts(cik, growth=0.10 + 0.03 * i, shares=target / px)
+
+
 def demo_site(tmp_path, two_weeks: bool = True):
-    """Build a complete offline site (two weekly snapshots, options, watchlist) and return (data_dir, out_dir)."""
+    """Build a complete offline site (two weekly snapshots, options, watchlist, AI lists) and return (data_dir, out_dir)."""
+    from unittest import mock
+
     from agent_trading.dashboard import options as opt
-    from agent_trading.dashboard import tracking
+    from agent_trading.dashboard import spec, tracking
     from agent_trading.dashboard.pipeline import run
     from agent_trading.dashboard.site import build_site
     from agent_trading.dashboard.store import Store
@@ -204,6 +227,7 @@ def demo_site(tmp_path, two_weeks: bool = True):
         p.add("SPEC", 301, sp=False, shares=8e6, drift=0.0003, growth=0.50, cash=1e8)
         p.add("SLOW", 302, sp=False, shares=8e6, drift=0.0003, growth=0.05)
         p.add("NEWQ", 303, sp=False, shares=8e6, drift=0.0003, growth=0.30, quarters=2)
+        add_ai_names(p)
         for t, name, start, drift, vol, seed in (("QQQX", "Invesco QQQ Trust, Series 1", 300, 0.0004, 0.01, 77),
                                                  ("LEVX", "ProShares UltraPro QQQ", 50, 0.0008, 0.03, 78),
                                                  ("ODDF", "Some Unusual Strategy Fund", 20, 0.0002, 0.01, 80)):
@@ -228,7 +252,8 @@ def demo_site(tmp_path, two_weeks: bool = True):
     for as_of, tweak in dates:
         p = providers(as_of, tweak)
         t = Tradability.all_tradable(list(p.listed), (as_of - timedelta(days=1)).isoformat())
-        snap = run(p, as_of, store.latest(before=str(as_of)), options_enabled=False, tradability=t, watchlist=wl)
+        with mock.patch.object(spec, "AI_UNIVERSE", FAKE_AI_UNIVERSE):
+            snap = run(p, as_of, store.latest(before=str(as_of)), options_enabled=False, tradability=t, watchlist=wl)
         snap["options"] = {"enabled": True, "status": "ok", **opt.build_horizons(chains_for(6), as_of, {})}
         store.write_snapshot(snap, "fixture")
         snaps.append(snap)
