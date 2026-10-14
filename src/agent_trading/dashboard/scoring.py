@@ -103,7 +103,10 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     ca, cl = inst.get("current_assets"), inst.get("current_liabilities")
     m["current_ratio"] = ca / cl if ca is not None and cl else None
     sh = f.diluted_shares
-    m["dilution"] = sh[0] / sh[4] - 1 if len(sh) > 4 and sh[0] and sh[4] else None
+    # a fiscal Q4 has only a full-year share count, so fall back one quarter (spec 2026-10-14.4)
+    pair = next(((sh[i], sh[i + 4]) for i in range(spec.DILUTION_LOOKBACK_QUARTERS + 1)
+                 if i + 4 < len(sh) and sh[i] and sh[i + 4]), None)
+    m["dilution"] = pair[0] / pair[1] - 1 if pair else None
     sbc = ttm(fl["sbc"])
     m["sbc_to_revenue"] = sbc / rev_ttm if sbc is not None and rev_ttm else None
 

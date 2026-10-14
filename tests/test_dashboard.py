@@ -88,6 +88,20 @@ def _metrics(**over):
     return m, f
 
 
+def test_dilution_falls_back_one_quarter_when_the_latest_is_a_fiscal_q4():
+    """Spec 2026-10-14.4: a fiscal Q4 has only a full-year diluted share count (MU, STX, WDC in October 2026)."""
+    close = make_bars(n=600, drift=0.001, seed=1, end=AS_OF.isoformat())["close"]
+    bench = make_bars(n=600, drift=0.0003, seed=2, end=AS_OF.isoformat())["close"]
+    f = build(make_facts(), AS_OF)
+    full = scoring.compute_metrics(f, close, bench, 1e10)["dilution"]
+    assert full == pytest.approx(f.diluted_shares[0] / f.diluted_shares[4] - 1)
+    q4 = replace(f, diluted_shares=[None] + f.diluted_shares[1:4] + [None] + f.diluted_shares[5:])
+    assert scoring.compute_metrics(q4, close, bench, 1e10)["dilution"] ==         pytest.approx(f.diluted_shares[1] / f.diluted_shares[5] - 1)
+    two_back = replace(f, diluted_shares=[None, None] + f.diluted_shares[2:])
+    assert scoring.compute_metrics(two_back, close, bench, 1e10)["dilution"] is None   # at most one quarter back
+    assert spec.DILUTION_LOOKBACK_QUARTERS == 1 and spec.spec_dict()["dilution_lookback_quarters"] == 1
+
+
 def test_missing_input_scores_zero_without_reweighting():
     m, f = _metrics()
     full = scoring.score_one("X", m, f, [])

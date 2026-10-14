@@ -101,7 +101,15 @@ Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners w
 
 ## Definitions (from `spec.py`)
 
-Spec version **2026-10-14.2** (current) is the owner's redesign. It was written down and committed before any data was evaluated with it:
+Spec version **2026-10-14.4** (current) fixes a data gap the owner approved on 2026-10-14, after the first live snapshot (2026-10-13):
+- companies tag a fiscal fourth quarter's diluted share count only as a full-year figure;
+- so dilution (the one-year change in diluted shares) was missing whenever the latest quarter was a fiscal Q4 (MU, STX and WDC in October 2026). That scored the input 0 and failed the multibagger dilution gate;
+- dilution now compares the newest quarter that has a quarterly count with the same quarter a year earlier, at most one quarter back (`DILUTION_LOOKBACK_QUARTERS`);
+- nothing else changed, and the 2026-10-13 snapshot stays as published under 2026-10-14.3.
+
+Spec version 2026-10-14.3 added a free-cash-flow margin cross-check to the watchlist's company scenarios.
+
+Spec version 2026-10-14.2 is the owner's redesign. It was written down and committed before any data was evaluated with it:
 - three growth lists of up to 10: large cap (S&P 500 members), mid cap ($2B-$10B) and a new small cap ($300M-$2B);
   - the small-cap list takes the old speculative list's $2 price and $2M liquidity floors, without its 20% growth gate;
   - old snapshots keep their `spec` list, shown as retired;
