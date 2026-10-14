@@ -60,6 +60,7 @@ p.lede { color: var(--text-secondary); margin-top: 0; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { padding: 6px 7px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 td.val { white-space: normal; min-width: 92px; }
+td.dist { white-space: normal; min-width: 120px; }
 th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
 th[data-sort] { cursor: pointer; } th[data-sort]::after { content: " \2195"; color: var(--text-muted); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -106,3 +106,20 @@ def test_price_chart_axis_labels_are_round(site):
     page = (site / "stock" / "large-S11.html").read_text(encoding="utf-8")
     labels = [int(x) for x in re.findall(r'text-anchor="end" font-size="11" fill="var\(--text-muted\)">(-?\d+)</text>', page)]
     assert labels and all(v % 10 == 0 for v in labels)
+
+
+@pytest.mark.parametrize("kind, signed, text", [
+    ("call", 0.052, "+5.2% (stock must rise)"),
+    ("call", -0.031, "already past breakeven (breakeven 3.1% below the stock)"),
+    ("put", -0.052, "-5.2% (stock must fall)"),
+    ("put", 0.020, "already past breakeven (breakeven 2.0% above the stock)"),
+    ("put", 0.0, "already past breakeven (breakeven 0.0% above the stock)"),
+])
+def test_distance_to_breakeven_wording(kind, signed, text):
+    from agent_trading.dashboard.site_options import distance_text
+    assert distance_text(kind, signed) == text
+
+
+def test_options_page_never_says_zero_move(site):
+    page = (site / "options.html").read_text(encoding="utf-8")
+    assert "0.0% down" not in page and "0.0% up" not in page and "Distance to breakeven" in page

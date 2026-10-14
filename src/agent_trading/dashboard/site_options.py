@@ -19,11 +19,19 @@ def lists_of(hz: dict) -> dict:
                                    "status": "puts were not collected in this snapshot (before spec 2026-10-14.2)"}}
 
 
+def distance_text(kind: str, signed) -> str:
+    """Signed distance from the stock price to the breakeven at expiry, in words a reader parses in one pass."""
+    if not isinstance(signed, (int, float)):
+        return "n/a"
+    if kind == "call":
+        return f"{signed:+.1%} (stock must rise)" if signed > 0 else             f"already past breakeven (breakeven {abs(signed):.1%} below the stock)"
+    return f"{signed:+.1%} (stock must fall)" if signed < 0 else         f"already past breakeven (breakeven {abs(signed):.1%} above the stock)"
+
+
 def _row(x: dict, kind: str, rid: str) -> str:
     rc = x.get("rank_components", {})
     ev = ", ".join(f'{e["date"]}' for e in x.get("events_before_expiry", [])) or "none scheduled"
-    req = x.get("required_move", abs(x.get("breakeven_move") or 0))
-    direction = "up" if kind == "call" else "down"
+    signed = x.get("breakeven_move")
     pay = "".join(f'<tr><td class="num">{pct(p["move"], 0, True)}</td><td class="num">{money(p["underlying"])}</td>'
                   f'<td class="num">{money(p["pl_per_contract"], 0)}</td><td class="num">{pct(p["return_on_premium"], 0, True)}</td></tr>'
                   for p in x.get("payoffs", []))
@@ -44,7 +52,7 @@ def _row(x: dict, kind: str, rid: str) -> str:
 <td class="num" data-v="{sval(x["spread_pct"])}">{pct(x["spread_pct"], 1)}</td>
 <td class="num" data-v="{sval(x["premium_per_contract_ask"])}">{money(x["premium_per_contract_ask"], 0)}</td>
 <td class="num" data-v="{sval(x["breakeven"])}">{money(x["breakeven"])}</td>
-<td class="num" data-v="{sval(req)}">{pct(req, 1)} {direction}</td>
+<td class="num dist" data-v="{sval(signed)}">{E(distance_text(kind, signed))}</td>
 <td class="num" data-v="{sval(x["max_loss_per_contract"])}">{money(x["max_loss_per_contract"], 0)}</td>
 <td class="num" data-v="{sval(x.get("volume"))}">{num(x.get("volume"), 0)}</td>
 <td class="num" data-v="{sval(x.get("open_interest"))}">{num(x.get("open_interest"), 0)}</td>
@@ -85,7 +93,8 @@ def _list(snap: dict, h, kind: str, data: dict | None) -> str:
             "<th class='num' data-sort='text'>Expiry</th><th class='num' data-sort='num'>Days</th>"
             "<th class='num' data-sort='num'>Strike</th><th class='num' data-sort='num'>Underlying</th><th class='num'>Bid / ask</th>"
             "<th class='num' data-sort='num'>Spread</th><th class='num' data-sort='num' title='Ask x 100 shares'>Premium*</th>"
-            "<th class='num' data-sort='num'>Breakeven at expiry</th><th class='num' data-sort='num'>Required move</th>"
+            "<th class='num' data-sort='num'>Breakeven at expiry</th><th class='num' data-sort='num' title='Move from today\'s stock "
+            "price to the breakeven at expiry'>Distance to breakeven</th>"
             "<th class='num' data-sort='num'>Max loss</th><th class='num' data-sort='num'>Volume</th>"
             "<th class='num' data-sort='num'>Open int.</th><th class='num' data-sort='num'>IV</th><th class='num' data-sort='num'>Delta</th>"
             "<th class='num' data-sort='num'>Theta</th><th class='num' data-sort='num'>Research score</th>"
