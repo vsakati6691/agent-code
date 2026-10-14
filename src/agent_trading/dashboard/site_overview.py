@@ -4,9 +4,11 @@ from __future__ import annotations
 import html
 import re
 
-from . import spec
+from . import changes as changes_mod, evidence, spec
+from .changes import KIND_LABELS
 from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval, tracking_schedule
 from .scenarios import implied_growth_text
+from .site_research import datasets_line, quality_badge
 
 E = html.escape
 GROWTH_KEYS = ("large", "mid", "small")
@@ -151,10 +153,34 @@ def sparkline(values: list, label: str) -> str:
             f'<polyline points="{pts}" fill="none" stroke="var(--series-1)" stroke-width="2"/></svg>')
 
 
-def row_spark(c: dict, bench: str) -> str:
-    """1-year sparkline of the stock (solid) vs its benchmark (dashed), both rebased to 100 at the start."""
+def spark_window(c: dict) -> tuple[int, str]:
+    """(first chart point, window text) for the 1-year sparkline.
+
+    Snapshots from spec 2026-10-14.5 store the exact start session of the 1-year return and include it in the
+    chart, so the line starts there; older ones fall back to the last 53 weekly points (about one year)."""
     ch = c.get("chart") or {}
-    s, b = (ch.get("stock") or [])[-53:], (ch.get("benchmark") or [])[-53:]
+    dates = ch.get("dates") or []
+    r = ((c.get("history") or {}).get("returns") or {}).get("1y") or {}
+    if r.get("start") and r["start"] in dates:
+        return dates.index(r["start"]), f'{r["start"]} to {r.get("end")}'
+    return max(0, len(dates) - 53), "about one year of weekly points"
+
+
+def missing_note(c: dict) -> str:
+    """The same missing-input indicator on every list row (spec 2026-10-14.5)."""
+    n = len(c.get("missing") or [])
+    level = evidence.quality_level(c.get("confidence_label"))
+    return (f'<div class="small muted" title="evidence: {E(level)}; {n} missing input{"s" if n != 1 else ""} (scored 0)">'
+            f'{E(level)}{f" · {n} missing" if n else ""}</div>')
+
+
+def row_spark(c: dict, bench: str) -> str:
+    """1-year sparkline of the stock (solid) vs its benchmark (dashed), both rebased to 100 at the start.
+
+    The label always shows the return table's 1-year figures, so the two can never disagree."""
+    ch = c.get("chart") or {}
+    i0, window = spark_window(c)
+    s, b = (ch.get("stock") or [])[i0:], (ch.get("benchmark") or [])[i0:]
     if len(s) < 10:
         return '<span class="muted small">n/a</span>'
     vals = [v / s[0] * 100 for v in s]
@@ -165,8 +191,11 @@ def row_spark(c: dict, bench: str) -> str:
 
     def pts(series):
         return " ".join(f"{i * w / (len(series) - 1):.1f},{h - 2 - (v - lo) / span * (h - 4):.1f}" for i, v in enumerate(series))
-    r, br = vals[-1] / 100 - 1, (bvals[-1] / 100 - 1) if bvals else None
-    label = f"1-year price: {c['ticker']} {r:+.0%}" + (f", {bench} {br:+.0%}" if br is not None else "")
+    ret = ((c.get("history") or {}).get("returns") or {}).get("1y") or {}
+    r = ret.get("stock") if ret.get("stock") is not None else vals[-1] / 100 - 1
+    br = ret.get("benchmark") if ret.get("stock") is not None else ((bvals[-1] / 100 - 1) if bvals else None)
+    label = (f"1-year price: {c['ticker']} {r:+.0%}" + (f", {bench} {br:+.0%}" if br is not None else "") +
+             f" ({window})")
     bench_line = (f'<polyline points="{pts(bvals)}" fill="none" stroke="var(--reference)" stroke-width="1.5" '
                   f'stroke-dasharray="3 2"/>') if bvals else ""
     return (f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" aria-label="{E(label)}">'
@@ -211,8 +240,8 @@ def evidence_block(key: str, c: dict, band: dict) -> str:
     vals = " · ".join(f'{y}y {money(base["years"][str(y)]["value_per_share"])}' for y in yrs) or "not computed"
     inval = "".join(f"<li>{E(x)}</li>" for x in c.get("invalidation", [])[:5])
     return f"""<div class="evidence">
-<div><h4>Evidence (component scores)</h4>{bars}<p class="small muted">Confidence {E(c.get("confidence_label", "?"))};
-missing inputs: {E(", ".join(c.get("missing", [])) or "none")}.</p></div>
+<div><h4>Evidence (component scores)</h4>{bars}<p class="small">{quality_badge(evidence.quality_level(c.get("confidence_label")),
+c.get("confidence_label"), len(c.get("missing") or []))}</p><p class="small muted">Missing inputs: {E(", ".join(c.get("missing", [])) or "none")}.</p></div>
 <div><h4>Thesis</h4><p class="small">{E(c.get("thesis", ""))}</p><h4>Bear case</h4><p class="small">{E(c.get("bear_case", ""))}</p></div>
 <div><h4>Financial trend (last 8 quarters, oldest → newest)</h4>
 <p class="small">Revenue {sparkline(f.get("revenue", []), "revenue trend")} Operating income
@@ -246,7 +275,7 @@ def growth_table(key: str, band: dict) -> str:
 <td class="num hide-sm" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(eg)}">{E(eg_txt)}</td>
 <td class="num val hide-sm" data-v="{sval(m.get("ev_to_sales"))}">{E(_valuation(m))}</td>
-<td class="num" data-v="{sval(c.get("composite"))}"><strong>{num(c.get("composite"), 1)}</strong></td>
+<td class="num" data-v="{sval(c.get("composite"))}"><strong>{num(c.get("composite"), 1)}</strong>{missing_note(c)}</td>
 <td class="num hide-sm" data-v="{sval(r3)}">{pct(r3, 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(r6)}">{pct(r6, 0, True)}</td>
 <td class="num" data-v="{sval(r1)}">{pct(r1, 0, True)}</td>
@@ -411,13 +440,13 @@ def _last_results(i: dict) -> str:
     return ""
 
 
-def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) -> str:
+def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, prev_snap: dict | None = None) -> str:
     bands = snap["bands"]
     ev = (snap.get("events") or {})
     items = ev.get("items")
     if items is None:
         earn = '<p class="small muted">Not collected in this snapshot.</p>'
-    elif not items and str(ev.get("note", "")).startswith("Earnings dates unavailable"):
+    elif not items and evidence.earnings_state(snap)[0] != "available":
         earn = ('<p class="small">Earnings dates could not be collected for this snapshot, so upcoming reports are '
                 'not listed (this does not mean none are due).</p>'
                 f'<p class="small muted">{E(ev.get("note", ""))}</p>')
@@ -439,6 +468,16 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
             elif isinstance(ch["change"], int) and ch["change"]:
                 moves.append((abs(ch["change"]), move_cause(ch, short)))
     first = all(ch["change"] == "new (first snapshot)" for b in bands.values() for ch in b.get("rank_changes", []))
+    summ = changes_mod.summary(snap, prev_snap)
+    if prev_snap is None:
+        what = ('<p class="small muted">No earlier snapshot is stored, so filings, deterioration, dilution, thesis '
+                'conditions and data availability cannot be compared yet.</p>')
+    else:
+        counts = " · ".join(f"{KIND_LABELS[k]}: {n}" for k, n in summ["counts"].items() if n) or "nothing listed"
+        top = "".join(f'<li><a href="stock/{E(r["band"])}-{E(r["ticker"])}.html">{E(r["ticker"])}</a>: {E(r["text"])}</li>'
+                      for r in [r for r in summ["rows"] if r["kind"] in ("thesis", "deterioration", "filing", "dilution")][:6])
+        what = (f'<p class="small"><strong>Since {E(summ["previous"])}</strong> ({E(counts)}; names on both '
+                f'snapshots only)</p><ul class="tight small">{top}</ul>')
     move_items = "".join(f"<li>{E(t)}</li>" for _, t in sorted(moves, key=lambda m: -m[0])[:6])
     changes = ('<p class="small muted">First snapshot: no previous week to compare.</p>' if first else
                f'<p class="small"><strong>New:</strong> {E(", ".join(new) or "none")}<br><strong>Departed:</strong> '
@@ -472,16 +511,18 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
            f'{tr.get("verdicts_stored", "n/a")}, {tr.get("to_check", "n/a")} to check · snapshot '
            f'{E(str(snap.get("run_finished", "")).replace("+00:00", ""))} UTC.</p>'
            f'<p class="small">{E("; ".join(snap.get("problems", []) + snap.get("notes", [])) or "No missing-data warnings.")}</p>'
-           '<p class="small"><a href="audit.html">Sources, timestamps and audit trail →</a></p>')
+           f'<p class="small">{datasets_line(evidence.datasets(snap))}</p>'
+           '<p class="small"><a href="audit.html#data-status">Data status, sources and audit trail →</a></p>')
     return f"""<div class="panels">
 <section class="card"><h3>Upcoming earnings (45 days)</h3>{earn}</section>
-<section class="card"><h3>This week's changes</h3>{changes}</section>
+<section class="card"><h3>What changed since the previous snapshot?</h3>{what}{changes}</section>
 <section class="card"><h3>Concentration and downside flags</h3><ul class="tight">{risk or '<li class="small muted">None triggered.</li>'}</ul></section>
 <section class="card"><h3>Performance vs benchmarks</h3>{perf}</section>
 <section class="card"><h3>Data coverage and freshness</h3>{cov}</section></div>"""
 
 
-def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict | None) -> str:
+def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict | None,
+             prev_snap: dict | None = None) -> str:
     counts = " · ".join(f'{E(band_title(k, snap["bands"][k]))}: {len(snap["bands"][k]["candidates"])}'
                         for k in ordered(snap["bands"]))
     opts = bool((snap.get("options") or {}).get("enabled"))
@@ -489,7 +530,7 @@ def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict |
 <p class="lede">Week ending {E(snap["as_of"])} · {counts} ·{' <a href="options.html">Options</a> ·' if opts else ''}
 <a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>
 <div class="overview">
-<div class="ov-panels">{panels(snap, tracking, dates)}
+<div class="ov-panels">{panels(snap, tracking, dates, prev_snap)}
 <details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details></div>
 <div class="ov-lists">{growth_section(snap)}
 {multibagger_section(snap)}</div>

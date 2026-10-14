@@ -14,21 +14,27 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 |---|---|
 | Overview | Freshness and stale-data banners, then five compact panels:
 <ul><li>upcoming earnings (scheduled, unverified)</li><li>new entrants, departures and rank moves</li><li>sector concentration and downside-risk flags</li><li>performance vs benchmarks from immutable snapshots</li><li>data coverage, freshness and missing-data warnings</li></ul>Then **Growth stocks**: tabs for the large-, mid- and small-cap top 10. Each tab states its market-cap definition and universe (large cap = S&P 500 members only). Its columns are rank, ticker/company, sector, market cap, price, revenue growth, earnings/FCF growth, valuation, research score, 3M/6M/1Y returns, 1Y vs benchmark, and main risk. Selecting a ticker expands its evidence, thesis, bear case, 8-quarter trend, base-case assumptions and invalidation. Then **Speculative multibagger research candidates**: top 5, 5-10 year horizon, with growth evidence, cash/runway, debt/dilution/valuation risk, bear/base/bull at 1/3/5/10 years, what must happen, and what would invalidate it |
-| Stock detail (one per candidate) | Price, market cap, sector, sources, timestamps; earnings dates (next: scheduled, unverified; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; risks; invalidation conditions; "probability not established" |
+| Compare (`compare.html`) | Pick 2-4 companies (ranked names and watchlist operating companies) and see growth, margins and cash flow, valuation, debt and dilution, returns and drawdowns with their exact windows, score components and evidence quality side by side. A banner flags anything that does not line up (TTM windows ending more than 45 days apart, different scoring profiles or benchmarks, watchlist names that are not scored), and each missing cell says why. Price paths are rebased to 100 on the dates every selected name shares, never interpolated. Every column links to its SEC sources. Selection is kept in the URL hash, e.g. `compare.html#MU,FIX` |
+| Stock detail (one per candidate) | **What changed since the previous snapshot** (new filings with EDGAR links, deterioration, dilution, thesis-condition breaches, data-availability changes, or why no comparison is possible); a **company research panel** (observed quarterly trends, supporting and counter-evidence, two earnings-quality checks, assumptions, verified/scheduled/estimated events, the thesis conditions recorded when the name first appeared with their current status, missing information, sources and dates); an **evidence-quality** check (passed checks, warnings, next checks); then price, market cap, sector, sources, timestamps; earnings dates (next: scheduled, unverified; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; a **scenario calculator** (your own starting growth, exit EV/Sales, dilution and FCF margin through the published formula, with a reset to the published assumptions; nothing is stored or published); risks; invalidation conditions; "probability not established" |
 | Options | Calls/Puts toggle x 3-, 6- and 12-month tabs: six lists of up to 10 contracts each, at most 2 per underlying. Each list shows the actual count and the reasons other contracts were left out. Contracts show with bid/ask, spread, volume/OI, IV, Greeks, premium x 100, adjusted-contract flag, breakeven, maximum loss, payoffs at expiration, a 30-day Black-Scholes sensitivity grid, and earnings before expiry. Shows an unavailable state when no valid chain exists |
 | Watchlist 2030 | The owner's ticker list (imported 2026-10-14, not synchronised). Each symbol is verified (name, exchange, type, listing status), with the latest verified price and timestamp. Conditional year-end-2030 bear/base/bull PRICE scenarios (% change and annualized) come from a company, ETF or leveraged-ETF method, with expandable assumptions, catalysts, bear case, invalidation, sources, evidence quality and missing information. Also: a range chart, theme concentration, sorting, filters and CSV. Unresolved or unmodellable symbols stay visible as 'Scenario unavailable' with the reason |
 | Symbol pages (`symbol/<TICKER>.html`) | Everything known about one symbol: list ranks, listed option contracts, its watchlist scenario (or what would unlock one), and its ranks in every stored snapshot. Reached from the header's 'Find a ticker' box, which works offline from an inline list |
 | Excluded (`excluded-<list>.html`) | Every stock considered for a list but not shown, grouped by reason, with the failing value |
 | History & tracking | Every weekly report, and the forward returns of each stored list (1, 3, 6 and 12 months) vs benchmarks, net of assumed friction, with turnover and drawdown |
 | Methodology | Every rule from `spec.py`, rendered, with the version history |
-| Audit trail | Snapshot hashes ("local build" when no commit), integrity check, request counts, data-source notes, links to `data/latest.json`, `data/<as-of>.json` and `data/schema.json` (field descriptions), and the append-only event log |
+| Audit trail | **Data status**: one state per dataset (available, partial, stale, missing, provider error) with source, coverage and retrieval time; never a sample fallback. Then snapshot hashes ("local build" when no commit), integrity check, request counts, data-source notes, links to `data/latest.json`, `data/<as-of>.json` and `data/schema.json` (field descriptions), and the append-only event log |
 | Feed | `feed.xml`: a static Atom feed of the weekly reports. The workflow sends nothing |
 
 ### Reading and using the site
 
 - **Time frames** are kept separate: trailing returns, conditional scenarios, option expiry windows and tracking periods.
-- **Weekly changes:** "This week's changes" explains each rank move by the change in the 0-100 score and the component
-  scores that moved most.
+- **Weekly changes:** "What changed since the previous snapshot?" lists filings, deterioration, dilution, thesis breaches
+  and data-availability changes for names on both snapshots, and explains each rank move by the change in the 0-100
+  score and the component scores that moved most.
+- **Freshness** is counted in completed NYSE sessions in New York time ("the latest completed session", "2 trading
+  sessions old"); a warning appears after six sessions.
+- **Evidence badges** look the same on every page: the evidence level, the source's own label and the number of missing
+  inputs.
 - **Options:** pages open on Calls / 3 months; a URL hash such as `#put-6m` selects another view, and the hash follows
   each click. "Distance to breakeven" is signed, or reads "already past breakeven".
 - **Phone layout:** under 700px the lists keep rank, ticker, price, score, 1Y and main risk, and options keep rank,
@@ -38,6 +44,25 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
   controls and expands every section.
 - **Long definitions** (multibagger, probabilities, scenario method) are one sentence plus a toggle on the overview and
   detail pages. The methodology page has the full text.
+
+### Spec 2026-10-14.5: data quality, research panel, comparisons (display rules only)
+
+Registered before any snapshot was evaluated with it. No ranking rule, scale, weight, gate or list size changed.
+- **Data states** (`dashboard/evidence.py`): every dataset gets one state, derived from the stored snapshot, so older
+  snapshots get the same treatment. A failed or unconfigured earnings lookup is "missing" or "provider error", never
+  "no earnings scheduled".
+- **Return windows:** each trailing return stores its start and end session. List sparklines use the 1-year window and
+  the return table's own figures. Older snapshots showed a weekly-sampled line about 260 sessions long next to a
+  252-session table return (MU: +470% vs +425%).
+- **Watchlist prices** are verified on their own. A fund with too little history keeps its verified price and its
+  exposure-class scenario; only the analyses needing more history are unavailable, and each one says how many bars exist.
+- **Research panel** (`dashboard/research.py`), **what changed** (`dashboard/changes.py`), **comparison**
+  (`dashboard/compare.py`) and **scenario calculator** (`dashboard/lab.py`; tested to reproduce the published base case
+  exactly) are deterministic. No text is generated.
+- **Attribution:** some structures are adapted from filingcopilot (MIT), ticker-dossier (MIT) and cc-equity-research
+  (Apache-2.0). See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for files, pinned commits and licenses.
+- **Assets** are linked with a content hash (`style.css?v=...`), so a browser never pairs new pages with a cached old
+  stylesheet or script.
 
 ## Architecture
 
@@ -101,7 +126,9 @@ Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners w
 
 ## Definitions (from `spec.py`)
 
-Spec version **2026-10-14.4** (current) fixes a data gap the owner approved on 2026-10-14, after the first live snapshot (2026-10-13):
+Spec version **2026-10-14.5** (current) adds display and data-quality rules only (see "Spec 2026-10-14.5" above).
+
+Spec version 2026-10-14.4 fixes a data gap the owner approved on 2026-10-14, after the first live snapshot (2026-10-13):
 - companies tag a fiscal fourth quarter's diluted share count only as a full-year figure;
 - so dilution (the one-year change in diluted shares) was missing whenever the latest quarter was a fiscal Q4 (MU, STX and WDC in October 2026). That scored the input 0 and failed the multibagger dilution gate;
 - dilution now compares the newest quarter that has a quarterly count with the same quarter a year earlier, at most one quarter back (`DILUTION_LOOKBACK_QUARTERS`);

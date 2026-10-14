@@ -270,7 +270,7 @@ def test_new_site_pages_panels_toggle_and_downloads(tmp_path, prov):
     build_site(tmp_path / "d", tmp_path / "s")
     out = tmp_path / "s"
     index = (out / "index.html").read_text(encoding="utf-8")
-    for text in ("Upcoming earnings", "This week's changes", "Concentration and downside flags", "Performance vs benchmarks",
+    for text in ("Upcoming earnings", "What changed since the previous snapshot?", "Concentration and downside flags", "Performance vs benchmarks",
                  "Data coverage and freshness", "S&amp;P 500 members only", "Speculative multibagger research candidates",
                  "5-10 year research horizon", "rowtoggle", "vs bench"):
         assert text in index, text

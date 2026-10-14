@@ -186,13 +186,20 @@ JS = r"""
     cur.parentNode.scrollLeft = cur.offsetLeft - 16;
   }
   // freshness: warn in the browser even if a failed update never redeployed the site
+  // age in completed NYSE sessions, New York time (spec FRESHNESS_RULE); the session list comes from the build
   var fresh = document.getElementById('freshness');
   if (fresh) {
-    var asOf = new Date(fresh.dataset.asof + 'T21:00:00Z');
-    var days = Math.floor((Date.now() - asOf.getTime()) / 86400000);
+    var sessions = (fresh.dataset.sessions || '').split(',').filter(Boolean);
+    var parts = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York', year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', hour12: false}).formatToParts(new Date());
+    var part = function (t) { var x = parts.filter(function (p) { return p.type === t; })[0]; return x ? x.value : ''; };
+    var today = part('year') + '-' + part('month') + '-' + part('day'), hour = parseInt(part('hour'), 10) % 24;
+    var done = sessions.filter(function (s) { return s < today || (s === today && hour >= 16); }).length;
+    var beyond = sessions.length > 0 && today > sessions[sessions.length - 1];
     var age = document.getElementById('age');
-    if (age) age.textContent = days <= 0 ? 'today' : days + (days === 1 ? ' day ago' : ' days ago');
-    if (days > 9) {
+    if (age) age.textContent = beyond ? 'more than ' + sessions.length + ' trading sessions old'
+      : done === 0 ? 'the latest completed session' : done + (done === 1 ? ' trading session' : ' trading sessions') + ' old';
+    if (beyond || done > parseInt(fresh.dataset.staleAfter || '6', 10)) {
       var b = document.getElementById('stale-client');
       if (b) b.hidden = false;
     }

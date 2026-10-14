@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -81,15 +82,22 @@ def _guard(ctx: Context, provider: str, fn, *args):
         return None, f"data unavailable ({exc})"
 
 
-def latest_bars(ctx: Context, symbol: str) -> tuple[pd.DataFrame | None, str | None, list[str]]:
-    """Validated daily bars ending exactly on the as-of session, or a reason."""
-    if symbol in ctx.histories:
-        return ctx.histories[symbol]
+MIN_HISTORY_BARS = 60
+
+
+def latest_bars(ctx: Context, symbol: str, min_bars: int = MIN_HISTORY_BARS
+                ) -> tuple[pd.DataFrame | None, str | None, list[str]]:
+    """Validated daily bars ending exactly on the as-of session, or a reason.
+
+    `min_bars` below the default only verifies the as-of price itself (spec WATCHLIST_PRICE_RULE)."""
+    key = symbol if min_bars == MIN_HISTORY_BARS else (symbol, min_bars)
+    if key in ctx.histories:
+        return ctx.histories[key]
     flags: list[str] = []
     df, why = _guard(ctx, "cboe", ctx.providers.history, symbol)
     if df is None:
-        ctx.histories[symbol] = (None, why, flags)
-        return ctx.histories[symbol]
+        ctx.histories[key] = (None, why, flags)
+        return ctx.histories[key]
     if df.attrs.get("repaired_recent", 0) > 2:
         flags.append(f"{df.attrs['repaired_recent']} price bars in the last year had an open/close outside the "
                      "day's range and were repaired")
@@ -108,12 +116,30 @@ def latest_bars(ctx: Context, symbol: str) -> tuple[pd.DataFrame | None, str | N
         df, trimmed = trim_bad_history(df, symbol)     # an old glitch drops older history, a recent one rejects
         if trimmed:
             flags.append(trimmed)
-        df = validate_bars(df, symbol, ctx.as_of, spec.MAX_PRICE_LAG_BUSINESS_DAYS, 60)
+        df = validate_bars(df, symbol, ctx.as_of, spec.MAX_PRICE_LAG_BUSINESS_DAYS, min_bars)
     except DataQualityError as exc:
-        ctx.histories[symbol] = (None, f"price data rejected: {exc}", flags)
-        return ctx.histories[symbol]
-    ctx.histories[symbol] = (df, None, flags)
-    return ctx.histories[symbol]
+        ctx.histories[key] = (None, f"price data rejected: {exc}", flags)
+        return ctx.histories[key]
+    ctx.histories[key] = (df, None, flags)
+    return ctx.histories[key]
+
+
+SHORT_HISTORY = re.compile(r"only (\d+) bars, need (\d+)")
+
+
+def watchlist_bars(ctx: Context, symbol: str) -> tuple[pd.DataFrame | None, str | None, list[str], str | None]:
+    """(bars, reason, flags, short-history note): the as-of price is verified on its own when the history is too
+    short for the full analysis (spec 2026-10-14.5); every other rejection still rejects the price."""
+    df, why, flags = latest_bars(ctx, symbol)
+    if df is not None or not why or not SHORT_HISTORY.search(why):
+        return df, why, flags, None
+    short, why2, flags2 = latest_bars(ctx, symbol, spec.WATCHLIST_MIN_PRICE_BARS)
+    if short is None:
+        return None, why2, flags2, None
+    n = len(short)
+    note = (f"only {n} daily bars since {short.index[0].date()}: the as-of price is verified, but analyses needing "
+            f"more history (trailing returns over {n} sessions, volatility, momentum) are unavailable")
+    return short, None, flags2, note
 
 
 def _quote(ctx: Context, symbol: str):
@@ -428,13 +454,16 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
             e["unavailable_reason"] = info["status"]
             e["unlock"] = wl_mod.unlock_steps("unresolved" if info["status"].startswith("unresolved") else "type")
             continue
-        df, why, pflags = latest_bars(ctx, t)
+        df, why, pflags, short_note = watchlist_bars(ctx, t)
         if df is None:
             e["unavailable_reason"] = f"no verified as-of price ({why})"
             e["unlock"] = wl_mod.unlock_steps("price")
             continue
         close = float(df["close"].iloc[-1])
-        e.update(price=close, price_date=ctx.as_of, price_flags=pflags)
+        e.update(price=close, price_date=ctx.as_of, price_flags=pflags, price_validation="as-of bar verified",
+                 history_bars=len(df), history_note=short_note)
+        if short_note:
+            e["missing"].append(short_note)
         e["sources"].append(SOURCES["cboe"])
         hist = scenarios.history_stats(df["close"], None)
         e["returns"] = {k: (v or {}).get("stock") for k, v in hist["returns"].items()}
@@ -654,9 +683,14 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
 
     earnings, earn_note = {}, None
     cal, why = _guard(ctx, "alphavantage", providers.earnings_calendar)
+    # spec 2026-10-14.5: a failed or unconfigured lookup is never shown as "no earnings scheduled"
+    earn_status = {"status": "ok", "state": "available", "calendar_rows": 0, "retrieved_at": ctx.started}
     if cal is None:
         earn_note = f"Earnings dates unavailable: {why}"
+        earn_status = {"status": "unavailable", "retrieved_at": ctx.started, "reason": why,
+                       "state": "missing" if "not configured" in str(why) else "provider_error"}
     else:
+        earn_status["calendar_rows"] = int(len(cal))
         for sym, grp in cal.groupby("symbol"):
             future = sorted(d for d in grp["reportDate"] if d > as_of)
             if future:
@@ -808,7 +842,10 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         "spec_version": spec.SPEC_VERSION, "spec_hash": spec.spec_hash(),
         "sources": SOURCES, "usage": providers.http.usage(),
         "tradability": {"rule": spec.TRADABILITY_RULE, "verdicts_stored": len(trad.symbols),
-                        "to_check": len(todo), "source": "Robinhood MCP get_equity_tradability (read-only)"},
+                        "to_check": len(todo), "source": "Robinhood MCP get_equity_tradability (read-only)",
+                        "oldest_check": min((v.get("checked_at", "") for v in trad.symbols.values()), default=None),
+                        "newest_check": max((v.get("checked_at", "") for v in trad.symbols.values()), default=None),
+                        "max_age_days": spec.TRADABILITY_MAX_AGE_DAYS},
         "universe": {
             "sp500_members": sorted(sp.index), "sp500_count": len(sp), "sp500_price_coverage": coverage,
             "broad_eligible": len(broad), "broad_prescreen": len(prelim), "broad_exclusion_counts": broad_reasons,
@@ -816,7 +853,7 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         },
         "benchmarks": {b: {"close": float(s.iloc[-1]), "date": as_of} for b, s in bench.items()},
         "bands": payload_bands, "options": options_payload, "watchlist": _clean(watch_payload),
-        "events": {"window_days": 45, "items": upcoming, "note": earn_note or
+        "events": {"window_days": 45, "items": upcoming, **earn_status, "note": earn_note or
                    "Scheduled earnings dates from Alpha Vantage's calendar. They are not independently verified; "
                    "other dated catalysts are not tracked."},
         "disclaimer": spec.DISCLAIMER, "multibagger": spec.MULTIBAGGER_DEFINITION,
