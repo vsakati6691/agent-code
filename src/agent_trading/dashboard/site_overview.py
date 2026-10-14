@@ -8,6 +8,7 @@ from . import changes as changes_mod, evidence, spec
 from .changes import KIND_LABELS
 from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval, tracking_schedule
 from .scenarios import implied_growth_text
+from .site_options import status_block, watchlist_cards
 from .site_research import datasets_line, quality_badge
 
 E = html.escape
@@ -341,6 +342,26 @@ def multibagger_needs(c: dict) -> str:
             "would have to happen together; none of it is forecast.")
 
 
+def scenario_flags_html(c: dict, band: dict | None = None) -> str:
+    """Passing the research screen and passing each scenario test are different things; show both, apart."""
+    sc = c.get("scenarios") or {}
+    fl = sc.get("flags") or {}
+    gates = (band or {}).get("gates") or []
+    screen = (f"passed: ranked #{c.get('rank')} with every eligibility gate met" if gates else
+              f"passed: ranked #{c.get('rank')} (liquidity, data and tradability rules met)")
+
+    def cell(key, label):
+        if key not in fl:
+            return f'<li>{E(label)}: <span class="pill muted">not tested</span></li>'
+        return f'<li>{E(label)}: <span class="pill {"ok" if fl[key] else "muted"}">{"yes" if fl[key] else "no"}</span></li>'
+    tests = (cell("bull_doubles_in_5y", "2x in 5 years (bull case)") + cell("bull_multibagger_5y", "5x in 5 years (bull case)") +
+             cell("bull_5x_in_10y", "5x in 10 years (bull case)") + cell("base_2x_in_10y", "2x in 10 years (base case)"))
+    note = "" if sc else ' <span class="muted">Scenarios were not computed, so every test reads "not tested".</span>'
+    return (f'<div class="flags small"><p><strong>Research screen:</strong> {E(screen)}. Passing the screen is separate from '
+            f'the scenario tests below.</p><p><strong>Scenario tests</strong> (conditional on the stated assumptions; not '
+            f'forecasts, targets or probabilities):{note}</p><ul class="tight">{tests}</ul></div>')
+
+
 def multibagger_section(snap: dict) -> str:
     b = snap["bands"].get("multibagger")
     if not b:
@@ -374,6 +395,7 @@ gross margin {pct(m.get("gross_margin"))} · operating margin {pct(m.get("operat
 dilution {pct(m.get("dilution"), 1)}/yr · SBC {pct(m.get("sbc_to_revenue"))} of revenue · EV/Sales {num(m.get("ev_to_sales"), 1)}x;
 {E(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")))}. {E(c.get("bear_case", ""))}</p></div></div>
 <h4>Bear / base / bull (conditional values per share)</h4>{scen}
+{scenario_flags_html(c, b)}
 <h4>What must happen for a multibagger outcome</h4><p class="small">{E(multibagger_needs(c))}</p>
 <h4>What would invalidate the thesis</h4><ul class="tight small">{inval}</ul></article>""")
     return f"""<h2 id="multibagger">Speculative multibagger research candidates</h2>
@@ -526,13 +548,17 @@ def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict |
     counts = " · ".join(f'{E(band_title(k, snap["bands"][k]))}: {len(snap["bands"][k]["candidates"])}'
                         for k in ordered(snap["bands"]))
     opts = bool((snap.get("options") or {}).get("enabled"))
+    o_status = status_block(snap)
+    o_link = (' <a href="options.html">Options watchlist</a> ·' if o_status["state"] == "available" else
+              f' <a href="options.html">Options watchlist</a> ({E(o_status["label"].lower())}) ·')
     return f"""<h1>{"Growth &amp; Options" if opts else "Growth"} Research Dashboard</h1>
-<p class="lede">Week ending {E(snap["as_of"])} · {counts} ·{' <a href="options.html">Options</a> ·' if opts else ''}
+<p class="lede">Week ending {E(snap["as_of"])} · {counts} ·{o_link}
 <a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>
 <div class="overview">
 <div class="ov-panels">{panels(snap, tracking, dates, prev_snap)}
 <details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details></div>
-<div class="ov-lists">{growth_section(snap)}
+<div class="ov-lists">{watchlist_cards(snap)}
+{growth_section(snap)}
 {multibagger_section(snap)}</div>
 </div>
 <p class="small muted">{len(dates)} weekly snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""

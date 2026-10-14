@@ -55,14 +55,14 @@ def test_six_lists_with_limits_per_type_and_underlying():
         for kind in ("calls", "puts"):
             lst = out[h.key][kind]
             rows = lst["rows"]
-            assert len(rows) == spec.OPTION_RULES["max_per_type_per_horizon"] == 10
+            assert len(rows) == spec.OPTION_RULES["max_per_type_per_horizon"] == 5      # 10 until 2026-10-14.6
             assert all(r["type"] == kind[:-1] for r in rows)
             per = pd.Series([r["underlying"] for r in rows]).value_counts()
             assert per.max() <= spec.OPTION_RULES["max_per_underlying_per_horizon"]
-            assert [r["rank"] for r in rows] == list(range(1, 11))
+            assert [r["rank"] for r in rows] == list(range(1, 6))
             scores = [r["rank_components"]["total"] for r in rows]
             assert scores == sorted(scores, reverse=True)
-            assert lst["rejections"]["list limit (ranked below the cutoff)"] == 6       # 16 eligible after per-underlying cap
+            assert lst["rejections"]["list limit (ranked below the cutoff)"] == 11      # 16 eligible after per-underlying cap
             dte = [r["dte"] for r in rows]
             assert all(h.min_dte <= d <= h.max_dte for d in dte)
 

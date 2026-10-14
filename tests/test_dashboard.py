@@ -224,7 +224,8 @@ def test_horizons_rank_without_upside_and_cap_per_underlying():
     out = opt.build_horizons(chains, AS_OF, {})
     got = out["3m"]["calls"]["rows"]
     assert len(got) == spec.OPTION_RULES["max_per_underlying_per_horizon"]
-    assert all(set(x["rank_components"]) == {"liquidity", "breakeven", "time_decay", "total"} for x in got)
+    assert all({"liquidity", "breakeven", "time_decay", "total"} <= set(x["rank_components"]) for x in got)
+    assert not any("upside" in k for x in got for k in x["rank_components"])
     assert out["6m"]["calls"]["status"].startswith("no call") and out["6m"]["calls"]["rows"] == []
 
 

@@ -20,7 +20,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ..market_calendar import is_trading_day
-from . import assets_research, changes, compare, evidence, lab, research, spec
+from . import assets_research, changes, compare, evidence, lab, probability, research, spec
 from .assets import CSS, JS
 from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval,
                   tracking_schedule)
@@ -28,7 +28,7 @@ from .scenarios import RETURN_WINDOWS, implied_growth_text
 from .site_compare import compare_page
 from .site_options import lists_of, options_page
 from .site_research import changes_section, datasets_table, lab_section, quality_block, research_section
-from .site_overview import band_title, excluded_page, overview
+from .site_overview import band_title, excluded_page, overview, scenario_flags_html
 from .site_symbol import symbol_index, symbol_page
 
 _SYMBOLS: dict[str, str] = {}      # ticker -> name, for the header search (set by build_site)
@@ -53,8 +53,9 @@ def brand() -> str:
 
 def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "", scripts: tuple = ()) -> str:
     up = "../" * depth
+    # the options page is always listed: it explains its own state when nothing was collected (2026-10-14.6)
     nav = "".join(f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>'
-                  for href, label in NAV if _SITE["options"] or href != "options.html")
+                  for href, label in NAV)
     opts = "".join(f'<option value="{E(t)}">{E(n)}</option>' for t, n in _SYMBOLS.items())
     search = (f'<form class="symsearch" role="search" data-base="{up}symbol/" onsubmit="return false">'
               f'<label class="sr-only" for="symq">Find a ticker</label><input id="symq" type="search" list="symlist" '
@@ -220,15 +221,10 @@ def detail(c: dict, snap: dict, history: list[dict] | None = None, prev_snap: di
                      f', fading to {pct(spec.SCENARIO_TERMINAL_GROWTH)}; exit EV/Sales {num(a["exit_ev_to_sales"], 1)}x; '
                      f'dilution {pct(a["annual_dilution"], 1)}/yr; FCF margin {pct(a["fcf_margin_start"])} &rarr; '
                      f'{pct(a.get("fcf_margin_end", a.get("fcf_margin_year5")))} by year {years[-1]}; {net_position(-a["net_cash_held"] if _ok(a.get("net_cash_held")) else None, False)} held flat</td></tr>')
-        fl = sc["flags"]
-        yn = lambda k: "yes" if fl.get(k) else "no"  # noqa: E731
-        ten = (f' · within ten years, bull case 5x: <strong>{yn("bull_5x_in_10y")}</strong>, base case 2x: '
-               f'<strong>{yn("base_2x_in_10y")}</strong>') if "bull_5x_in_10y" in fl else ""
         yh = "".join(f'<th class="num">{y} year{"s" if y > 1 else ""}</th>' for y in years)
         scen_html = f"""<div class="table-wrap"><table aria-label="Bear, base and bull scenario values"><thead><tr><th>Scenario</th>{yh}<th>Assumptions</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
-<p class="small">Bull case reaches 2x in five years: <strong>{yn("bull_doubles_in_5y")}</strong> ·
-5x in five years: <strong>{yn("bull_multibagger_5y")}</strong>{ten}.</p>
+{scenario_flags_html(c, snap["bands"][c["band"]])}
 {summary_details(SUMMARIES["multibagger"], spec.MULTIBAGGER_DEFINITION)}
 {summary_details(SUMMARIES["scenario_method"], spec.SCENARIO_METHOD, "How the scenarios are built")}"""
     earn = c.get("next_earnings")
@@ -349,6 +345,20 @@ def methodology_page() -> str:
                     f'<td>{b.max_results}</td></tr>' for b in spec.BANDS)
     hz = "".join(f'<li>{E(h.title)}: {h.min_dte}-{h.max_dte} days to expiration</li>' for h in spec.HORIZONS)
     rk = "".join(f'<li><strong>{E(k)} ({w:.0%})</strong>: {E(t)}</li>' for k, (w, t) in spec.OPTION_RANKING.items())
+    sizes = "; ".join(f"from {v}: up to {n} per list ({what})" for v, n, what in spec.OPTION_LIST_SIZE_HISTORY)
+    ps = probability.status_summary()
+    cells = ", ".join(f"{k} {v}" for k, v in ps["cells"].items())
+    g = spec.PROBABILITY_GATE
+    gate = "".join(f"<li>{E(x)}</li>" for x in (
+        f"required fields: {', '.join(g['required_fields'])}",
+        f"at least {g['min_sample_size']} resolved contracts per option type and horizon",
+        f"an evaluation period of at least {g['min_evaluation_days']} days of expirations",
+        f"expected calibration error at most {g['max_calibration_error']:.2f}",
+        "forecasts recorded out of sample, before their outcomes were known",
+        "no reuse of a holdout already consumed by another decision (the 2022+ equity holdout was evaluated on 2026-10-12)",
+        "an uncertainty interval accompanies every percentage",
+        "calls and puts, and each expiry window, calibrated separately"))
+    missing = "".join(f"<li>{E(x)}</li>" for x in spec.PROBABILITY_MISSING_DATA)
     log = "".join(f'<li>{E(v)}: {E(t)}</li>' for v, t in spec.SPEC_CHANGELOG)
     etf = "".join(f'<tr><td>{E(r[1])}</td><td class="small">{E(", ".join(k.strip() for k in r[2]))}</td>'
                   f'<td class="num">{" / ".join(pct(x, 0, True) for x in r[3])}</td><td class="num">{pct(r[4], 2)}</td>'
@@ -382,6 +392,18 @@ GitHub Actions cannot reach it; no account data is stored.</p>
 <p>Ranking (higher is better; maximum upside is not an input):</p><ul>{rk}</ul><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>{E(spec.DELTA_STATEMENT)}</p><p>{E(spec.PREMIUM_ASSUMPTION)} Puts: breakeven = strike - premium; payoff = max(strike - price, 0) -
 premium; the required move is measured downward. {E(spec.RISK_FREE_RATE_NOTE)}</p>
+<p>{E(spec.OPTION_UNIVERSE_TEXT)} {E(spec.OPTION_TOP_DEFINITION)}</p>
+<p>{E(spec.OPTION_THETA_RULE)}</p><p>{E(spec.OPTION_QUOTE_RULE)}</p><p>{E(spec.OPTION_EVENT_RULE)}</p><p>{E(spec.FEE_TREATMENT)}</p>
+<p>List size by methodology version (older snapshots render with the limit they were built under): {E(sizes)}.</p>
+<h3 id="probability">Probability of profit: definition, validation gate and missing data</h3>
+<p>{E(spec.PROBABILITY_OF_PROFIT_DEFINITION)}</p><p>{E(spec.ITM_PROBABILITY_DEFINITION)}</p><p>{E(spec.PROBABILITY_NEVER_SUBSTITUTED)}</p>
+<p><strong>{E(spec.PROBABILITY_NOT_ESTABLISHED)}</strong> Status by option type and horizon: {E(cells)}.</p>
+<p>A percentage may be displayed only for a calibration record that passes every rule of the gate, and the page must then show
+the model version, evaluation period, sample size, calibration result and uncertainty next to it:</p><ul>{gate}</ul>
+<p>Data contract for a future calibration (one append-only record per listed contract, written at listing time and completed
+at expiration): {E(", ".join(probability.DATA_CONTRACT["record_fields"]))}. {E(probability.DATA_CONTRACT["resolution"])}
+{E(probability.DATA_CONTRACT["storage"])} {E(probability.DATA_CONTRACT["evaluation"])}</p>
+<p>Missing today, so no probability can be established:</p><ul>{missing}</ul>
 <h2 id="watchlist">Watchlist: conditional 2030 price scenarios</h2><p>{E(spec.WATCHLIST_STATEMENT)}</p><p>{E(spec.WATCHLIST_SEPARATION)}</p>
 <p>{E(spec.WATCHLIST_COMPANY_METHOD)}</p><p>{E(spec.LEVERAGED_METHOD)}</p><p>{E(spec.FEE_NOTE)}</p>
 <div class="table-wrap"><table aria-label="ETF exposure-class assumptions"><thead><tr><th>ETF exposure class</th><th>Name keywords</th><th class="num">Bear / base / bull total return</th>
@@ -503,11 +525,21 @@ def options_csv(rows: list[dict]) -> str:
             "volume", "open_interest", "iv", "delta", "gamma", "theta", "vega", "rho", "multiplier", "adjusted",
             "premium_basis", "premium_per_contract_ask", "breakeven", "breakeven_move", "required_move",
             "max_loss_per_contract"]
-    w.writerow(cols + ["rank_score", "earnings_before_expiry", "flags"])
+    extra = ["horizon", "mid", "premium_per_contract_mid", "implied_move_1sd", "theta_available", "theta_share_per_day",
+             "quote_time_utc", "quote_date_ny", "quote_status", "quote_source", "underlying_last_trade",
+             "contract_last_trade", "events_status"]
+    w.writerow(cols + ["rank_score", "earnings_before_expiry", "flags"] + extra +
+               ["score_liquidity", "score_breakeven", "score_time_decay", "probability_status", "probability_of_profit",
+                "fees"])
     for x in rows:
+        rc = x.get("rank_components") or {}
+        p = x.get("probability") or {}
         w.writerow([csv_value(v) for v in [x.get(c, "call" if c == "type" else None) for c in cols] +
-                   [x["rank_components"]["total"], ";".join(str(e["date"]) for e in x.get("events_before_expiry", [])),
-                    ";".join(x["flags"])]])
+                   [rc.get("total"), ";".join(str(e["date"]) for e in x.get("events_before_expiry", [])),
+                    ";".join(x.get("flags", []))] + [x.get(c) for c in extra] +
+                   [rc.get("liquidity"), rc.get("breakeven"), rc.get("time_decay"),
+                    p.get("status") or "not_established", p.get("probability_of_profit"),
+                    "before fees (none deducted)"]])
     return buf.getvalue()
 
 

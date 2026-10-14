@@ -799,11 +799,14 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             chains[c["ticker"]] = ch if ch is not None else why
         ev = {t: [{"date": date.fromisoformat(d), "event": "earnings (scheduled, unverified)"}]
               for t, d in earnings.items()}
-        options_payload = _clean({"enabled": True, **opt.build_horizons(chains, as_of, ev),
+        # spec 2026-10-14.6: without a collected calendar every contract's earnings status is 'unknown'
+        options_payload = _clean({"enabled": True, **opt.build_horizons(chains, as_of, ev, events_known=cal is not None),
                                   "earnings_note": earn_note, "delta_statement": spec.DELTA_STATEMENT,
                                   "underlying_rule": spec.OPTION_UNDERLYINGS, "status": "ok",
                                   "premium_assumption": spec.PREMIUM_ASSUMPTION,
-                                  "ranking_note": spec.OPTION_RANKING_NOTE})
+                                  "ranking_note": spec.OPTION_RANKING_NOTE,
+                                  "collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                  "source": SOURCES["cboe"]})
 
     watch_payload = {"status": "no watchlist configured", "entries": []}
     if watchlist is not None:

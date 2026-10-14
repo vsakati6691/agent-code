@@ -98,6 +98,17 @@ footer { color: var(--text-muted); font-size: 13px; border-top: 1px solid var(--
 .rowtoggle::after { content: " \25B8"; color: var(--text-muted); }
 .rowtoggle[aria-expanded="true"]::after { content: " \25BE"; }
 .rowtoggle:focus-visible, .tabs button:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+/* options: maximum loss and critical warnings stay visible at every width */
+.crit, td.crit { color: var(--bad-border); font-weight: 650; } th.crit { color: var(--text-primary); }
+tr.detail p.crit { margin: 4px 0 8px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 18px; }
+.facts h4 { margin: 6px 0 4px; font-size: 14px; } .facts ul { margin: 0; }
+.ow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin: 8px 0 16px; }
+.ow-grid .card { margin: 0; } .ow-grid h3 { margin-top: 0; font-size: 15px; } .ow-grid ol { padding-left: 20px; margin: 4px 0; }
+.ow-grid li { margin: 3px 0; }
+.tabs button .small { font-weight: 400; }
+td.ev-unknown, td.ev-scheduled { color: var(--warn-border); }
+.flags ul { margin: 2px 0; }
 tbody.item + tbody.item tr:first-child td { border-top: 1px solid var(--border); }
 tbody.item tr:first-child td { border-bottom: 0; }
 tr.detail td { background: var(--surface-2); }
@@ -204,6 +215,25 @@ JS = r"""
       if (b) b.hidden = false;
     }
   }
+  // keyboard support for every tab list: Left/Right (or Up/Down) move between tabs and select them, Home/End jump,
+  // and only the selected tab sits in the Tab order (roving tabindex)
+  function roving(list) {
+    list.querySelectorAll('button[role="tab"]').forEach(function (b) {
+      b.setAttribute('tabindex', b.getAttribute('aria-selected') === 'true' ? '0' : '-1');
+    });
+  }
+  function tablistKeys(list, select) {
+    var tabs = Array.prototype.slice.call(list.querySelectorAll('button[role="tab"]'));
+    function go(i) { var b = tabs[(i + tabs.length) % tabs.length]; select(b); b.focus(); }
+    tabs.forEach(function (b, i) {
+      b.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); go(i + 1); }
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); go(i - 1); }
+        else if (e.key === 'Home') { e.preventDefault(); go(0); }
+        else if (e.key === 'End') { e.preventDefault(); go(tabs.length - 1); }
+      });
+    });
+  }
   // tabs
   document.querySelectorAll('[data-tabs]').forEach(function (group) {
     var buttons = group.querySelectorAll('button[data-tab]');
@@ -211,9 +241,11 @@ JS = r"""
     function show(key, push) {
       buttons.forEach(function (b) { b.setAttribute('aria-selected', b.dataset.tab === key ? 'true' : 'false'); });
       document.querySelectorAll('[data-panel-of="' + group.id + '"]').forEach(function (p) { p.hidden = p.dataset.panel !== key; });
+      roving(group);
       if (push) history.replaceState(null, '', '#' + key);
     }
     buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab, true); }); });
+    tablistKeys(group, function (b) { show(b.dataset.tab, true); });
     var hash = location.hash.replace('#', '');
     var first = buttons[0] && buttons[0].dataset.tab;
     var want = [hash, first].filter(function (k) { return k && group.querySelector('button[data-tab="' + k + '"]'); })[0];
@@ -240,16 +272,28 @@ JS = r"""
       box.querySelectorAll('section[data-type]').forEach(function (p) {
         p.hidden = !(p.dataset.type === state.type && p.dataset.hz === state.hz);
       });
+      box.querySelectorAll('[role="tablist"]').forEach(roving);
       if (push) history.replaceState(null, '', '#' + state.type + '-' + state.hz);
     }
-    var parts = location.hash.replace('#', '').split('-');
-    ['type', 'hz'].forEach(function (d, i) {
-      var first = box.querySelector('button[data-dim="' + d + '"]');
-      state[d] = valid(d, parts[i]) ? parts[i] : (first && first.dataset.val);
-    });
+    function fromHash() {
+      var parts = location.hash.replace('#', '').split('-');
+      var changed = false;
+      ['type', 'hz'].forEach(function (d, i) {
+        var first = box.querySelector('button[data-dim="' + d + '"]');
+        var want = valid(d, parts[i]) ? parts[i] : (state[d] || (first && first.dataset.val));
+        if (want !== state[d]) { state[d] = want; changed = true; }
+      });
+      return changed;
+    }
+    fromHash();
     box.querySelectorAll('button[data-dim]').forEach(function (b) {
       b.addEventListener('click', function () { state[b.dataset.dim] = b.dataset.val; render(true); });
     });
+    box.querySelectorAll('[role="tablist"]').forEach(function (tl) {
+      tablistKeys(tl, function (b) { state[b.dataset.dim] = b.dataset.val; render(true); });
+    });
+    // in-page links such as #put-6m (the summary strip) switch the view without a reload
+    window.addEventListener('hashchange', function () { if (fromHash()) render(false); });
     render(false);
   });
   // sortable + searchable + sector-filtered tables; grouped tables move each <tbody class="item"> as a unit

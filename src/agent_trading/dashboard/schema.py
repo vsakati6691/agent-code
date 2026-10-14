@@ -70,7 +70,22 @@ CONTRACT = _obj("One option contract in a ranked list.", {
     "payoffs": _f("array", "Profit per contract at expiration for fixed stock moves (exact arithmetic)."),
     "sensitivity": _f("object", "Black-Scholes MODEL estimates of value after 30 days for price/IV shifts."),
     "events_before_expiry": _f("array", "Scheduled earnings before expiry (unverified)."),
+    "events_status": _f("string", "From 2026-10-14.6: scheduled, none scheduled, or unknown (calendar not collected)."),
     "flags": _f("array", "Data caveats: delayed quote, wide spread, low volume, adjusted contract..."),
+    "horizon": _f("string", "From 2026-10-14.6: the expiry window key (3m, 6m, 12m)."),
+    "theta_available": _f("boolean", "From 2026-10-14.6: false means theta was missing; such contracts are not listed."),
+    "theta_share_per_day": _f("number", "|theta| / mid per day; null when theta is unavailable (never zero-filled)."),
+    "quote_time_utc": _f("string", "From 2026-10-14.6: the chain snapshot time (UTC) = when the bid/ask were quoted."),
+    "quote_date_ny": _f("string", "That snapshot's New York date."),
+    "quote_status": _f("string", "Freshness verdict of the snapshot relative to the as-of session."),
+    "quote_source": _f("string", "Cboe delayed quotes (end-of-session snapshot; never live)."),
+    "contract_last_trade": _f("string", "When the CONTRACT last traded (not its quote time); null when never recorded."),
+    "underlying_last_trade": _f("string", "When the underlying last traded (must be the as-of session)."),
+    "risks": _f("object", "From 2026-10-14.6: plain-language liquidity, time_decay, volatility, event and max_loss notes."),
+    "fees": _f("string", "Fee treatment of every payoff figure (none deducted)."),
+    "probability": _f("object", "From 2026-10-14.6: the probability gate's verdict; status 'not_established' with the "
+                                "statement, the definition, why, and the missing data. A percentage appears only for a "
+                                "record that passes spec.PROBABILITY_GATE."),
 })
 WATCH_ENTRY = _obj("One watchlist symbol.", {
     "ticker": _f("string", "Symbol as imported."),
@@ -125,6 +140,14 @@ SCHEMA = {
                                            "puts": _obj("Ranked puts.", {"rows": {"type": "array", "items": CONTRACT}})}),
             "underlyings": _f("array", "Underlyings with a valid chain."),
             "chain_problems": _f("object", "Why other chains were not used."),
+            "quotes": _f("object", "From 2026-10-14.6: per underlying, the chain snapshot time, its New York date, the "
+                                   "freshness status and the underlying's last trade."),
+            "events_known": _f("boolean", "From 2026-10-14.6: false when the earnings calendar was not collected."),
+            "rules": _f("object", "From 2026-10-14.6: the OPTION_RULES the snapshot was built with (list size included)."),
+            "spec_version": _f("string", "Methodology version the option lists were built under."),
+            "collected_at": _f("string", "UTC time the chains were collected."),
+            "probability": _f("object", "Calibration status per option type and horizon (all 'not established'), the "
+                                        "gate, the data contract and the missing data."),
         }),
         "watchlist": _obj("Owner watchlist with conditional 2030 price scenarios.",
                           {"entries": {"type": "array", "items": WATCH_ENTRY},
