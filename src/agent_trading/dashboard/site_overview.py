@@ -352,6 +352,9 @@ def move_cause(ch: dict, list_name: str) -> str:
     if comps is None:
         return f'{head}: {ch.get("explanation", "")}'
     sc = ch.get("score_change")
+    if not comps and (not isinstance(sc, (int, float)) or abs(sc) < 0.05):
+        why = "other stocks scored higher this week" if d < 0 else "stocks above it fell back or left the list"
+        return f"{head}: its own score was unchanged; {why}"
     parts = ([f"score {sc:+.1f}"] if isinstance(sc, (int, float)) else []) + \
         [", ".join(f"{k} {v:+.1f}" for k, v in comps.items()) or "component scores unchanged"]
     return f"{head}: " + "; ".join(parts)

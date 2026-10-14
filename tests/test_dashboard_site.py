@@ -345,3 +345,9 @@ def test_changes_panel_names_the_causes(site):
     assert old == "X down 2 to #5 (Mid): component score changes: growth -3.0"
     page = (site / "index.html").read_text(encoding="utf-8")
     assert "Biggest moves and why" in page and re.search(r"(up|down) \d+ to #\d+ \(Large cap \(S&amp;P 500 members\)\): score [+-]", page)
+
+
+def test_move_with_unchanged_own_score_says_others_moved():
+    from agent_trading.dashboard.site_overview import move_cause
+    t = move_cause({"ticker": "S11", "change": -2, "to": 3, "score_change": 0.0, "component_changes": {}}, "Large cap")
+    assert t == "S11 down 2 to #3 (Large cap): its own score was unchanged; other stocks scored higher this week"
