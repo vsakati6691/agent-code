@@ -314,7 +314,7 @@ def test_facts_assumptions_missing_data_and_scores_are_shown_apart(built):
               "Distance to breakeven"):
         assert h in page, h
     assert page.count("data-hz=") == 6 and page.count('role="tablist"') == 2
-    assert re.search(r'<section data-hz="6m" data-type="put" hidden><h2>About 6 months · puts · 150-210 days', page)
+    assert re.search(r'<section data-hz="6m" data-type="put"[^>]* hidden><h2>About 6 months · puts · 150-210 days', page)
 
 
 def test_short_lists_say_why_on_the_page(tmp_path):

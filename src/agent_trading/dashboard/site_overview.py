@@ -307,13 +307,13 @@ return minus {E(band.get("benchmark", ""))}. Select a ticker to show its evidenc
 def growth_section(snap: dict) -> str:
     bands = snap["bands"]
     keys = [k for k in ordered(bands) if k != "multibagger"]
-    tabs = "".join(f'<button role="tab" data-tab="{k}" aria-selected="false">{E(band_title(k, bands[k]))}</button>'
-                   for k in keys)
+    tabs = "".join(f'<button role="tab" id="tab-{k}" aria-controls="panel-{k}" data-tab="{k}" aria-selected="false">'
+                   f'{E(band_title(k, bands[k]))}</button>' for k in keys)
     panels = []
     for k in keys:
         b = bands[k]
         short = f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ""
-        panels.append(f"""<section data-panel-of="growthtabs" data-panel="{k}" role="tabpanel" hidden>
+        panels.append(f"""<section data-panel-of="growthtabs" data-panel="{k}" id="panel-{k}" role="tabpanel" aria-labelledby="tab-{k}" hidden>
 <h3>{E(b.get("title", k))}</h3><p class="small">{E(definition_line(k, b))} Benchmark: {E(b.get("benchmark_name", b.get("benchmark", "")))}.
 Showing {len(b["candidates"])} of up to {b.get("max_results", 10)}; {b.get("ranked", "?")} ranked, {len(b["excluded"])} excluded.</p>
 {short}{distribution_strip(b["candidates"])}{growth_table(k, b)}

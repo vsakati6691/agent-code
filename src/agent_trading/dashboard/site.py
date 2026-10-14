@@ -15,6 +15,7 @@ import io
 import json
 import math
 import os
+import re
 import shutil
 from datetime import date, timedelta
 from pathlib import Path
@@ -46,6 +47,15 @@ COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", 
 
 # --- page shell -------------------------------------------------------------------------------------
 
+TH_WITHOUT_SCOPE = re.compile(r"<th\b(?![^>]*\bscope=)")
+
+
+def column_headers(markup: str) -> str:
+    """Every <th> on this site is a column header: give each one scope="col" so screen readers announce the
+    column for a cell in a wide, sideways-scrolling table. Headers that already declare a scope are left alone."""
+    return TH_WITHOUT_SCOPE.sub('<th scope="col"', markup)
+
+
 def brand() -> str:
     """Site name: options appear in it only while the latest snapshot publishes them."""
     return "Growth & Options Research" if _SITE["options"] else "Growth Research"
@@ -69,9 +79,9 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <script>try{{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}}catch(e){{}}</script>
 <link rel="stylesheet" href="{up}assets/style.css{_SITE["v"]}">
 <link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
-<body><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
+<body><a class="skip" href="#main">Skip to content</a><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
 <nav>{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
-<main>{freshness}{body}
+<main id="main" tabindex="-1">{column_headers(freshness + body)}
 <footer>{E(spec.DISCLAIMER)} Methodology version {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
 Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>
 <script src="{up}assets/app.js{_SITE["v"]}"></script>{"".join(f'<script src="{up}{s}{_SITE["v"]}"></script>' for s in scripts)}</body></html>"""

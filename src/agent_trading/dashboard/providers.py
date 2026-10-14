@@ -123,13 +123,18 @@ def sector_from_sic(sic: str | int | None) -> str:
     return best
 
 
-def parse_earnings_8k(subs: dict | None) -> list[str]:
+def parse_earnings_8k(subs: dict | None, on_or_before: date | None = None) -> list[str]:
     """Filing dates of 8-K (or 8-K/A) reports that include item 2.02 'Results of Operations and Financial
-    Condition', newest first, from an SEC submissions payload."""
+    Condition', newest first, from an SEC submissions payload.
+
+    The submissions file is a current view, not point in time; `on_or_before` (the as-of date) drops filings
+    made after it, so a rerun for an earlier week or a run after a holiday Friday never reports a later release."""
     recent = ((subs or {}).get("filings") or {}).get("recent") or {}
     forms, dates, items = recent.get("form") or [], recent.get("filingDate") or [], recent.get("items") or []
+    cutoff = on_or_before.isoformat() if on_or_before else None
     out = [d for f, d, it in zip(forms, dates, items + [""] * (len(forms) - len(items)))
-           if f in ("8-K", "8-K/A") and "2.02" in {s.strip() for s in str(it).split(",")}]
+           if f in ("8-K", "8-K/A") and "2.02" in {s.strip() for s in str(it).split(",")}
+           and (cutoff is None or str(d) <= cutoff)]
     return sorted(set(out), reverse=True)
 
 

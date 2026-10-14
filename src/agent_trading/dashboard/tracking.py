@@ -8,12 +8,14 @@ unavailable (possible delisting) instead of being dropped.
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, timedelta
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
 
 from . import spec
+from ..market_calendar import is_trading_day
 
 BANDS = {b.key: b for b in spec.BANDS}
 
@@ -29,8 +31,26 @@ class _Legacy:
 ALL_BANDS = {**{k: _Legacy(v) for k, v in spec.LEGACY_BANDS.items()}, **BANDS}
 
 
+@lru_cache(maxsize=4096)
+def sessions_elapsed(start: date, as_of: date) -> int:
+    """NYSE sessions after `start` up to and including `as_of` (spec.TRACK_HORIZONS count trading days).
+
+    Weekday counting (np.busday_count) overstates this by one for every exchange holiday in the window, which
+    used to mark every complete series as a possible delisting on the day a horizon fell due in a holiday week."""
+    n, d = 0, start
+    while d < as_of:
+        d += timedelta(days=1)
+        if is_trading_day(d):
+            n += 1
+    return n
+
+
 def forward_return(close: pd.Series | None, start: date, bars: int, as_of: date) -> tuple[float | None, str]:
-    """(price return from the `start` close to `bars` sessions later, status)."""
+    """(price return from the `start` close to `bars` sessions later, status).
+
+    Statuses: "ok"; "pending" while fewer than `bars` NYSE sessions have passed; "prices stop on <date> ..." when
+    the series ends before the as-of session; "missing bars ..." when it reaches the as-of session but has fewer
+    bars than sessions (a gap in the vendor history, never silently bridged)."""
     if close is None or close.empty:
         return None, "no price data"
     ts = pd.Timestamp(start)
@@ -40,10 +60,12 @@ def forward_return(close: pd.Series | None, start: date, bars: int, as_of: date)
     j = i + bars
     if j < len(close):
         return float(close.iloc[j] / close.iloc[i] - 1), "ok"
-    sessions_elapsed = int(np.busday_count(start, as_of))
-    if sessions_elapsed >= bars:
-        return None, f"prices stop on {close.index[-1].date()} (possible delisting or ticker change)"
-    return None, "pending"
+    if sessions_elapsed(start, as_of) < bars:
+        return None, "pending"
+    last = close.index[-1].date()
+    if last < as_of:
+        return None, f"prices stop on {last} (possible delisting or ticker change)"
+    return None, f"missing bars: only {len(close) - 1 - i} of {bars} sessions after {start} have a close"
 
 
 def track(snapshots: list[dict], prices: dict[str, pd.Series], as_of: date) -> dict:

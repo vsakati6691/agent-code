@@ -220,9 +220,11 @@ def next_filing_estimate(subs: dict | None, last_filed: str | None, as_of: date)
     for form, d in zip(recent.get("form") or [], recent.get("filingDate") or []):
         if form in ("10-Q", "10-K"):
             try:
-                dates.append(date.fromisoformat(d))
+                filed = date.fromisoformat(d)
             except ValueError:
                 continue
+            if filed <= as_of:                  # point in time: the submissions file is a current view
+                dates.append(filed)
     dates = sorted(set(dates), reverse=True)[:5]
     if len(dates) >= 2:
         gaps = sorted((a - b).days for a, b in zip(dates, dates[1:]))

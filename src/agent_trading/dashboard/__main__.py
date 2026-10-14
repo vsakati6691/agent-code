@@ -80,11 +80,23 @@ def cmd_run(args) -> int:
         store.write_snapshot(payload, args.commit or "")
     except SnapshotExists as exc:
         store.audit("run_skipped", as_of=as_of, reason=str(exc))
-    update_tracking(store, providers, as_of)
-    store.write_status(payload["status"], "weekly update completed" if payload["status"] == "ok" else
-                       "weekly update completed with partial data", str(as_of), problems=payload["problems"][:10])
-    store.audit("run_finished", as_of=as_of, status=payload["status"], usage=providers.http.usage())
-    print(f"snapshot {as_of}: status {payload['status']}; requests {providers.http.usage()['requests']}")
+    # From here on the snapshot is stored. The workflow commits the data branch only when this command exits 0
+    # or 2, so a failure in the derived tracking file must be recorded, not raised: raising would discard the
+    # week's snapshot and audit lines along with it. tracking.json is recomputed from the snapshots next run.
+    status, problems = payload["status"], list(payload["problems"])
+    try:
+        update_tracking(store, providers, as_of)
+    except Exception as exc:  # noqa: BLE001 - the snapshot must survive a tracking failure
+        err = f"{type(exc).__name__}: {exc}"[:500]
+        store.audit("tracking_failed", as_of=as_of, error=err)
+        log.exception("tracking update failed; the %s snapshot is kept and tracking.json is unchanged", as_of)
+        status = "partial"
+        problems.append(f"tracking not updated ({type(exc).__name__}); the snapshot is stored and tracking is "
+                        "recomputed on the next run")
+    store.write_status(status, "weekly update completed" if status == "ok" else
+                       "weekly update completed with partial data", str(as_of), problems=problems[:10])
+    store.audit("run_finished", as_of=as_of, status=status, usage=providers.http.usage())
+    print(f"snapshot {as_of}: status {status}; requests {providers.http.usage()['requests']}")
     return 0
 
 

@@ -139,14 +139,18 @@ def test_tabs_are_not_silently_restored_and_follow_the_hash():
 
 def test_options_h2_names_the_active_choice(site):
     page = (site / "options.html").read_text(encoding="utf-8")
-    assert re.search(r'<section data-hz="3m" data-type="call" hidden><h2>About 3 months · calls', page)
+    assert re.search(r'<section data-hz="3m" data-type="call"[^>]* hidden><h2>About 3 months · calls', page)
 
 
 def _header_classes(page: str, table_id: str) -> list[tuple[str, str]]:
+    """[(header label, class attribute)] for a table's column headers, whatever the attribute order."""
     m = re.search(r'<table id="' + re.escape(table_id) + r'".*?<thead><tr>(.*?)</tr></thead>', page, re.S)
     assert m, table_id
-    return [(re.sub(r"<[^>]+>", "", label).strip(), cls) for cls, label in
-            re.findall(r"<th class=['\"]([^'\"]*)['\"][^>]*>(.*?)</th>", m.group(1))]
+    out = []
+    for attrs, label in re.findall(r"<th\b([^>]*)>(.*?)</th>", m.group(1)):
+        cls = re.search(r"class=['\"]([^'\"]*)['\"]", attrs)
+        out.append((re.sub(r"<[^>]+>", "", label).strip(), cls.group(1) if cls else ""))
+    return out
 
 
 def test_phone_width_keeps_only_the_named_columns(site):
@@ -451,6 +455,25 @@ def test_verify_earnings_labels_cadence_and_respects_the_budget():
     assert none["last_results"] is None and "no 8-K item 2.02" in none["last_results_status"]
 
 
+def test_8k_results_and_filing_cadence_are_point_in_time():
+    """The SEC submissions file is a current view: filings after the as-of date must not become 'last results'
+    (a rerun for an earlier week, or a Saturday run after a holiday Friday when EDGAR was open)."""
+    from datetime import date
+    from agent_trading.dashboard.pipeline import Context, verify_earnings
+    from agent_trading.dashboard.providers import parse_earnings_8k
+    from agent_trading.dashboard.watchlist import next_filing_estimate
+    assert parse_earnings_8k(SUBS, date(2026, 7, 1)) == ["2026-04-29", "2026-02-01"]
+    assert parse_earnings_8k(SUBS, date(2026, 7, 30)) == ["2026-07-30", "2026-04-29", "2026-02-01"]   # same day counts
+    assert parse_earnings_8k(SUBS, date(2026, 1, 1)) == []
+    earlier = verify_earnings(Context(date(2026, 7, 1), _Prov(500, SUBS)), 1, "2026-07-29")
+    assert earlier["last_results"] == "2026-04-29" and earlier["last_results_status"] == "verified (8-K)"
+    assert "2026-07-30" not in str(earlier)
+    subs = {"filings": {"recent": {"form": ["10-Q", "10-Q", "10-K", "10-Q"],
+                                   "filingDate": ["2026-11-06", "2026-08-07", "2026-02-20", "2025-11-06"]}}}
+    nxt, basis = next_filing_estimate(subs, None, date(2026, 10, 9))
+    assert nxt == date(2026, 8, 7) + (date(2026, 8, 7) - date(2026, 2, 20)) and "last 3" in basis   # 2026-11-06 ignored
+
+
 def test_site_shows_verified_8k_dates(site):
     page = (site / "stock" / "large-S04.html").read_text(encoding="utf-8")
     assert "verified (8-K)" in page and "last results 2026-07-30" in page and "unverified" in page
@@ -568,3 +591,53 @@ def test_earnings_panel_shows_five_dates_and_folds_the_rest():
     shown, folded = html.split("<details", 1)
     assert all(f"<strong>T{i}</strong>" in shown for i in range(EARNINGS_SHOWN))
     assert f"{9 - EARNINGS_SHOWN} more" in folded and "<strong>T8</strong>" in folded
+
+
+# --- accessibility (2026-10-14 cycle): column headers, tab wiring, skip link ----------------------------------
+
+def test_every_column_header_declares_its_scope(site):
+    missing = []
+    for p in _pages(site):
+        for m in re.finditer(r"<th\b[^>]*>", p.read_text(encoding="utf-8")):
+            if 'scope="col"' not in m.group(0):
+                missing.append(f"{p.relative_to(site)}: {m.group(0)[:60]}")
+    assert not missing, missing[:10]
+    from agent_trading.dashboard.site import column_headers
+    assert column_headers("<thead><tr><th class='num'>A</th><th>B</th></tr></thead>") ==         "<thead><tr><th scope=\"col\" class='num'>A</th><th scope=\"col\">B</th></tr></thead>"
+    assert column_headers('<th scope="row">x</th>') == '<th scope="row">x</th>'           # an explicit scope is kept
+    from agent_trading.dashboard.assets_research import COMPARE_JS
+    assert COMPARE_JS.count("scope = 'col'") == 2                                        # the browser-built table too
+
+
+def _ids(page: str) -> set[str]:
+    return set(re.findall(r'\bid="([^"]+)"', page))
+
+
+def test_tab_lists_name_their_panels_and_panels_name_their_tabs(site):
+    for name in ("index.html", "options.html"):
+        page = (site / name).read_text(encoding="utf-8")
+        ids = _ids(page)
+        tabs = re.findall(r'<button role="tab"[^>]*>', page)
+        assert tabs, name
+        for tab in tabs:
+            tid = re.search(r'\bid="([^"]+)"', tab)
+            controls = re.search(r'aria-controls="([^"]+)"', tab)
+            assert tid and controls, tab
+            for pid in controls.group(1).split():
+                assert pid in ids, (name, pid)
+                panel = re.search(r'<section[^>]*\bid="' + re.escape(pid) + r'"[^>]*>', page).group(0)
+                assert 'role="tabpanel"' in panel and tid.group(1) in re.search(r'aria-labelledby="([^"]+)"', panel).group(1).split()
+    options = (site / "options.html").read_text(encoding="utf-8")
+    assert options.count('role="tabpanel"') == 6
+    assert 'id="opanel-put-6m" role="tabpanel" aria-labelledby="otab-type-put otab-hz-6m"' in options
+    assert 'aria-controls="opanel-put-3m opanel-put-6m opanel-put-12m"' in options     # the Puts tab controls three panels
+    assert not re.search(r'\bid="(call|put)-(3m|6m|12m)"', options)                   # view hashes stay free of elements
+
+
+def test_every_page_has_a_skip_link_to_a_focusable_main(site):
+    from agent_trading.dashboard.assets import CSS
+    for p in _pages(site):
+        text = p.read_text(encoding="utf-8")
+        assert '<a class="skip" href="#main">Skip to content</a>' in text and '<main id="main" tabindex="-1">' in text, p.name
+        assert text.index('class="skip"') < text.index("<header"), p.name              # first in the Tab order
+    assert ".skip:focus { left: 16px; }" in CSS
