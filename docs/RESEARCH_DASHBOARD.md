@@ -16,7 +16,7 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 <ul><li>upcoming earnings (scheduled, unverified)</li><li>new entrants, departures and rank moves</li><li>sector concentration and downside-risk flags</li><li>performance vs benchmarks from immutable snapshots</li><li>data coverage, freshness and missing-data warnings</li></ul>Then **Growth stocks**: tabs for the large-, mid- and small-cap top 10. Each tab states its market-cap definition and universe (large cap = S&P 500 members only). Its columns are rank, ticker/company, sector, market cap, price, revenue growth, earnings/FCF growth, valuation, research score, 3M/6M/1Y returns, 1Y vs benchmark, and main risk. Selecting a ticker expands its evidence, thesis, bear case, 8-quarter trend, base-case assumptions and invalidation. Then **Speculative multibagger research candidates**: top 5, 5-10 year horizon, with growth evidence, cash/runway, debt/dilution/valuation risk, bear/base/bull at 1/3/5/10 years, what must happen, and what would invalidate it |
 | Compare (`compare.html`) | Pick 2-4 companies (ranked names and watchlist operating companies) and see growth, margins and cash flow, valuation, debt and dilution, returns and drawdowns with their exact windows, score components and evidence quality side by side. A banner flags anything that does not line up (TTM windows ending more than 45 days apart, different scoring profiles or benchmarks, watchlist names that are not scored), and each missing cell says why. Price paths are rebased to 100 on the dates every selected name shares, never interpolated. Every column links to its SEC sources. Selection is kept in the URL hash, e.g. `compare.html#MU,FIX` |
 | Stock detail (one per candidate) | **What changed since the previous snapshot** (new filings with EDGAR links, deterioration, dilution, thesis-condition breaches, data-availability changes, or why no comparison is possible); a **company research panel** (observed quarterly trends, supporting and counter-evidence, two earnings-quality checks, assumptions, verified/scheduled/estimated events, the thesis conditions recorded when the name first appeared with their current status, missing information, sources and dates); an **evidence-quality** check (passed checks, warnings, next checks); then price, market cap, sector, sources, timestamps; earnings dates (next: scheduled, unverified; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; a **scenario calculator** (your own starting growth, exit EV/Sales, dilution and FCF margin through the published formula, with a reset to the published assumptions; nothing is stored or published); risks; invalidation conditions; "probability not established" |
-| Options | Calls/Puts toggle x 3-, 6- and 12-month tabs: six lists of up to 10 contracts each, at most 2 per underlying. Each list shows the actual count and the reasons other contracts were left out. Contracts show with bid/ask, spread, volume/OI, IV, Greeks, premium x 100, adjusted-contract flag, breakeven, maximum loss, payoffs at expiration, a 30-day Black-Scholes sensitivity grid, and earnings before expiry. Shows an unavailable state when no valid chain exists |
+| Options (`options.html`) | **Options watchlist**: a Calls/Puts control x 3M/6M/1Y tabs, six independently ranked lists of **up to 5** contracts each (spec 2026-10-14.6; 10 before), at most 2 per underlying, on the week's large-cap candidates only. The page is always linked and opens with a plain-language status (not collected / collection failed / stale / partial / available) and the owner setup step when collection is off. Each list shows how many qualified, why it is short, and why other contracts were left out. A compact row shows the underlying, contract symbol, expiry date and days remaining, strike, premium (ask x 100), breakeven with the required move, **maximum loss (visible on phones)**, spread, volume, open interest, IV, delta, theta, earnings status (scheduled / none scheduled / **unknown** when the calendar was not collected), the research score with its three parts, and the probability verdict. Expanding a row separates **observed facts** (delayed quote, snapshot time in UTC, source, delay, the underlying's and the contract's own last trade), **assumptions** (ask premium, breakeven, implied move, no fees, model notes), **unknown or missing** items, the **research score**, plain-language liquidity / time-decay / volatility / event risks, exact payoffs at expiration (before fees), a labelled 30-day Black-Scholes estimate, and "Probability not established". The page names the snapshot's methodology version next to the renderer's. CSV per list |
 | Watchlist 2030 | The owner's ticker list (imported 2026-10-14, not synchronised). Each symbol is verified (name, exchange, type, listing status), with the latest verified price and timestamp. Conditional year-end-2030 bear/base/bull PRICE scenarios (% change and annualized) come from a company, ETF or leveraged-ETF method, with expandable assumptions, catalysts, bear case, invalidation, sources, evidence quality and missing information. Also: a range chart, theme concentration, sorting, filters and CSV. Unresolved or unmodellable symbols stay visible as 'Scenario unavailable' with the reason |
 | Symbol pages (`symbol/<TICKER>.html`) | Everything known about one symbol: list ranks, listed option contracts, its watchlist scenario (or what would unlock one), and its ranks in every stored snapshot. Reached from the header's 'Find a ticker' box, which works offline from an inline list |
 | Excluded (`excluded-<list>.html`) | Every stock considered for a list but not shown, grouped by reason, with the failing value |
@@ -35,15 +35,51 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
   sessions old"); a warning appears after six sessions.
 - **Evidence badges** look the same on every page: the evidence level, the source's own label and the number of missing
   inputs.
-- **Options:** pages open on Calls / 3 months; a URL hash such as `#put-6m` selects another view, and the hash follows
-  each click. "Distance to breakeven" is signed, or reads "already past breakeven".
+- **Options:** pages open on Calls / 3 months; a URL hash such as `#put-6m` selects another view, the hash follows
+  each click, and in-page links to a hash switch the view. Tab lists work with the keyboard (Left/Right, Home/End).
+  "Distance to breakeven" is signed, or reads "already past breakeven". The overview carries an **Options watchlist**
+  block with the six lists in compact form (or the status when none can be shown).
 - **Phone layout:** under 700px the lists keep rank, ticker, price, score, 1Y and main risk, and options keep rank,
-  underlying, expiry, strike, bid/ask, premium, breakeven and score. Ticker columns stay pinned while tables scroll,
-  and the navigation is one scrolling row.
+  underlying, expiry, strike, premium, breakeven, **maximum loss** and score, plus the "can lose the entire premium"
+  warning. Ticker columns stay pinned while tables scroll, and the navigation is one scrolling row.
 - **Theme and print:** the theme button cycles auto, light and dark, and is remembered on the device. Printing hides
   controls and expands every section.
 - **Long definitions** (multibagger, probabilities, scenario method) are one sentence plus a toggle on the overview and
   detail pages. The methodology page has the full text.
+
+### Spec 2026-10-14.6: options watchlist, correctness fixes, probability gate
+
+Registered on 2026-10-14 before any snapshot was evaluated with it (the only published snapshot, 2026-10-13, has no
+option data and stays as published under 2026-10-14.3).
+- **Six lists of up to 5** (`OPTION_RULES["max_per_type_per_horizon"]`, was 10). Windows (70-110, 150-210, 300-430
+  days), liquidity, spread, delta, standard-contract and per-underlying rules and the ranking weights are unchanged.
+  Older snapshots render with the limit they were built under (`spec.option_list_limit`), and every options page
+  names the snapshot's methodology version next to the renderer version.
+- **Theta** (`OPTION_THETA_RULE`): a contract whose theta is missing or exactly zero is not eligible, with the reason
+  "theta unavailable". Before this version a missing theta became zero and earned the maximum time-decay score.
+  `theta_share_per_day` stays null when theta is missing; `rank_components.time_decay_missing` records it.
+- **Quote freshness** (`OPTION_QUOTE_RULE`): the chain's own snapshot timestamp (Cboe reports it in UTC; converted to
+  the New York date) must not predate the as-of session, in addition to the underlying's last trade. A contract's
+  own `last_trade_time` says when it last traded, not when it was quoted; it is stored as `contract_last_trade` and
+  shown separately. `quote_time_utc`, `quote_date_ny` and `quote_status` are stored per contract and per underlying.
+- **Earnings status** (`OPTION_EVENT_RULE`): `events_status` is `scheduled`, `none scheduled` or `unknown`; it is
+  `unknown` whenever the calendar lookup failed or was not configured, so the page never shows "none scheduled" for
+  missing data. Older snapshots without the field fall back to the stored unavailability note.
+- **Fees** (`FEE_TREATMENT`): no commissions or fees are deducted; every payoff, breakeven and maximum-loss figure
+  says so. Pre-expiration figures are labelled Black-Scholes model estimates with their assumptions.
+- **Probability of profit** (`dashboard/probability.py`): defined as the probability that net P/L is positive at
+  expiration after the stated premium and costs, distinct from finishing in the money. A percentage can be displayed
+  only for a `CalibrationRecord` that passes `PROBABILITY_GATE` (required fields, at least 200 resolved contracts per
+  option type and horizon, at least a year of expirations, calibration error at most 0.05, out-of-sample forecasts,
+  no reuse of the consumed 2022+ holdout, an uncertainty interval). The registry holds no record, so every contract
+  shows **"Probability not established — insufficient validated evidence."** Delta, the research score, scenario
+  weights and pricing-model outputs never enter the probability path (a test checks the engine passes no estimate).
+  `DATA_CONTRACT` lists what must be recorded per listed contract before a calibration can exist, and
+  `PROBABILITY_MISSING_DATA` what is missing today (no stored historical chains, no expired listed contracts, no
+  forecasts recorded before outcomes, no evaluation period yet, no broker-matched fees).
+- **Display:** the options page is always in the menu and explains its state; the overview has an Options watchlist
+  block; scenario-test flags (2x in 5 years, 5x in 5 years, 5x in 10 years, 2x in 10 years) are shown separately
+  from passing the research screen; tab lists are keyboard-operable.
 
 ### Spec 2026-10-14.5: data quality, research panel, comparisons (display rules only)
 
@@ -126,7 +162,8 @@ Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners w
 
 ## Definitions (from `spec.py`)
 
-Spec version **2026-10-14.5** (current) adds display and data-quality rules only (see "Spec 2026-10-14.5" above).
+Spec version **2026-10-14.6** (current) is the options watchlist, correctness and probability-gate version (see
+"Spec 2026-10-14.6" above). Spec version 2026-10-14.5 added display and data-quality rules only.
 
 Spec version 2026-10-14.4 fixes a data gap the owner approved on 2026-10-14, after the first live snapshot (2026-10-13):
 - companies tag a fiscal fourth quarter's diluted share count only as a full-year figure;
@@ -187,10 +224,15 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
 - **Probabilities:** none are shown, because no model here has out-of-sample calibration. Option delta is explicitly *not* a probability of profit.
 - **Option horizons:** 70-110, 150-210 and 300-430 days to expiration.
 - **Option eligibility:**
-  - OI ≥ 500, volume ≥ 10, spread ≤ 10% of mid, delta 0.30-0.70;
+  - OI ≥ 500, volume ≥ 10, spread ≤ 10% of mid, |delta| 0.30-0.70;
+  - implied volatility and theta present (a missing or zero theta is "theta unavailable", never zero decay);
   - standard 100-share contracts only;
-  - at most 2 contracts per underlying.
-- **Option ranking:** 45% liquidity, 35% breakeven vs implied move, 20% time decay. Upside is not an input.
+  - at most 2 contracts per underlying, up to 5 per list (10 before 2026-10-14.6);
+  - the underlying must have traded in the as-of session and the chain's snapshot must not predate it.
+- **Option ranking:** 45% liquidity, 35% breakeven vs implied move, 20% time decay. Upside is not an input, and a
+  highly ranked put is not a view that the underlying will fall.
+- **Probability of profit:** never shown without a calibration record that passes `PROBABILITY_GATE`; today every
+  contract reads "Probability not established — insufficient validated evidence."
 
 **Changing a rule:** add a new `SPEC_VERSION` with a `SPEC_CHANGELOG` entry. Snapshots carry the spec hash, and tracking keeps versions apart. Version 2026-10-13.2 added "one share class per company" after the 25-stock smoke test listed GOOG and GOOGL separately. That is a data-integrity fix; no score, scale or weight changed.
 
@@ -310,7 +352,8 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
    - Review Cboe's website terms for republishing delayed quotes and option chains on a public site.
    - Either obtain consent, accept the risk knowingly, or run with options disabled. Stock prices on the site also come from Cboe.
    - Then set the repository **variable** `DASHBOARD_PUBLISH` = `true`. Until then the workflow builds and checks the site but does not deploy it.
-   - Option chains are **off** unless the repository variable `DASHBOARD_OPTIONS` = `true`. The owner chose stocks-only publication on 2026-10-14, because of Cboe's terms. While options are off, the Options tab shows "not collected".
+   - Option chains are **off** unless the repository variable `DASHBOARD_OPTIONS` = `true`. The owner chose stocks-only publication on 2026-10-14, because of Cboe's terms. While options are off, the Options page stays in the menu and explains that nothing was collected, with this setup step. Enabling it changes nothing for earlier snapshots; the six lists appear in the first weekly snapshot collected afterwards (a manual "Run workflow" with the options box ticked also works, and the data branch keeps the snapshot).
+   - `ALPHAVANTAGE_API_KEY` is also needed for the contracts' earnings status; without it every contract reads "unknown" (never "none scheduled").
 5. **First run:** Actions → research-dashboard → Run workflow. Check the run summary, the `research-data` branch and the site.
 6. If branch protection rules cover all branches, allow `github-actions[bot]` to push `research-data`. The workflow never force-pushes.
 
@@ -318,7 +361,8 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 
 - Prices are delayed, end-of-session snapshots, never live. Returns exclude dividends.
 - The Cboe endpoints are undocumented and can change without notice. When they break, runs fail visibly (stale banner); they do not show invented data.
-- Cboe option rows give each contract's last trade time but no quote timestamp. Chains are accepted only when the underlying traded in the as-of session.
+- Cboe option rows give each contract's last trade time but no per-contract quote timestamp; the chain file's own snapshot timestamp (UTC) is the quote time for every contract in it, and the two are kept apart on the page. Chains are accepted only when the underlying traded in the as-of session and the snapshot does not predate it.
+- No probability of profit can be calibrated yet: no historical option chains are stored, no listed contract has expired, and no forecast has been recorded before an outcome. The data contract for a future calibration is documented in `dashboard/probability.py`; nothing is back-filled.
 - **Broad-universe gaps:**
   - Companies without a cover-page share count in recent SEC frames are excluded. This includes some multi-class issuers.
   - Foreign private issuers (20-F/40-F) cannot be scored.

@@ -127,15 +127,38 @@ def datasets(snap: dict) -> list[dict]:
                           "as-of price verified for each listed watchlist symbol",
                           f"{len(priced)} of {len(listed)} listed", as_of, at))
 
+    o_state, o_detail = options_state(snap)
+    o = snap.get("options") or {}
+    cov = f"{len(o.get('underlyings') or [])} of {len(o.get('underlyings') or []) + len(o.get('chain_problems') or {})} chains" \
+        if o.get("enabled") and o.get("status") == "ok" else ""
+    out.append(record("Option chains", src.get("cboe", "Cboe delayed quotes"), o_state, o_detail, cov, as_of,
+                      o.get("collected_at") or at))
+    return out
+
+
+def options_state(snap: dict) -> tuple[str, str]:
+    """(dataset state, plain-language detail) for the option chains behind a snapshot.
+
+    missing = collection switched off or not configured; provider_error = the collection ran and failed, or no
+    chain could be used for a reason other than staleness; stale = every chain was rejected as stale; partial =
+    some chains were rejected; available = every requested chain was collected and validated."""
     o = snap.get("options") or {}
     if not o.get("enabled"):
-        o_state, o_detail = "missing", f"collection off: {o.get('status') or 'not configured'}"
-    elif o.get("status") == "ok":
-        o_state, o_detail = "available", "delayed chains collected for every underlying"
-    else:
-        o_state, o_detail = ("partial" if o.get("chain_problems") else "provider_error"), str(o.get("status"))
-    out.append(record("Option chains", src.get("cboe", "Cboe delayed quotes"), o_state, o_detail, "", as_of, at))
-    return out
+        why = o.get("status") or "not configured"
+        return "missing", f"not collected for this snapshot ({why})"
+    if o.get("status") != "ok":
+        return "provider_error", f"collection failed: {o.get('status')}"
+    problems = o.get("chain_problems") or {}
+    usable = o.get("underlyings") or []
+    if not usable:
+        if problems and all("stale" in str(v).lower() for v in problems.values()):
+            return "stale", f"every chain was rejected as stale ({len(problems)} of {len(problems)})"
+        return "provider_error", (f"no chain could be used: {len(problems)} rejected" if problems else
+                                  "no chain was collected")
+    if problems:
+        return "partial", (f"{len(usable)} of {len(usable) + len(problems)} chains usable; {len(problems)} rejected "
+                           "(stale, failed or unreadable)")
+    return "available", f"delayed chains collected and validated for all {len(usable)} underlying(s)"
 
 
 # --- per-company evidence check (adapted from ticker-dossier QualityGate) -------------------------------

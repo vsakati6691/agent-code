@@ -54,10 +54,11 @@ def symbol_page(ticker: str, snap: dict, history: list[dict]) -> str:
     opt_rows = "".join(
         f'<tr><td>{E(h)}</td><td>{E(kind)}</td><td class="num">{E(x["expiration"])}</td><td class="num">{money(x["strike"])}</td>'
         f'<td class="num">{money(x.get("premium_per_contract_ask"), 0)}</td><td class="num">{money(x.get("breakeven"))}</td>'
+        f'<td class="num crit">{money(x.get("max_loss_per_contract"), 0)}</td>'
         f'<td class="num">{num((x.get("rank_components") or {}).get("total"), 1)}</td></tr>' for h, kind, x in cons)
     options = (f'<div class="table-wrap"><table aria-label="Option contracts listed for this symbol"><thead><tr><th>Horizon</th>'
                f'<th>Type</th><th class="num">Expiry</th><th class="num">Strike</th><th class="num">Premium (ask x 100)</th>'
-               f'<th class="num">Breakeven</th><th class="num">Research score</th></tr></thead><tbody>{opt_rows}</tbody></table></div>'
+               f'<th class="num">Breakeven</th><th class="num crit">Max loss</th><th class="num">Research score</th></tr></thead><tbody>{opt_rows}</tbody></table></div>'
                f'<p class="small"><a href="../options.html">All option comparisons</a></p>' if cons else
                '<p class="small muted">No listed option contracts for this symbol this week.</p>')
     w = next((e for e in (snap.get("watchlist") or {}).get("entries", []) if e["ticker"] == ticker), None)

@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.5"
+SPEC_VERSION = "2026-10-14.6"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
@@ -69,6 +69,24 @@ SPEC_CHANGELOG = [
                      "(7) A comparison page (COMPARE_RULES) and an interactive scenario calculator whose results "
                      "are never stored or ranked (SCENARIO_LAB_BOUNDS). Several structures are adapted from "
                      "filingcopilot, ticker-dossier and cc-equity-research (see THIRD_PARTY_NOTICES.md)."),
+    ("2026-10-14.6", "Owner request (2026-10-14), registered before any snapshot was evaluated with it. Options "
+                     "watchlist: (1) each of the six option lists (calls and puts x 3, 6 and 12 months) shows up to "
+                     "5 contracts instead of 10 (OPTION_RULES max_per_type_per_horizon); the windows, liquidity, "
+                     "spread, delta, standard-contract and per-underlying rules and the ranking weights are "
+                     "unchanged, and a list with fewer qualifying contracts is never padded. (2) Correctness: a "
+                     "contract whose theta is missing (or reported as exactly zero) is not eligible, with the reason "
+                     "'theta unavailable'; before this version a missing theta became zero and earned the maximum "
+                     "time-decay score (OPTION_THETA_RULE). (3) Quote freshness is validated from the chain's own "
+                     "snapshot timestamp (UTC, converted to the New York session date) as well as the underlying's "
+                     "last trade; a contract's last trade time is reported separately and never used as its quote "
+                     "time (OPTION_QUOTE_RULE). (4) A contract's earnings status is 'unknown' when the calendar was "
+                     "not collected, never 'none scheduled' (OPTION_EVENT_RULE). (5) Probability of profit is "
+                     "defined (PROBABILITY_OF_PROFIT_DEFINITION) and gated: a percentage may be shown only for a "
+                     "calibration record that passes PROBABILITY_GATE; none exists, so every contract shows "
+                     "PROBABILITY_NOT_ESTABLISHED. (6) Payoffs state their fee treatment (FEE_TREATMENT). Display "
+                     "rules: the options page is always listed with its status; scenario-test flags are shown "
+                     "separately from passing the research screen; pages name both the snapshot's methodology "
+                     "version and the renderer version."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -385,7 +403,7 @@ OPTION_UNDERLYINGS = (
 )
 OPTION_TYPES = ("call", "put")
 OPTION_RULES = {
-    "max_per_type_per_horizon": 10,       # up to 10 calls and 10 puts per horizon (60 contracts overall)
+    "max_per_type_per_horizon": 5,        # up to 5 calls and 5 puts per horizon (30 contracts overall; 2026-10-14.6)
     "max_per_underlying_per_horizon": 2,  # per option type
     "min_open_interest": 500,
     "min_volume": 10,
@@ -394,7 +412,105 @@ OPTION_RULES = {
     "max_delta": 0.70,
     "standard_multiplier": 100,
     "max_quote_age_business_days": 0,   # the chain's underlying quote must be from the as-of session
+    "require_theta": True,              # 2026-10-14.6: no theta -> not eligible (never scored as zero decay)
 }
+# list size per option type and horizon by methodology version (older snapshots render with their own limit)
+OPTION_LIST_SIZE_HISTORY = (("2026-10-13.1", 5, "calls only"), ("2026-10-14.2", 10, "calls and puts"),
+                            ("2026-10-14.6", 5, "calls and puts"))
+
+
+def option_list_limit(version: str | None) -> int:
+    """The per-list limit in force for a snapshot's methodology version."""
+    limit = OPTION_LIST_SIZE_HISTORY[0][1]
+    for v, n, _ in OPTION_LIST_SIZE_HISTORY:
+        if version and str(version) >= v:
+            limit = n
+    return limit
+
+
+OPTION_UNIVERSE_TEXT = (
+    "Screened universe: the option chains of this week's large-cap research candidates only (up to 10 S&P 500 "
+    "members, chosen by the stock screen before any option data is read). Within each chain, only standard "
+    "100-share contracts expiring in the window are considered. This is not the whole option market: a contract "
+    "on any other stock is never seen."
+)
+OPTION_TOP_DEFINITION = (
+    "'Top' means the highest research score among the contracts that pass every eligibility rule. The score "
+    "compares liquidity (spread and open interest), how far the stock must move to break even relative to the "
+    "move the option market itself implies, and time decay. It does not forecast the stock, the option's price "
+    "or the chance of a profit; the lists are a comparison of contract characteristics, not a trade list."
+)
+OPTION_THETA_RULE = (
+    "Theta is required. A contract whose theta is missing or reported as exactly zero cannot be scored on time "
+    "decay and is not eligible (rejection reason 'theta unavailable'). Missing values are kept as missing; they "
+    "are never replaced by zero, which would have earned the best possible time-decay score."
+)
+OPTION_QUOTE_RULE = (
+    "Quote freshness uses the chain's own snapshot timestamp (Cboe reports it in UTC; it is converted to the New "
+    "York date) and the underlying's last trade time: the underlying must have traded in the as-of session, and "
+    "the snapshot must not predate it. A contract's own last trade time only says when it last traded; an illiquid "
+    "contract can carry a current bid and ask without trading for days, so that time is shown separately and is "
+    "never treated as the quote time. Quotes are delayed, end-of-session values, never live."
+)
+OPTION_EVENT_RULE = (
+    "Earnings before expiry are checked against the scheduled dates collected for the snapshot. When that calendar "
+    "was not collected or failed, the status is 'unknown': it never reads as 'none scheduled'. Dates come from Alpha "
+    "Vantage and are not independently verified; dividends and other events are not checked."
+)
+FEE_TREATMENT = (
+    "No commissions, per-contract fees, regulatory fees or assignment and exercise costs are deducted: every "
+    "payoff, breakeven and maximum-loss figure is before fees, so a real position loses slightly more and breaks "
+    "even slightly later. Maximum loss is the premium paid at the ask x 100 shares, and a long option can lose all "
+    "of it."
+)
+OPTION_RISK_THRESHOLDS = {
+    # plain-language risk notes (display only; the ranking uses the OPTION_RANKING scales, not these)
+    "spread_wide": 0.05,            # ask - bid above 5% of mid: costly to enter and exit
+    "open_interest_thin": 2000,     # fewer outstanding contracts: harder to exit at a fair price
+    "decay_fast": 0.003,            # theta above 0.3% of the mid per day: time works against the holder quickly
+    "iv_high": 0.50,                # implied volatility above 50%: the market expects very large moves
+}
+
+# --- Probability of profit: definition, validation gate and data contract -----------------------------------
+PROBABILITY_OF_PROFIT_DEFINITION = (
+    "Probability of profit = the probability that the position's net profit or loss is positive at expiration "
+    "after the stated premium (ask x 100) and the stated costs (here: none). It is NOT the probability of "
+    "finishing in the money: a contract can expire in the money and still lose money when the intrinsic value is "
+    "below the premium paid."
+)
+ITM_PROBABILITY_DEFINITION = (
+    "Probability of finishing in the money = the probability that the stock closes beyond the strike at "
+    "expiration, ignoring the premium. Even this is not shown: no calibrated estimate of it exists here either."
+)
+PROBABILITY_NEVER_SUBSTITUTED = (
+    "Delta, the research score, the scenario weights and unvalidated pricing-model outputs (Black-Scholes "
+    "sensitivities) are never shown or used as a probability of profit."
+)
+PROBABILITY_NOT_ESTABLISHED = "Probability not established — insufficient validated evidence."
+PROBABILITY_GATE = {
+    # a percentage may be displayed only for a calibration record that satisfies every rule below
+    "required_fields": ("model_version", "option_type", "horizon", "evaluation_start", "evaluation_end",
+                        "sample_size", "out_of_sample", "holdout_consumed", "calibration_error", "brier_score",
+                        "uncertainty", "data_source"),
+    "min_sample_size": 200,         # resolved contracts per option type and horizon
+    "min_evaluation_days": 365,     # the evaluation period must cover at least a year of expirations
+    "max_calibration_error": 0.05,  # expected calibration error (reliability gap) across probability bins
+    "require_out_of_sample": True,  # forecasts recorded before outcomes were known
+    "forbid_consumed_holdout": True,  # the 2022+ equity holdout evaluated on 2026-10-12 is not reusable
+    "require_uncertainty": True,    # an interval, not a point, must accompany every percentage
+    "per_type_and_horizon": True,   # calls and puts, and each expiry window, are calibrated separately
+}
+PROBABILITY_MISSING_DATA = (
+    "Historical option chains with bid and ask at each weekly as-of date: none are stored (Cboe provides current "
+    "chains only, and option collection was off for every published snapshot).",
+    "Realized underlying prices at each contract's expiration, matched to the contracts that were listed: none, "
+    "because no contracts have been listed and expired yet.",
+    "A model that records a probability for each listed contract BEFORE its expiration, so the forecast can be "
+    "scored against the outcome.",
+    "An out-of-sample evaluation period of at least a year per option type and horizon with at least 200 resolved "
+    "contracts, which cannot exist before the lists have run for that long.",
+    "Transaction-cost assumptions that match the broker actually used (fees are currently not deducted).",
+)
 OPTION_RANKING = {
     # Weighted sum of 0..1 sub-scores; higher is better. Upside is deliberately not a ranking input.
     "liquidity": (0.45, "half spread-percentage score (0% -> 1, 10% -> 0), half open-interest score "
@@ -585,8 +701,15 @@ def spec_dict() -> dict:
         "multibagger": MULTIBAGGER_DEFINITION,
         "horizons": [asdict(h) for h in HORIZONS],
         "option_types": OPTION_TYPES, "premium_assumption": PREMIUM_ASSUMPTION,
-        "option_rules": OPTION_RULES,
+        "option_rules": OPTION_RULES, "option_list_size_history": OPTION_LIST_SIZE_HISTORY,
         "option_ranking": {k: v[0] for k, v in OPTION_RANKING.items()},
+        "option_texts": {"universe": OPTION_UNIVERSE_TEXT, "top": OPTION_TOP_DEFINITION, "theta": OPTION_THETA_RULE,
+                         "quote": OPTION_QUOTE_RULE, "event": OPTION_EVENT_RULE, "fees": FEE_TREATMENT,
+                         "risk_thresholds": OPTION_RISK_THRESHOLDS},
+        "probability_contract": {"pop": PROBABILITY_OF_PROFIT_DEFINITION, "itm": ITM_PROBABILITY_DEFINITION,
+                                 "never_substituted": PROBABILITY_NEVER_SUBSTITUTED,
+                                 "not_established": PROBABILITY_NOT_ESTABLISHED, "gate": PROBABILITY_GATE,
+                                 "missing_data": PROBABILITY_MISSING_DATA},
         "payoff_moves": PAYOFF_MOVES,
         "sensitivity": SENSITIVITY,
         "risk_free_rate": RISK_FREE_RATE,

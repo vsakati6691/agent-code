@@ -155,7 +155,8 @@ def test_phone_width_keeps_only_the_named_columns(site):
     assert kept == ["#", "Ticker / company / sector", "Price", "Score", "1Y", "Main risk / weakest evidence"]
     opt = _header_classes((site / "options.html").read_text(encoding="utf-8"), "o-3m-call")
     kept = [label for label, cls in opt if "hide-sm" not in cls]
-    assert kept == ["#", "Underlying", "Expiry", "Strike", "Bid / ask", "Premium*", "Breakeven at expiry", "Research score"]
+    # 2026-10-14.6: maximum loss stays visible on phones; bid/ask moves to the expandable facts
+    assert kept == ["#", "Underlying", "Expiry", "Strike", "Premium*", "Breakeven at expiry", "Max loss", "Research score"]
 
 
 def test_ticker_column_is_sticky_in_every_wide_table(site):
@@ -509,7 +510,8 @@ def test_flags_shared_by_most_names_collapse_to_a_count():
     assert "<details>" in long and f"{FLAG_LIST_MAX + 1} of 35 listed names" in long
 
 
-def test_options_disappear_from_name_and_menu_when_the_snapshot_has_none(tmp_path):
+def test_options_off_drops_options_from_the_name_but_keeps_the_page_linked(tmp_path):
+    """2026-10-14.6: the site name follows the data, but the options page stays in the menu and explains itself."""
     from agent_trading.dashboard.site import build_site
     from agent_trading.dashboard.store import Store
     data, out = demo_site(tmp_path / "a", two_weeks=False)
@@ -523,8 +525,9 @@ def test_options_disappear_from_name_and_menu_when_the_snapshot_has_none(tmp_pat
     for name in ("index.html", "watchlist.html", "methodology.html"):
         page = (off_out / name).read_text(encoding="utf-8")
         assert "Options Research" not in page and "Growth Research" in page, name
-        assert not re.search(r'<nav>.*href="options\.html"', page), name
-    assert 'href="options.html"' not in (off_out / "index.html").read_text(encoding="utf-8")
+        assert re.search(r'<nav>.*href="options\.html"', page), name
+    index = (off_out / "index.html").read_text(encoding="utf-8")
+    assert 'id="options-watchlist"' in index and "not collected" in index
     assert "<title>Growth Research: weekly reports</title>" in (off_out / "feed.xml").read_text(encoding="utf-8")
 
 

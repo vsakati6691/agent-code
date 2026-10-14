@@ -32,7 +32,7 @@ def a_candidate(demo, band="large"):
 # --- rules are registered before use ---------------------------------------------------------------------------
 
 def test_display_rules_are_registered_and_hashed():
-    assert spec.SPEC_VERSION == "2026-10-14.5"
+    assert spec.SPEC_VERSION >= "2026-10-14.5"          # later versions keep these display rules
     assert any(v == "2026-10-14.5" for v, _ in spec.SPEC_CHANGELOG)
     rules = spec.spec_dict()["display_rules"]
     for key in ("watchlist_price", "freshness", "dataset_states", "forensics", "changes", "compare", "scenario_lab"):
