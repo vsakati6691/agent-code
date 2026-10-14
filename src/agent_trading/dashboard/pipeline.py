@@ -622,7 +622,7 @@ def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -
         out["last_results_status"] = f"not checked ({why})"
         return out
     from .providers import parse_earnings_8k
-    dates = parse_earnings_8k(sub)
+    dates = parse_earnings_8k(sub, ctx.as_of)          # point in time: filings after the as-of date are ignored
     if not dates:
         out["last_results_status"] = "no 8-K item 2.02 among the recent SEC filings"
         return out

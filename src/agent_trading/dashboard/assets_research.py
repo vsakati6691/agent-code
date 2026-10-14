@@ -239,9 +239,10 @@ COMPARE_JS = r"""
     var t = document.createElement('table');
     t.setAttribute('aria-label', 'Side-by-side comparison');
     var th = document.createElement('thead'), hr = document.createElement('tr');
-    hr.appendChild(text('th', 'Measure'));
+    var first = text('th', 'Measure'); first.scope = 'col'; hr.appendChild(first);
     es.forEach(function (e, i) {
       var h = document.createElement('th'), a = text('a', e.ticker);
+      h.scope = 'col';
       a.href = e.url;
       h.appendChild(a);
       h.appendChild(text('div', e.name || '', 'small muted'));

@@ -94,6 +94,11 @@ footer { color: var(--text-muted); font-size: 13px; border-top: 1px solid var(--
   .chart svg { max-width: 100%; }
 }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* keyboard users: the first Tab press reveals a link straight to the page content */
+.skip { position: absolute; left: -999px; top: 8px; z-index: 10; padding: 6px 10px; background: var(--surface-1);
+  border: 2px solid var(--series-1); border-radius: 6px; color: var(--text-primary); }
+.skip:focus { left: 16px; }
+main:focus { outline: none; }
 .rowtoggle { font: inherit; background: none; border: 0; padding: 0; color: var(--link); cursor: pointer; text-align: left; }
 .rowtoggle::after { content: " \25B8"; color: var(--text-muted); }
 .rowtoggle[aria-expanded="true"]::after { content: " \25BE"; }

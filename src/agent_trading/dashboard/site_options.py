@@ -320,15 +320,19 @@ premium, while before-expiration values are Black-Scholes MODEL estimates.</div>
         return head + ('<h2>The six lists</h2><p class="small">Top 5 calls and top 5 puts for about 3 months, 6 months and 1 year '
                        'to expiry will appear here once option chains are collected and validated for a snapshot (see the '
                        'status above). The <a href="methodology.html">methodology</a> page has every rule.</p>' + unused)
-    hz_tabs = "".join(f'<button role="tab" data-dim="hz" data-val="{h.key}" aria-selected="false">{E(HZ_SHORT[h.key])} · {E(h.title.lower())} '
+    # ARIA tabs pattern over two dimensions: a type tab controls that type's three panels, a horizon tab the two
+    # panels in that window, and each panel names both tabs; the ids never collide with the #call-3m view hashes
+    hz_tabs = "".join(f'<button role="tab" id="otab-hz-{h.key}" aria-controls="{" ".join(f"opanel-{k}-{h.key}" for k in spec.OPTION_TYPES)}" '
+                      f'data-dim="hz" data-val="{h.key}" aria-selected="false">{E(HZ_SHORT[h.key])} · {E(h.title.lower())} '
                       f'<span class="small muted">({h.min_dte}-{h.max_dte} d)</span></button>' for h in spec.HORIZONS)
-    type_tabs = ('<button role="tab" data-dim="type" data-val="call" aria-selected="false">Calls</button>'
-                 '<button role="tab" data-dim="type" data-val="put" aria-selected="false">Puts</button>')
+    type_tabs = "".join(f'<button role="tab" id="otab-type-{k}" aria-controls="{" ".join(f"opanel-{k}-{h.key}" for h in spec.HORIZONS)}" '
+                        f'data-dim="type" data-val="{k}" aria-selected="false">{k.capitalize()}s</button>' for k in spec.OPTION_TYPES)
     panels = []
     for h in spec.HORIZONS:
         ls = lists_of(o.get(h.key) or {})
         for kind in spec.OPTION_TYPES:
-            panels.append(f'<section data-hz="{h.key}" data-type="{kind}" hidden><h2>{E(h.title)} · {kind}s · '
+            panels.append(f'<section data-hz="{h.key}" data-type="{kind}" id="opanel-{kind}-{h.key}" role="tabpanel" '
+                          f'aria-labelledby="otab-type-{kind} otab-hz-{h.key}" hidden><h2>{E(h.title)} · {kind}s · '
                           f'{h.min_dte}-{h.max_dte} days to expiry</h2>{_list(snap, h, kind, ls.get(f"{kind}s"), o)}</section>')
     quotes = o.get("quotes") or {}
     qrows = "".join(f'<li>{E(s)}: {E(q.get("quote_status", ""))}; snapshot {E(str(q.get("quote_time_utc") or "not stored").replace("+00:00", ""))} UTC; '

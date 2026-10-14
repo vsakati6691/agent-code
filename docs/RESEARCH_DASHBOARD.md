@@ -47,6 +47,26 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 - **Long definitions** (multibagger, probabilities, scenario method) are one sentence plus a toggle on the overview and
   detail pages. The methodology page has the full text.
 
+### Fixes on 2026-10-14 (improvement cycle; no methodology change, so no new spec version)
+
+- **Tracking counts NYSE sessions.** `tracking.forward_return` decided "pending" or "prices stop (possible
+  delisting)" by counting weekdays, which overstates elapsed sessions by one per exchange holiday. On the day a
+  horizon fell due in a holiday week (for example 21 weekdays after 2026-01-02 is only 20 sessions, MLK Day), every
+  complete series was reported as a possible delisting and the horizon as unavailable. Elapsed sessions now come from
+  the same NYSE calendar as the tracking schedule shown on the site; a series that reaches the as-of session with
+  fewer bars than sessions is reported as "missing bars", never bridged.
+- **Point-in-time SEC filing dates.** The SEC submissions file is a current view. The "last results (8-K item 2.02)"
+  date and the watchlist's next-filing estimate now ignore filings made after the as-of date, so a rerun for an
+  earlier week, or a Saturday run after a holiday Friday (EDGAR is open on Good Friday), never shows a later release
+  as verified.
+- **A failed tracking update no longer loses the week.** The workflow commits the data branch only when the run exits
+  0 or 2. A crash in the tracking step after the snapshot was written used to exit 1, which dropped the snapshot and
+  the audit lines with it. The run now records `tracking_failed` in the audit log, writes a `partial` status and
+  exits 0; `tracking.json` is recomputed from the stored snapshots on the next run.
+- **Accessibility.** Every column header carries `scope="col"` (including the browser-built comparison table), the
+  growth and options tab lists follow the ARIA tabs pattern (each tab names the panels it controls and each panel
+  names its tabs), and every page starts with a "Skip to content" link to a focusable `main` landmark.
+
 ### Spec 2026-10-14.6: options watchlist, correctness fixes, probability gate
 
 Registered on 2026-10-14 before any snapshot was evaluated with it (the only published snapshot, 2026-10-13, has no
@@ -254,6 +274,8 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
 - **Overlap:** a workflow `concurrency` group serializes runs, without cancelling a run in progress.
 - **Failures:**
   - A failed run writes `status.json` and an audit entry, and keeps every earlier snapshot.
+  - A failure after the snapshot is written (the tracking update) is recorded as `tracking_failed`; the snapshot is
+    kept, the status is `partial`, and tracking is recomputed on the next run.
   - The site is rebuilt from the last good snapshot, with a red "latest weekly update failed" banner.
   - The final workflow job fails, so the run shows red in the Actions tab.
   - If no new build is deployed at all, the page's own script shows a "may be out of date" banner once the data is over nine days old.
@@ -263,7 +285,8 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
 ## Validation and performance tracking
 
 - Each weekly snapshot is immutable (SHA-256 manifest); `verify` re-checks all of them on every run.
-- Tracking compounds each snapshot's equal-weighted list from its as-of close over 21, 63, 126 and 252 sessions.
+- Tracking compounds each snapshot's equal-weighted list from its as-of close over 21, 63, 126 and 252 sessions
+  (NYSE sessions, counted with the same calendar as the schedule shown on the history page).
   - Results are **price returns, minus assumed friction** (15, 25 and 50 bps per side for large, mid and speculative), compared with SPY, IJH or IWM.
   - Turnover and a one-week chained drawdown are also reported.
 - **Bias controls:**

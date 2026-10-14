@@ -7,6 +7,7 @@ import re
 from dataclasses import replace
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -290,6 +291,30 @@ def test_forward_returns_never_look_ahead_and_report_delisting():
     assert r is None and "delisting" in status
 
 
+def test_forward_return_counts_nyse_sessions_not_weekdays():
+    """Regression (2026-10-14): 2026-01-19 (MLK Day) has no bar. Twenty-one weekdays after 2026-01-02 is only 20
+    sessions, and weekday counting reported every complete series as a possible delisting on that day."""
+    from agent_trading.market_calendar import is_trading_day
+    days = [d for d in pd.bdate_range("2026-01-02", "2026-03-31") if is_trading_day(d.date())]
+    assert pd.Timestamp("2026-01-19") not in days
+    close = pd.Series(range(100, 100 + len(days)), index=pd.DatetimeIndex(days), dtype=float)
+    start = date(2026, 1, 2)
+    assert tracking.sessions_elapsed(start, date(2026, 2, 2)) == 20 and int(np.busday_count(start, date(2026, 2, 2))) == 21
+    assert tracking.forward_return(close[close.index <= "2026-02-02"], start, 21, date(2026, 2, 2)) == (None, "pending")
+    r, status = tracking.forward_return(close[close.index <= "2026-02-03"], start, 21, date(2026, 2, 3))
+    assert status == "ok" and r == pytest.approx(close.iloc[21] / close.iloc[0] - 1)
+    # a series that really stops before the as-of session is still reported as a possible delisting
+    r, status = tracking.forward_return(close.iloc[:10], start, 21, date(2026, 3, 31))
+    assert r is None and status.startswith("prices stop on 2026-01-15") and "delisting" in status
+    # a vendor gap (a session without a bar) is named as such, never bridged or called a delisting
+    gap = close[close.index <= "2026-02-03"].drop(pd.Timestamp("2026-01-27"))
+    r, status = tracking.forward_return(gap, start, 21, date(2026, 2, 3))
+    assert r is None and status == "missing bars: only 20 of 21 sessions after 2026-01-02 have a close"
+    # the tracking schedule shown on the site uses the same calendar: results appear when the sessions have passed
+    from agent_trading.dashboard.fmt import tracking_schedule
+    assert "1-month results from about 2026-02-03" in tracking_schedule(["2026-01-02"])
+
+
 def test_tracking_applies_friction_turnover_and_never_claims_edge():
     idx = pd.bdate_range("2026-01-01", periods=80)
     prices = {t: pd.Series([100 * (1.001 ** i) for i in range(80)], index=idx) for t in ("A", "B", "C", "SPY")}
@@ -430,6 +455,28 @@ def test_cli_failed_run_keeps_last_snapshot_and_site_shows_stale_banner(tmp_path
     index = (out / "index.html").read_text(encoding="utf-8")
     assert "latest weekly update failed" in index and "2026-10-09" in index
     assert (out / "options.html").exists() and "Options data unavailable" in (out / "options.html").read_text(encoding="utf-8")
+
+
+def test_cli_keeps_the_snapshot_when_the_tracking_update_fails(tmp_path, cli_env, monkeypatch):
+    """A failure after the snapshot is written must not discard the week: the workflow commits the data branch
+    only on exit 0 or 2, so the run records the failure, writes status.json and still exits 0."""
+    monkeypatch.setattr("agent_trading.dashboard.__main__.tracking.track", lambda *a, **k: 1 / 0)
+    data = tmp_path / "data"
+    assert cli(["run", "--data", str(data), "--as-of", "2026-10-09", "--no-options"]) == 0
+    store = Store(data)
+    assert store.dates() == ["2026-10-09"] and store.verify_all() == []
+    assert store.read_json("tracking.json") is None                       # not written: nothing stale or invented
+    events = [e["event"] for e in store.audit_log()]
+    assert events[-3:] == ["snapshot_written", "tracking_failed", "run_finished"]
+    failed = next(e for e in store.audit_log() if e["event"] == "tracking_failed")
+    assert failed["error"].startswith("ZeroDivisionError")
+    status = store.status()
+    assert status["status"] == "partial" and status["as_of"] == "2026-10-09"
+    assert any("tracking not updated (ZeroDivisionError)" in p for p in status["problems"])
+    assert cli(["verify", "--data", str(data)]) == 0
+    out = tmp_path / "site"
+    assert cli(["build", "--data", str(data), "--out", str(out)]) == 0      # the site still builds from the snapshot
+    assert "Stale data" not in (out / "index.html").read_text(encoding="utf-8")
 
 
 def test_cli_crash_is_recorded_not_raised(tmp_path, cli_env, monkeypatch):
