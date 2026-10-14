@@ -81,14 +81,29 @@ def profile_of(band: dict) -> tuple:
 
 # --- detail page ----------------------------------------------------------------------------------------
 
+NICE_STEPS = (10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000)
+
+
+def nice_ticks(lo: float, hi: float, max_ticks: int = 7) -> list[float]:
+    """Round axis ticks (multiples of 10/25/50/100/250/500...) covering [lo, hi], at most `max_ticks`."""
+    import math as _m
+    for step in NICE_STEPS:
+        start, end = _m.floor(lo / step) * step, _m.ceil(hi / step) * step
+        if end == start:
+            end = start + step
+        if (end - start) / step + 1 <= max_ticks:
+            return [start + i * step for i in range(int(round((end - start) / step)) + 1)]
+    step = NICE_STEPS[-1]
+    return [_m.floor(lo / step) * step, _m.ceil(hi / step) * step]
+
+
 def line_chart(chart: dict, ticker: str, bench: str) -> str:
     if not chart or not chart.get("stock"):
         return '<p class="muted">Price history unavailable.</p>'
     W, H, L, R, T, B = 720, 260, 48, 660, 14, 230
     vals = chart["stock"] + (chart.get("benchmark") or [])
-    lo, hi = min(vals), max(vals)
-    pad = (hi - lo) * 0.06 or 1
-    lo, hi = lo - pad, hi + pad
+    tick_values = nice_ticks(min(vals), max(vals))
+    lo, hi = tick_values[0], tick_values[-1]
     n = len(chart["stock"])
 
     def xy(i, v):
@@ -98,8 +113,7 @@ def line_chart(chart: dict, ticker: str, bench: str) -> str:
         return " ".join(f'{"M" if i == 0 else "L"}{x:.1f},{y:.1f}' for i, (x, y) in
                         enumerate(xy(i, v) for i, v in enumerate(series)))
     ticks = []
-    for k in range(5):
-        v = lo + (hi - lo) * k / 4
+    for v in tick_values:
         _, y = xy(0, v)
         ticks.append(f'<line x1="{L}" x2="{R}" y1="{y:.1f}" y2="{y:.1f}" stroke="var(--border)" stroke-width="1"/>'
                      f'<text x="{L - 6}" y="{y + 4:.1f}" text-anchor="end" font-size="11" fill="var(--text-muted)">{v:.0f}</text>')

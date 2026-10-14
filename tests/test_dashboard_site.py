@@ -91,3 +91,18 @@ def test_pages_never_say_net_debt_net_cash(site):
 def test_detail_page_keeps_list_title_casing(site):
     page = (site / "stock" / "large-S11.html").read_text(encoding="utf-8")
     assert "in the Large cap (S&amp;P 500 members) list" in page and "s&amp;p 500 members" not in page
+
+
+def test_chart_ticks_are_round_numbers():
+    from agent_trading.dashboard.site import nice_ticks
+    assert nice_ticks(22, 1040) == [0, 250, 500, 750, 1000, 1250]
+    assert nice_ticks(95, 140) == [90, 100, 110, 120, 130, 140]
+    assert nice_ticks(70, 180) == [50, 75, 100, 125, 150, 175, 200]
+    t = nice_ticks(22, 5040)
+    assert t[0] <= 22 and t[-1] >= 5040 and all(v % 500 == 0 for v in t) and len(t) <= 7
+
+
+def test_price_chart_axis_labels_are_round(site):
+    page = (site / "stock" / "large-S11.html").read_text(encoding="utf-8")
+    labels = [int(x) for x in re.findall(r'text-anchor="end" font-size="11" fill="var\(--text-muted\)">(-?\d+)</text>', page)]
+    assert labels and all(v % 10 == 0 for v in labels)
