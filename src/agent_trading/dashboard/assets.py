@@ -111,7 +111,11 @@ tr.detail > td { white-space: normal; }
 details.more[open] > p { margin: 6px 0 0; }
 .chart.range { overflow-x: auto; } .chart.range svg { min-width: 560px; }
 caption { text-align: left; }
+.symsearch input { font: inherit; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; width: 150px;
+  background: var(--surface-1); color: var(--text-primary); }
+header.site .inner .symsearch { margin-left: auto; }
 @media (max-width: 700px) {
+  header.site .inner .symsearch { margin-left: 0; } .symsearch input { width: 100%; }
   header.site .inner { flex-direction: column; align-items: stretch; gap: 4px; padding-top: 8px; padding-bottom: 6px; }
   nav { display: flex; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 14px; padding-bottom: 4px; min-width: 0; max-width: 100%;
         scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
@@ -123,6 +127,19 @@ caption { text-align: left; }
 
 JS = r"""
 (function () {
+  // header search: open the symbol page when the input matches a ticker in the inline datalist
+  var sf = document.querySelector('.symsearch');
+  if (sf) {
+    var q = sf.querySelector('input');
+    var known = {};
+    sf.querySelectorAll('datalist option').forEach(function (o) { known[o.value.toUpperCase()] = o.value; });
+    function go() {
+      var t = known[q.value.trim().toUpperCase()];
+      if (t) location.href = sf.dataset.base + encodeURIComponent(t) + '.html';
+    }
+    q.addEventListener('change', go);
+    q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+  }
   // phone header: keep the current page's link in view inside the scrolling nav
   var cur = document.querySelector('nav a[aria-current]');
   if (cur && cur.parentNode.scrollWidth > cur.parentNode.clientWidth) {

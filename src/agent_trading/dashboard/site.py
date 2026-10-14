@@ -24,6 +24,9 @@ from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, o
 from .scenarios import implied_growth_text
 from .site_options import lists_of, options_page
 from .site_overview import band_title, excluded_page, overview
+from .site_symbol import symbol_index, symbol_page
+
+_SYMBOLS: dict[str, str] = {}      # ticker -> name, for the header search (set by build_site)
 from .site_watchlist import watchlist_csv, watchlist_page
 from .store import Store, find_private_keys
 
@@ -40,13 +43,19 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
     up = "../" * depth
     nav = "".join(f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>'
                   for href, label in NAV)
+    opts = "".join(f'<option value="{E(t)}">{E(n)}</option>' for t, n in _SYMBOLS.items())
+    search = (f'<form class="symsearch" role="search" data-base="{up}symbol/" onsubmit="return false">'
+              f'<label class="sr-only" for="symq">Find a ticker</label><input id="symq" type="search" list="symlist" '
+              f'placeholder="Find a ticker" autocomplete="off" aria-describedby="symhint">'
+              f'<span id="symhint" class="sr-only">Choose a ticker from the list to open its page</span>'
+              f'<datalist id="symlist">{opts}</datalist></form>' if _SYMBOLS else "")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{E(title)} · Growth &amp; Options Research</title>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="{up}assets/style.css"></head>
 <body><header class="site"><div class="inner"><a class="brand" href="{up}index.html">Growth &amp; Options Research</a>
-<nav>{nav}</nav></div></header>
+<nav>{nav}</nav>{search}</div></header>
 <main>{freshness}{body}
 <footer>{E(spec.DISCLAIMER)} Methodology version {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
 Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>
@@ -462,6 +471,8 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         (out / "methodology.html").write_text(page("Methodology", methodology_page(), "methodology.html"), encoding="utf-8")
         return {"pages": 2, "snapshot": None}
     snap = store.load(dates[-1])
+    _SYMBOLS.clear()
+    _SYMBOLS.update(symbol_index(snap))
     hits = find_private_keys(snap)
     if hits:
         raise RuntimeError(f"refusing to publish: private-looking fields {hits[:5]}")
@@ -479,6 +490,10 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "reports").mkdir()
     (out / "downloads").mkdir()
     (out / "data").mkdir()
+    (out / "symbol").mkdir()
+    history = [snap if d == dates[-1] else store.load(d) for d in dates]
+    for t in _SYMBOLS:
+        write(f"symbol/{t}.html", f"{t} · symbol", symbol_page(t, snap, history), "", 1)
     for key, band in snap["bands"].items():
         write(f"excluded-{key}.html", f"Excluded: {band_title(key, band)}", excluded_page(key, band), "index.html")
     n = 0

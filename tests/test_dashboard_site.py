@@ -247,3 +247,26 @@ def test_excluded_lists_live_on_their_own_compact_pages(site):
     assert re.search(r'href="excluded-(mid|small|multibagger).html"', index) and "<th>Reason</th>" not in index
     page = (site / "excluded-small.html").read_text(encoding="utf-8")
     assert page.count("<h1") == 1 and "Excluded from" in page
+
+
+# --- item 13: per-symbol pages and header search --------------------------------------------
+
+def test_symbol_pages_cover_lists_options_and_watchlist(site):
+    import json as _json
+    snap = _json.loads((site / "data" / "latest.json").read_text())
+    expected = {c["ticker"] for b in snap["bands"].values() for c in b["candidates"]}
+    expected |= set(snap["options"]["underlyings"]) | {e["ticker"] for e in snap["watchlist"]["entries"]}
+    have = {p.stem for p in (site / "symbol").glob("*.html")}
+    assert expected == have
+    page = (site / "symbol" / "S04.html").read_text(encoding="utf-8")
+    for heading in ("This week's lists", "Option contracts", "Watchlist 2030", "History across snapshots"):
+        assert heading in page
+    assert page.count("2026-10-02") >= 1 and page.count("2026-10-09") >= 1          # both snapshots in history
+    nope = (site / "symbol" / "NOPE.html").read_text(encoding="utf-8")
+    assert "Scenario unavailable" in nope and "Not in any of this week" in nope
+
+
+def test_every_page_has_the_inline_symbol_search(site):
+    for p in _pages(site):
+        text = p.read_text(encoding="utf-8")
+        assert '<datalist id="symlist">' in text and 'value="S04"' in text, p.name
