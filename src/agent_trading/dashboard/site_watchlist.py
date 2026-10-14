@@ -6,7 +6,7 @@ import html
 import io
 
 from . import spec
-from .fmt import cap, csv_value, money, num, ok, pct, sval
+from .fmt import cap, csv_value, money, net_position, num, ok, pct, sval
 
 E = html.escape
 
@@ -66,7 +66,7 @@ def _assumptions(e: dict) -> str:
         if "starting_revenue_growth" in a:
             txt = (f"revenue growth starts at {pct(a['starting_revenue_growth'])} and fades toward "
                    f"{pct(spec.SCENARIO_TERMINAL_GROWTH)}; 2030 revenue {cap(a['revenue_2030'])}; exit EV/Sales "
-                   f"{num(a['exit_ev_to_sales'], 1)}x; net cash held {cap(a['net_cash_held'])}; dilution "
+                   f"{num(a['exit_ev_to_sales'], 1)}x; {net_position(-a['net_cash_held'], False)} held flat; dilution "
                    f"{pct(a['annual_dilution'], 1)}/yr")
             if a.get("margin_2030") is not None:
                 txt += (f"; {a.get('margin_source')} margin {pct(a['margin_today'])} → {pct(a['margin_2030'])} by 2030 "
@@ -102,7 +102,7 @@ def watchlist_page(snap: dict) -> str:
             f"operating margin {pct(km.get('operating_margin'))}" if ok(km.get("operating_margin")) else "",
             f"FCF {cap(km.get('fcf_ttm'))}" if ok(km.get("fcf_ttm")) else "",
             f"EV/Sales {num(km.get('ev_to_sales'), 1)}x" if ok(km.get("ev_to_sales")) else "",
-            f"net debt {cap(km.get('net_debt'))}" if ok(km.get("net_debt")) else "",
+            net_position(km.get("net_debt"), False) if ok(km.get("net_debt")) else "",
             f"dilution {pct(km.get('dilution'), 1)}/yr" if ok(km.get("dilution")) else "") if t)
         bodies.append(f"""<tbody class="item" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
 <td><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>

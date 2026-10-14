@@ -76,6 +76,18 @@ def test_detail_page_inputs_are_rounded_percentages():
     assert metric("log_market_cap", 9.6).endswith("market cap")
 
 
+def test_net_debt_or_net_cash_never_both():
+    from agent_trading.dashboard.fmt import net_position
+    assert net_position(1.5e9) == "Net debt $1.5B" and net_position(-1.5e9) == "Net cash $1.5B"
+    assert net_position(-2e8, False) == "net cash $200M" and net_position(None) == "Net debt n/a"
+
+
+def test_pages_never_say_net_debt_net_cash(site):
+    for p in site.rglob("*.html"):
+        text = p.read_text(encoding="utf-8").lower()
+        assert "net debt net cash" not in text and "net cash held -" not in text, p.name
+
+
 def test_detail_page_keeps_list_title_casing(site):
     page = (site / "stock" / "large-S11.html").read_text(encoding="utf-8")
     assert "in the Large cap (S&amp;P 500 members) list" in page and "s&amp;p 500 members" not in page

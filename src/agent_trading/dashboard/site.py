@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import spec
 from .assets import CSS, JS
-from .fmt import cap, csv_value, metric, money, num, ok as _ok, pct, sval
+from .fmt import cap, csv_value, metric, money, net_position, num, ok as _ok, pct, sval
 from .scenarios import implied_growth_text
 from .site_options import lists_of, options_page
 from .site_overview import band_title, overview
@@ -162,7 +162,7 @@ def detail(c: dict, snap: dict) -> str:
             rows += (f'<tr><td><strong>{key}</strong></td>{cells}<td class="small">start growth {pct(a["starting_revenue_growth"])}'
                      f', fading to {pct(spec.SCENARIO_TERMINAL_GROWTH)}; exit EV/Sales {num(a["exit_ev_to_sales"], 1)}x; '
                      f'dilution {pct(a["annual_dilution"], 1)}/yr; FCF margin {pct(a["fcf_margin_start"])} &rarr; '
-                     f'{pct(a.get("fcf_margin_end", a.get("fcf_margin_year5")))} by year {years[-1]}; net cash held {cap(a["net_cash_held"]) if (a["net_cash_held"] or 0) >= 0 else "-" + cap(-a["net_cash_held"])}</td></tr>')
+                     f'{pct(a.get("fcf_margin_end", a.get("fcf_margin_year5")))} by year {years[-1]}; {net_position(-a["net_cash_held"] if _ok(a.get("net_cash_held")) else None, False)} held flat</td></tr>')
         fl = sc["flags"]
         yn = lambda k: "yes" if fl.get(k) else "no"  # noqa: E731
         ten = (f' · within ten years, bull case 5x: <strong>{yn("bull_5x_in_10y")}</strong>, base case 2x: '
@@ -207,7 +207,7 @@ summary of evidence, not a recommendation.</p>
 <div class="card">Revenue TTM {cap(m.get("revenue_ttm"))} · growth {pct(m.get("revenue_growth_ttm"))} · 3-yr CAGR {pct(m.get("revenue_cagr_3y"))}</div>
 <div class="card">Gross margin {pct(m.get("gross_margin"))} · operating margin {pct(m.get("operating_margin"))} · FCF margin {pct(m.get("fcf_margin"))}</div>
 <div class="card">EV/Sales {num(m.get("ev_to_sales"), 1)}x · P/E {num(m.get("pe"), 1)} · FCF yield {pct(m.get("fcf_yield"), 1)} · {E(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")))}</div>
-<div class="card">Net debt {cap(m.get("net_debt")) if (m.get("net_debt") or 0) >= 0 else "net cash " + cap(-m["net_debt"])} · current ratio {num(m.get("current_ratio"))} · dilution {pct(m.get("dilution"), 1)} · SBC/revenue {pct(m.get("sbc_to_revenue"))}</div>
+<div class="card">{net_position(m.get("net_debt"))} · current ratio {num(m.get("current_ratio"))} · dilution {pct(m.get("dilution"), 1)} · SBC/revenue {pct(m.get("sbc_to_revenue"))}</div>
 </div>
 <div class="table-wrap"><table><thead><tr><th>USD millions</th>{fhead}</tr></thead><tbody>
 {frow("Revenue", "revenue")}{frow("Gross profit", "gross_profit")}{frow("Operating income", "operating_income")}

@@ -81,6 +81,14 @@ def csv_value(v):
     return v
 
 
+def net_position(net_debt, capital: bool = True) -> str:
+    """'Net debt $X' or 'Net cash $X' (never both words); net_debt < 0 means net cash."""
+    if not ok(net_debt):
+        return "Net debt n/a" if capital else "net debt n/a"
+    word = "debt" if net_debt > 0 else "cash"
+    return f"{'N' if capital else 'n'}et {word} {cap(abs(net_debt))}"
+
+
 def sval(v) -> str:
     """data-v attribute for numeric sorting (plain digits, never scientific notation)."""
     return plain(v, 8).replace(",", "") if ok(v) else ""
