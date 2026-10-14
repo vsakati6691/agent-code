@@ -9,6 +9,7 @@ from . import spec
 from .evidence import quality_level
 from .fmt import cap, csv_value, money, net_position, num, ok, pct, sval
 from .site_research import quality_badge
+from .site_scan import pin_button
 
 E = html.escape
 OLD_TYPE_DETAIL = " (warrant, right, unit, preferred, note, fund or blank-check)"
@@ -58,7 +59,9 @@ def range_chart(entries: list[dict]) -> str:
 def _scen_cells(e: dict) -> str:
     sc = e.get("scenarios")
     if not sc:
-        return '<td colspan="3" class="small muted">Scenario unavailable</td>'
+        # Keep all three cells so sorting later columns uses the correct index.
+        return ('<td class="small muted" data-v="">Scenario unavailable</td>'
+                '<td class="small muted" data-v="">—</td><td class="small muted" data-v="">—</td>')
     return "".join(f'<td class="num" data-v="{sval(sc[k]["change"])}">{money(sc[k]["price"])}<div class="small muted">'
                    f'{pct(sc[k]["change"], 0, True)} · {pct(sc[k]["annualized"], 1, True)}/yr</div></td>'
                    for k in ("bear", "base", "bull"))
@@ -111,7 +114,9 @@ def _unlock(e: dict) -> str:
 
 def watchlist_page(snap: dict) -> str:
     w = snap.get("watchlist")
-    head = """<h1>Watchlist — 2030 Outlook</h1>"""
+    head = ('<div class="section-heading watch-heading"><div><p class="eyebrow">RESEARCH DESK / LONG VIEW</p>'
+            '<h1>Watchlist — 2030 Outlook</h1><p class="lede">Scan the evidence. Explore the assumptions.</p></div>'
+            '<a class="action" href="index.html#candidate-scan">← Daily scan</a></div>')
     if not w or w.get("status") != "ok":
         return head + '<div class="banner warn"><strong>Watchlist not available</strong>This snapshot has no watchlist ' \
                       'section (it predates spec 2026-10-14.2 or no list is configured).</div>'
@@ -128,8 +133,8 @@ def watchlist_page(snap: dict) -> str:
             f"EV/Sales {num(km.get('ev_to_sales'), 1)}x" if ok(km.get("ev_to_sales")) else "",
             net_position(km.get("net_debt"), False) if ok(km.get("net_debt")) else "",
             f"dilution {pct(km.get('dilution'), 1)}/yr" if ok(km.get("dilution")) else "") if t)
-        bodies.append(f"""<tbody class="item" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
-<td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
+        bodies.append(f"""<tbody class="item" data-ticker="{E(e['ticker'])}" data-scenario="{'available' if e.get('scenarios') else 'unavailable'}" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
+<td class="tk" data-v="{E(e['ticker'])}">{pin_button(e['ticker'])}<button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
 <div class="small muted">{E(e.get("name") or "name not resolved")}</div></td>
 <td class="small hide-sm" data-v="{E(tidy(e.get("asset_type")))}">{E(tidy(e.get("asset_type")) or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
@@ -152,22 +157,37 @@ status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") el
     conc = " · ".join(f"{E(k)}: {v}" for k, v in sorted(w.get("concentration", {}).items(), key=lambda kv: -kv[1]))
     themes = sorted({e.get("sector") or "Unknown" for e in entries})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in themes)
-    return head + f"""<div class="banner warn"><strong>Conditional 2030 price scenarios</strong>{E(w["statement"])}</div>
-<div class="banner info small"><strong>Separate research universe</strong>{E(w["separation"])} The ticker list was imported on
-{E(w["imported_at"])} and is not synchronized with any account; it works without a Robinhood login.</div>
+    available = sum(bool(e.get("scenarios")) for e in entries)
+    priced = sum(ok(e.get("price")) for e in entries)
+    return head + f"""<div class="watch-summary scan-stats">
+<div class="scan-stat"><span>Symbols</span><strong>{len(entries)}</strong><small>Separate research universe</small></div>
+<div class="scan-stat"><span>With a recorded price</span><strong>{priced}</strong><small>Check each row's price date</small></div>
+<div class="scan-stat"><span>Scenarios available</span><strong>{available}</strong><small>Conditional, not forecasts</small></div>
+<div class="scan-stat"><span>Scenarios unavailable</span><strong>{len(entries) - available}</strong><small>Reasons stay visible in each row</small></div></div>
+<div class="banner warn small"><strong>Conditional 2030 price scenarios</strong>Assumption-based price outcomes, not predictions or probabilities.
+<details><summary>Read the scenario limits</summary><p>{E(w["statement"])}</p></details></div>
+<details class="small"><summary>About this watchlist and its concentration</summary><p><strong>Separate research universe</strong> {E(w["separation"])} The ticker list was imported on
+{E(w["imported_at"])} and is not synchronized with any account; it works without a Robinhood login.</p>
 <p class="small">Valuation date {E(snap["as_of"])} close · target {E(w["target_date"])} · horizon {num(w["years_to_target"], 2)} years ·
-theme concentration: {conc}.</p>
-{range_chart(entries)}
+theme concentration: {conc}.</p></details>
 <div class="controls"><input type="search" placeholder="Search ticker, name, reason" data-search="t-watch" aria-label="Search watchlist">
 <select data-sector="t-watch" aria-label="Filter by sector or theme"><option value="">All sectors and themes</option>{opts}</select>
+<select data-filter="t-watch" data-field="scenario" aria-label="Filter scenario availability"><option value="">All scenario states</option><option value="available">Scenarios available</option><option value="unavailable">Scenarios unavailable</option></select>
+<select data-filter="t-watch" data-field="pinned" aria-label="Filter pinned watchlist"><option value="">All tickers</option><option value="yes">Pinned tickers</option></select>
+<button class="action" type="button" data-reset="t-watch">Reset filters</button>
 <span class="small muted" data-count="t-watch" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="t-watch" data-table data-grouped><caption class="sr-only">Watchlist 2030 scenarios</caption>
 <thead><tr><th class="tk" data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
 <th class="num" data-sort="num">Bear 2030</th><th class="num" data-sort="num">Base 2030</th><th class="num" data-sort="num">Bull 2030</th>
 <th class="hide-sm">Method</th><th data-sort="text">Evidence</th><th>Unavailable / notes</th></tr></thead>{''.join(bodies)}</table></div>
+<p class="scan-empty" data-empty="t-watch" hidden>No symbols match these filters. Reset filters or pin a ticker with its star first.</p>
+<p class="small muted" data-pin-status>Pins are saved only on this device.</p>
+<details class="context-details"><summary>Compare all 2030 scenario ranges</summary>{range_chart(entries)}</details>
+<details class="context-details"><summary>Valuation methods and assumptions</summary>
 <p class="small"><a href="downloads/{E(snap["as_of"])}_watchlist_2030.csv" download>Download (CSV)</a> · Prices are split-adjusted
 price data; scenarios are PRICE outcomes and exclude distributions (total return would add dividends). Methods:
-{E(spec.WATCHLIST_COMPANY_METHOD)} {E(spec.LEVERAGED_METHOD)} {E(spec.FEE_NOTE)}</p>"""
+{E(spec.WATCHLIST_COMPANY_METHOD)} {E(spec.LEVERAGED_METHOD)} {E(spec.FEE_NOTE)}</p></details>
+<p class="small"><a class="action" href="downloads/{E(snap['as_of'])}_watchlist_2030.csv" download>Download watchlist CSV ↓</a></p>"""
 
 
 def watchlist_csv(snap: dict) -> str:
