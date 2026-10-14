@@ -1,4 +1,4 @@
-# Growth & Options Research Dashboard (GitHub Pages)
+# Tikasa Stock Research Dashboard (GitHub Pages)
 
 A static website, rebuilt every weekend by GitHub Actions, that compares US growth stocks, long-horizon speculative candidates, S&P 500 call and put contracts, and the owner's watchlist using rules fixed in advance. The outputs are **research comparisons only**: they are not personalized advice, recommendations, or instructions to trade. The dashboard never reads the brokerage account and never places orders.
 
@@ -6,14 +6,15 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 - Workflow: `.github/workflows/research-dashboard.yml`
 - Rules: `src/agent_trading/dashboard/spec.py` (pre-registered and hashed)
 - Tests: `tests/test_dashboard.py`, `tests/test_dashboard_v2.py`, `tests/test_dashboard_http.py`, `tests/test_dashboard_site.py` (builds a two-snapshot demo site and checks it: links, page size, table labels, one h1 per page, no raw values), `tests/test_dashboard_ai.py` (AI lists, scenario test, private-company validation, page weight)
-- Site modules: `site.py` (shell, detail pages, history, methodology, audit, build), `site_overview.py`, `site_ai.py`, `site_options.py`, `site_watchlist.py`, `fmt.py`; AI logic in `ai.py`
+- Site modules: `site.py` (shell, detail pages, history, methodology, audit, build), `site_overview.py`, `site_lists.py`, `site_scan.py`, `site_ai.py`, `site_options.py`, `site_watchlist.py`, `fmt.py`; AI logic in `ai.py`
 
 ## What the site shows
 
 | Page | Contents |
 |---|---|
-| Overview | Freshness and stale-data banners, then five compact panels:
-<ul><li>upcoming earnings (scheduled, unverified)</li><li>new entrants, departures and rank moves</li><li>sector concentration and downside-risk flags</li><li>performance vs benchmarks from immutable snapshots</li><li>data coverage, freshness and missing-data warnings</li></ul>Then **Growth stocks**: tabs for the large-, mid- and small-cap top 10. Each tab states its market-cap definition and universe (large cap = S&P 500 members only). Its columns are rank, ticker/company, sector, market cap, price, revenue growth, earnings/FCF growth, valuation, research score, 3M/6M/1Y returns, 1Y vs benchmark, and main risk. Selecting a ticker expands its evidence, thesis, bear case, 8-quarter trend, base-case assumptions and invalidation. Then **Speculative multibagger research candidates**: top 5, 5-10 year horizon, with growth evidence, cash/runway, debt/dilution/valuation risk, bear/base/bull at 1/3/5/10 years, what must happen, and what would invalidate it |
+| Overview (`index.html`) | Daily review: snapshot summary, stored SPY/IJH/IWM market context, links to the two research pages, then changes, earnings, concentration/downside flags, performance vs benchmarks and data coverage. AI and options summaries and time-horizon guidance expand below. |
+| Growth Stocks (`growth.html`) | Search, filters and device-local pins across the growth lists. Large-, mid- and small-cap shortcuts open each full table with financial trends, evidence, thesis, bear case, assumptions, invalidation and CSV downloads. The large-cap universe is S&P 500 members only. Multibagger candidates are kept on their own page. |
+| Multibaggers (`multibaggers.html`) | Up to 5 speculative candidates with a 5–10 year research horizon: growth evidence, cash/runway, debt/dilution/valuation risk, conditional bear/base/bull scenarios, what must happen and what would invalidate the thesis. Pins are shared across research pages. Older snapshots explain when this list is unavailable. |
 | Compare (`compare.html`) | Pick 2-4 companies (ranked names and watchlist operating companies) and see growth, margins and cash flow, valuation, debt and dilution, returns and drawdowns with their exact windows, score components and evidence quality side by side. A banner flags anything that does not line up (TTM windows ending more than 45 days apart, different scoring profiles or benchmarks, watchlist names that are not scored), and each missing cell says why. Price paths are rebased to 100 on the dates every selected name shares, never interpolated. Every column links to its SEC sources. Selection is kept in the URL hash, e.g. `compare.html#MU,FIX` |
 | Stock detail (one per candidate) | **What changed since the previous snapshot** (new filings with EDGAR links, deterioration, dilution, thesis-condition breaches, data-availability changes, or why no comparison is possible); a **company research panel** (observed quarterly trends, supporting and counter-evidence, two earnings-quality checks, assumptions, verified/scheduled/estimated events, the thesis conditions recorded when the name first appeared with their current status, missing information, sources and dates); an **evidence-quality** check (passed checks, warnings, next checks); then price, market cap, sector, sources, timestamps; earnings dates (next: scheduled, unverified; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; a **scenario calculator** (your own starting growth, exit EV/Sales, dilution and FCF margin through the published formula, with a reset to the published assumptions; nothing is stored or published); risks; invalidation conditions; "probability not established" |
 | AI stocks (`ai.html`) | Spec 2026-10-14.7. Top 5 AI-exposed large-cap and top 5 mid-cap stocks (same fixed scoring as the growth lists, from a curated AI universe with each company's role in the AI chain); a **top-20 market-cap scenario test** against today's 20th-largest S&P 500 market cap (conditional, never a probability, which the page states is not established); the universe by role with the reason any name was not ranked; and **private AI companies** (OpenAI, Anthropic, Databricks, Mistral...) for context, with reported valuations shown only with a dated source link and an "unverified" label |
@@ -28,15 +29,17 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 
 ### Reading and using the site
 
-- **Daily review desk:** the overview opens with a snapshot summary and SPY, IJH and IWM context, then a single
-  candidate scanner. These are still **weekly snapshots**, not live quotes or a daily collection schedule.
+- **Daily review desk:** the overview opens with a snapshot summary and SPY, IJH and IWM context, then the research briefing.
+  Growth Stocks and Multibaggers have separate navigation tabs and dedicated pages. These are still **weekly snapshots**, not live quotes or a daily collection schedule.
   Benchmark 1Y price returns are reused from matching stored return windows; conflicting or unavailable values
   stay unavailable. Candidate counts are unique tickers, while the table keeps each ticker's list membership.
-- **Candidate filters:** combine ticker/company/risk search, research list, sector, evidence level and missing
+- **Growth candidate filters:** combine ticker/company/risk search, research list, sector, evidence level and missing
   inputs. Scores remain comparable within their original list only; the scanner does not rank across lists.
-  Star a ticker to pin it on the current device, then select Pinned tickers. Pins also appear on Watchlist 2030.
+  Star a ticker to pin it on the current device, then select Pinned tickers. Pins also appear on Multibaggers and Watchlist 2030.
   Browser storage failures leave pins usable for that page and display an explanation. `/` focuses the scanner
   search; Reset filters clears the current view. Filters never change stored research or published rankings.
+- **Existing bookmarks:** `index.html#large`, `#mid`, `#small`, `#growth` and `#candidate-scan` follow the
+  growth page; `index.html#multibagger` follows the multibagger page. List and exclusion backlinks use the new routes.
 - **Watchlist scan:** symbol/price/scenario counts lead the page; scenario availability and pinned-ticker filters
   narrow the table. The full range chart and methods expand below it. Unavailable scenarios keep their reasons
   and all table cells, so sorting remains aligned. Missing numerical values sort last in either direction.

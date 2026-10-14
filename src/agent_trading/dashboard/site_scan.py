@@ -73,20 +73,22 @@ def scan_header(snap: dict, prev_snap: dict | None) -> str:
              (earnings, "Scheduled earnings", f"Next {window} days from snapshot" if state == "available" else "Calendar data unavailable"))
     tiles = "".join(f'<div class="scan-stat"><span>{label}</span><strong>{value}</strong><small>{note}</small></div>'
                     for value, label, note in stats)
-    return (f'<section class="scan-hero"><div><p class="eyebrow">RESEARCH DESK / DAILY REVIEW</p>'
+    return (f'<section class="scan-hero" data-overview><div><p class="eyebrow">RESEARCH DESK / DAILY REVIEW</p>'
             '<h1>Your market scan.<br><span>Context first. Research next.</span></h1>'
             '<p class="lede">Check the market backdrop, narrow the candidates, then inspect the evidence.</p>'
-            '<div class="hero-actions"><a class="action primary" href="#candidate-scan">Scan candidates ↓</a>'
-            '<a class="action" href="watchlist.html">Watchlist 2030 ↗</a></div></div>'
+            '<div class="hero-actions"><a class="action primary" href="growth.html">Explore growth stocks →</a>'
+            '<a class="action" href="multibaggers.html">Multibagger research →</a></div></div>'
             f'<aside class="snapshot-note"><span class="eyebrow">SNAPSHOT CLOSE</span><strong>{E(snap["as_of"])}</strong>'
             '<span>Weekly data · ready for your daily review</span><a href="#research-briefing">Open research briefing →</a>'
             '</aside></section>'
             f'<div class="scan-stats" aria-label="Snapshot summary">{tiles}</div>')
 
 
-def candidate_scan(snap: dict) -> str:
+def candidate_scan(snap: dict, band_keys: list[str] | None = None) -> str:
     bands = snap.get("bands") or {}
     keys = [k for k in LIST_ORDER if k in bands] + sorted(k for k in bands if k not in LIST_ORDER)
+    if band_keys is not None:
+        keys = [k for k in keys if k in band_keys]
     rows, sectors = [], set()
     for key in keys:
         band = bands[key]

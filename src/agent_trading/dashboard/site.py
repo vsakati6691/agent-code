@@ -28,19 +28,21 @@ from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, o
 from .scenarios import RETURN_WINDOWS, implied_growth_text
 from .site_ai import ai_page, methodology_ai, top20_block
 from .site_compare import compare_page
+from .site_lists import growth_page, multibaggers_page
 from .site_options import lists_of, options_page
 from .site_research import changes_section, datasets_table, lab_section, quality_block, research_section
-from .site_overview import band_title, evidence_fragments, excluded_page, overview, scenario_flags_html
+from .site_overview import band_title, evidence_fragments, excluded_page, list_page, overview, scenario_flags_html
 from .site_symbol import symbol_index, symbol_page
 
 _SYMBOLS: dict[str, str] = {}      # ticker -> name, for the header search (set by build_site)
-_SITE = {"options": True, "v": ""}   # options published? and the asset version for cache busting (set by build_site)
+_SITE = {"v": ""}   # asset version for cache busting (set by build_site)
 from .site_watchlist import watchlist_csv, watchlist_page
 from .store import Store, find_private_keys
 
 E = html.escape
-NAV = [("index.html", "Overview"), ("ai.html", "AI stocks"), ("options.html", "Options"),
-       ("watchlist.html", "Watchlist 2030"), ("compare.html", "Compare"),
+NAV = [("index.html", "Overview"), ("growth.html", "Growth Stocks"), ("multibaggers.html", "Multibaggers"),
+       ("ai.html", "AI stocks"), ("options.html", "Options"), ("watchlist.html", "Watchlist 2030"),
+       ("compare.html", "Compare"),
        ("history.html", "History & tracking"), ("methodology.html", "Methodology"), ("audit.html", "Audit trail")]
 COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", "balance": "Balance", "runway": "Runway",
               "valuation": "Value", "momentum": "Mom.", "relative": "Rel."}
@@ -58,8 +60,8 @@ def column_headers(markup: str) -> str:
 
 
 def brand() -> str:
-    """Site name: options appear in it only while the latest snapshot publishes them."""
-    return "Growth & Options Research" if _SITE["options"] else "Growth Research"
+    """The public site name stays consistent across pages and dataset states."""
+    return "Tikasa Stock Research"
 
 
 def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "", scripts: tuple = ()) -> str:
@@ -241,7 +243,7 @@ def detail(c: dict, snap: dict, history: list[dict] | None = None, prev_snap: di
     earn = c.get("next_earnings")
     flags = "".join(f'<span class="pill">{E(f)}</span>' for f in c["flags"]) or '<span class="muted">none</span>'
     ns = "".join(f'<li><strong>{E(k.replace("_", " "))}:</strong> {E(v)}</li>' for k, v in c["not_scored"].items())
-    return f"""<p class="small"><a href="../index.html#{E(c["band"])}">&larr; back to the list</a></p>
+    return f"""<p class="small"><a href="../{list_page(c["band"])}#{E(c["band"])}">&larr; back to the list</a></p>
 <h1>{E(c["ticker"])} · {E(c["name"] or "")}</h1>
 <p class="lede">{E(c["sector"] or "Unknown")} · rank {c["rank"]} in the {E(band_title(c["band"], snap["bands"][c["band"]]))} list ·
 score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confidence_label"])}">{E(c["confidence_label"])}</span></p>
@@ -616,10 +618,12 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         msg = (status or {}).get("message", "no weekly snapshot has been produced yet")
         body = f'<h1>{E(brand())} Dashboard</h1><div class="banner bad"><strong>No research data available</strong>{E(msg)}</div>'
         (out / "index.html").write_text(page("Overview", body, "index.html"), encoding="utf-8")
+        for rel, title in (("growth.html", "Growth Stocks"), ("multibaggers.html", "Multibaggers")):
+            empty = f'<h1>{title}</h1><p class="scan-empty">No research data available. {E(msg)}</p>'
+            (out / rel).write_text(page(title, empty, rel), encoding="utf-8")
         (out / "methodology.html").write_text(page("Methodology", methodology_page(), "methodology.html"), encoding="utf-8")
-        return {"pages": 2, "snapshot": None}
+        return {"pages": 4, "snapshot": None}
     snap = store.load(dates[-1])
-    _SITE["options"] = bool((snap.get("options") or {}).get("enabled"))
     _SYMBOLS.clear()
     _SYMBOLS.update(symbol_index(snap))
     hits = find_private_keys(snap)
@@ -632,6 +636,8 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
     write("index.html", "Overview", overview(snap, status, dates, tracking, prev_snap), "index.html")
     write("ai.html", "AI stocks", ai_page(snap), "ai.html")
+    write("growth.html", "Growth Stocks", growth_page(snap), "growth.html")
+    write("multibaggers.html", "Multibaggers", multibaggers_page(snap), "multibaggers.html")
     write("options.html", "Options research", options_page(snap), "options.html")
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
     write("history.html", "History", history_page(dates, tracking), "history.html")
@@ -652,13 +658,11 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     for t in _SYMBOLS:
         write(f"symbol/{t}.html", f"{t} · symbol", symbol_page(t, snap, history), "", 1)
     for key, band in snap["bands"].items():
-        write(f"excluded-{key}.html", f"Excluded: {band_title(key, band)}", excluded_page(key, band), "index.html")
-    n = 0
+        write(f"excluded-{key}.html", f"Excluded: {band_title(key, band)}", excluded_page(key, band), list_page(key))
     for key, band in snap["bands"].items():
         for c in band["candidates"]:
             write(f"stock/{key}-{c['ticker']}.html", f"{c['ticker']} research", detail(c, snap, history, prev_snap),
-                  "", 1, js=("assets/lab.js",))
-            n += 1
+                  list_page(key), 1, js=("assets/lab.js",))
     for d in dates:
         s = snap if d == dates[-1] else store.load(d)
         (out / "reports" / f"{d}.html").write_text(page(f"Week ending {d}", weekly_report(s), "history.html", 1, ""),
@@ -681,4 +685,4 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     if leaks:
         shutil.rmtree(out)
         raise RuntimeError(f"refusing to publish: secret values found in {len(leaks)} file(s)")
-    return {"pages": 7 + n + len(dates), "snapshot": dates[-1], "integrity_problems": integrity}
+    return {"pages": len(list(out.rglob("*.html"))), "snapshot": dates[-1], "integrity_problems": integrity}

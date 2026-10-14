@@ -5,7 +5,7 @@ CSS = r"""
 header.site .inner, main { max-width: 1400px; padding-left: 28px; padding-right: 28px; }
 header.site .inner { gap: 14px 20px; padding-top: 18px; padding-bottom: 14px; }
 header.site .brand { display: inline-flex; align-items: center; gap: 10px; letter-spacing: -.4px; }
-header.site .brand::before { content: "G / R"; background: var(--text-primary); color: var(--surface-1);
+header.site .brand::before { content: "T / S"; background: var(--text-primary); color: var(--surface-1);
   padding: 7px; border-radius: 5px; font: 700 11px/1.2 ui-monospace, monospace; letter-spacing: -1px; }
 header.site nav { order: 3; flex-basis: 100%; font-size: 13px; }
 nav a { display: inline-block; padding: 4px 0; color: var(--text-secondary); }
@@ -43,6 +43,14 @@ main { padding-top: 16px; }
 .market-label { font-size: 13px; } .market-label span { color: var(--text-muted); font-size: 12px; }
 .market-value { font-size: 27px; font-weight: 550; letter-spacing: -.7px; margin: 8px 0; font-variant-numeric: tabular-nums; }
 .market-foot { flex-wrap: wrap; font-size: 11px; color: var(--text-muted); }
+.research-paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
+.research-path { display: flex; flex-direction: column; gap: 9px; padding: 22px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface-1); color: var(--text-secondary); text-decoration: none; font-size: 13px; }
+.research-path:hover { border-color: var(--link); text-decoration: none; }
+.research-path .eyebrow { margin: 0; font-size: 10px; }
+.research-path strong { display: flex; justify-content: space-between; font-size: 21px; color: var(--text-primary); }
+.research-path strong span { color: var(--link); } .research-path small { color: var(--text-muted); }
+#research-briefing { scroll-margin-top: 20px; }
 .positive { color: var(--good); } .negative { color: var(--bad-border); }
 #candidate-scan { scroll-margin-top: 20px; margin-top: 36px; }
 .scan-toolbar { background: var(--surface-1); padding: 14px; border: 1px solid var(--border); border-radius: 8px; align-items: end; gap: 10px; }
@@ -81,6 +89,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .scan-stat:nth-child(3) { border-left: 0; } .scan-stat:nth-child(n+3) { border-top: 1px solid var(--border); }
   .scan-stat strong { font-size: 24px; }
   .market-grid { grid-template-columns: 1fr; gap: 8px; }
+  .research-paths { grid-template-columns: 1fr; gap: 10px; } .research-path { padding: 18px; }
   .market-tile { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
   .market-label { justify-content: flex-start; flex-wrap: wrap; } .market-value { font-size: 22px; margin: 0; }
   .market-foot { grid-column: 1 / -1; }
@@ -133,10 +142,15 @@ JS = r"""
     var search = document.querySelector('[data-search="t-scan"], [data-search="t-watch"]');
     if (search) { e.preventDefault(); search.focus(); }
   });
-  // Preserve deep links into the full research lists now that they are folded.
+  // Old overview bookmarks follow the lists to their dedicated pages.
   function revealHash() {
     var id;
     try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) { return; }
+    if (document.querySelector('[data-overview]')) {
+      var destination = id === 'multibagger' ? 'multibaggers.html' :
+        ['large', 'mid', 'small', 'spec', 'growth', 'candidate-scan'].includes(id) ? 'growth.html' : '';
+      if (destination) { location.replace(destination + '#' + encodeURIComponent(id)); return; }
+    }
     var target = document.getElementById(id) || Array.from(document.querySelectorAll('[data-panel]')).find(function (p) {
       return p.dataset.panel === id;
     });

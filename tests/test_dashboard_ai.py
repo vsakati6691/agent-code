@@ -298,7 +298,11 @@ def test_private_companies_show_sources_dates_and_the_unverified_label(site):
 
 def test_the_ai_lists_have_their_own_page_not_a_growth_tab(site):
     index = (site / "index.html").read_text(encoding="utf-8")
-    assert 'data-tab="ai_large"' not in index and 'data-tab="ai_mid"' not in index
+    growth = (site / "growth.html").read_text(encoding="utf-8")
+    assert 'data-tab="ai_large"' not in growth and 'data-tab="ai_mid"' not in growth
+    assert 'data-list="ai_large"' not in growth and 'data-list="ai_mid"' not in growth
+    assert 'href="../ai.html#ai_large"' in (site / "stock" / "ai_large-AIL6.html").read_text(encoding="utf-8")
+    assert 'id="ai_large"' in (site / "ai.html").read_text(encoding="utf-8")
     assert 'id="ai-stocks"' in index and 'href="ai.html"' in index and 'href="stock/ai_large-AIL6.html"' in index
     nav = re.search(r"<nav>(.*?)</nav>", index, re.S).group(1)
     assert nav.index("AI stocks") < nav.index("Options")
@@ -338,7 +342,7 @@ def test_a_snapshot_from_before_the_ai_lists_renders_an_explanation_not_an_error
 # --- page weight: evidence rows load on demand ------------------------------------------------------------------------------
 
 def test_list_pages_carry_placeholders_and_each_evidence_block_is_a_small_file(site):
-    for name, keys in (("index.html", ("large", "mid", "small")), ("ai.html", ("ai_large", "ai_mid"))):
+    for name, keys in (("growth.html", ("large", "mid", "small")), ("ai.html", ("ai_large", "ai_mid"))):
         page = (site / name).read_text(encoding="utf-8")
         assert 'class="evidence"' not in page, name                       # the evidence moved out of the page
         sources = re.findall(r'class="lazy" data-src="([^"]+)"\s+data-page="([^"]+)"', page)

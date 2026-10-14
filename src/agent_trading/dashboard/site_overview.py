@@ -1,4 +1,4 @@
-"""Overview page: compact panels, the three growth lists and the speculative multibagger candidates."""
+"""Market overview and shared renderers for the separate research-list pages."""
 from __future__ import annotations
 
 import html
@@ -9,9 +9,9 @@ from . import changes as changes_mod, evidence, spec
 from .changes import KIND_LABELS
 from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval, tracking_schedule
 from .scenarios import implied_growth_text
-from .site_options import status_block, watchlist_cards
+from .site_options import watchlist_cards
 from .site_research import datasets_line, quality_badge
-from .site_scan import candidate_scan, market_context, scan_header
+from .site_scan import market_context, pin_button, scan_header
 
 E = html.escape
 GROWTH_KEYS = ("large", "mid", "small")
@@ -86,7 +86,7 @@ def excluded_page(key: str, band: dict) -> str:
         f'<details><summary>{E(reason)} <span class="muted">({len(items):,})</span></summary><p class="small">'
         + ", ".join(f"{E(t)}" + (f" ({E(d)})" if d else "") for t, d in items) + "</p></details>"
         for reason, items in groups)
-    return (f'<p class="small"><a href="index.html#{E(key)}">&larr; back to the list</a></p>'
+    return (f'<p class="small"><a href="{list_page(key)}#{E(key)}">&larr; back to the list</a></p>'
             f'<h1>Excluded from: {E(band_title(key, band))}</h1>'
             f'<p class="lede">Every stock that was considered for this list but not ranked or not shown, grouped by '
             f'reason. Numbers in brackets are the values that failed the rule.</p>'
@@ -96,6 +96,12 @@ def excluded_page(key: str, band: dict) -> str:
 def band_title(key: str, band: dict) -> str:
     return band.get("short_title") or spec.BAND_TITLES_SHORT.get(key) or \
         spec.LEGACY_BANDS.get(key, {}).get("title") or band.get("title", key)
+
+
+def list_page(key: str) -> str:
+    if key.startswith("ai_"):
+        return "ai.html"
+    return "multibaggers.html" if key == "multibagger" else "growth.html"
 
 
 def definition_line(key: str, band: dict) -> str:
@@ -268,7 +274,7 @@ def evidence_fragments(bands: dict) -> dict[str, str]:
     """{published path: JSON text} for every candidate whose list page uses a lazy evidence row."""
     out = {}
     for key, band in bands.items():
-        if key == "multibagger":          # its cards are shown in full on the overview
+        if key == "multibagger":          # its cards are shown in full on the multibagger page
             continue
         for c in band.get("candidates", []):
             out[f"fragments/{key}-{c['ticker']}.json"] = json.dumps({"html": evidence_block(key, c, band)},
@@ -407,7 +413,7 @@ def multibagger_section(snap: dict) -> str:
                     else f"cash burn; runway about {num(runway, 1)} years" if runway is not None else "cash flow n/a")
         inval = "".join(f"<li>{E(x)}</li>" for x in c.get("invalidation", [])[:4])
         cards.append(f"""<article class="card mb"><header><span class="rank">#{c["rank"]}</span>
-<a href="stock/multibagger-{E(c["ticker"])}.html"><strong>{E(c["ticker"])}</strong></a> {E(c.get("name") or "")}
+{pin_button(c["ticker"])}<a href="stock/multibagger-{E(c["ticker"])}.html"><strong>{E(c["ticker"])}</strong></a> {E(c.get("name") or "")}
 <span class="small muted">{E(c.get("sector") or "")} · {cap(c.get("market_cap"))} · {money(c.get("price"))} · score {num(c.get("composite"), 1)}</span></header>
 <div class="mb-grid"><div><h4>Growth opportunity and evidence</h4><p class="small">{E(c.get("thesis", ""))}</p>
 <p class="small">Revenue {pct(m.get("revenue_growth_ttm"), 0, True)} TTM, {pct(m.get("revenue_cagr_3y"), 0, True)}/yr over 3 years ·
@@ -584,26 +590,26 @@ def ai_teaser(snap: dict) -> str:
 
 def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict | None,
              prev_snap: dict | None = None) -> str:
-    counts = " · ".join(f'{E(band_title(k, snap["bands"][k]))}: {len(snap["bands"][k]["candidates"])}'
-                        for k in ordered(snap["bands"]))
-    o_status = status_block(snap)
-    o_link = (' <a href="options.html">Options watchlist</a> ·' if o_status["state"] == "available" else
-              f' <a href="options.html">Options watchlist</a> ({E(o_status["label"].lower())}) ·')
+    bands = snap["bands"]
+    growth_count = len({c["ticker"] for k, b in bands.items() if list_page(k) == "growth.html" for c in b["candidates"]})
+    multi = bands.get("multibagger")
+    multi_count = f'{len(multi["candidates"])} candidates' if multi is not None else "Not available in this snapshot"
+    ai_summary = ai_teaser(snap)
+    if ai_summary:
+        ai_summary = f'<details class="context-details"><summary>AI stocks summary</summary>{ai_summary}</details>'
     return f"""{scan_header(snap, prev_snap)}
 {market_context(snap)}
-{candidate_scan(snap)}
-<details class="context-details" id="research-briefing"><summary>Research briefing · changes, earnings, risks and data coverage</summary>
-{panels(snap, tracking, dates, prev_snap)}</details>
-<details class="context-details"><summary>Full research lists · growth, options and long-term scenarios</summary>
-<p class="small">Snapshot {E(snap["as_of"])} · {counts} ·{o_link}
-<a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>
-<div class="overview">
-<div class="ov-panels">
-<details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details></div>
-<div class="ov-lists">{watchlist_cards(snap)}
-{growth_section(snap)}
-{multibagger_section(snap)}
-{ai_teaser(snap)}</div>
-</div>
-</details>
+<section aria-label="Choose a research list" class="research-paths">
+<a class="research-path" href="growth.html"><span class="eyebrow">LARGE · MID · SMALL CAP</span>
+<strong>Growth Stocks <span aria-hidden="true">↗</span></strong><span>Scan, filter and compare the ranked growth lists.</span>
+<small>{growth_count} unique candidates</small></a>
+<a class="research-path" href="multibaggers.html"><span class="eyebrow">5–10 YEAR RESEARCH</span>
+<strong>Multibaggers <span aria-hidden="true">↗</span></strong><span>Examine the growth path, assumptions and failure risks.</span>
+<small>{multi_count}</small></a></section>
+<section id="research-briefing" aria-labelledby="briefing-title">
+<div class="section-heading"><h2 id="briefing-title">Research briefing</h2><span class="small muted">Changes, earnings, risks and data coverage</span></div>
+{panels(snap, tracking, dates, prev_snap)}</section>
+{ai_summary}
+<details class="context-details"><summary>Options research summary</summary>{watchlist_cards(snap)}</details>
+<details class="context-details small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details>
 <p class="small muted">{len(dates)} weekly snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""

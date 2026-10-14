@@ -271,9 +271,13 @@ def test_new_site_pages_panels_toggle_and_downloads(tmp_path, prov):
     out = tmp_path / "s"
     index = (out / "index.html").read_text(encoding="utf-8")
     for text in ("Upcoming earnings", "What changed since the previous snapshot?", "Concentration and downside flags", "Performance vs benchmarks",
-                 "Data coverage and freshness", "S&amp;P 500 members only", "Speculative multibagger research candidates",
-                 "5-10 year research horizon", "rowtoggle", "vs bench"):
+                 "Data coverage and freshness"):
         assert text in index, text
+    growth = (out / "growth.html").read_text(encoding="utf-8")
+    for text in ("S&amp;P 500 members only", "rowtoggle", "vs bench"):
+        assert text in growth, text
+    multibaggers = (out / "multibaggers.html").read_text(encoding="utf-8")
+    assert "Speculative multibagger research candidates" in multibaggers and "5-10 year research horizon" in multibaggers
     opts = (out / "options.html").read_text(encoding="utf-8")
     assert 'data-dim="type" data-val="put"' in opts and opts.count("data-hz=") == 6
     assert "Premium assumption" in opts and "not predict profitability" in opts
@@ -315,7 +319,9 @@ def test_old_snapshot_still_renders_and_tracks(tmp_path):
     _store_snapshot(tmp_path / "d", old)
     build_site(tmp_path / "d", tmp_path / "s")
     out = tmp_path / "s"
-    assert "retired" in (out / "index.html").read_text(encoding="utf-8") or "Speculative" in (out / "index.html").read_text(encoding="utf-8")
+    assert "Speculative" in (out / "growth.html").read_text(encoding="utf-8")
+    multi = (out / "multibaggers.html").read_text(encoding="utf-8")
+    assert "not available in this snapshot" in multi and 'href="growth.html#spec"' in multi
     opts = (out / "options.html").read_text(encoding="utf-8")
     assert "OLD" in opts and "puts were not collected in this snapshot" in opts
     assert "Watchlist not available" in (out / "watchlist.html").read_text(encoding="utf-8")
