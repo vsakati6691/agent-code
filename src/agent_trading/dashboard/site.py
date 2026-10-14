@@ -20,6 +20,7 @@ from pathlib import Path
 from . import spec
 from .assets import CSS, JS
 from .fmt import cap, money, num, ok as _ok, pct, sval
+from .scenarios import implied_growth_text
 from .site_options import lists_of, options_page
 from .site_overview import band_title, overview
 from .site_watchlist import watchlist_csv, watchlist_page
@@ -204,7 +205,7 @@ summary of evidence, not a recommendation.</p>
 <div class="grid small">
 <div class="card">Revenue TTM {cap(m.get("revenue_ttm"))} · growth {pct(m.get("revenue_growth_ttm"))} · 3-yr CAGR {pct(m.get("revenue_cagr_3y"))}</div>
 <div class="card">Gross margin {pct(m.get("gross_margin"))} · operating margin {pct(m.get("operating_margin"))} · FCF margin {pct(m.get("fcf_margin"))}</div>
-<div class="card">EV/Sales {num(m.get("ev_to_sales"), 1)}x · P/E {num(m.get("pe"), 1)} · FCF yield {pct(m.get("fcf_yield"), 1)} · implied revenue growth {pct(m.get("implied_revenue_cagr"))}</div>
+<div class="card">EV/Sales {num(m.get("ev_to_sales"), 1)}x · P/E {num(m.get("pe"), 1)} · FCF yield {pct(m.get("fcf_yield"), 1)} · {E(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")))}</div>
 <div class="card">Net debt {cap(m.get("net_debt")) if (m.get("net_debt") or 0) >= 0 else "net cash " + cap(-m["net_debt"])} · current ratio {num(m.get("current_ratio"))} · dilution {pct(m.get("dilution"), 1)} · SBC/revenue {pct(m.get("sbc_to_revenue"))}</div>
 </div>
 <div class="table-wrap"><table><thead><tr><th>USD millions</th>{fhead}</tr></thead><tbody>

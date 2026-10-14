@@ -218,8 +218,9 @@ def company_narrative(m: dict, earnings: str | None) -> dict:
         catalysts.append(f"Sustaining revenue growth near the trailing {g:.0%}")
     bear = []
     if m.get("implied_growth_gap") is not None and m["implied_growth_gap"] < 0:
-        bear.append(f"The price already implies about {m['implied_revenue_cagr']:.0%} annual revenue growth for "
-                    "five years, more than recent results.")
+        from .scenarios import implied_growth_text
+        bear.append(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")) +
+                    ": more than recent results.")
     if fcf is not None and fcf < 0:
         bear.append("Free cash flow is negative, so growth depends on funding (dilution or debt).")
     if m.get("dilution") is not None and m["dilution"] > 0.05:

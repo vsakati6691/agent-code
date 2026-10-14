@@ -5,6 +5,7 @@ import html
 
 from . import spec
 from .fmt import cap, money, num, pct, sval
+from .scenarios import implied_growth_text
 
 E = html.escape
 GROWTH_KEYS = ("large", "mid", "small")
@@ -43,7 +44,7 @@ def definition_line(key: str, band: dict) -> str:
 def short_risk(text: str, limit: int = 90) -> str:
     """Compact form of the counterargument for the overview row (the full text is in the evidence panel)."""
     t = (text or "").replace("Weakest evidence: ", "")
-    t = t.split(" (negative = ")[0].rstrip(".")
+    t = t.split(" (negative = ")[0].rstrip(".")       # older snapshots carry the previous wording
     t = t[0].upper() + t[1:] if t else t
     return t if len(t) <= limit else t[: limit - 1].rsplit(" ", 1)[0] + "…"
 
@@ -231,7 +232,7 @@ def multibagger_section(snap: dict) -> str:
 gross margin {pct(m.get("gross_margin"))} · operating margin {pct(m.get("operating_margin"))} · {E(cash_txt)}</p></div>
 <div><h4>Debt, dilution and valuation risk</h4><p class="small">Net debt/EBITDA {num(m.get("net_debt_to_ebitda"), 1)} ·
 dilution {pct(m.get("dilution"), 1)}/yr · SBC {pct(m.get("sbc_to_revenue"))} of revenue · EV/Sales {num(m.get("ev_to_sales"), 1)}x;
-the price implies about {pct(m.get("implied_revenue_cagr"))} revenue growth a year. {E(c.get("bear_case", ""))}</p></div></div>
+{E(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")))}. {E(c.get("bear_case", ""))}</p></div></div>
 <h4>Bear / base / bull (conditional values per share)</h4>{scen}
 <h4>What must happen for a multibagger outcome</h4><p class="small">{E(multibagger_needs(c))}</p>
 <h4>What would invalidate the thesis</h4><ul class="tight small">{inval}</ul></article>""")
