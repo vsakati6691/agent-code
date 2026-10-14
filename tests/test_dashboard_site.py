@@ -272,6 +272,23 @@ def test_every_page_has_the_inline_symbol_search(site):
         assert '<datalist id="symlist">' in text and 'value="S04"' in text, p.name
 
 
+# --- item 15: sparklines and distribution strips ------------------------------------------------
+
+def test_list_rows_have_a_one_year_sparkline_vs_benchmark(site):
+    page = (site / "index.html").read_text(encoding="utf-8")
+    sparks = re.findall(r'<svg class="spark"[^>]*aria-label="1-year price: ([^"]+)"', page)
+    assert len(sparks) >= 10 and all("SPY" in s or "IJH" in s or "IWM" in s for s in sparks)
+    assert 'stroke-dasharray="3 2"' in page
+
+
+def test_lists_show_sector_and_market_cap_mix(site):
+    page = (site / "index.html").read_text(encoding="utf-8")
+    assert page.count('aria-label="Sector mix"') >= 3 and page.count('aria-label="Market-cap mix"') >= 3
+    from agent_trading.dashboard.site_overview import distribution_strip
+    strip = distribution_strip([{"sector": "Energy", "market_cap": 5e9}, {"sector": "Energy", "market_cap": 3e11}])
+    assert "Energy <strong>2</strong>" in strip and "$2B-$10B <strong>1</strong>" in strip and "$200B+ <strong>1</strong>" in strip
+
+
 # --- item 14: why a watchlist scenario is unavailable --------------------------------------------
 
 def test_next_filing_estimate_from_cadence_and_fallback():

@@ -120,6 +120,52 @@ def sparkline(values: list, label: str) -> str:
             f'<polyline points="{pts}" fill="none" stroke="var(--series-1)" stroke-width="2"/></svg>')
 
 
+def row_spark(c: dict, bench: str) -> str:
+    """1-year sparkline of the stock (solid) vs its benchmark (dashed), both rebased to 100 at the start."""
+    ch = c.get("chart") or {}
+    s, b = (ch.get("stock") or [])[-53:], (ch.get("benchmark") or [])[-53:]
+    if len(s) < 10:
+        return '<span class="muted small">n/a</span>'
+    vals = [v / s[0] * 100 for v in s]
+    bvals = [v / b[0] * 100 for v in b] if len(b) == len(s) and b[0] else []
+    lo, hi = min(vals + bvals), max(vals + bvals)
+    span = (hi - lo) or 1
+    w, h = 96, 26
+
+    def pts(series):
+        return " ".join(f"{i * w / (len(series) - 1):.1f},{h - 2 - (v - lo) / span * (h - 4):.1f}" for i, v in enumerate(series))
+    r, br = vals[-1] / 100 - 1, (bvals[-1] / 100 - 1) if bvals else None
+    label = f"1-year price: {c['ticker']} {r:+.0%}" + (f", {bench} {br:+.0%}" if br is not None else "")
+    bench_line = (f'<polyline points="{pts(bvals)}" fill="none" stroke="var(--reference)" stroke-width="1.5" '
+                  f'stroke-dasharray="3 2"/>') if bvals else ""
+    return (f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" aria-label="{E(label)}">'
+            f'<title>{E(label)}</title>{bench_line}<polyline points="{pts(vals)}" fill="none" stroke="var(--series-1)" '
+            f'stroke-width="2"/></svg>')
+
+
+CAP_BUCKETS = ((0, 2e9, "under $2B"), (2e9, 10e9, "$2B-$10B"), (10e9, 50e9, "$10B-$50B"), (50e9, 200e9, "$50B-$200B"),
+               (200e9, float("inf"), "$200B+"))
+
+
+def distribution_strip(cands: list[dict]) -> str:
+    """Sector and market-cap mix of a list: one hue, bar length = count (no category colours needed)."""
+    if not cands:
+        return ""
+
+    def strip(title, counts):
+        total = sum(counts.values()) or 1
+        items = "".join(f'<span class="chip"><span class="chipbar" style="width:{max(6, 60 * n / total):.0f}px"></span>'
+                        f'{E(k)} <strong>{n}</strong></span>' for k, n in counts.items() if n)
+        return f'<div class="strip" role="group" aria-label="{E(title)}"><span class="muted">{E(title)}:</span>{items}</div>'
+    sectors: dict[str, int] = {}
+    for c in cands:
+        sectors[c.get("sector") or "Unknown"] = sectors.get(c.get("sector") or "Unknown", 0) + 1
+    sectors = dict(sorted(sectors.items(), key=lambda kv: (-kv[1], kv[0])))
+    caps = {label: sum(1 for c in cands if c.get("market_cap") is not None and lo <= c["market_cap"] < hi)
+            for lo, hi, label in CAP_BUCKETS}
+    return strip("Sector mix", sectors) + strip("Market-cap mix", caps)
+
+
 def evidence_block(key: str, c: dict, band: dict) -> str:
     comps = band.get("components") or [k for k in c.get("components", {})]
     bars = "".join(
@@ -174,8 +220,9 @@ def growth_table(key: str, band: dict) -> str:
 <td class="num hide-sm" data-v="{sval(r6)}">{pct(r6, 0, True)}</td>
 <td class="num" data-v="{sval(r1)}">{pct(r1, 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(x1)}">{pct(x1, 0, True)}</td>
+<td class="hide-sm">{row_spark(c, band.get("benchmark", "benchmark"))}</td>
 <td class="small risk" title="{E(c.get("counterargument", ""))}">{E(short_risk(c.get("counterargument", "")))}</td></tr>
-<tr id="{rid}" class="detail" hidden><td colspan="13">{evidence_block(key, c, band)}</td></tr></tbody>""")
+<tr id="{rid}" class="detail" hidden><td colspan="14">{evidence_block(key, c, band)}</td></tr></tbody>""")
     sectors = sorted({c.get("sector") or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
     head = ('<th class="num" data-sort="num">#</th><th class="tk" data-sort="text">Ticker / company / sector</th>'
@@ -185,12 +232,13 @@ def growth_table(key: str, band: dict) -> str:
             '<th class="num hide-sm" data-sort="num" title="EV/S = enterprise value / sales; P/E = price / earnings">Valuation</th><th class="num" data-sort="num" title="Research score 0-100 from fixed rules (see Methodology)">Score</th>'
             '<th class="num hide-sm" data-sort="num">3M</th><th class="num hide-sm" data-sort="num">6M</th>'
             '<th class="num" data-sort="num">1Y</th><th class="num hide-sm" data-sort="num" title="1-year return minus the benchmark">vs bench</th>'
+            '<th class="hide-sm" title="1-year price path: stock solid, benchmark dashed, both rebased to 100">1-yr path</th>'
             '<th class="risk" title="The weakest scored evidence for this stock">Main risk / weakest evidence</th>')
     return f"""<div class="controls"><input type="search" placeholder="Search ticker, name, risk" data-search="{tid}"
 aria-label="Search {E(band_title(key, band))}"><select data-sector="{tid}" aria-label="Filter by sector"><option value="">All sectors</option>{opts}</select>
 <span class="small muted" data-count="{tid}" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="{tid}" data-table data-grouped><caption class="sr-only">{E(band_title(key, band))}</caption>
-<thead><tr>{head}</tr></thead>{''.join(bodies) or '<tbody><tr><td colspan="13" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
+<thead><tr>{head}</tr></thead>{''.join(bodies) or '<tbody><tr><td colspan="14" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
 <p class="small muted">Returns are trailing price returns to the as-of close (dividends excluded); "vs bench" is the 1-year
 return minus {E(band.get("benchmark", ""))}. Select a ticker to show its evidence.</p>"""
 
@@ -207,7 +255,7 @@ def growth_section(snap: dict) -> str:
         panels.append(f"""<section data-panel-of="growthtabs" data-panel="{k}" role="tabpanel" hidden>
 <h3>{E(b.get("title", k))}</h3><p class="small">{E(definition_line(k, b))} Benchmark: {E(b.get("benchmark_name", b.get("benchmark", "")))}.
 Showing {len(b["candidates"])} of up to {b.get("max_results", 10)}; {b.get("ranked", "?")} ranked, {len(b["excluded"])} excluded.</p>
-{short}{growth_table(k, b)}
+{short}{distribution_strip(b["candidates"])}{growth_table(k, b)}
 <p class="small"><a href="downloads/{E(snap["as_of"])}_{k}.csv" download>Download CSV</a></p>{excluded_summary(k, b)}</section>""")
     return f"""<h2 id="growth">Growth stocks</h2><div class="tabs" data-tabs id="growthtabs" role="tablist"
 aria-label="Growth lists">{tabs}</div>{''.join(panels)}"""

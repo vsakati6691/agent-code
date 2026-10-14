@@ -107,6 +107,9 @@ tr.detail > td { white-space: normal; }
   box-shadow: 1px 0 0 var(--border); min-width: 84px; }
 .table-wrap th.tk { background: var(--surface-2); }
 .spark { vertical-align: middle; }
+.strip { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 13px; margin: 4px 0; }
+.chip { display: inline-flex; align-items: center; gap: 5px; }
+.chipbar { display: inline-block; height: 8px; background: var(--series-1); border-radius: 4px; }
 .summary { margin: 4px 0; } details.more { display: inline; } details.more > summary { display: inline; font-size: 13px; }
 details.more[open] > p { margin: 6px 0 0; }
 .chart.range { overflow-x: auto; } .chart.range svg { min-width: 560px; }
