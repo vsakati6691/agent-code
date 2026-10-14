@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from ..market_calendar import is_trading_day
-from . import assets_research, changes, compare, evidence, lab, probability, research, spec
+from . import assets_bets, assets_research, changes, compare, evidence, lab, probability, research, spec
 from .assets import CSS, JS
 from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval,
                   tracking_schedule)
@@ -29,6 +29,7 @@ from .scenarios import RETURN_WINDOWS, implied_growth_text
 from .site_ai import ai_page, methodology_ai, top20_block
 from .site_compare import compare_page
 from .site_lists import growth_page, multibaggers_page
+from . import site_bets
 from . import site_refresh
 from .site_options import lists_of, options_page
 from .site_research import changes_section, datasets_table, lab_section, quality_block, research_section
@@ -42,7 +43,7 @@ from .store import Store, find_private_keys
 
 E = html.escape
 NAV = [("index.html", "Overview"), ("growth.html", "Growth Stocks"), ("multibaggers.html", "Multibaggers"),
-       ("ai.html", "AI stocks"), ("options.html", "Options"), ("watchlist.html", "Watchlist 2030"),
+       ("ai.html", "AI stocks"), ("options.html", "Options"), ("bets.html", "Small bets"), ("watchlist.html", "Watchlist 2030"),
        ("compare.html", "Compare"),
        ("history.html", "History & tracking"), ("methodology.html", "Methodology"), ("audit.html", "Audit trail")]
 COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", "balance": "Balance", "runway": "Runway",
@@ -424,6 +425,7 @@ at expiration): {E(", ".join(probability.DATA_CONTRACT["record_fields"]))}. {E(p
 <p>{E(spec.WATCHLIST_COMPANY_METHOD)}</p><p>{E(spec.LEVERAGED_METHOD)}</p><p>{E(spec.FEE_NOTE)}</p>
 <div class="table-wrap"><table aria-label="ETF exposure-class assumptions"><thead><tr><th>ETF exposure class</th><th>Name keywords</th><th class="num">Bear / base / bull total return</th>
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
+{site_bets.methodology()}
 <h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
 <h2 id="display-rules">Data states, research panel and comparisons</h2>
 <p>These rules decide how evidence is labelled and compared. No score, gate or ranking uses them.</p>
@@ -608,11 +610,12 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "assets").mkdir(parents=True)
     # a content hash in every asset link, so a browser never pairs new pages with a cached old stylesheet or script
     _SITE["v"] = "?v=" + hashlib.sha256((CSS + assets_research.CSS + JS + assets_research.COMPARE_JS +
-                                         assets_research.LAB_JS).encode("utf-8")).hexdigest()[:10]
-    (out / "assets" / "style.css").write_text(CSS + assets_research.CSS, encoding="utf-8")
+                                         assets_research.LAB_JS + assets_bets.CSS + assets_bets.JS).encode("utf-8")).hexdigest()[:10]
+    (out / "assets" / "style.css").write_text(CSS + assets_research.CSS + assets_bets.CSS, encoding="utf-8")
     (out / "assets" / "app.js").write_text(JS, encoding="utf-8")
     (out / "assets" / "compare.js").write_text(assets_research.COMPARE_JS, encoding="utf-8")
     (out / "assets" / "lab.js").write_text(assets_research.LAB_JS, encoding="utf-8")
+    (out / "assets" / "bets.js").write_text(assets_bets.JS, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
     status = store.status()
     if not dates:
@@ -623,7 +626,8 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
             empty = f'<h1>{title}</h1><p class="scan-empty">No research data available. {E(msg)}</p>'
             (out / rel).write_text(page(title, empty, rel), encoding="utf-8")
         (out / "methodology.html").write_text(page("Methodology", methodology_page(), "methodology.html"), encoding="utf-8")
-        return {"pages": 4, "snapshot": None}
+        (out / "bets.html").write_text(page("Small bets", site_bets.bets_page({}, None), "bets.html"), encoding="utf-8")
+        return {"pages": 5, "snapshot": None}
     snap = store.load(dates[-1])
     _SYMBOLS.clear()
     _SYMBOLS.update(symbol_index(snap))
@@ -641,6 +645,7 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     write("growth.html", "Growth Stocks", growth_page(snap, daily), "growth.html")
     write("multibaggers.html", "Multibaggers", multibaggers_page(snap), "multibaggers.html")
     write("options.html", "Options research", options_page(snap, daily), "options.html")
+    write("bets.html", "Small-bet options research", site_bets.bets_page(snap, daily), "bets.html", js=("assets/bets.js",))
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
     write("history.html", "History", history_page(dates, tracking), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
