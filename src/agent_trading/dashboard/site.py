@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import spec
 from .assets import CSS, JS
-from .fmt import cap, money, num, ok as _ok, pct, sval
+from .fmt import cap, csv_value, metric, money, num, ok as _ok, pct, sval
 from .scenarios import implied_growth_text
 from .site_options import lists_of, options_page
 from .site_overview import band_title, overview
@@ -141,7 +141,8 @@ def detail(c: dict, snap: dict) -> str:
         f'<td class="num">{"missing" if c["components"].get(cp.key) is None else round(c["components"][cp.key] * 100)}</td>'
         f'<td><div class="bar"><span style="width:{(c["components"].get(cp.key) or 0) * 100:.0f}%"></span></div></td>'
         f'<td class="small">' + "; ".join(
-            f'{E(mk)} = {E(_metric(m.get(mk)))}{" (missing, scored 0)" if mk in c["missing"] else ""}'
+            f'<abbr title="{E(spec.METRIC_NOTES.get(mk, ""))}">{E(mk.replace("_", " "))}</abbr> = {E(metric(mk, m.get(mk)))}'
+            f'{" (missing, scored 0)" if mk in c["missing"] else ""}'
             for mk in cp.metrics) + "</td></tr>" for cp in profile_of(snap["bands"][c["band"]]))
     fund = c["fundamentals"]
     frow = lambda label, key: f'<tr><td>{label}</td>' + "".join(  # noqa: E731
@@ -219,16 +220,6 @@ facts filed on or before {E(snap["as_of"])} only.</p>
 <h2>What would invalidate the thesis</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["invalidation"])}</ul>"""
 
 
-def _metric(v) -> str:
-    if v is None:
-        return "n/a"
-    if isinstance(v, (int, float)):
-        if not math.isfinite(v):
-            return "not meaningful"
-        return f"{v:.3g}"
-    return str(v)
-
-
 # --- history, methodology, audit ------------------------------------------------------------------------
 
 def history_page(dates: list[str], tracking: dict | None) -> str:
@@ -261,9 +252,20 @@ def history_page(dates: list[str], tracking: dict | None) -> str:
 <h3>Each snapshot</h3><div class="table-wrap"><table><thead><tr><th>As of</th><th>Category</th><th>Spec</th>{hh}</tr></thead>
 <tbody>{''.join(rows)}</tbody></table></div>
 <p class="small">{E(tracking["method"])}</p><ul class="small">{''.join(f'<li>{E(x)}</li>' for x in tracking["limitations"])}</ul>
-<p class="small">Assumed friction per side (bps): {E(json.dumps(tracking["friction"]))}.</p>"""
+<p class="small">Assumed trading friction per side: {E(", ".join(f"{k} {v:g} bps" for k, v in tracking["friction"].items()))}
+(bps = hundredths of a percent).</p>"""
     return f"""<h1>History and performance tracking</h1><p class="lede">Every weekly snapshot is stored unchanged. Later prices
 measure each list as it was published.</p><h2>Weekly reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
+
+
+_R = spec.OPTION_RULES
+OPTION_RULES_TEXT = (
+    f"up to {_R['max_per_type_per_horizon']} calls and {_R['max_per_type_per_horizon']} puts per expiry window, at most "
+    f"{_R['max_per_underlying_per_horizon']} per underlying per list; open interest at least {_R['min_open_interest']}; "
+    f"volume at least {_R['min_volume']}; bid-ask spread at most {_R['max_spread_pct']:.0%} of the mid price; |delta| "
+    f"{_R['min_delta']:g} to {_R['max_delta']:g}; standard {_R['standard_multiplier']}-share contracts only; the "
+    f"underlying must have traded in the as-of session"
+)
 
 
 def _component_rows(components) -> str:
@@ -313,7 +315,7 @@ GitHub Actions cannot reach it; no account data is stored.</p>
 <h3>Not scored</h3><ul>{''.join(f'<li>{E(k.replace("_", " "))}: {E(v)}</li>' for k, v in spec.NOT_SCORED_FACTORS.items())}</ul>
 <p>The strongest counterargument is the input with the largest weighted shortfall (missing critical data first).</p>
 <h2>Scenarios</h2><p>{E(spec.SCENARIO_METHOD)}</p><p>{E(spec.MULTIBAGGER_DEFINITION)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p>
-<h2>Options (calls and puts)</h2><p>{E(spec.OPTION_UNDERLYINGS)}</p><ul>{hz}</ul><p>Eligibility: {E(json.dumps(spec.OPTION_RULES))}.</p>
+<h2>Options (calls and puts)</h2><p>{E(spec.OPTION_UNDERLYINGS)}</p><ul>{hz}</ul><p>Eligibility: {E(OPTION_RULES_TEXT)}.</p>
 <p>Ranking (higher is better; maximum upside is not an input):</p><ul>{rk}</ul><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>{E(spec.DELTA_STATEMENT)}</p><p>{E(spec.PREMIUM_ASSUMPTION)} Puts: breakeven = strike - premium; payoff = max(strike - price, 0) -
 premium; the required move is measured downward. {E(spec.RISK_FREE_RATE_NOTE)}</p>
@@ -325,9 +327,20 @@ premium; the required move is measured downward. {E(spec.RISK_FREE_RATE_NOTE)}</
 <h2>Version history</h2><ul>{log}</ul>"""
 
 
+def _readable(d) -> str:
+    """Audit details as 'key: value' text (no raw JSON on the page)."""
+    if isinstance(d, dict):
+        return "; ".join(f"{str(k).replace('_', ' ')}: {_readable(v)}" for k, v in d.items() if v not in (None, "", {}, []))
+    if isinstance(d, (list, tuple)):
+        return ", ".join(_readable(v) for v in d)
+    if isinstance(d, float):
+        return metric("", d)
+    return str(d)
+
+
 def audit_page(store: Store, snap: dict, integrity: list[str]) -> str:
-    rows = "".join(f'<tr><td class="small">{E(str(e.get("at")))}</td><td>{E(str(e.get("event")))}</td><td class="small">'
-                   f'{E(json.dumps({k: v for k, v in e.items() if k not in ("at", "event")}, default=str)[:400])}</td></tr>'
+    rows = "".join(f'<tr><td class="small">{E(str(e.get("at")).replace("+00:00", ""))}</td><td>{E(str(e.get("event")).replace("_", " "))}</td>'
+                   f'<td class="small">{E(_readable({k: v for k, v in e.items() if k not in ("at", "event")})[:400])}</td></tr>'
                    for e in reversed(store.audit_log()[-300:]))
     man = []
     for d in reversed(store.dates()):
@@ -340,7 +353,8 @@ def audit_page(store: Store, snap: dict, integrity: list[str]) -> str:
     return f"""<h1>Audit trail</h1>{ok}<h2>Snapshots</h2><div class="table-wrap"><table><thead><tr><th>As of</th><th>SHA-256</th>
 <th>Spec</th><th>Code</th><th>Status</th></tr></thead><tbody>{''.join(man)}</tbody></table></div>
 <h2>Latest run</h2><p class="small">Started {E(snap.get("run_started", ""))}, finished {E(snap.get("run_finished", ""))} UTC.
-Requests by provider: {E(json.dumps(usage.get("requests", {})))}; cache hits {E(str(usage.get("cache_hits", 0)))}.
+Requests by provider: {E(", ".join(f"{k} {v}" for k, v in usage.get("requests", {}).items()) or "none (all answered from cache)")};
+cache hits {E(str(usage.get("cache_hits", 0)))}.
 Problems: {E("; ".join(snap.get("problems", [])) or "none")}.</p>
 <h2>Data sources and terms</h2><ul class="small">{''.join(f'<li><strong>{E(k)}</strong>: {E(v)}</li>' for k, v in snap.get("sources", {}).items())}</ul>
 <h2>Events</h2><div class="table-wrap"><table><thead><tr><th>At (UTC)</th><th>Event</th><th>Details</th></tr></thead><tbody>{rows}</tbody></table></div>"""
@@ -377,9 +391,9 @@ def band_csv(band: dict) -> str:
     w.writerow(["rank", "ticker", "name", "sector", "composite", *[f"component_{c.key}" for c in comps],
                 "confidence", "price", "market_cap", *keys, "missing", "flags", "counterargument"])
     for c in band["candidates"]:
-        w.writerow([c["rank"], c["ticker"], c["name"], c["sector"], c["composite"],
+        w.writerow([csv_value(x) for x in [c["rank"], c["ticker"], c["name"], c["sector"], c["composite"],
                     *[c["components"].get(k.key) for k in comps], c["confidence"], c["price"], c["market_cap"],
-                    *[c["metrics"].get(k) for k in keys], ";".join(c["missing"]), ";".join(c["flags"]), c["counterargument"]])
+                    *[c["metrics"].get(k) for k in keys], ";".join(c["missing"]), ";".join(c["flags"]), c["counterargument"]]])
     return buf.getvalue()
 
 
@@ -392,9 +406,9 @@ def options_csv(rows: list[dict]) -> str:
             "max_loss_per_contract"]
     w.writerow(cols + ["rank_score", "earnings_before_expiry", "flags"])
     for x in rows:
-        w.writerow([x.get(c, "call" if c == "type" else None) for c in cols] +
+        w.writerow([csv_value(v) for v in [x.get(c, "call" if c == "type" else None) for c in cols] +
                    [x["rank_components"]["total"], ";".join(str(e["date"]) for e in x.get("events_before_expiry", [])),
-                    ";".join(x["flags"])])
+                    ";".join(x["flags"])]])
     return buf.getvalue()
 
 

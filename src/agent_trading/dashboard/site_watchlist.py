@@ -6,7 +6,7 @@ import html
 import io
 
 from . import spec
-from .fmt import cap, money, num, ok, pct, sval
+from .fmt import cap, csv_value, money, num, ok, pct, sval
 
 E = html.escape
 
@@ -154,8 +154,8 @@ def watchlist_csv(snap: dict) -> str:
     for e in (snap.get("watchlist") or {}).get("entries", []):
         sc = e.get("scenarios") or {}
         g = lambda k, f: (sc.get(k) or {}).get(f)  # noqa: E731
-        wr.writerow([e["ticker"], e.get("name"), e.get("asset_type"), e.get("exchange"), e.get("status"), e.get("price"),
+        wr.writerow([csv_value(v) for v in [e["ticker"], e.get("name"), e.get("asset_type"), e.get("exchange"), e.get("status"), e.get("price"),
                      e.get("price_date"), e.get("method"), e.get("evidence_quality"),
                      *[g(k, "price") for k in ("bear", "base", "bull")], *[g(k, "change") for k in ("bear", "base", "bull")],
-                     *[g(k, "annualized") for k in ("bear", "base", "bull")], e.get("unavailable_reason")])
+                     *[g(k, "annualized") for k in ("bear", "base", "bull")], e.get("unavailable_reason")]])
     return buf.getvalue()

@@ -178,3 +178,50 @@ def option_row(under: str, exp: date, strike: float, bid: float, ask: float, del
     return {"option": occ, "root": root, "expiration": exp, "type": "call", "strike": strike, "bid": bid, "ask": ask,
             "iv": iv, "open_interest": oi, "volume": vol, "delta": delta, "gamma": 0.01, "theta": theta, "vega": 0.3,
             "rho": 0.1, "last_trade_time": f"{AS_OF}T15:59:00", "last_price": (bid + ask) / 2}
+
+
+def demo_site(tmp_path, two_weeks: bool = True):
+    """Build a complete offline site (two weekly snapshots, options, watchlist) and return (data_dir, out_dir)."""
+    from agent_trading.dashboard import options as opt
+    from agent_trading.dashboard import tracking
+    from agent_trading.dashboard.pipeline import run
+    from agent_trading.dashboard.site import build_site
+    from agent_trading.dashboard.store import Store
+    from agent_trading.dashboard.tradability import Tradability
+    from agent_trading.dashboard.watchlist import WatchlistConfig
+    from tests.test_dashboard_v2 import chains_for
+
+    def providers(as_of, tweak):
+        p = FakeProviders(as_of)
+        benchmarks(p)
+        sectors = ["Information Technology", "Health Care", "Industrials"]
+        for i in range(12):
+            p.add(f"S{i:02d}", 100 + i, growth=0.05 + 0.04 * i + (tweak if i % 4 == 0 else 0),
+                  drift=0.0004 + 0.0001 * i, shares=5e8, sector=sectors[i % 3])
+        p.add("MIDA", 300, sp=False, shares=4e7, drift=0.0003, growth=0.25)
+        p.add("SPEC", 301, sp=False, shares=8e6, drift=0.0003, growth=0.50, cash=1e8)
+        p.add("SLOW", 302, sp=False, shares=8e6, drift=0.0003, growth=0.05)
+        p.add("NEWQ", 303, sp=False, shares=8e6, drift=0.0003, growth=0.30, quarters=2)
+        for t, name, start, drift, vol, seed in (("QQQX", "Invesco QQQ Trust, Series 1", 300, 0.0004, 0.01, 77),
+                                                 ("LEVX", "ProShares UltraPro QQQ", 50, 0.0008, 0.03, 78),
+                                                 ("ODDF", "Some Unusual Strategy Fund", 20, 0.0002, 0.01, 80)):
+            p.listed[t] = (name, "Nasdaq", True)
+            p.bars[t] = make_bars(n=1300, start=start, drift=drift, vol=vol, seed=seed, end=as_of.isoformat())
+        p.bars["QQQ"] = make_bars(n=1300, start=300, drift=0.0004, seed=79, end=as_of.isoformat())
+        return p
+
+    data, out = tmp_path / "data", tmp_path / "site"
+    store = Store(data)
+    wl = WatchlistConfig(("MIDA", "QQQX", "LEVX", "NEWQ", "ODDF", "NOPE"), "2026-10-14", "fixture")
+    dates = [(AS_OF - timedelta(days=7), 0.0), (AS_OF, 0.12)] if two_weeks else [(AS_OF, 0.0)]
+    snaps = []
+    for as_of, tweak in dates:
+        p = providers(as_of, tweak)
+        t = Tradability.all_tradable(list(p.listed), (as_of - timedelta(days=1)).isoformat())
+        snap = run(p, as_of, store.latest(before=str(as_of)), options_enabled=False, tradability=t, watchlist=wl)
+        snap["options"] = {"enabled": True, "status": "ok", **opt.build_horizons(chains_for(6), as_of, {})}
+        store.write_snapshot(snap, "fixture")
+        snaps.append(snap)
+    store.write_json("tracking.json", tracking.track(snaps, {k: v["close"] for k, v in p.bars.items()}, AS_OF))
+    build_site(data, out)
+    return data, out

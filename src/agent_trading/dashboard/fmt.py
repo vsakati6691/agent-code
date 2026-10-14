@@ -32,6 +32,55 @@ def cap(v) -> str:
     return f"${v / 1e12:.2f}T" if v >= 1e12 else f"${v / 1e9:.1f}B" if v >= 1e9 else f"${v / 1e6:.0f}M"
 
 
+# ratio metrics are shown as percentages; everything else as a plain rounded number
+PCT_METRICS = {
+    "revenue_growth_ttm", "revenue_cagr_3y", "growth_consistency", "growth_acceleration",
+    "operating_income_growth_ttm", "fcf_growth_ttm", "fcf_margin_change", "fcf_margin", "gross_margin",
+    "operating_margin", "roic", "accruals", "dilution", "sbc_to_revenue", "fcf_yield", "implied_growth_gap",
+    "implied_revenue_cagr", "return_12_1", "excess_6m", "excess_12m", "return_6m", "return_12m",
+    "operating_margin_change",
+}
+MULTIPLE_METRICS = {"net_debt_to_ebitda", "current_ratio", "ev_to_sales", "ev_to_sales_per_growth", "pe"}
+
+
+def plain(v: float, sig: int = 4) -> str:
+    """A rounded number with no scientific notation (4 significant digits by default)."""
+    if v == 0:
+        return "0"
+    from math import floor, log10
+    decimals = max(0, sig - 1 - int(floor(log10(abs(v)))))
+    out = f"{round(v, decimals):,.{decimals}f}"
+    return out.rstrip("0").rstrip(".") if "." in out else out
+
+
+def metric(name: str, v) -> str:
+    """Display form of one scoring input: percentages for ratios, rounded plain numbers otherwise."""
+    if v is None:
+        return "n/a"
+    if not ok(v):
+        return "not meaningful"
+    if name in ("operating_income_growth_ttm", "fcf_growth_ttm") and v == -1.0:
+        return "not meaningful (negative base)"
+    if name in PCT_METRICS:
+        return f"{v:+.1%}" if name in ("growth_acceleration", "fcf_margin_change", "implied_growth_gap",
+                                        "operating_margin_change", "excess_6m", "excess_12m", "return_12_1") \
+            else f"{v:.1%}"
+    if name == "log_market_cap":
+        return f"{cap(10 ** v)} market cap"
+    if name in MULTIPLE_METRICS:
+        return f"{plain(v)}x"
+    return plain(v)
+
+
+def csv_value(v):
+    """CSV cell: rounded floats without scientific notation; missing or non-finite values are empty."""
+    if isinstance(v, bool) or v is None:
+        return "" if v is None else str(v)
+    if isinstance(v, float):
+        return plain(v, 6).replace(",", "") if ok(v) else ""
+    return v
+
+
 def sval(v) -> str:
-    """data-v attribute for numeric sorting."""
-    return f"{v:.6g}" if ok(v) else ""
+    """data-v attribute for numeric sorting (plain digits, never scientific notation)."""
+    return plain(v, 8).replace(",", "") if ok(v) else ""

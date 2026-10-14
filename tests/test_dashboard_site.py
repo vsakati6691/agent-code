@@ -32,3 +32,45 @@ def test_bear_case_does_not_repeat_the_implied_growth_sentence():
     counter = "Weakest evidence: " + implied_growth_text(1.35, 0.49) + "."
     assert bear_case(m, counter).count("Price implies") == 1
     assert bear_case(m, "Weakest evidence: leverage.").count("Price implies") == 1
+
+
+# --- item 2 / item 12: output guards over the whole built site ----------------------------------
+
+import re  # noqa: E402
+
+from tests.dashboard_fixtures import demo_site  # noqa: E402
+
+FORBIDDEN = [(r"\d[eE][-+]\d", "scientific notation"), (r"\bnan\b", "nan"), (r"\bNaN\b", "NaN"), (r"\bNone\b", "None"),
+             (r"(?<![\w-])-?inf\b", "inf"), (r"\{", "brace")]
+
+
+def visible_text(html: str) -> str:
+    html = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", html)
+    html = re.sub(r"(?s)<[^>]+>", " ", html)
+    return html
+
+
+@pytest.fixture(scope="module")
+def site(tmp_path_factory):
+    return demo_site(tmp_path_factory.mktemp("demo"))[1]
+
+
+def test_no_raw_numbers_or_python_values_leak_into_pages_or_csv(site):
+    problems = []
+    for p in list(site.rglob("*.html")) + list(site.rglob("*.csv")):
+        text = p.read_text(encoding="utf-8")
+        body = visible_text(text) if p.suffix == ".html" else text
+        for pattern, label in FORBIDDEN:
+            m = re.search(pattern, body)
+            if m:
+                problems.append(f"{p.relative_to(site)}: {label}: ...{body[max(0, m.start() - 40):m.end() + 40]!r}")
+    assert not problems, "\n".join(problems[:15])
+
+
+def test_detail_page_inputs_are_rounded_percentages():
+    from agent_trading.dashboard.fmt import metric
+    assert metric("fcf_margin_change", 8.33e-17) == "+0.0%"
+    assert metric("gross_margin", 0.53212) == "53.2%"
+    assert metric("net_debt_to_ebitda", 0.123456) == "0.1235x"
+    assert metric("fcf_growth_ttm", -1.0) == "not meaningful (negative base)"
+    assert metric("log_market_cap", 9.6).endswith("market cap")

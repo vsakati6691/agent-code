@@ -269,7 +269,7 @@ def panels(snap: dict, tracking: dict | None) -> str:
         earn = '<p class="small muted">Not collected in this snapshot.</p>'
     else:
         earn = "".join(f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">({E(i["list"])})</span></li>'
-                       for i in items[:12]) or '<li class="muted">None in the next 45 days.</li>'
+                       for i in items[:12]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
         earn = f'<ul class="tight small">{earn}</ul><p class="small muted">{E(ev.get("note", ""))}</p>'
     new, gone, moves = [], [], []
     for k, b in bands.items():
