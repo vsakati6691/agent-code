@@ -81,7 +81,7 @@ def symbol_page(ticker: str, snap: dict, history: list[dict]) -> str:
     history_html = (f'<div class="table-wrap"><table aria-label="Ranks in earlier weekly snapshots"><thead><tr><th>Week ending</th>'
                     f'<th>List</th><th class="num">Rank</th><th class="num">Score</th></tr></thead><tbody>{"".join(hist)}</tbody>'
                     f'</table></div>' if hist else '<p class="small muted">Not in any stored weekly list yet.</p>')
-    return (f'<h1>{E(ticker)}{" · " + E(name) if name else ""}</h1><p class="lede">{E(sector or "")} Everything the '
+    return (f'<h1>{E(ticker)}{" · " + E(name) if name else ""}</h1><p class="lede">{E(sector) + " · " if sector else ""}Everything the '
             f'stored snapshots know about this symbol, as of {E(str(snap["as_of"]))}.</p>'
             f'<h2>This week\'s lists</h2>{lists}<h2>Option contracts</h2>{options}<h2>Watchlist 2030</h2>{watch}'
             f'<h2>History across snapshots</h2>{history_html}')
