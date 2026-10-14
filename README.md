@@ -19,6 +19,11 @@ scanner, risk headroom, data checks and headlines. It is a snapshot that a
 Claude session refreshes after a run, not a live feed. Runs write the full
 reports to `reports/`, which stays out of git.
 
+**Weekly research dashboard (GitHub Pages):** a separate, public-data-only site. GitHub Actions rebuilds it
+every weekend: large-cap, mid-cap and speculative growth research candidates, plus S&P 500 call-option
+comparisons. Every rule was fixed before results were seen, and the weekly snapshots are immutable and tracked
+against benchmarks. Research comparisons only, not advice. See [docs/RESEARCH_DASHBOARD.md](docs/RESEARCH_DASHBOARD.md).
+
 ## Architecture
 
 ### System overview
@@ -163,7 +168,8 @@ deliberate: the limits cap losses, and they also cap gains.
 | Order type | Day limit order at the last close ± 0.5%; after a buy fills, a GTC stop-loss sell at the ticket's stop |
 | Blocks | No new buys while any buy order is open, after a loss limit, or with an unverified snapshot |
 | Positions opened by hand | Stop unknown, so their whole value counts as risk (blocks new buys) |
-| Checks each run | Previous tickets (filled / still open / not placed); positions without a stop-loss order |
+| Checks each run | Previous tickets (filled / still open / not placed); positions not fully covered by open stop sell orders (limit sells don't count) |
+| Same-day reruns | Earlier tickets for the day are kept and count against the daily limits; a symbol is never ticketed twice in a day |
 | Alerts | One phone alert only for: trades to place, a missing stop, a failed run, or a halt |
 
 GTAA tickets appear only on the last trading day of a month. Desk tickets
@@ -259,6 +265,8 @@ src/agent_trading/
   backtest/                   desk engine, allocation engine (GTAA), scanner backtest, splits, stats
   account.py, journal.py, regime.py, cli.py
 docs/DAILY_ROUTINE.md         the runbook the scheduled Claude sessions follow
+src/agent_trading/dashboard/  weekly research dashboard (public data only; see docs/RESEARCH_DASHBOARD.md)
+.github/workflows/            research-dashboard.yml: weekly run, research-data branch, GitHub Pages
 tests/                        unit, integration (mocked services) and safety tests
 ```
 

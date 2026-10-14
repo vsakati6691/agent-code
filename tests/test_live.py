@@ -126,7 +126,7 @@ def test_previous_tickets_reconciled_and_missing_stop_flagged(settings, ledger):
     assert status["BUY NVDA 2"].startswith("filled")
     assert status["BUY GLD 1"] == "order still open"
     assert status["BUY IBIT 3"].startswith("not in the account")
-    assert any("NVDA: no open sell order" in w and "95.00" in w for w in res.warnings)
+    assert any("NVDA: no stop-loss order" in w and "95.00" in w for w in res.warnings)
 
 
 def test_config_rejects_unknown_live_strategy(settings):

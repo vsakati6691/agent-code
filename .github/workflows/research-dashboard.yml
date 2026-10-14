@@ -1,0 +1,177 @@
+# Weekly investment-research dashboard -> GitHub Pages.
+#
+# Schedule: GitHub cron is always UTC and ignores daylight saving time.
+#   Saturday 14:17 UTC = 10:17 EDT (Mar-Nov) / 09:17 EST (Nov-Mar): well after Friday's 16:00 ET close
+#   and after Cboe's end-of-day history files update. Sunday 14:17 UTC is an automatic retry; it does
+#   nothing when Saturday's snapshot already exists (snapshots are immutable).
+#   Scheduled runs can start late or be skipped when GitHub is busy; use "Run workflow" to rerun.
+# Holidays: the run uses the latest completed NYSE session (Thursday after Good Friday, for example).
+#
+# Secrets (Settings > Secrets and variables > Actions), never printed:
+#   SEC_USER_AGENT        required, "<name or project> <real contact email>" (SEC fair-access policy;
+#                         SEC rejects users.noreply.github.com addresses)
+#   ALPHAVANTAGE_API_KEY  optional, earnings dates (1 request per run)
+# Variable:
+#   DASHBOARD_PUBLISH     set to "true" to deploy to Pages, after reviewing the data-source terms in
+#                         docs/RESEARCH_DASHBOARD.md. Without it the site is built and checked but not published.
+#
+# This workflow never reads brokerage data, places orders, or sends messages.
+
+name: research-dashboard
+
+on:
+  schedule:
+    - cron: "17 14 * * 6"
+    - cron: "17 14 * * 0"
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "As-of session YYYY-MM-DD (blank = latest completed NYSE session)"
+        required: false
+        default: ""
+      options:
+        description: "Collect option chains"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-dashboard
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12"
+  DATA_BRANCH: research-data
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1   # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+
+  update:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: write          # push the research-data branch (snapshots, audit log)
+    outputs:
+      code: ${{ steps.run.outputs.code }}
+      as_of: ${{ steps.run.outputs.as_of }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1   # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: python -m pip install -e .
+
+      - name: Check out the data branch (created on the first run)
+        run: |
+          git config user.name "research-dashboard[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null; then
+            git fetch --no-tags --depth=1 origin "$DATA_BRANCH:$DATA_BRANCH"
+            git worktree add research-data "$DATA_BRANCH"
+          else
+            git worktree add --orphan -b "$DATA_BRANCH" research-data
+          fi
+
+      - name: HTTP cache (this week's responses only)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
+        with:
+          path: .cache/http
+          key: http-${{ github.run_id }}
+          restore-keys: http-
+
+      - name: Weekly research run
+        id: run
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          AS_OF: ${{ github.event.inputs.as_of }}
+          OPTIONS: ${{ github.event_name == 'schedule' || github.event.inputs.options == 'true' }}
+        run: |
+          find .cache/http -type f -mmin +4320 -delete 2>/dev/null || true   # drop cached responses older than 3 days
+          args=(run --data research-data --cache .cache/http --commit "$GITHUB_SHA")
+          [ -n "$AS_OF" ] && args+=(--as-of "$AS_OF")
+          [ "$OPTIONS" = "true" ] || args+=(--no-options)
+          set +e
+          python -m agent_trading.dashboard "${args[@]}"
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "as_of=$(python -c 'import json;print(json.load(open("research-data/status.json")).get("as_of",""))' 2>/dev/null)" >> "$GITHUB_OUTPUT"
+          if [ "$code" != "0" ] && [ "$code" != "2" ]; then exit "$code"; fi
+
+      - name: Verify snapshot integrity
+        run: python -m agent_trading.dashboard verify --data research-data
+
+      - name: Save snapshots and audit trail to the data branch
+        run: |
+          cd research-data
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no data changes"
+          else
+            git commit -q -m "Weekly research data $(date -u +%Y-%m-%dT%H:%MZ) (run ${{ github.run_id }})"
+            git push origin "HEAD:$DATA_BRANCH"
+          fi
+
+      - name: Build the static site (from stored snapshots only)
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+        run: python -m agent_trading.dashboard build --data research-data --out site
+
+      - name: Summary
+        run: |
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s = json.load(open("research-data/status.json"))
+          print(f"### Research dashboard: {s['status']}\n\nAs of {s.get('as_of')}. {s['message']}")
+          EOF
+
+      - name: Upload the Pages artifact
+        if: vars.DASHBOARD_PUBLISH == 'true'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b   # v4
+        with:
+          path: site
+
+  deploy:
+    needs: update
+    if: vars.DASHBOARD_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e   # v4
+
+  result:
+    # The stale-data site is still deployed when the weekly run fails; this job then fails the
+    # workflow so the failure is visible in the Actions tab.
+    needs: [update, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "update: ${{ needs.update.result }} (run exit code ${{ needs.update.outputs.code }}), deploy: ${{ needs.deploy.result }}"
+          if [ "${{ needs.update.result }}" != "success" ] || [ "${{ needs.update.outputs.code }}" = "2" ]; then exit 1; fi
+          if [ "${{ needs.deploy.result }}" = "failure" ]; then exit 1; fi

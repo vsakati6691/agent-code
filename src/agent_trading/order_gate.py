@@ -13,7 +13,8 @@ day's bars, independently of the sizing code, and fails closed:
 * each buy must be an allowed, unleveraged symbol with a fresh bar, a sane
   limit and stop, at most `max_order_notional`, not already held, and the batch
   must stay within the daily entry and purchase limits, the exposure cap and
-  the cash reserve.
+  the cash reserve. The daily limits include `issued_today`: tickets that an
+  earlier run already issued for the same ticket day, which may be placed.
 
 Nothing here talks to a broker; the owner still places every ticket by hand.
 """
@@ -126,8 +127,11 @@ def _global_blockers(settings: Settings, snap: AccountSnapshot | None, as_of: da
 
 def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | None, as_of: date,
                   bars: dict[str, pd.DataFrame], status: TradingStatus | None,
-                  now: datetime | None = None) -> GateResult:
-    """Approve or reject each ticket. Sells are checked before buys."""
+                  now: datetime | None = None, issued_today: list | tuple = ()) -> GateResult:
+    """Approve or reject each ticket. Sells are checked before buys.
+
+    `issued_today`: tickets already issued for `as_of` by earlier runs. Their buys count against the
+    daily purchase and entry limits, and no symbol is ticketed twice on the same side in one day."""
     now = now or datetime.now(timezone.utc)
     al = settings.account_limits
     res = GateResult()
@@ -158,6 +162,7 @@ def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | Non
         res.buy_blockers.append("an open buy order exists at the broker; reconcile it before new buys")
 
     allowed = {s.upper() for s in al.live_allowed_symbols}
+    ticketed = {(t.symbol.upper(), t.side) for t in issued_today}
     selling: set[str] = set()
     for t in [t for t in tickets if t.side == "sell"]:
         reason = None
@@ -167,6 +172,8 @@ def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | Non
             reason = f"sell quantity {t.quantity:g} exceeds the {held[t.symbol]:g} held"
         elif t.symbol in selling:
             reason = "duplicate sell ticket"
+        elif (t.symbol.upper(), "sell") in ticketed:
+            reason = "already ticketed today"
         elif not (math.isfinite(t.limit_price) and t.limit_price > 0):
             reason = "invalid limit price"
         if reason:
@@ -175,8 +182,13 @@ def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | Non
             res.approved.append(t)
             selling.add(t.symbol)
 
-    bought, entries, seen = 0.0, 0, set()
+    issued_buys = [t for t in issued_today if t.side == "buy"]
+    bought, entries = sum(t.notional for t in issued_buys), len(issued_buys)
+    seen: set[str] = set()
     for t in [t for t in tickets if t.side == "buy"]:
+        if (t.symbol.upper(), "buy") in ticketed:
+            res.rejected.append((t, "already ticketed today"))
+            continue
         reason = _buy_reason(t, al, allowed, held, seen, bars, as_of)
         if reason is None and res.buy_blockers:
             reason = "; ".join(res.buy_blockers)

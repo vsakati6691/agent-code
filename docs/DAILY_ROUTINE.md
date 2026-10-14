@@ -33,7 +33,10 @@ one-line note.
    "unsettled_funds": <from get_accounts>, "account_type": <type from get_accounts>,
    "portfolio": {...}, "positions": [...], "orders": [...]}` and run
    `& $py -m agent_trading account import <file>`. Without `unsettled_funds`
-   the order gate blocks every buy ticket (settled cash unknown). Take the
+   the order gate blocks every buy ticket (settled cash unknown). Keep each
+   order's `type`, `trigger`, `stop_price` and `quantity` as returned: a
+   position counts as protected only by open **stop** sell orders covering its
+   full quantity (a limit sell does not count). Take the
    snapshot **after 16:00 ET**: tickets need a snapshot from the ticket day
    that is under 6 hours old.
 2. **Constituents** (Mondays, or when `universe show` warns it is old):
@@ -138,6 +141,8 @@ held GTAA assets below it get paper sell orders, all sized by the RiskEngine.
 
 ## Recovery
 
+- A same-day rerun keeps the tickets already issued that day (they may be placed), counts them against
+  the $200 / 3-entry daily limits and never re-tickets a symbol, so it can only add what is left.
 - A run failed midway: rerun it. Imports are idempotent and `paper run` will
   not queue duplicate orders for the same date.
 - Stale or missing data: the report lists it, the scanner reports coverage,

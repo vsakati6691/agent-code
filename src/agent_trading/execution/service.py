@@ -171,18 +171,25 @@ class ExecutionService:
 
     # --- health, reconciliation, halt ------------------------------------------
     def reconcile(self, account: AccountState) -> list[str]:
-        """Broker positions must equal the baseline plus the ledger's fills."""
+        """Broker positions must equal the baseline plus the ledger's fills since the baseline.
+
+        The baseline records the fills the ledger already held when it was taken: those are already
+        inside the baseline positions and must not be added a second time."""
         baseline = self.ledger.get_meta(f"baseline:{self.mode}")
         if baseline is None:
-            self.ledger.set_meta(f"baseline:{self.mode}", {"positions": account.positions,
+            fills = {r["ref_id"]: r["filled_quantity"] for r in self.ledger.orders()
+                     if r["mode"] == self.mode and r["filled_quantity"]}
+            self.ledger.set_meta(f"baseline:{self.mode}", {"positions": account.positions, "fills": fills,
                                                            "at": account.fetched_at.isoformat()})
-            self.ledger.log("baseline", {"mode": self.mode, "positions": account.positions})
+            self.ledger.log("baseline", {"mode": self.mode, "positions": account.positions, "fills": fills})
             return []
         expected = dict(baseline["positions"])
+        counted = baseline.get("fills", {})
         for r in self.ledger.orders():
-            if r["mode"] == self.mode and r["filled_quantity"]:
+            new_fill = (r["filled_quantity"] or 0.0) - counted.get(r["ref_id"], 0.0)
+            if r["mode"] == self.mode and abs(new_fill) > 1e-12:
                 sign = 1 if r["side"] == "buy" else -1
-                expected[r["symbol"]] = expected.get(r["symbol"], 0.0) + sign * r["filled_quantity"]
+                expected[r["symbol"]] = expected.get(r["symbol"], 0.0) + sign * new_fill
         problems = []
         for sym in sorted(set(expected) | set(account.positions)):
             want, have = expected.get(sym, 0.0), account.positions.get(sym, 0.0)
