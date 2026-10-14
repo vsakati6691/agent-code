@@ -139,6 +139,17 @@ def test_budget_exhaustion_records_every_unavailable_item(tmp_path):
     assert len(out["quotes"]) == 6 and "budget" in out["quotes"]["SPY"]["reason"]
 
 
+def test_scheduled_calendar_dates_serialize_and_retain_scheduled_status(tmp_path):
+    import pandas as pd
+    weekly(tmp_path)
+    p = RefreshProviders()
+    p.earnings = pd.DataFrame({"symbol": ["AAA"], "reportDate": [AS_OF + timedelta(days=20)]})
+    assert run(tmp_path, p, AS_OF, now=NOW)["status"] == "ok"
+    row = RefreshStore(tmp_path).load(str(AS_OF))["options"]["3m"]["calls"]["rows"][0]
+    assert row["events_status"] == "scheduled"
+    assert row["events_before_expiry"][0]["date"] == "2026-10-29"
+
+
 def test_http_refresh_limits_fresh_cache_and_deadline(tmp_path):
     now = [0.0]
     response = Mock(status_code=200, content=b'{"fresh":true}')

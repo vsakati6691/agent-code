@@ -31,6 +31,9 @@ def compact_options(payload: dict) -> dict:
             payload[horizon.key][kind + "s"]["rows"] = [
                 {**{k: row.get(k) for k in ROW_FIELDS}, "status": "available", "reason": "passed existing eligibility"}
                 for row in rows]
+            for row in payload[horizon.key][kind + "s"]["rows"]:
+                row["events_before_expiry"] = [{**event, "date": event["date"].isoformat()}
+                                               for event in row["events_before_expiry"]]
     return payload
 
 
