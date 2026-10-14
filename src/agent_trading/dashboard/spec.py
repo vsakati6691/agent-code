@@ -17,12 +17,36 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-13.2"
+SPEC_VERSION = "2026-10-14.3"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
                      "a company with several listed share classes (e.g. GOOG and GOOGL) is evaluated once, using "
                      "its most liquid class. No scoring rule, scale or weight changed."),
+    ("2026-10-14.1", "Owner requests (2026-10-14), written before any data was run with them: (1) only stocks "
+                     "Robinhood reports as tradable are published; a read-only Robinhood check no older than 35 "
+                     "days is required, and unverified stocks are excluded with that reason. (2) New list: "
+                     "long-horizon multibagger research candidates (5-10 years), $500M-$50B, with growth, margin, "
+                     "track-record, dilution and survival gates, a long-horizon weight profile with a new runway "
+                     "and operating-leverage component, and 10-year scenarios. The existing lists' rules, scales "
+                     "and weights did not change; fixed scales mean removing untradable stocks leaves the order "
+                     "of the others unchanged."),
+    ("2026-10-14.2", "Owner redesign request (2026-10-14), written before any data was evaluated with it: "
+                     "(1) three growth lists of up to 10: large cap (S&P 500 members), mid cap ($2B-$10B) and a "
+                     "new small-cap list ($300M-$2B; the former 'speculative' list's price and liquidity floors, "
+                     "without its 20% growth gate, and scored like the other growth lists); (2) the long-horizon "
+                     "list is renamed 'Speculative multibagger research candidates' and shows up to 5; (3) options "
+                     "cover calls AND puts, up to 10 per type per horizon (was 5 calls), with the same windows, "
+                     "liquidity filters and per-underlying limit; put deltas use their absolute value; (4) a "
+                     "separate owner watchlist with conditional year-end-2030 price scenarios (companies, "
+                     "unleveraged ETFs and leveraged ETFs each with their own method). Scoring scales and "
+                     "weights did not change."),
+    ("2026-10-14.3", "Watchlist only, from the owner's watchlist requirements (connect margins to per-share "
+                     "value): each company scenario now carries an explicit free-cash-flow margin path to "
+                     "2030 (today's TTM FCF margin, or operating margin when FCF is unavailable, plus the "
+                     "scenario's margin shift) and the EV/FCF multiple that the 2030 value implies. A value "
+                     "with negative 2030 FCF or an implied EV/FCF above 60x is flagged as not supported by "
+                     "cash generation. Scenario prices, growth lists, options and scoring are unchanged."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -30,7 +54,8 @@ SPEC_CHANGELOG = [
 MULTIBAGGER_DEFINITION = (
     "A 'multibagger' scenario here means a bull-case value of at least 5x today's price after five years "
     "(about 38% a year). A 2x-in-five-years outcome (about 15% a year) is shown separately as 'doubling'. "
-    "Scenario values are conditional on the stated assumptions; they are not maximum prices, targets or "
+    "For the long-horizon list the test also runs at ten years: a bull case of at least 5x (about 17.5% a "
+    "year) and a base case of at least 2x (about 7% a year) within ten years. Scenario values are conditional on the stated assumptions; they are not maximum prices, targets or "
     "predictions."
 )
 PROBABILITY_STATEMENT = (
@@ -55,7 +80,7 @@ DISCLAIMER = (
 class Band:
     key: str
     title: str
-    universe: str                 # "sp500" or "broad"
+    universe: str                 # "sp500", "broad", or "all" (both, de-duplicated)
     min_cap: float | None         # USD, inclusive
     max_cap: float | None         # USD, exclusive
     min_price: float
@@ -65,15 +90,38 @@ class Band:
     benchmark_name: str
     friction_bps_per_side: float  # assumed slippage + half-spread for performance tracking
     min_revenue_growth: float | None = None   # eligibility gate (TTM YoY), None = no gate
+    profile: str = "standard"                 # which component weights score this list (PROFILES)
+    gates: tuple = ()                         # extra eligibility gates: (metric, ">=" or "<=", value)
+    scenario_years: tuple = (1, 3, 5)
 
+
+BAND_TITLES_SHORT = {"large": "Large cap (S&P 500 members)", "mid": "Mid cap ($2B-$10B)",
+                     "small": "Small cap ($300M-$2B)", "multibagger": "Speculative multibagger (5-10 yr)"}
+# lists retired by a later spec version; old snapshots that contain them still render and are still tracked
+LEGACY_BANDS = {"spec": {"title": "Speculative potential multibagger research candidates (retired 2026-10-14.2)",
+                         "benchmark": "IWM", "friction_bps_per_side": 50.0}}
 
 BANDS = (
     Band("large", "Large-cap growth research candidates", "sp500", None, None, 5.0, 20e6, 10,
          "SPY", "SPDR S&P 500 ETF (price return)", 15.0),
     Band("mid", "Mid-cap growth research candidates", "broad", 2e9, 10e9, 5.0, 5e6, 10,
          "IJH", "iShares Core S&P Mid-Cap ETF (price return)", 25.0),
-    Band("spec", "Speculative potential multibagger research candidates", "broad", 300e6, 2e9, 2.0, 2e6, 10,
-         "IWM", "iShares Russell 2000 ETF (price return)", 50.0, min_revenue_growth=0.20),
+    Band("small", "Small-cap growth research candidates", "broad", 300e6, 2e9, 2.0, 2e6, 10,
+         "IWM", "iShares Russell 2000 ETF (price return)", 50.0),
+    Band("multibagger", "Speculative multibagger research candidates (5-10 year horizon)", "all", 500e6, 50e9, 5.0,
+         5e6, 5, "IWM", "iShares Russell 2000 ETF (price return)", 35.0, profile="long_horizon",
+         gates=(("revenue_growth_ttm", ">=", 0.15), ("revenue_cagr_3y", ">=", 0.15), ("gross_margin", ">=", 0.35),
+                ("reported_quarters", ">=", 12), ("dilution", "<=", 0.08), ("survival", ">=", 1)),
+         scenario_years=(1, 3, 5, 10)),
+)
+MULTIBAGGER_RATIONALE = (
+    "Why these criteria: research on the stocks that compounded many-fold over 5-10 years (for example "
+    "Bessembinder's work on how concentrated long-run stock returns are, and Mayer's book 100 Baggers) finds "
+    "that they usually started small enough to have room to grow, grew revenue fast for many years, had gross "
+    "margins high enough to scale, did not dilute shareholders away, survived without distress, and were not "
+    "priced for perfection at the start. The gates encode those minimums; the long-horizon score ranks on growth "
+    "durability first and weights short-term momentum lightly. Most stocks that pass these screens will NOT "
+    "become multibaggers, and no probability is estimated."
 )
 
 MARKET_CAP_DEFINITION = (
@@ -91,9 +139,20 @@ UNIVERSE_DEFINITION = (
     "rights, units, preferred shares, notes, depositary shares, blank-check companies (names containing "
     "'Acquisition Corp'), companies in bankruptcy, and companies without US-GAAP 10-K/10-Q XBRL data (most "
     "foreign private issuers file 20-F/40-F and cannot be compared on the same basis). Mid cap: $2B to $10B. "
-    "Speculative: $300M to $2B with trailing revenue growth of at least 20%. A company with several listed share "
-    "classes (one SEC CIK) is evaluated once, using the class with the highest 20-day median dollar volume."
+    "Small cap: $300M to $2B. These lists cover the screened universes only: the large-cap list is S&P 500 "
+    "members, not every large company. Speculative multibagger list: "
+    "the S&P 500 and the broad universe together, $500M to $50B, passing every gate in its band definition. "
+    "A company with several listed share "
+    "classes (one SEC CIK) is evaluated once, using the class with the highest 20-day median dollar volume. Only "
+    "stocks verified as tradable on Robinhood are published (see TRADABILITY_RULE)."
 )
+TRADABILITY_RULE = (
+    "Published only if Robinhood's read-only get_equity_tradability check reports tradeable = true, state = "
+    "active, and 'tradable' for an individual account (regular hours), and the check is at most 35 days old. "
+    "Not tradable, not found, unverified or stale checks exclude the stock with that reason (fail closed)."
+)
+TRADABILITY_MAX_AGE_DAYS = 35
+TRADABILITY_CHECK_DEPTH = 15      # unverified names this far below each list's cutoff go on the to-check list
 LIMITED_HISTORY_QUARTERS = 8     # fewer reported quarters than this -> 'limited operating history' flag
 LIMITED_HISTORY_DAYS = 504       # fewer price bars than this (about 2 years) -> 'limited trading history' flag
 MAX_FILING_AGE_DAYS = 200        # latest 10-Q/10-K older than this -> fundamentals stale, excluded
@@ -164,6 +223,26 @@ COMPONENTS = (
         "excess_12m": Scale(-0.30, 0.50),
     }),
 )
+_BY_KEY = {c.key: c for c in COMPONENTS}
+LONG_HORIZON_COMPONENTS = (
+    Component("growth", _BY_KEY["growth"].title, 0.30, True, _BY_KEY["growth"].metrics),
+    Component("earnings", _BY_KEY["earnings"].title, 0.10, False, _BY_KEY["earnings"].metrics),
+    Component("quality", _BY_KEY["quality"].title, 0.15, False, _BY_KEY["quality"].metrics),
+    Component("balance", _BY_KEY["balance"].title, 0.15, True, _BY_KEY["balance"].metrics),
+    Component("valuation", _BY_KEY["valuation"].title, 0.15, True, _BY_KEY["valuation"].metrics),
+    Component("runway", "Runway and operating leverage", 0.10, False, {
+        "log_market_cap": Scale(8.7, 10.7, reverse=True),     # $500M -> 1, $50B -> 0: room to compound
+        "operating_margin_change": Scale(-0.05, 0.05),        # TTM operating margin vs the prior TTM
+    }),
+    Component("momentum", _BY_KEY["momentum"].title, 0.05, False, _BY_KEY["momentum"].metrics),
+)
+PROFILES = {"standard": COMPONENTS, "long_horizon": LONG_HORIZON_COMPONENTS}
+GATE_NOTES = {
+    "reported_quarters": "Number of reported quarters available (at least three years of history).",
+    "survival": "1 when TTM free cash flow is positive, or cash and short-term investments cover at least two "
+                "years of the current free-cash-flow burn; 0 otherwise.",
+}
+
 METRIC_NOTES = {
     "revenue_growth_ttm": "Trailing-twelve-month revenue vs the prior twelve months, from 10-Q/10-K XBRL facts.",
     "revenue_cagr_3y": "Annual revenue growth over three years (TTM vs the TTM three years earlier).",
@@ -193,6 +272,10 @@ METRIC_NOTES = {
     "return_12_1": "Price return from 252 to 21 trading days before the as-of date (skips the latest month).",
     "excess_6m": "6-month price return minus the benchmark's.",
     "excess_12m": "12-month price return minus the benchmark's.",
+    "log_market_cap": "log10 of market capitalization; smaller companies have more room to compound "
+                      "(long-horizon list only).",
+    "operating_margin_change": "TTM operating margin minus the prior TTM's; positive means operating leverage "
+                               "(long-horizon list only).",
 }
 NOT_SCORED_FACTORS = {
     "competitive_position": "Not scored: no reliable structured data source. Read the 10-K business and "
@@ -230,8 +313,8 @@ class ScenarioRule:
     key: str
     growth_multiplier: float      # x the starting growth rate (which is capped, below)
     growth_shift: float           # added to the starting growth rate
-    margin_shift: float           # added to the current FCF margin by year 5 (linear)
-    exit_multiple_factor: float   # x the current EV/Sales, reached by year 5 (linear)
+    margin_shift: float           # added to the current FCF margin by the last scenario year (linear)
+    exit_multiple_factor: float   # x the current EV/Sales, reached by the last scenario year (linear)
     dilution_shift: float         # added to the trailing annual dilution rate
 
 
@@ -249,7 +332,7 @@ SCENARIO_METHOD = (
     "Revenue starts at trailing-twelve-month revenue and grows at a starting rate that fades 20% a year "
     "toward 4%. The starting rate is TTM revenue growth (capped at 60%, floored at -30%) times the scenario "
     "multiplier plus the shift. The exit EV/Sales multiple moves linearly from today's to today's x the "
-    "scenario factor by year 5 (floor 0.5x). Equity value = EV + net cash (held at today's level). Shares "
+    "scenario factor by the last scenario year (year 5, or year 10 for the long-horizon list; floor 0.5x). Equity value = EV + net cash (held at today's level). Shares "
     "grow at the trailing dilution rate plus the scenario shift. FCF margin assumptions are shown for "
     "transparency and consistency checks; the value itself comes from the EV/Sales path. Every number is "
     "conditional on these assumptions; none is a forecast, a target or a maximum."
@@ -275,13 +358,14 @@ OPTION_UNDERLYINGS = (
     "The large-cap research candidates of the same week (S&P 500 members only), scored before any option "
     "data is read."
 )
+OPTION_TYPES = ("call", "put")
 OPTION_RULES = {
-    "max_per_horizon": 5,
-    "max_per_underlying_per_horizon": 2,
+    "max_per_type_per_horizon": 10,       # up to 10 calls and 10 puts per horizon (60 contracts overall)
+    "max_per_underlying_per_horizon": 2,  # per option type
     "min_open_interest": 500,
     "min_volume": 10,
     "max_spread_pct": 0.10,        # (ask - bid) / mid
-    "min_delta": 0.30,
+    "min_delta": 0.30,                    # applied to |delta|: calls 0.30..0.70, puts -0.70..-0.30
     "max_delta": 0.70,
     "standard_multiplier": 100,
     "max_quote_age_business_days": 0,   # the chain's underlying quote must be from the as-of session
@@ -290,14 +374,81 @@ OPTION_RANKING = {
     # Weighted sum of 0..1 sub-scores; higher is better. Upside is deliberately not a ranking input.
     "liquidity": (0.45, "half spread-percentage score (0% -> 1, 10% -> 0), half open-interest score "
                         "(log scale, 500 -> 0, 20,000 -> 1)"),
-    "breakeven": (0.35, "breakeven move at expiration divided by the one-standard-deviation implied move "
-                        "(IV x sqrt(years)); 0 -> 1, 1.0 or more -> 0"),
+    "breakeven": (0.35, "required move to breakeven at expiration (up for calls, down for puts) divided by "
+                        "the one-standard-deviation implied move (IV x sqrt(years)); 0 -> 1, 1.0 or more -> 0"),
     "time_decay": (0.20, "theta per day as a share of the premium; 0% -> 1, 1.0% or more -> 0"),
 }
-PAYOFF_MOVES = (-0.30, -0.15, 0.0, 0.10, 0.20, 0.30, 0.50)
+PREMIUM_ASSUMPTION = (
+    "Illustrative premium = the quoted ASK x 100 shares (the cost to open at the delayed ask). Breakevens, "
+    "payoffs and maximum loss use that premium; the mid price is shown for reference only."
+)
+OPTION_RANKING_NOTE = (
+    "Rankings compare liquidity and contract characteristics (spread, open interest, breakeven vs the implied "
+    "move, time decay). They do not predict profitability. A put listed here does not mean the underlying is "
+    "expected to fall: puts are ranked on the same contract characteristics for the same underlyings, not by "
+    "reversing the growth rankings."
+)
+PAYOFF_MOVES = (-0.50, -0.30, -0.15, 0.0, 0.10, 0.20, 0.30, 0.50)
 SENSITIVITY = {"days_forward": 30, "iv_shifts": (-0.05, 0.0, 0.05), "price_moves": (-0.10, 0.0, 0.10)}
 RISK_FREE_RATE_NOTE = "Black-Scholes sensitivities use a 4% risk-free rate and no dividends (model estimates)."
 RISK_FREE_RATE = 0.04
+
+# --- Owner watchlist: conditional 2030 price scenarios ---------------------------------------
+WATCHLIST_TARGET_DATE = "2030-12-31"
+WATCHLIST_STATEMENT = (
+    "Conditional 2030 price scenarios: what the price would be on December 31, 2030 IF the stated assumptions "
+    "held. They are not predictions, targets, guarantees or analyst consensus; the base case is not "
+    "necessarily the most likely outcome, and no probability is assigned. Horizon = the actual time from the "
+    "valuation date to December 31, 2030. All figures are PRICE scenarios (distributions excluded), on the "
+    "split-adjusted price basis used everywhere on this site."
+)
+WATCHLIST_SEPARATION = (
+    "The watchlist is a custom research universe imported from the owner's list. It is kept separate from the "
+    "ranked growth screens: being on the watchlist never qualifies a stock for a ranked list."
+)
+WATCHLIST_COMPANY_METHOD = (
+    "Operating companies: revenue x EV/Sales path (the same bear/base/bull rules as the growth lists: starting "
+    "growth = TTM revenue growth capped at 60% x the scenario multiplier + shift, fading 20% a year toward 4%; "
+    "EV/Sales moves from today's to today's x the scenario factor by December 31, 2030), plus net cash held "
+    "flat, divided by shares growing at the trailing dilution rate + the scenario shift. Margins are linked "
+    "through a cross-check: each scenario's 2030 free-cash-flow margin (today's TTM FCF margin, or operating "
+    "margin when FCF is unavailable, plus the scenario's margin shift: bear -5 points, base 0, bull +5) gives "
+    "2030 FCF, and the implied EV/FCF multiple shows whether the value is supported by cash generation (flagged "
+    "when 2030 FCF is negative or EV/FCF exceeds 60x). Requires positive TTM revenue, positive enterprise value "
+    "and at least 4 reported quarters; otherwise 'Scenario unavailable'."
+)
+WATCHLIST_MAX_SUPPORTED_EV_FCF = 60.0
+# annual TOTAL-return assumptions for the fund's underlying exposure (before fees), by exposure class;
+# price return = total return - assumed fee - assumed distribution yield
+ETF_EXPOSURE_RULES = (
+    # (class, title, name keywords, (bear, base, bull) annual total return, assumed fee, assumed distribution yield)
+    ("broad_us", "Broad US equity index", ("nasdaq-100", "nasdaq 100", "s&p 500", "total stock market",
+                                            "total market", "qqq"), (0.00, 0.06, 0.10), 0.0020, 0.006),
+    ("semis", "Semiconductor industry", ("semiconductor",), (-0.03, 0.06, 0.13), 0.0035, 0.004),
+    ("thematic", "Single theme or industry", ("space", "artificial intelligence", " ai ", "memory", "nuclear",
+                                              "uranium", "robot", "quantum", "cyber", "cloud", "ipo", "innovation",
+                                              "lithography", "dram", "aerospace"), (-0.08, 0.04, 0.14), 0.0065, 0.002),
+)
+LEVERAGED_KEYWORDS = {"ultrapro": 3, "3x": 3, "2x": 2, "ultra ": 2, "-1x": -1, "-2x": -2, "-3x": -3,
+                      "short": -1, "inverse": -1, "bear": -1}
+LEVERAGED_METHOD = (
+    "Leveraged and inverse ETFs: the fund resets its leverage L daily, so its long-run growth depends on the "
+    "path, not just the index's cumulative return. Scenario growth rate = L x mu - L^2 x sigma^2 / 2 - (L - 1) x "
+    "financing rate - fee, where mu is the underlying index's arithmetic annual return for the scenario (its "
+    "exposure-class total return + sigma^2/2) and sigma its volatility (trailing 3-year realized volatility of "
+    "the tracked index fund; x1.25 in the bear case, x0.85 in the bull case). This is a constant-volatility "
+    "approximation: real paths differ widely, and a deep drawdown may never be recovered. If the leverage, the "
+    "underlying index or its price history cannot be identified, the scenario is unavailable."
+)
+LEVERAGED_FINANCING_RATE = 0.04
+LEVERAGED_ASSUMED_FEE = 0.0095
+LEVERAGED_VOL_FACTORS = {"bear": 1.25, "base": 1.0, "bull": 0.85}
+LEVERAGED_UNDERLYING_HINTS = {"qqq": "QQQ", "nasdaq-100": "QQQ", "nasdaq 100": "QQQ", "s&p 500": "SPY",
+                              "semiconductor": "SOXX"}
+FEE_NOTE = (
+    "Fund fees and distribution yields are ASSUMED by exposure class (no permitted source provides them in the "
+    "automated run); each fund's assumption is shown and flagged as unverified."
+)
 
 # --- Performance tracking ---------------------------------------------------------
 TRACK_HORIZONS = {"1m": 21, "3m": 63, "6m": 126, "12m": 252}   # trading days after the snapshot's as-of close
@@ -319,11 +470,17 @@ def spec_dict() -> dict:
         "version": SPEC_VERSION,
         "bands": [asdict(b) for b in BANDS],
         "market_cap_definition": MARKET_CAP_DEFINITION,
+        "tradability": {"rule": TRADABILITY_RULE, "max_age_days": TRADABILITY_MAX_AGE_DAYS,
+                        "check_depth": TRADABILITY_CHECK_DEPTH},
         "universe_definition": UNIVERSE_DEFINITION,
         "limits": {"limited_history_quarters": LIMITED_HISTORY_QUARTERS, "limited_history_days": LIMITED_HISTORY_DAYS,
                    "max_filing_age_days": MAX_FILING_AGE_DAYS, "max_price_lag": MAX_PRICE_LAG_BUSINESS_DAYS},
         "components": [{"key": c.key, "title": c.title, "weight": c.weight, "critical": c.critical,
                         "metrics": {k: asdict(v) for k, v in c.metrics.items()}} for c in COMPONENTS],
+        "profiles": {name: [{"key": c.key, "weight": c.weight, "critical": c.critical,
+                             "metrics": {k: asdict(v) for k, v in c.metrics.items()}} for c in comps]
+                     for name, comps in PROFILES.items()},
+        "gate_notes": GATE_NOTES, "multibagger_rationale": MULTIBAGGER_RATIONALE,
         "metric_notes": METRIC_NOTES,
         "not_scored": NOT_SCORED_FACTORS,
         "max_missing_metrics": MAX_MISSING_METRICS,
@@ -337,12 +494,19 @@ def spec_dict() -> dict:
                             "terminal_growth": SCENARIO_TERMINAL_GROWTH, "min_ev_sales": SCENARIO_MIN_EV_SALES},
         "multibagger": MULTIBAGGER_DEFINITION,
         "horizons": [asdict(h) for h in HORIZONS],
+        "option_types": OPTION_TYPES, "premium_assumption": PREMIUM_ASSUMPTION,
         "option_rules": OPTION_RULES,
         "option_ranking": {k: v[0] for k, v in OPTION_RANKING.items()},
         "payoff_moves": PAYOFF_MOVES,
         "sensitivity": SENSITIVITY,
         "risk_free_rate": RISK_FREE_RATE,
         "track_horizons": TRACK_HORIZONS,
+        "watchlist": {"target": WATCHLIST_TARGET_DATE, "company_method": WATCHLIST_COMPANY_METHOD,
+                      "max_supported_ev_fcf": WATCHLIST_MAX_SUPPORTED_EV_FCF,
+                      "etf_rules": ETF_EXPOSURE_RULES, "leveraged": LEVERAGED_METHOD,
+                      "leveraged_params": [LEVERAGED_KEYWORDS, LEVERAGED_FINANCING_RATE, LEVERAGED_ASSUMED_FEE,
+                                           LEVERAGED_VOL_FACTORS, LEVERAGED_UNDERLYING_HINTS]},
+        "legacy_bands": LEGACY_BANDS,
     }
 
 
@@ -353,10 +517,14 @@ def spec_hash() -> str:
 
 
 def _check() -> None:
-    total = sum(c.weight for c in COMPONENTS)
-    if abs(total - 1.0) > 1e-9:
-        raise ValueError(f"component weights sum to {total}, not 1")
-    missing_notes = {m for c in COMPONENTS for m in c.metrics} - set(METRIC_NOTES)
+    for name, comps in PROFILES.items():
+        total = sum(c.weight for c in comps)
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError(f"{name} component weights sum to {total}, not 1")
+    for b in BANDS:
+        if b.profile not in PROFILES:
+            raise ValueError(f"band {b.key}: unknown profile {b.profile}")
+    missing_notes = {m for comps in PROFILES.values() for c in comps for m in c.metrics} - set(METRIC_NOTES)
     if missing_notes:
         raise ValueError(f"metrics without a documented definition: {sorted(missing_notes)}")
     if abs(sum(w for w, _ in OPTION_RANKING.values()) - 1.0) > 1e-9:

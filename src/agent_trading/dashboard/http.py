@@ -39,6 +39,7 @@ ALLOWED_HOSTS = {
 RETRY_STATUS = {429, 500, 502, 503, 504}
 RATE_LIMIT_ATTEMPTS = 5
 MAX_INTERVAL = 3.0           # slowest pacing adaptive throttling will go to (seconds between requests)
+RECOVER_AFTER = 300          # successful requests in a row before a throttled provider speeds up 10%
 
 
 class FetchError(RuntimeError):
@@ -78,6 +79,7 @@ class HttpClient:
     clock: callable = time.monotonic
     used: dict[str, int] = field(default_factory=dict)
     throttled: dict[str, int] = field(default_factory=dict)
+    _streak: dict[str, int] = field(default_factory=dict)
     cache_hits: int = 0
     _last: dict[str, float] = field(default_factory=dict)
 
@@ -146,6 +148,7 @@ class HttpClient:
                 raise FetchError(f"{host}: {type(exc).__name__}") from None
             else:
                 if resp.status_code == 200:
+                    self._recover(provider)
                     return resp.content
                 if resp.status_code in (301, 302, 303, 307, 308):
                     # redirects are followed only to another allow-listed host, and only once
@@ -159,6 +162,7 @@ class HttpClient:
                 last_error = f"HTTP {resp.status_code}"
             wait = self.backoff * 2 ** (attempt - 1)
             if last_error == "HTTP 429":
+                self._streak[provider] = 0
                 limit = max(limit, RATE_LIMIT_ATTEMPTS)
                 self.throttled[provider] = self.throttled.get(provider, 0) + 1
                 lim = self.limits[provider]
@@ -172,6 +176,15 @@ class HttpClient:
                 log.info("%s: %s, retry %d/%d in %.0fs", host, last_error, attempt, limit - 1, wait)
                 self.sleep(wait)
         raise FetchError(f"{host}: {last_error} after {attempt} attempts")
+
+    def _recover(self, provider: str) -> None:
+        """After a long run of successes, move a throttled provider 10% back toward its base pacing."""
+        base = DEFAULT_LIMITS[provider].min_interval if provider in DEFAULT_LIMITS else 0.0
+        lim = self.limits[provider]
+        self._streak[provider] = self._streak.get(provider, 0) + 1
+        if lim.min_interval > base and self._streak[provider] >= RECOVER_AFTER:
+            lim.min_interval = max(base, lim.min_interval * 0.9)
+            self._streak[provider] = 0
 
     def _pace(self, provider: str) -> None:
         wait = self.limits[provider].min_interval - (self.clock() - self._last.get(provider, -1e9))

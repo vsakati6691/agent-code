@@ -3,6 +3,8 @@
     python -m agent_trading.dashboard run    --data research-data --cache .cache/http [--as-of YYYY-MM-DD]
     python -m agent_trading.dashboard build  --data research-data --out site
     python -m agent_trading.dashboard verify --data research-data
+    python -m agent_trading.dashboard tradability todo   --data research-data
+    python -m agent_trading.dashboard tradability import --data research-data <saved MCP JSON files>
 
 `run` exits 0 on success (status ok or partial), 2 when the run failed and the
 previous snapshot must stay up (status.json says why), 1 on a usage error.
@@ -12,6 +14,7 @@ ALPHAVANTAGE_API_KEY (optional; earnings dates). Values are never printed.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -25,6 +28,8 @@ from .pipeline import RunFailed, as_of_for, run
 from .providers import Providers
 from .site import build_site
 from .store import SnapshotExists, Store
+from .tradability import Tradability, TradabilityError, parse_results, read_todo, write_todo
+from .watchlist import WatchlistConfig
 from ..logging_setup import register_secret
 
 log = logging.getLogger("agent_trading.dashboard")
@@ -53,8 +58,14 @@ def cmd_run(args) -> int:
     store.audit("run_started", as_of=as_of, commit=args.commit, limit=args.limit, options=not args.no_options)
     providers = _providers(Path(args.cache) if args.cache else None)
     previous = store.latest(before=str(as_of))
+    trad = Tradability.load(store.root)
+    todo: list[dict] = []
     try:
-        payload = run(providers, as_of, previous, options_enabled=not args.no_options, limit=args.limit)
+        try:
+            payload = run(providers, as_of, previous, options_enabled=not args.no_options, limit=args.limit,
+                          tradability=trad, todo_out=todo, watchlist=WatchlistConfig.load())
+        finally:
+            write_todo(store.root, todo, as_of)      # symbols the next Claude session should check on Robinhood
     except RunFailed as exc:
         store.audit("run_failed", as_of=as_of, reason=str(exc), usage=providers.http.usage())
         store.write_status("failed", str(exc), str(as_of))
@@ -91,6 +102,29 @@ def update_tracking(store: Store, providers: Providers, as_of: date) -> None:
     store.write_json("tracking.json", tracking.track(snaps, prices, as_of))
 
 
+def cmd_tradability(args) -> int:
+    data = Path(args.data)
+    if args.action == "todo":
+        todo = read_todo(data)
+        for i in range(0, len(todo), 10):          # get_equity_tradability takes at most 10 symbols
+            print(" ".join(todo[i:i + 10]))
+        print(f"{len(todo)} symbol(s) to check", file=sys.stderr)
+        return 0
+    trad = Tradability.load(data)
+    checked_at = args.checked_at or datetime.now(timezone.utc).date().isoformat()
+    changed = 0
+    for f in args.files:
+        try:
+            changed += trad.merge(parse_results(json.loads(Path(f).read_text(encoding="utf-8")), checked_at))
+        except (TradabilityError, ValueError, KeyError) as exc:
+            print(f"{f}: rejected ({exc})", file=sys.stderr)
+            return 1
+    trad.save(data)
+    Store(data).audit("tradability_imported", files=len(args.files), symbols_updated=changed, checked_at=checked_at)
+    print(f"{changed} verdict(s) stored; {len(trad.symbols)} symbol(s) in total")
+    return 0
+
+
 def cmd_build(args) -> int:
     info = build_site(Path(args.data), Path(args.out), SECRET_ENV)
     print(f"site built: {info}")
@@ -120,6 +154,12 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--data", required=True)
     b.add_argument("--out", required=True)
     b.set_defaults(func=cmd_build)
+    t = sub.add_parser("tradability", help="Robinhood tradability verdicts (checked in a read-only Claude session)")
+    t.add_argument("action", choices=["todo", "import"])
+    t.add_argument("--data", required=True)
+    t.add_argument("--checked-at", default=None, help="date of the check (default today, UTC)")
+    t.add_argument("files", nargs="*")
+    t.set_defaults(func=cmd_tradability)
     v = sub.add_parser("verify", help="check every snapshot against its manifest hash")
     v.add_argument("--data", required=True)
     v.set_defaults(func=cmd_verify)

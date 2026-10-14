@@ -122,6 +122,20 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     m["implied_revenue_cagr"] = imp
     m["implied_growth_gap"] = g - imp if g is not None and imp is not None else None
 
+    # long-horizon list: runway, operating leverage, track record and survival
+    m["log_market_cap"] = math.log10(market_cap) if market_cap and market_cap > 0 else None
+    oi_m_prev = oi_prev / rev_prev if oi_prev is not None and rev_prev else None
+    m["operating_margin_change"] = (m["operating_margin"] - oi_m_prev
+                                    if m["operating_margin"] is not None and oi_m_prev is not None else None)
+    m["reported_quarters"] = float(sum(1 for v in rev if v is not None))
+    if fcf is None:
+        m["survival"] = None
+    elif fcf > 0:
+        m["survival"] = 1.0
+    else:
+        m["cash_runway_years"] = (cash or 0.0) / -fcf if fcf < 0 else None
+        m["survival"] = 1.0 if (m["cash_runway_years"] or 0) >= 2 else 0.0
+
     m["return_12_1"] = price_return(close, 252, 21)
     for key, n in (("6m", 126), ("12m", 252)):
         r = price_return(close, n)
@@ -184,13 +198,16 @@ COUNTER_TEXT = {   # neutral wording: the weakest input is not always "bad", onl
     "return_12_1": "Weakest evidence: price momentum ({v:+.0%} over 12-1 months).",
     "excess_6m": "Weakest evidence: six-month return relative to the benchmark ({v:+.0%}).",
     "excess_12m": "Weakest evidence: twelve-month return relative to the benchmark ({v:+.0%}).",
+    "log_market_cap": "Weakest evidence: size; at this market cap there is less room to compound.",
+    "operating_margin_change": "Weakest evidence: operating margin changed {v:+.1%} in a year (no operating leverage yet).",
 }
 
 
-def counterargument(sub: dict[str, float], metrics: dict, missing: list[str]) -> str:
+def counterargument(sub: dict[str, float], metrics: dict, missing: list[str],
+                    components: tuple = spec.COMPONENTS) -> str:
     """The weakest scored evidence, weighted by its component weight; missing critical data first."""
-    weights = {m: c.weight / len(c.metrics) for c in spec.COMPONENTS for m in c.metrics}
-    crit_missing = [m for m in missing if any(m in c.metrics and c.critical for c in spec.COMPONENTS)]
+    weights = {m: c.weight / len(c.metrics) for c in components for m in c.metrics}
+    crit_missing = [m for m in missing if any(m in c.metrics and c.critical for c in components)]
     if crit_missing:
         return f"Key evidence is missing ({', '.join(crit_missing)}), so the score may overstate the case."
     present = [(weights[m] * (1 - s), m) for m, s in sub.items() if m not in missing]
@@ -205,7 +222,8 @@ def counterargument(sub: dict[str, float], metrics: dict, missing: list[str]) ->
         except (TypeError, ValueError):
             pass
     if worst in ("operating_income_growth_ttm", "fcf_growth_ttm") and v == -1.0:
-        return f"Weakest evidence: {'operating income' if worst.startswith('operating') else 'free cash flow'} "                "was zero or negative a year ago, so its growth is not meaningful."
+        what = "operating income" if worst.startswith("operating") else "free cash flow"
+        return f"Weakest evidence: {what} was zero or negative a year ago, so its growth is not meaningful."
     if worst == "net_debt_to_ebitda" and isinstance(v, float) and not math.isfinite(v):
         return "Weakest evidence: net debt with zero or negative EBITDA."
     if worst == "ev_to_sales_per_growth" and isinstance(v, float) and not math.isfinite(v):
@@ -213,12 +231,13 @@ def counterargument(sub: dict[str, float], metrics: dict, missing: list[str]) ->
     return text.split(" (")[0].rstrip(".") + "."
 
 
-def score_one(ticker: str, metrics: dict, f: Fundamentals | None, flags: list[str]) -> Score:
+def score_one(ticker: str, metrics: dict, f: Fundamentals | None, flags: list[str],
+              components: tuple = spec.COMPONENTS) -> Score:
     sub: dict[str, float] = {}
     missing: list[str] = []
     comps: dict[str, float | None] = {}
     crit_missing = []
-    for c in spec.COMPONENTS:
+    for c in components:
         vals = []
         for name, s in c.metrics.items():
             raw = metrics.get(name)
@@ -238,10 +257,10 @@ def score_one(ticker: str, metrics: dict, f: Fundamentals | None, flags: list[st
     elif len(missing) > spec.MAX_MISSING_METRICS:
         reason = f"too little evidence: {len(missing)} of {len(sub)} sub-metrics missing"
     composite = None if reason else round(100 * sum(
-        c.weight * (comps[c.key] or 0.0) for c in spec.COMPONENTS), 2)
+        c.weight * (comps[c.key] or 0.0) for c in components), 2)
     conf, label = confidence(1 - len(missing) / len(sub), f, flags)
     return Score(ticker, composite, comps, sub, missing, reason, conf, label,
-                 counterargument(sub, metrics, missing), flags=list(flags))
+                 counterargument(sub, metrics, missing, components), flags=list(flags))
 
 
 def rank(scores: list[Score]) -> list[Score]:

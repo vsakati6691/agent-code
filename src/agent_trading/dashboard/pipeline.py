@@ -20,6 +20,9 @@ from . import scenarios, scoring, spec
 from .fundamentals import Fundamentals, build as build_fundamentals
 from .http import BudgetExceeded, FetchError
 from .providers import SOURCES, Providers, common_stock_reason, sector_from_sic
+from .tradability import Tradability
+from . import watchlist as wl_mod
+from .watchlist import WatchlistConfig
 from ..data.validation import DataQualityError, trim_bad_history, validate_bars
 from ..market_calendar import is_trading_day, previous_trading_day
 
@@ -206,6 +209,25 @@ def broad_universe(ctx: Context, ref: dict) -> tuple[pd.DataFrame, dict[str, int
 
 # --- scoring a band ------------------------------------------------------------------------------
 
+GATE_LABELS = {"revenue_growth_ttm": "TTM revenue growth", "revenue_cagr_3y": "3-year revenue growth",
+               "gross_margin": "gross margin", "reported_quarters": "reported quarters", "dilution": "dilution",
+               "survival": "survival (positive FCF or 2+ years of cash runway)"}
+
+
+def failed_gate(band: spec.Band, m: dict) -> str | None:
+    """The first eligibility gate the stock fails (missing input = fail), or None."""
+    for metric, op, limit in band.gates:
+        v = m.get(metric)
+        label = GATE_LABELS.get(metric, metric)
+        if v is None or not math.isfinite(v):
+            return f"gate input unavailable: {label}"
+        if (op == ">=" and v < limit) or (op == "<=" and v > limit):
+            shown = f"{v:.0%}" if abs(limit) < 5 and metric not in ("reported_quarters", "survival") else f"{v:g}"
+            want = f"{limit:.0%}" if abs(limit) < 5 and metric not in ("reported_quarters", "survival") else f"{limit:g}"
+            return f"gate failed: {label} {shown} (needs {op} {want})"
+    return None
+
+
 def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, str]],
              bench: pd.Series) -> list[dict]:
     """Score each (ticker, cik, name, sector) for `band`; exclusions are recorded on ctx."""
@@ -242,6 +264,10 @@ def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, s
             ctx.exclude(band.key, t, f"market cap ${cap / 1e9:.2f}B outside the band")
             continue
         m = scoring.compute_metrics(f, df["close"], bench, cap)
+        gate = failed_gate(band, m)
+        if gate:
+            ctx.exclude(band.key, t, gate)
+            continue
         if band.min_revenue_growth is not None and (m["revenue_growth_ttm"] is None
                                                     or m["revenue_growth_ttm"] < band.min_revenue_growth):
             g = m["revenue_growth_ttm"]
@@ -249,7 +275,7 @@ def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, s
                         f" below the {band.min_revenue_growth:.0%} speculative-band gate")
             continue
         flags = flags + cap_flags + pflags
-        s = scoring.score_one(t, m, f, flags)
+        s = scoring.score_one(t, m, f, flags, spec.PROFILES[band.profile])
         if s.excluded_reason:
             ctx.exclude(band.key, t, s.excluded_reason)
         out.append({"ticker": t, "cik": cik, "name": name, "sector": sector, "score": s, "metrics": m,
@@ -297,11 +323,14 @@ def candidate_detail(ctx: Context, band: spec.Band, row: dict, bench: pd.Series,
     scen = None
     scen_note = None
     try:
-        if m["ev_to_sales"] and m["revenue_growth_ttm"] is not None and m["revenue_ttm"]:
+        if m.get("enterprise_value") is not None and m["enterprise_value"] <= 0:
+            scen_note = ("Scenarios not computed: enterprise value is not positive (net cash exceeds market cap), "
+                         "so the EV/Sales scenario model does not apply.")
+        elif m["ev_to_sales"] and m["revenue_growth_ttm"] is not None and m["revenue_ttm"]:
             shares = m["market_cap"] / row["close"]
             scen = scenarios.scenario_table(row["close"], shares, m["revenue_ttm"], m["revenue_growth_ttm"],
                                             m["ev_to_sales"], -(m["net_debt"] or 0.0), m.get("fcf_margin"),
-                                            m.get("dilution"))
+                                            m.get("dilution"), band.scenario_years)
         else:
             scen_note = "Scenarios not computed: revenue, growth or EV/Sales unavailable."
     except ValueError as exc:
@@ -377,9 +406,170 @@ def rank_changes(current: list[dict], previous: list[dict] | None) -> list[dict]
 
 # --- the run ---------------------------------------------------------------------------------------
 
+def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: dict) -> dict:
+    """Verify each watchlist symbol and build its conditional 2030 price scenarios (spec 2026-10-14.2).
+
+    Kept apart from the ranked lists: nothing here changes any ranking."""
+    years = wl_mod.years_to_target(ctx.as_of)
+    sp = ref["sp500"]
+    entries = []
+    for t in cfg.tickers:
+        info = wl_mod.resolve(t, ref["dirs"], ref["sec"])
+        e = {**info, "price": None, "price_date": None, "price_source": SOURCES["cboe"], "method": None,
+             "scenarios": None, "unavailable_reason": None, "missing": [], "assumptions_note": None,
+             "sector": None, "catalysts": [], "bear_case": None, "invalidation": [], "evidence_quality": "none",
+             "sources": [SOURCES["nasdaqtrader"], SOURCES["sec"]], "returns": None, "key_metrics": {}}
+        entries.append(e)
+        if info["status"] != "listed":
+            e["unavailable_reason"] = info["status"]
+            continue
+        df, why, pflags = latest_bars(ctx, t)
+        if df is None:
+            e["unavailable_reason"] = f"no verified as-of price ({why})"
+            continue
+        close = float(df["close"].iloc[-1])
+        e.update(price=close, price_date=ctx.as_of, price_flags=pflags)
+        e["sources"].append(SOURCES["cboe"])
+        hist = scenarios.history_stats(df["close"], None)
+        e["returns"] = {k: (v or {}).get("stock") for k, v in hist["returns"].items()}
+        e["history_start"] = hist["first_date"]
+        kind = info["asset_type"] or ""
+        if kind.startswith("operating company"):
+            _watchlist_company(ctx, e, df, close, years, earnings, sp)
+        elif kind in ("ETF", "leveraged/inverse ETF"):
+            _watchlist_etf(ctx, e, close, years)
+        else:
+            e["unavailable_reason"] = f"no scenario method for this security type ({kind or 'unknown'})"
+    themes: dict[str, int] = {}
+    for e in entries:
+        key = e["sector"] or ("Unresolved" if e["status"] != "listed" else "Unknown")
+        themes[key] = themes.get(key, 0) + 1
+    return {"imported_at": cfg.imported_at, "source": cfg.source, "target_date": spec.WATCHLIST_TARGET_DATE,
+            "years_to_target": years, "statement": spec.WATCHLIST_STATEMENT, "separation": spec.WATCHLIST_SEPARATION,
+            "entries": entries, "concentration": themes, "status": "ok"}
+
+
+def _watchlist_company(ctx, e, df, close, years, earnings, sp) -> None:
+    e["method"] = "company: revenue x EV/Sales to 2030-12-31"
+    e["sector"] = sp.loc[e["ticker"], "sector"] if e["ticker"] in sp.index else None
+    if e["cik"] is None:
+        e["unavailable_reason"] = "no SEC registrant (CIK) for this symbol, so no reported fundamentals"
+        return
+    f, why = _facts(ctx, e["cik"])
+    if f is None:
+        e["unavailable_reason"] = f"fundamentals unavailable ({why})"
+        return
+    if e["sector"] is None:
+        sub, _ = _guard(ctx, "sec", ctx.providers.submissions, e["cik"])
+        e["sector"] = sector_from_sic(sub.get("sic")) if sub else "Unknown"
+    flags, why = fundamentals_flags(f, ctx.as_of, len(df))
+    if why:
+        e["unavailable_reason"] = why
+        return
+    cap, cap_flags = market_cap(f, close)
+    if cap is None:
+        e["unavailable_reason"] = "market cap unavailable (no share count)"
+        return
+    m = scoring.compute_metrics(f, df["close"], None, cap)
+    e["key_metrics"] = {k: m.get(k) for k in ("market_cap", "revenue_ttm", "revenue_growth_ttm", "gross_margin",
+                                              "operating_margin", "fcf_ttm", "fcf_margin", "ev_to_sales",
+                                              "net_debt", "dilution", "sbc_to_revenue", "implied_revenue_cagr")}
+    e["missing"] += [f for f in flags + cap_flags]
+    e["evidence_quality"] = wl_mod.evidence_quality("company", f, len(df))
+    narrative = wl_mod.company_narrative(m, earnings.get(e["ticker"]))
+    e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
+    if not earnings.get(e["ticker"]):
+        e["missing"].append("no scheduled earnings date")
+    if not m["revenue_ttm"] or m["revenue_ttm"] <= 0 or f.n_quarters < 4:
+        e["unavailable_reason"] = "too little reported revenue for a revenue-based valuation (pre-revenue or new filer)"
+        return
+    if m["revenue_growth_ttm"] is None:
+        e["unavailable_reason"] = "revenue growth not computable (fewer than 8 reported quarters)"
+        return
+    if m["enterprise_value"] is None or m["enterprise_value"] <= 0 or not m["ev_to_sales"]:
+        e["unavailable_reason"] = "enterprise value not positive, so EV/Sales cannot anchor the valuation"
+        return
+    margin, source = (m.get("fcf_margin"), "FCF") if m.get("fcf_margin") is not None else (m.get("operating_margin"), "operating")
+    if margin is None:
+        e["missing"].append("no margin data, so the cash-generation cross-check could not run")
+    e["scenarios"] = wl_mod.company_scenarios(close, cap / close, m["revenue_ttm"], m["revenue_growth_ttm"],
+                                              m["ev_to_sales"], -(m["net_debt"] or 0.0), m.get("dilution"), years,
+                                              margin, source)
+    e["assumptions_note"] = spec.WATCHLIST_COMPANY_METHOD
+
+
+def _watchlist_etf(ctx, e, close, years) -> None:
+    name = e["name"] or ""
+    lev = wl_mod.leverage_of(name)
+    e["evidence_quality"] = wl_mod.evidence_quality("leveraged" if lev else "etf")
+    e["missing"].append(spec.FEE_NOTE)
+    if lev:
+        e["method"] = "leveraged ETF: daily-reset model with volatility drag"
+        narrative = wl_mod.etf_narrative(None, lev)
+        e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
+        e["sector"] = f"Leveraged ETF ({lev}x)"
+        if lev < 0:
+            e["unavailable_reason"] = "inverse fund: the daily-reset model here covers long leverage only"
+            return
+        und = wl_mod.leveraged_underlying(name)
+        if und is None:
+            e["unavailable_reason"] = "the tracked index could not be identified from the fund name"
+            return
+        rule = wl_mod.exposure_class(next(k for k, v in spec.LEVERAGED_UNDERLYING_HINTS.items()
+                                          if v == und and wl_mod._has(name, k)))
+        udf, why, _ = latest_bars(ctx, und)
+        sigma = wl_mod.realized_vol(udf["close"]) if udf is not None else None
+        if rule is None or sigma is None:
+            e["unavailable_reason"] = f"no 3-year price history for the tracked index fund {und}"
+            return
+        e["scenarios"] = wl_mod.leveraged_scenarios(close, lev, rule, sigma, years)
+        e["assumptions_note"] = spec.LEVERAGED_METHOD + f" Tracked index proxy: {und}; trailing volatility {sigma:.0%}."
+        return
+    rule = wl_mod.exposure_class(name)
+    narrative = wl_mod.etf_narrative(rule, None)
+    e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
+    e["method"] = "ETF: exposure-class return assumptions"
+    if rule is None:
+        e["sector"] = "ETF (exposure not classified)"
+        e["unavailable_reason"] = "the fund's exposure could not be classified from its name; no assumption is made"
+        return
+    e["sector"] = f"ETF: {rule[1]}"
+    e["scenarios"] = wl_mod.etf_scenarios(close, rule, years)
+    e["assumptions_note"] = ("Fund-level model: exposure-class total-return assumptions minus an assumed fee and "
+                             "distribution yield give a price return, compounded to 2030-12-31. "
+                             "Company valuation formulas are not applied to funds.")
+
+
+def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability,
+                  todo: list[dict]) -> list:
+    """Drop stocks without a fresh 'tradable' Robinhood verdict (fail closed) and re-rank the rest.
+
+    Scores use fixed scales, so removing a stock never changes the order of the others. Unverified stocks
+    that would have been shown, or are within TRADABILITY_CHECK_DEPTH places of the cutoff, go on the
+    to-check list for the next Claude session."""
+    kept, unverified = [], 0
+    for s in ranked:
+        ok, why = trad.check(s.ticker, ctx.as_of)
+        if ok:
+            kept.append(s)
+            continue
+        ctx.exclude(band.key, s.ticker, why)
+        if ok is None and len(kept) + unverified < band.max_results + spec.TRADABILITY_CHECK_DEPTH:
+            todo.append({"ticker": s.ticker, "band": band.key, "composite": s.composite, "reason": why})
+        if ok is None:
+            unverified += 1
+    return scoring.rank(kept)
+
+
 def run(providers: Providers, as_of: date, previous: dict | None = None, options_enabled: bool = True,
-        limit: int | None = None) -> dict:
-    """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy."""
+        limit: int | None = None, tradability: Tradability | None = None,
+        todo_out: list | None = None, watchlist: WatchlistConfig | None = None) -> dict:
+    """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
+
+    `tradability`: stored Robinhood verdicts (None = none stored: nothing can be published).
+    `todo_out`: filled with the symbols that need a Robinhood check, even when the run fails."""
+    trad = tradability or Tradability()
+    todo = todo_out if todo_out is not None else []
     if not is_trading_day(as_of):
         raise RunFailed(f"{as_of} is not an NYSE trading day")
     ctx = Context(as_of, providers, limit=limit)
@@ -417,8 +607,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
     broad, broad_reasons = broad_universe(ctx, ref)
     log.info("reference data: %d S&P 500 members, %d listings, %d eligible broad-universe stocks",
              len(sp), len(ref["dirs"]), len(broad))
-    lo = min(b.min_cap for b in spec.BANDS if b.universe == "broad")
-    hi = max(b.max_cap for b in spec.BANDS if b.universe == "broad")
+    lo = min(b.min_cap for b in spec.BANDS if b.universe in ("broad", "all"))
+    hi = max(b.max_cap for b in spec.BANDS if b.universe in ("broad", "all"))
     prelim = []
     for n, (t, r) in enumerate(broad.iterrows(), 1):
         if n % 500 == 0:
@@ -435,7 +625,7 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         if 0.8 * lo <= cap < 1.25 * hi:      # buffer: the final band test uses point-in-time XBRL shares
             prelim.append((t, int(r["cik"]), r["name"], None))
         else:
-            k = "outside the $300M-$10B pre-screen (cover-page shares x close)"
+            k = f"outside the ${lo / 1e6:,.0f}M-${hi / 1e9:,.0f}B pre-screen (cover-page shares x close)"
             broad_reasons[k] = broad_reasons.get(k, 0) + 1
         if limit and len(prelim) >= limit:
             break
@@ -446,11 +636,14 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             rows = evaluate(ctx, band, sp_list, bench[band.benchmark])
         else:
             sp_set = set(sp.index)
-            rows = evaluate(ctx, band, [p for p in prelim], bench[band.benchmark])
+            pool = list(prelim)
+            if band.universe == "all":
+                pool = sp_list + [p for p in pool if p[0] not in {s[0] for s in sp_list}]
+            rows = evaluate(ctx, band, pool, bench[band.benchmark])
             for r in rows:
                 if r["ticker"] in sp_set:
                     r["sector"] = sp.loc[r["ticker"], "sector"]
-        ranked = scoring.rank([r["score"] for r in rows])
+        ranked = tradable_only(ctx, band, scoring.rank([r["score"] for r in rows]), trad, todo)
         by_t = {r["ticker"]: r for r in rows}
         top = [by_t[s.ticker] for s in ranked[: band.max_results]]
         for r in top + [by_t[s.ticker] for s in ranked[band.max_results: band.max_results + 10]]:
@@ -465,7 +658,11 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
                          for c in previous.get("bands", {}).get(band.key, {}).get("candidates", [])]
         payload_bands[band.key] = {
             "title": band.title, "benchmark": band.benchmark, "benchmark_name": band.benchmark_name,
-            "max_results": band.max_results, "candidates": details,
+            "profile": band.profile, "components": [c.key for c in spec.PROFILES[band.profile]],
+            "gates": [list(g) for g in band.gates], "scenario_years": list(band.scenario_years),
+            "max_results": band.max_results, "candidates": details, "short_title": spec.BAND_TITLES_SHORT.get(band.key),
+            "definition": {"universe": band.universe, "min_cap": band.min_cap, "max_cap": band.max_cap,
+                           "min_price": band.min_price, "min_dollar_volume": band.min_dollar_volume},
             "shortfall_note": None if len(top) >= band.max_results else
             f"Only {len(top)} stocks met every rule; the list is not padded to {band.max_results}.",
             "runners_up": [{"ticker": s.ticker, "rank": s.rank, "composite": s.composite,
@@ -483,6 +680,11 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         raise RunFailed(f"only {coverage:.0%} of S&P 500 members had a valid as-of price "
                         f"(need {MIN_SP500_COVERAGE:.0%}); not publishing a partial ranking")
 
+    if not any(b["candidates"] for b in payload_bands.values()) and not any(
+            v.get("tradable") for v in trad.symbols.values()):
+        raise RunFailed("no Robinhood tradability verdicts are stored, so no stock can be published; check the "
+                        f"{len(todo)} symbols on the to-check list with a read-only Claude session")
+
     options_payload = {"enabled": options_enabled, "status": "disabled in configuration"}
     if options_enabled:
         chains = {}
@@ -493,7 +695,26 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
               for t, d in earnings.items()}
         options_payload = _clean({"enabled": True, **opt.build_horizons(chains, as_of, ev),
                                   "earnings_note": earn_note, "delta_statement": spec.DELTA_STATEMENT,
-                                  "underlying_rule": spec.OPTION_UNDERLYINGS, "status": "ok"})
+                                  "underlying_rule": spec.OPTION_UNDERLYINGS, "status": "ok",
+                                  "premium_assumption": spec.PREMIUM_ASSUMPTION,
+                                  "ranking_note": spec.OPTION_RANKING_NOTE})
+
+    watch_payload = {"status": "no watchlist configured", "entries": []}
+    if watchlist is not None:
+        watch_payload = evaluate_watchlist(ctx, ref, watchlist, earnings)
+    upcoming = []
+    horizon_end = as_of + timedelta(days=45)
+    for key, b in payload_bands.items():
+        for c in b["candidates"]:
+            if c.get("next_earnings") and c["next_earnings"] <= horizon_end.isoformat():
+                upcoming.append({"ticker": c["ticker"], "date": c["next_earnings"], "list": key,
+                                 "event": "earnings (scheduled; Alpha Vantage; not independently verified)"})
+    for e in watch_payload.get("entries", []):
+        d = earnings.get(e["ticker"])
+        if d and d <= horizon_end.isoformat():
+            upcoming.append({"ticker": e["ticker"], "date": d, "list": "watchlist",
+                             "event": "earnings (scheduled; Alpha Vantage; not independently verified)"})
+    upcoming.sort(key=lambda x: (x["date"], x["ticker"]))
 
     if ctx.transient_failures:
         ctx.problems.append(f"{ctx.transient_failures} request(s) still failed after retries (rate limits or server "
@@ -505,13 +726,18 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         "status": status, "problems": ctx.problems, "notes": ctx.notes + ([earn_note] if earn_note else []),
         "spec_version": spec.SPEC_VERSION, "spec_hash": spec.spec_hash(),
         "sources": SOURCES, "usage": providers.http.usage(),
+        "tradability": {"rule": spec.TRADABILITY_RULE, "verdicts_stored": len(trad.symbols),
+                        "to_check": len(todo), "source": "Robinhood MCP get_equity_tradability (read-only)"},
         "universe": {
             "sp500_members": sorted(sp.index), "sp500_count": len(sp), "sp500_price_coverage": coverage,
             "broad_eligible": len(broad), "broad_prescreen": len(prelim), "broad_exclusion_counts": broad_reasons,
             "definitions": {"universe": spec.UNIVERSE_DEFINITION, "market_cap": spec.MARKET_CAP_DEFINITION},
         },
         "benchmarks": {b: {"close": float(s.iloc[-1]), "date": as_of} for b, s in bench.items()},
-        "bands": payload_bands, "options": options_payload,
+        "bands": payload_bands, "options": options_payload, "watchlist": _clean(watch_payload),
+        "events": {"window_days": 45, "items": upcoming, "note": earn_note or
+                   "Scheduled earnings dates from Alpha Vantage's calendar. They are not independently verified; "
+                   "other dated catalysts are not tracked."},
         "disclaimer": spec.DISCLAIMER, "multibagger": spec.MULTIBAGGER_DEFINITION,
         "probability": spec.PROBABILITY_STATEMENT,
     })

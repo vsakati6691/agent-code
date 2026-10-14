@@ -84,6 +84,17 @@ def test_rate_limit_honours_retry_after_and_slows_the_provider():
         c.get_bytes("https://cdn-api.cboe.com/x")
 
 
+def test_throttled_provider_recovers_gradually_but_not_below_base():
+    from agent_trading.dashboard.http import DEFAULT_LIMITS, RECOVER_AFTER
+    c = HttpClient(None, "ua x@y.z", session=Session([Resp(429)] + [Resp(200)] * (3 * RECOVER_AFTER)),
+                   sleep=lambda x: None)
+    c.get_bytes("https://cdn-api.cboe.com/a")
+    slow = c.limits["cboe"].min_interval
+    for i in range(3 * RECOVER_AFTER - 1):
+        c.get_bytes(f"https://cdn-api.cboe.com/{i}")
+    assert DEFAULT_LIMITS["cboe"].min_interval <= c.limits["cboe"].min_interval < slow
+
+
 def test_budget_is_enforced():
     c, s = client([Resp(200)] * 5, budget=2)
     c.get_bytes("https://data.sec.gov/a")

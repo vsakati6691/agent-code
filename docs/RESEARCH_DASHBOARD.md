@@ -1,19 +1,22 @@
-# Weekly research dashboard (GitHub Pages)
+# Growth & Options Research Dashboard (GitHub Pages)
 
-A static website, rebuilt every weekend by GitHub Actions, that compares US stocks and S&P 500 call options using rules fixed in advance. The outputs are **research comparisons only**: they are not personalized advice, recommendations, or instructions to trade. The dashboard never reads the brokerage account and never places orders.
+A static website, rebuilt every weekend by GitHub Actions, that compares US growth stocks, long-horizon speculative candidates, S&P 500 call and put contracts, and the owner's watchlist using rules fixed in advance. The outputs are **research comparisons only**: they are not personalized advice, recommendations, or instructions to trade. The dashboard never reads the brokerage account and never places orders.
 
 - Code: `src/agent_trading/dashboard/`
 - Workflow: `.github/workflows/research-dashboard.yml`
 - Rules: `src/agent_trading/dashboard/spec.py` (pre-registered and hashed)
-- Tests: `tests/test_dashboard.py`, `tests/test_dashboard_http.py`
+- Tests: `tests/test_dashboard.py`, `tests/test_dashboard_v2.py`, `tests/test_dashboard_http.py`
+- Site modules: `site.py` (shell, detail pages, history, methodology, audit, build), `site_overview.py`, `site_options.py`, `site_watchlist.py`, `fmt.py`
 
 ## What the site shows
 
 | Page | Contents |
 |---|---|
-| Overview | Data-freshness and stale-data banners, the weekly summary, and three category tabs. Each tab has a searchable, sortable, sector-filtered table with component scores, confidence and the strongest counterargument. Each tab also shows rank changes with explanations, concentration warnings, the next ten names, every excluded stock with its reason, and a CSV download |
+| Overview | Freshness and stale-data banners, then five compact panels:
+<ul><li>upcoming earnings (scheduled, unverified)</li><li>new entrants, departures and rank moves</li><li>sector concentration and downside-risk flags</li><li>performance vs benchmarks from immutable snapshots</li><li>data coverage, freshness and missing-data warnings</li></ul>Then **Growth stocks**: tabs for the large-, mid- and small-cap top 10. Each tab states its market-cap definition and universe (large cap = S&P 500 members only). Its columns are rank, ticker/company, sector, market cap, price, revenue growth, earnings/FCF growth, valuation, research score, 3M/6M/1Y returns, 1Y vs benchmark, and main risk. Selecting a ticker expands its evidence, thesis, bear case, 8-quarter trend, base-case assumptions and invalidation. Then **Speculative multibagger research candidates**: top 5, 5-10 year horizon, with growth evidence, cash/runway, debt/dilution/valuation risk, bear/base/bull at 1/3/5/10 years, what must happen, and what would invalidate it |
 | Stock detail (one per candidate) | Price, market cap, sector, sources, timestamps; thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; risks; invalidation conditions; "probability not established" |
-| Options research | 3-, 6- and 12-month horizons. Up to five liquid call contracts per horizon, with bid/ask, spread, volume/OI, IV, Greeks, premium x 100, adjusted-contract flag, breakeven, maximum loss, payoffs at expiration, a 30-day Black-Scholes sensitivity grid, and earnings before expiry. Shows an unavailable state when no valid chain exists |
+| Options | Calls/Puts toggle x 3-, 6- and 12-month tabs: six lists of up to 10 contracts each, at most 2 per underlying. Each list shows the actual count and the reasons other contracts were left out. Contracts show with bid/ask, spread, volume/OI, IV, Greeks, premium x 100, adjusted-contract flag, breakeven, maximum loss, payoffs at expiration, a 30-day Black-Scholes sensitivity grid, and earnings before expiry. Shows an unavailable state when no valid chain exists |
+| Watchlist 2030 | The owner's ticker list (imported 2026-10-14, not synchronised). Each symbol is verified (name, exchange, type, listing status), with the latest verified price and timestamp. Conditional year-end-2030 bear/base/bull PRICE scenarios (% change and annualized) come from a company, ETF or leveraged-ETF method, with expandable assumptions, catalysts, bear case, invalidation, sources, evidence quality and missing information. Also: a range chart, theme concentration, sorting, filters and CSV. Unresolved or unmodellable symbols stay visible as 'Scenario unavailable' with the reason |
 | History & tracking | Every weekly report, and the forward returns of each stored list (1, 3, 6 and 12 months) vs benchmarks, net of assumed friction, with turnover and drawdown |
 | Methodology | Every rule from `spec.py`, rendered, with the version history |
 | Audit trail | Snapshot hashes, integrity check, request counts, data-source notes, and the append-only event log |
@@ -80,6 +83,44 @@ Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners w
 
 ## Definitions (from `spec.py`)
 
+Spec version **2026-10-14.2** (current) is the owner's redesign. It was written down and committed before any data was evaluated with it:
+- three growth lists of up to 10: large cap (S&P 500 members), mid cap ($2B-$10B) and a new small cap ($300M-$2B);
+  - the small-cap list takes the old speculative list's $2 price and $2M liquidity floors, without its 20% growth gate;
+  - old snapshots keep their `spec` list, shown as retired;
+- the long-horizon list is renamed **Speculative multibagger research candidates** and shows up to 5;
+- options cover **calls and puts**, up to 10 per type per horizon, with the same windows, filters and per-underlying limit;
+  - put |delta| must be between 0.30 and 0.70;
+  - put breakeven = strike - premium;
+  - premium = the delayed ask x 100;
+- a separate **watchlist** with conditional 2030 price scenarios.
+
+Scoring scales and weights are unchanged.
+
+Spec version 2026-10-14.1 applied two earlier owner requests:
+- only stocks verified as tradable on Robinhood are published;
+- a new long-horizon multibagger list was added.
+
+- **Robinhood tradability (all lists):** a stock is published only if Robinhood's read-only
+  `get_equity_tradability` check, at most 35 days old, reports:
+  - `tradeable` true;
+  - state active;
+  - tradable for an individual account in regular hours.
+
+  Anything else excludes the stock with the reason: not tradable, not found, unverified or stale. Scores use
+  fixed scales, so removing a stock never reorders the others.
+- **Long-horizon multibagger list (5-10 years):** S&P 500 and broad universe together, $500M-$50B.
+  - **Gates, all required (a missing input fails):**
+    - TTM and 3-year revenue growth ≥ 15%;
+    - gross margin ≥ 35%;
+    - ≥ 12 reported quarters;
+    - dilution ≤ 8% a year;
+    - survival: positive FCF, or ≥ 2 years of cash runway.
+  - **Score weights (long-horizon profile):** growth durability 30%, earnings/FCF 10%, quality 15%, balance
+    sheet 15%, valuation 15%, runway + operating leverage 10% (new component), momentum 5%.
+  - **Scenarios:** 1, 3, 5 and 10 years. Flags show whether the bull case reaches 5x and the base case 2x
+    within ten years.
+  - **Rationale:** in `spec.MULTIBAGGER_RATIONALE`. Most stocks that pass will not become multibaggers, and
+    no probability is shown.
 - **Large cap:** current S&P 500 members.
 - **Mid cap:** $2B to $10B.
 - **Speculative:** $300M to $2B with at least 20% trailing revenue growth.
@@ -137,6 +178,56 @@ Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners w
   - names whose prices stop are reported as "possible delisting", not dropped. Delisting returns are not available from these sources.
 - No edge is claimed before 52 snapshots, and none afterwards without a statistical test. Nothing is tuned on tracked results; a rule change creates a new spec version.
 
+## Watchlist — 2030 Outlook
+
+- **Source:** `config/research_watchlist.json` holds tickers only, plus the import date and its source note. Edit the
+  file to change the list; it never syncs automatically. No account details, quantities, cost basis or balances
+  are allowed, and the loader rejects such fields.
+- **Separate universe:** a watchlist symbol is never added to, or used to rank, the growth lists.
+- **Verification (every run):**
+  - names, exchanges, ETF flags and listing status come from the Nasdaq Trader directories and the SEC ticker file;
+  - a symbol found in neither is shown as unresolved, with no substitute;
+  - OTC symbols are shown as not exchange-listed.
+- **Horizon:** the actual time from the as-of close to 2030-12-31, not a rolling 5 years.
+- **Methods:**
+  - **Companies:** revenue x EV/Sales to 2030 under the growth lists' bear/base/bull rules, plus net cash, divided by
+    diluted shares. Unavailable without positive revenue, positive EV and at least 4 reported quarters.
+    - **Margin link** (spec 2026-10-14.3): each scenario also carries an FCF-margin path to 2030. It starts from
+      today's TTM FCF margin, or the operating margin, and moves -5, 0 or +5 points by 2030. That gives 2030 FCF
+      and the implied EV/FCF multiple.
+    - A value with negative 2030 FCF, or above 60x EV/FCF, is flagged as not supported by cash generation. The
+      price itself is unchanged.
+  - **Unleveraged ETFs:** exposure-class total-return assumptions, minus an assumed fee and an assumed distribution
+    yield, give a price return. The class comes from the fund name, using the keyword table in `spec.py`. With no
+    class the scenario is unavailable. Company formulas are never applied to funds.
+  - **Leveraged ETFs:** g = L·mu - L²·sigma²/2 - (L-1)·financing - fee.
+    - Sigma is the tracked index fund's trailing 3-year volatility (x1.25 in the bear case, x0.85 in the bull case).
+    - It is never L x the index return.
+    - Inverse funds, or funds whose index can't be identified, show "Scenario unavailable".
+- **Labels:** "Conditional 2030 price scenarios". These are price returns only, on the split-adjusted price basis.
+  The base case is not "most likely", and no probabilities are shown.
+- **Fund fees and yields** are assumptions by class and are flagged as unverified: no permitted CI source provides
+  them.
+
+## Robinhood tradability checks (Claude session, read-only)
+
+GitHub Actions cannot reach the Robinhood MCP, so verdicts are stored on the `research-data` branch in
+`robinhood_tradability.json`, with symbols, verdicts, reasons and dates only and no account data. Each run
+writes `robinhood_tradability_todo.json`: unverified names near or inside each list's cutoff. To refresh, in a
+Claude session:
+
+1. Run `git worktree add ..\agent-code-research-data research-data`, or update an existing worktree with
+   `git pull`.
+2. Run `python -m agent_trading.dashboard tradability todo --data ..\agent-code-research-data`. It prints
+   the symbols 10 per line.
+3. For each line, call the read-only Robinhood `get_equity_tradability` tool (Agent-trading account) and save
+   the JSON `data` to the scratchpad.
+4. Run `python -m agent_trading.dashboard tradability import --data ..\agent-code-research-data <files>`.
+   Payloads containing account fields are rejected.
+5. Commit and push `research-data`. The next weekly run uses the new verdicts.
+
+If no verdicts are stored at all, the run fails visibly instead of publishing unverified stocks.
+
 ## Commands
 
 ```powershell
@@ -151,6 +242,7 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 
 ## Owner actions (required before the first deployment)
 
+0. **Robinhood tradability verdicts:** run the refresh above at least monthly, or when the to-check list grows.
 1. **Merge the pull request into `main`.** Scheduled workflows only run from the default branch.
 2. **GitHub Pages and the private repository.**
    - On GitHub Free, Pages needs a public repository.
@@ -179,5 +271,5 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 - **Sectors:** S&P 500 sectors are GICS (Wikipedia). Others are mapped coarsely from SEC SIC codes.
 - **Not scored:** competitive position, catalysts and customer concentration have no reliable structured source. They are listed as not scored.
 - **Debt:** total debt can be overstated when a filer's `LongTermDebt` tag already includes the current portion (conservative).
-- **Option events:** only scheduled earnings dates are checked. Ex-dividend dates and other corporate events before expiry are not.
+- **Option events:** only scheduled earnings dates are checked, from Alpha Vantage, and they are labelled unverified because no verified calendar is reachable from CI. Ex-dividend dates and other corporate events before expiry are not.
 - **Thesis and invalidation text:** these are template-generated from the numbers. They summarize evidence; they are not analyst judgement.
