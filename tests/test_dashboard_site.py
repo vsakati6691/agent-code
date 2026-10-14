@@ -128,3 +128,15 @@ def test_options_page_never_says_zero_move(site):
 def test_no_backslash_escapes_inside_html_attributes(site):
     for p in site.rglob("*.html"):
         assert "\\'" not in p.read_text(encoding="utf-8"), p.name     # a backslash before a quote
+
+
+def test_tabs_are_not_silently_restored_and_follow_the_hash():
+    from agent_trading.dashboard.assets import CSS, JS
+    assert "localStorage.getItem('matrix'" not in JS and "localStorage.getItem('tab:" not in JS
+    assert "history.replaceState(null, '', '#' + state.type + '-' + state.hz)" in JS
+    assert 'aria-selected="true"] { background: var(--series-1)' in CSS and "underline" in CSS
+
+
+def test_options_h2_names_the_active_choice(site):
+    page = (site / "options.html").read_text(encoding="utf-8")
+    assert re.search(r'<section data-hz="3m" data-type="call" hidden><h2>About 3 months · calls', page)

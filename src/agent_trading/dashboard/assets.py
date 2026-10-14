@@ -52,7 +52,8 @@ p.lede { color: var(--text-secondary); margin-top: 0; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .tabs button { font: inherit; padding: 6px 12px; border: 1px solid var(--border); background: var(--surface-1);
   color: var(--text-primary); border-radius: 6px; cursor: pointer; }
-.tabs button[aria-selected="true"] { background: var(--surface-2); font-weight: 650; border-color: var(--text-secondary); }
+.tabs button[aria-selected="true"] { background: var(--series-1); color: #fff; font-weight: 650; border-color: var(--series-1);
+  box-shadow: inset 0 -3px 0 var(--text-primary); text-decoration: underline; text-underline-offset: 3px; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
 .controls input, .controls select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--surface-1); color: var(--text-primary); }
@@ -101,7 +102,6 @@ tr.detail > td { white-space: normal; }
 .card.mb header { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 4px; }
 .mb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 18px; }
 .rank { font-weight: 700; color: var(--text-secondary); }
-.tabs.seg button[aria-selected="true"] { background: var(--series-1); color: #fff; border-color: var(--series-1); }
 .table-wrap.wide td.sticky, .table-wrap.wide th.sticky { position: sticky; left: 0; background: var(--surface-1); z-index: 1; }
 .table-wrap.wide th.sticky { background: var(--surface-2); }
 .spark { vertical-align: middle; }
@@ -130,17 +130,17 @@ JS = r"""
   // tabs
   document.querySelectorAll('[data-tabs]').forEach(function (group) {
     var buttons = group.querySelectorAll('button[data-tab]');
-    function show(key) {
+    // default to the first tab on every load; only an explicit URL hash selects another (no silent restore)
+    function show(key, push) {
       buttons.forEach(function (b) { b.setAttribute('aria-selected', b.dataset.tab === key ? 'true' : 'false'); });
       document.querySelectorAll('[data-panel-of="' + group.id + '"]').forEach(function (p) { p.hidden = p.dataset.panel !== key; });
-      try { localStorage.setItem('tab:' + group.id, key); } catch (e) {}
+      if (push) history.replaceState(null, '', '#' + key);
     }
-    buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab); }); });
-    var saved = null; try { saved = localStorage.getItem('tab:' + group.id); } catch (e) {}
+    buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab, true); }); });
     var hash = location.hash.replace('#', '');
     var first = buttons[0] && buttons[0].dataset.tab;
-    var want = [hash, saved, first].filter(function (k) { return k && group.querySelector('button[data-tab="' + k + '"]'); })[0];
-    if (want) show(want);
+    var want = [hash, first].filter(function (k) { return k && group.querySelector('button[data-tab="' + k + '"]'); })[0];
+    if (want) show(want, false);
   });
   // expandable rows (evidence, assumptions, payoffs)
   document.querySelectorAll('.rowtoggle').forEach(function (b) {
@@ -152,26 +152,28 @@ JS = r"""
     });
   });
   // two-dimensional tabs (option type x expiry horizon)
+  // Calls / 3 months on every load unless the URL hash names a tab (#put-6m); the hash follows each click
   document.querySelectorAll('[data-matrix]').forEach(function (box) {
     var state = {};
-    function render() {
+    function valid(d, v) { return v && box.querySelector('button[data-dim="' + d + '"][data-val="' + v + '"]'); }
+    function render(push) {
       box.querySelectorAll('button[data-dim]').forEach(function (b) {
         b.setAttribute('aria-selected', state[b.dataset.dim] === b.dataset.val ? 'true' : 'false');
       });
       box.querySelectorAll('section[data-type]').forEach(function (p) {
         p.hidden = !(p.dataset.type === state.type && p.dataset.hz === state.hz);
       });
-      try { localStorage.setItem('matrix', JSON.stringify(state)); } catch (e) {}
+      if (push) history.replaceState(null, '', '#' + state.type + '-' + state.hz);
     }
-    try { state = JSON.parse(localStorage.getItem('matrix') || '{}') || {}; } catch (e) { state = {}; }
-    ['type', 'hz'].forEach(function (d) {
+    var parts = location.hash.replace('#', '').split('-');
+    ['type', 'hz'].forEach(function (d, i) {
       var first = box.querySelector('button[data-dim="' + d + '"]');
-      if (!state[d] || !box.querySelector('button[data-dim="' + d + '"][data-val="' + state[d] + '"]')) state[d] = first && first.dataset.val;
+      state[d] = valid(d, parts[i]) ? parts[i] : (first && first.dataset.val);
     });
     box.querySelectorAll('button[data-dim]').forEach(function (b) {
-      b.addEventListener('click', function () { state[b.dataset.dim] = b.dataset.val; render(); });
+      b.addEventListener('click', function () { state[b.dataset.dim] = b.dataset.val; render(true); });
     });
-    render();
+    render(false);
   });
   // sortable + searchable + sector-filtered tables; grouped tables move each <tbody class="item"> as a unit
   document.querySelectorAll('table[data-table]').forEach(function (table) {
