@@ -126,12 +126,12 @@ def growth_table(key: str, band: dict) -> str:
         rid = f"d-{key}-{c['ticker'].replace('.', '_')}"
         bodies.append(f"""<tbody class="item" data-sector="{E(c.get("sector") or "Unknown")}"><tr>
 <td class="num" data-v="{c["rank"]}">{c["rank"]}</td>
-<td><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}" title="Show evidence">
+<td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}" title="Show evidence">
 <strong>{E(c["ticker"])}</strong></button><div class="small muted">{E(c.get("name") or "")}</div>
 <div class="small muted">{E(c.get("sector") or "Unknown")}</div></td>
-<td class="num" data-v="{sval(c.get("market_cap"))}">{cap(c.get("market_cap"))}</td>
+<td class="num hide-sm" data-v="{sval(c.get("market_cap"))}">{cap(c.get("market_cap"))}</td>
 <td class="num" data-v="{sval(c.get("price"))}">{money(c.get("price"))}</td>
-<td class="num" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
+<td class="num hide-sm" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(eg)}">{E(eg_txt)}</td>
 <td class="num val hide-sm" data-v="{sval(m.get("ev_to_sales"))}">{E(_valuation(m))}</td>
 <td class="num" data-v="{sval(c.get("composite"))}"><strong>{num(c.get("composite"), 1)}</strong></td>
@@ -143,14 +143,14 @@ def growth_table(key: str, band: dict) -> str:
 <tr id="{rid}" class="detail" hidden><td colspan="13">{evidence_block(key, c, band)}</td></tr></tbody>""")
     sectors = sorted({c.get("sector") or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
-    head = ('<th class="num" data-sort="num">#</th><th data-sort="text">Ticker / company / sector</th>'
-            '<th class="num" data-sort="num">Mkt cap</th>'
-            '<th class="num" data-sort="num">Price</th><th class="num" data-sort="num" title="TTM revenue growth">Rev gr.</th>'
+    head = ('<th class="num" data-sort="num">#</th><th class="tk" data-sort="text">Ticker / company / sector</th>'
+            '<th class="num hide-sm" data-sort="num" title="Market cap: as-of close x SEC cover-page shares">Mkt cap</th>'
+            '<th class="num" data-sort="num">Price</th><th class="num hide-sm" data-sort="num" title="Revenue growth over the trailing twelve months (TTM)">Rev gr.</th>'
             '<th class="num hide-sm" data-sort="num" title="TTM free-cash-flow growth, else operating income growth">Earn/FCF gr.</th>'
-            '<th class="num hide-sm" data-sort="num">Valuation</th><th class="num" data-sort="num">Score</th>'
+            '<th class="num hide-sm" data-sort="num" title="EV/S = enterprise value / sales; P/E = price / earnings">Valuation</th><th class="num" data-sort="num" title="Research score 0-100 from fixed rules (see Methodology)">Score</th>'
             '<th class="num hide-sm" data-sort="num">3M</th><th class="num hide-sm" data-sort="num">6M</th>'
             '<th class="num" data-sort="num">1Y</th><th class="num hide-sm" data-sort="num" title="1-year return minus the benchmark">vs bench</th>'
-            '<th>Main risk / weakest evidence</th>')
+            '<th class="risk" title="The weakest scored evidence for this stock">Main risk / weakest evidence</th>')
     return f"""<div class="controls"><input type="search" placeholder="Search ticker, name, risk" data-search="{tid}"
 aria-label="Search {E(band_title(key, band))}"><select data-sector="{tid}" aria-label="Filter by sector"><option value="">All sectors</option>{opts}</select>
 <span class="small muted" data-count="{tid}" aria-live="polite"></span></div>

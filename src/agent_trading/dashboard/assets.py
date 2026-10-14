@@ -102,8 +102,10 @@ tr.detail > td { white-space: normal; }
 .card.mb header { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 4px; }
 .mb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 18px; }
 .rank { font-weight: 700; color: var(--text-secondary); }
-.table-wrap.wide td.sticky, .table-wrap.wide th.sticky { position: sticky; left: 0; background: var(--surface-1); z-index: 1; }
-.table-wrap.wide th.sticky { background: var(--surface-2); }
+/* the ticker column stays visible while a wide table scrolls sideways */
+.table-wrap td.tk, .table-wrap th.tk { position: sticky; left: 0; z-index: 2; background: var(--surface-1);
+  box-shadow: 1px 0 0 var(--border); min-width: 84px; }
+.table-wrap th.tk { background: var(--surface-2); }
 .spark { vertical-align: middle; }
 .chart.range { overflow-x: auto; } .chart.range svg { min-width: 560px; }
 caption { text-align: left; }

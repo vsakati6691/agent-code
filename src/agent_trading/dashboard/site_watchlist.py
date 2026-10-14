@@ -105,7 +105,7 @@ def watchlist_page(snap: dict) -> str:
             net_position(km.get("net_debt"), False) if ok(km.get("net_debt")) else "",
             f"dilution {pct(km.get('dilution'), 1)}/yr" if ok(km.get("dilution")) else "") if t)
         bodies.append(f"""<tbody class="item" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
-<td><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
+<td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
 <div class="small muted">{E(e.get("name") or "name not resolved")}</div></td>
 <td class="small hide-sm" data-v="{E(e.get("asset_type") or "")}">{E(e.get("asset_type") or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
@@ -137,7 +137,7 @@ theme concentration: {conc}.</p>
 <select data-sector="t-watch" aria-label="Filter by sector or theme"><option value="">All sectors and themes</option>{opts}</select>
 <span class="small muted" data-count="t-watch" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="t-watch" data-table data-grouped><caption class="sr-only">Watchlist 2030 scenarios</caption>
-<thead><tr><th data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
+<thead><tr><th class="tk" data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
 <th class="num" data-sort="num">Bear 2030</th><th class="num" data-sort="num">Base 2030</th><th class="num" data-sort="num">Bull 2030</th>
 <th class="hide-sm">Method</th><th data-sort="text">Evidence</th><th>Unavailable / notes</th></tr></thead>{''.join(bodies)}</table></div>
 <p class="small"><a href="downloads/{E(snap["as_of"])}_watchlist_2030.csv" download>Download (CSV)</a> · Prices are split-adjusted

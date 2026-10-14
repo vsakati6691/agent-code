@@ -140,3 +140,24 @@ def test_tabs_are_not_silently_restored_and_follow_the_hash():
 def test_options_h2_names_the_active_choice(site):
     page = (site / "options.html").read_text(encoding="utf-8")
     assert re.search(r'<section data-hz="3m" data-type="call" hidden><h2>About 3 months · calls', page)
+
+
+def _header_classes(page: str, table_id: str) -> list[tuple[str, str]]:
+    m = re.search(r'<table id="' + re.escape(table_id) + r'".*?<thead><tr>(.*?)</tr></thead>', page, re.S)
+    assert m, table_id
+    return [(re.sub(r"<[^>]+>", "", label).strip(), cls) for cls, label in
+            re.findall(r"<th class=['\"]([^'\"]*)['\"][^>]*>(.*?)</th>", m.group(1))]
+
+
+def test_phone_width_keeps_only_the_named_columns(site):
+    over = _header_classes((site / "index.html").read_text(encoding="utf-8"), "t-large")
+    kept = [label for label, cls in over if "hide-sm" not in cls]
+    assert kept == ["#", "Ticker / company / sector", "Price", "Score", "1Y", "Main risk / weakest evidence"]
+    opt = _header_classes((site / "options.html").read_text(encoding="utf-8"), "o-3m-call")
+    kept = [label for label, cls in opt if "hide-sm" not in cls]
+    assert kept == ["#", "Underlying", "Expiry", "Strike", "Bid / ask", "Premium*", "Breakeven at expiry", "Research score"]
+
+
+def test_ticker_column_is_sticky_in_every_wide_table(site):
+    for page, tid in (("index.html", "t-large"), ("options.html", "o-3m-call"), ("watchlist.html", "t-watch")):
+        assert any("tk" in cls.split() for _, cls in _header_classes((site / page).read_text(encoding="utf-8"), tid)), page
