@@ -24,7 +24,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -206,6 +206,79 @@ def leveraged_scenarios(price: float, lev: int, underlying_rule, sigma: float, y
                                     "financing_cost": (lev - 1) * spec.LEVERAGED_FINANCING_RATE,
                                     "assumed_fee": spec.LEVERAGED_ASSUMED_FEE, "log_growth_rate": g}}
     return out
+
+
+# --- what would unlock an unavailable scenario --------------------------------------------
+
+def next_filing_estimate(subs: dict | None, last_filed: str | None, as_of: date) -> tuple[date | None, str]:
+    """(expected date of the next 10-Q/10-K, how it was estimated) from the company's filing dates."""
+    dates = []
+    recent = ((subs or {}).get("filings") or {}).get("recent") or {}
+    for form, d in zip(recent.get("form") or [], recent.get("filingDate") or []):
+        if form in ("10-Q", "10-K"):
+            try:
+                dates.append(date.fromisoformat(d))
+            except ValueError:
+                continue
+    dates = sorted(set(dates), reverse=True)[:5]
+    if len(dates) >= 2:
+        gaps = sorted((a - b).days for a, b in zip(dates, dates[1:]))
+        gap = gaps[len(gaps) // 2]
+        basis = f"the median gap of {gap} days between its last {len(dates)} quarterly and annual reports"
+        last = dates[0]
+    elif last_filed:
+        gap, last = 91, date.fromisoformat(last_filed)
+        basis = f"an assumed quarterly cadence (91 days after its last report on {last_filed})"
+    else:
+        return None, "no filing history to estimate from"
+    nxt = last + timedelta(days=gap)
+    if nxt < as_of:
+        return nxt, basis + " (now overdue)"
+    return nxt, basis
+
+
+def unlock_steps(reason_key: str, **kw) -> list[str]:
+    """Exact missing inputs and what would unlock the scenario. Never proposes a method the spec lacks."""
+    nxt, basis = kw.get("next_filing", (None, ""))
+    when = f"next 10-Q/10-K expected around {nxt.isoformat()} based on {basis}" if nxt else basis
+    if reason_key == "quarters":
+        n = kw["quarters"]
+        return [f"{n} of 4 required quarters reported; {when}.",
+                f"Year-over-year revenue growth also needs 8 quarters ({max(0, 8 - n)} more reports)."]
+    if reason_key == "growth":
+        n = kw["quarters"]
+        return [f"{n} of 8 quarters needed for year-over-year revenue growth ({8 - n} more report(s)); {when}."]
+    if reason_key == "revenue":
+        return [f"Trailing-twelve-month revenue is {kw['revenue']}; the company method needs positive revenue.",
+                f"Unlocks once reported revenue turns positive; {when}."]
+    if reason_key == "ev":
+        return [f"Enterprise value is {kw['ev']}: net cash of {kw['net_cash']} exceeds the market cap of {kw['cap']}.",
+                "EV/Sales cannot anchor a value until the market cap exceeds net cash."]
+    if reason_key == "stale":
+        return [kw["why"] + ".", f"Unlocks with the next report; {when}."]
+    if reason_key == "no_cik":
+        return ["No SEC registrant matches this symbol, so there are no reported fundamentals.",
+                "The spec defines no company method without SEC filings."]
+    if reason_key == "unresolved":
+        return ["Not in today's exchange listings or the SEC ticker file.",
+                "Check whether the symbol was renamed, delisted or mistyped, then edit config/research_watchlist.json."]
+    if reason_key == "price":
+        return ["No verified close for the as-of session; unlocks when one is available (next weekly run)."]
+    if reason_key == "etf_class":
+        classes = ", ".join(r[1] for r in spec.ETF_EXPOSURE_RULES)
+        return [f"The fund name matches none of the defined exposure classes ({classes}).",
+                "The spec defines no other ETF method, so no number is shown."]
+    if reason_key == "inverse":
+        return ["Inverse funds are not covered by the spec's leveraged model, and no other method is defined."]
+    if reason_key == "lev_index":
+        known = ", ".join(sorted(set(spec.LEVERAGED_UNDERLYING_HINTS.values())))
+        return [f"The tracked index could not be identified from the fund name (identifiable: {known}).",
+                "No other leveraged-fund method is defined."]
+    if reason_key == "lev_history":
+        return [f"Needs about 3 years of daily prices for the tracked index fund {kw['index']} to measure its volatility."]
+    if reason_key == "type":
+        return ["The spec defines scenario methods only for operating companies and ETFs."]
+    return []
 
 
 # --- narrative ----------------------------------------------------------------------------

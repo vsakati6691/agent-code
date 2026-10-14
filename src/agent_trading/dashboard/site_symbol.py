@@ -69,7 +69,8 @@ def symbol_page(ticker: str, snap: dict, history: list[dict]) -> str:
         sc = w.get("scenarios")
         watch = ('<p class="small">' + (" · ".join(f'{k} {money(sc[k]["price"])} ({pct(sc[k]["change"], 0, True)})'
                                                  for k in ("bear", "base", "bull")) if sc else
-                                        f'Scenario unavailable: {E(w.get("unavailable_reason") or "")}') +
+                                        f'Scenario unavailable: {E(w.get("unavailable_reason") or "")}. ' +
+                                        " ".join(E(u) for u in w.get("unlock") or [])) +
                  f' <a href="../watchlist.html">Watchlist 2030 page</a></p>')
     hist = []
     for s in history:

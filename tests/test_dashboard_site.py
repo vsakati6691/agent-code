@@ -270,3 +270,39 @@ def test_every_page_has_the_inline_symbol_search(site):
     for p in _pages(site):
         text = p.read_text(encoding="utf-8")
         assert '<datalist id="symlist">' in text and 'value="S04"' in text, p.name
+
+
+# --- item 14: why a watchlist scenario is unavailable --------------------------------------------
+
+def test_next_filing_estimate_from_cadence_and_fallback():
+    from datetime import date
+    from agent_trading.dashboard.watchlist import next_filing_estimate
+    subs = {"filings": {"recent": {"form": ["10-Q", "8-K", "10-Q", "10-K", "10-Q"],
+                                   "filingDate": ["2026-08-07", "2026-08-01", "2026-05-08", "2026-02-20", "2025-11-06"]}}}
+    nxt, basis = next_filing_estimate(subs, None, date(2026, 10, 9))
+    assert nxt == date(2026, 8, 7) + (date(2026, 8, 7) - date(2026, 5, 8)) and "median gap" in basis
+    nxt, basis = next_filing_estimate({"sic": "1"}, "2026-08-10", date(2026, 10, 9))
+    assert nxt == date(2026, 11, 9) and "assumed quarterly cadence" in basis
+    nxt, basis = next_filing_estimate(None, "2026-01-10", date(2026, 10, 9))
+    assert "overdue" in basis
+
+
+def test_unlock_steps_name_exact_inputs_and_never_invent_methods():
+    from datetime import date
+    from agent_trading.dashboard.watchlist import unlock_steps
+    q = unlock_steps("quarters", quarters=2, next_filing=(date(2026, 11, 15), "the last filing cadence"))
+    assert q[0] == "2 of 4 required quarters reported; next 10-Q/10-K expected around 2026-11-15 based on the last filing cadence."
+    assert "The spec defines no other ETF method" in " ".join(unlock_steps("etf_class"))
+    assert "edit config/research_watchlist.json" in " ".join(unlock_steps("unresolved"))
+
+
+def test_watchlist_page_lists_what_unlocks_each_unavailable_scenario(site):
+    import json as _json
+    snap = _json.loads((site / "data" / "latest.json").read_text())
+    w = {e["ticker"]: e for e in snap["watchlist"]["entries"]}
+    assert w["NEWQ"]["scenarios"] is None and w["NEWQ"]["unlock"][0].startswith("2 of 4 required quarters reported")
+    for t in ("NOPE", "ODDF"):
+        assert w[t]["scenarios"] is None and w[t]["unlock"], t
+    assert all(e["unlock"] for e in w.values() if e["scenarios"] is None)
+    page = (site / "watchlist.html").read_text(encoding="utf-8")
+    assert "Why unavailable, and what would unlock it" in page

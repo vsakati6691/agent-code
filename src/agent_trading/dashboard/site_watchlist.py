@@ -85,6 +85,13 @@ def _assumptions(e: dict) -> str:
     return f'<ul class="tight small">{"".join(rows)}</ul>'
 
 
+def _unlock(e: dict) -> str:
+    if not e.get("unlock"):
+        return ""
+    items = "".join(f"<li>{E(u)}</li>" for u in e["unlock"])
+    return f'<h4>Why unavailable, and what would unlock it</h4><ul class="tight small">{items}</ul>'
+
+
 def watchlist_page(snap: dict) -> str:
     w = snap.get("watchlist")
     head = """<h1>Watchlist — 2030 Outlook</h1>"""
@@ -117,7 +124,8 @@ def watchlist_page(snap: dict) -> str:
 status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") else ""}. Sector/theme: {E(e.get("sector") or "n/a")}.</p>
 <p class="small">{E(km_txt)}</p><p class="small">Trailing price returns: 1y {pct((e.get("returns") or {}).get("1y"), 0, True)},
 3y {pct((e.get("returns") or {}).get("3y"), 0, True)} (history from {E(str(e.get("history_start") or "n/a"))}).</p></div>
-<div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}</div>
+<div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}
+{_unlock(e)}</div>
 <div><h4>Catalysts</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("catalysts", []))}</ul>
 <h4>Strongest bear case</h4><p class="small">{E(e.get("bear_case") or "n/a")}</p></div>
 <div><h4>Thesis invalidation</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("invalidation", []))}</ul>
