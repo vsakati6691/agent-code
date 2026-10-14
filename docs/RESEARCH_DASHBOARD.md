@@ -275,6 +275,7 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
    - Review Cboe's website terms for republishing delayed quotes and option chains on a public site.
    - Either obtain consent, accept the risk knowingly, or run with options disabled. Stock prices on the site also come from Cboe.
    - Then set the repository **variable** `DASHBOARD_PUBLISH` = `true`. Until then the workflow builds and checks the site but does not deploy it.
+   - Option chains are **off** unless the repository variable `DASHBOARD_OPTIONS` = `true`. The owner chose stocks-only publication on 2026-10-14, because of Cboe's terms. While options are off, the Options tab shows "not collected".
 5. **First run:** Actions → research-dashboard → Run workflow. Check the run summary, the `research-data` branch and the site.
 6. If branch protection rules cover all branches, allow `github-actions[bot]` to push `research-data`. The workflow never force-pushes.
 
