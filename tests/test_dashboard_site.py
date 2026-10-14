@@ -123,3 +123,8 @@ def test_distance_to_breakeven_wording(kind, signed, text):
 def test_options_page_never_says_zero_move(site):
     page = (site / "options.html").read_text(encoding="utf-8")
     assert "0.0% down" not in page and "0.0% up" not in page and "Distance to breakeven" in page
+
+
+def test_no_backslash_escapes_inside_html_attributes(site):
+    for p in site.rglob("*.html"):
+        assert "\'" not in p.read_text(encoding="utf-8"), p.name

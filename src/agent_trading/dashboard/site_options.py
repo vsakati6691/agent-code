@@ -93,7 +93,7 @@ def _list(snap: dict, h, kind: str, data: dict | None) -> str:
             "<th class='num' data-sort='text'>Expiry</th><th class='num' data-sort='num'>Days</th>"
             "<th class='num' data-sort='num'>Strike</th><th class='num' data-sort='num'>Underlying</th><th class='num'>Bid / ask</th>"
             "<th class='num' data-sort='num'>Spread</th><th class='num' data-sort='num' title='Ask x 100 shares'>Premium*</th>"
-            "<th class='num' data-sort='num'>Breakeven at expiry</th><th class='num' data-sort='num' title='Move from today\'s stock "
+            "<th class='num' data-sort='num'>Breakeven at expiry</th><th class='num' data-sort='num' title='Move from the current stock "
             "price to the breakeven at expiry'>Distance to breakeven</th>"
             "<th class='num' data-sort='num'>Max loss</th><th class='num' data-sort='num'>Volume</th>"
             "<th class='num' data-sort='num'>Open int.</th><th class='num' data-sort='num'>IV</th><th class='num' data-sort='num'>Delta</th>"
