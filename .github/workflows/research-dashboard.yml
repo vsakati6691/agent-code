@@ -12,6 +12,7 @@
 #                         SEC rejects users.noreply.github.com addresses)
 #   ALPHAVANTAGE_API_KEY  optional, earnings dates (1 request per run)
 # Variable:
+#   DASHBOARD_OPTIONS     set to "true" to collect and publish option chains (off by default: Cboe terms)
 #   DASHBOARD_PUBLISH     set to "true" to deploy to Pages, after reviewing the data-source terms in
 #                         docs/RESEARCH_DASHBOARD.md. Without it the site is built and checked but not published.
 #
@@ -30,9 +31,9 @@ on:
         required: false
         default: ""
       options:
-        description: "Collect option chains"
+        description: "Collect option chains (published only if DASHBOARD_OPTIONS is true)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -101,7 +102,8 @@ jobs:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
           AS_OF: ${{ github.event.inputs.as_of }}
-          OPTIONS: ${{ github.event_name == 'schedule' || github.event.inputs.options == 'true' }}
+          # options are off unless the owner opts in: repository variable DASHBOARD_OPTIONS=true (Cboe terms)
+          OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' && (github.event_name == 'schedule' || github.event.inputs.options == 'true') }}
         run: |
           find .cache/http -type f -mmin +4320 -delete 2>/dev/null || true   # drop cached responses older than 3 days
           args=(run --data research-data --cache .cache/http --commit "$GITHUB_SHA")
