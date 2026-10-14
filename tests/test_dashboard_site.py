@@ -384,3 +384,22 @@ def test_per_snapshot_json_schema_and_audit_links(site):
     assert {"ticker", "rank", "composite", "scenarios"} <= set(cand)
     audit = (site / "audit.html").read_text(encoding="utf-8")
     assert 'href="data/schema.json"' in audit and all(f'href="data/{d}.json"' in audit for d in store.dates())
+
+
+# --- item 19: theme toggle and print stylesheet ------------------------------------------------
+
+def test_theme_toggle_overrides_system_and_is_applied_before_paint(site):
+    from agent_trading.dashboard.assets import CSS, JS
+    page = (site / "index.html").read_text(encoding="utf-8")
+    head = page[:page.index("</head>")]
+    assert 'localStorage.getItem("theme")' in head and head.index("<script>") < head.index("style.css")
+    assert 'class="themebtn"' in page
+    assert "var order = ['auto', 'light', 'dark'];" in JS
+    assert ':root[data-theme="dark"]' in CSS and ':root:where(:not([data-theme="light"]))' in CSS
+
+
+def test_print_stylesheet_hides_controls_and_expands_details():
+    from agent_trading.dashboard.assets import CSS, JS
+    pr = CSS[CSS.index("@media print"):]
+    assert "header.site" in pr and ".tabs" in pr and "display: none" in pr and "background: #fff" in pr
+    assert "beforeprint" in JS and "setAttribute('open'" in JS

@@ -81,6 +81,18 @@ details { margin: 6px 0; } summary { cursor: pointer; color: var(--link); }
 .legend i.ref { border-top: 2px dashed var(--reference); }
 ul.tight { margin: 4px 0; padding-left: 20px; }
 footer { color: var(--text-muted); font-size: 13px; border-top: 1px solid var(--border); margin-top: 32px; padding-top: 12px; }
+.themebtn { font: inherit; font-size: 13px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-1); color: var(--text-secondary); cursor: pointer; }
+@media print {
+  header.site, .symsearch, .themebtn, .tabs, .controls, footer, #stale-client { display: none !important; }
+  :root, body { background: #fff !important; color: #000 !important; }
+  .card, .banner, .table-wrap, th, tr.detail td { background: #fff !important; box-shadow: none !important; }
+  .table-wrap { overflow: visible !important; border: 0; }
+  .table-wrap td.tk, .table-wrap th.tk { position: static; }
+  a { color: #000; text-decoration: underline; }
+  h1, h2, h3 { page-break-after: avoid; } tr, .card { page-break-inside: avoid; }
+  .chart svg { max-width: 100%; }
+}
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .rowtoggle { font: inherit; background: none; border: 0; padding: 0; color: var(--link); cursor: pointer; text-align: left; }
 .rowtoggle::after { content: " \25B8"; color: var(--text-muted); }
@@ -130,6 +142,28 @@ header.site .inner .symsearch { margin-left: auto; }
 
 JS = r"""
 (function () {
+  // colour theme: auto (follows the system) -> light -> dark; the choice is remembered on this device only
+  var tb = document.querySelector('.themebtn');
+  if (tb) {
+    var order = ['auto', 'light', 'dark'];
+    var cur = 'auto';
+    try { cur = localStorage.getItem('theme') || 'auto'; } catch (e) {}
+    function apply(t) {
+      if (t === 'auto') { delete document.documentElement.dataset.theme; } else { document.documentElement.dataset.theme = t; }
+      tb.textContent = 'Theme: ' + t;
+      tb.setAttribute('aria-label', 'Colour theme: ' + (t === 'auto' ? 'automatic' : t) + '. Select to change.');
+      try { if (t === 'auto') localStorage.removeItem('theme'); else localStorage.setItem('theme', t); } catch (e) {}
+    }
+    apply(order.indexOf(cur) >= 0 ? cur : 'auto');
+    tb.addEventListener('click', function () {
+      var now = document.documentElement.dataset.theme || 'auto';
+      apply(order[(order.indexOf(now) + 1) % order.length]);
+    });
+  }
+  // printing: expand every collapsed section so the printout is complete
+  window.addEventListener('beforeprint', function () {
+    document.querySelectorAll('details').forEach(function (d) { d.setAttribute('open', ''); });
+  });
   // header search: open the symbol page when the input matches a ticker in the inline datalist
   var sf = document.querySelector('.symsearch');
   if (sf) {
