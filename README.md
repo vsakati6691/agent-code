@@ -1,5 +1,7 @@
 # agent-code
 
+**📊 Live research dashboard:** https://vsakati6691.github.io/agent-code/
+
 AI-assisted **research, paper-trading and live-ticket** system for US stocks and ETFs.
 Scheduled AI sessions collect data through read-only market connectors; the Python
 engine does the analysis.
@@ -51,8 +53,8 @@ saves JSON, imports it and runs the analysis ([docs/DAILY_ROUTINE.md](docs/DAILY
 Runs happen only while the laptop and the app are open. A missed run means no tickets, which
 is safe. Reports go to `reports/` (git-ignored). Dashboards:
 [Agent-trading desk](https://claude.ai/artifact/A3dcSc1pWfKjykdjFxHnNo) (owner's snapshot of the
-last run) and the weekly public-data [research dashboard](docs/RESEARCH_DASHBOARD.md) built by
-GitHub Actions.
+last run) and the weekly public-data [research dashboard](https://vsakati6691.github.io/agent-code/)
+(live on GitHub Pages, [how it is built](docs/RESEARCH_DASHBOARD.md)) built by GitHub Actions.
 
 Data comes from Robinhood (account, prices, quotes, fundamentals), Financial Datasets
 (S&P 500 list, news, filings), Bigdata.com (economic calendar) and Alpha Vantage (rates,
