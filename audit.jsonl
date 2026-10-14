@@ -4,3 +4,4 @@
 {"as_of": "2026-10-13", "at": "2026-10-14T12:58:22+00:00", "event": "run_finished", "status": "ok", "usage": {"budgets": {"alphavantage": 3, "cboe": 7000, "nasdaqtrader": 10, "sec": 4000, "wikipedia": 10}, "cache_hits": 69, "final_interval_s": {"alphavantage": 13.0, "cboe": 1.39, "nasdaqtrader": 1.0, "sec": 0.15, "wikipedia": 1.0}, "rate_limited": {"cboe": 6}, "requests": {"cboe": 5778, "nasdaqtrader": 2, "sec": 2254, "wikipedia": 1}}}
 {"as_of": "2026-10-13", "at": "2026-10-14T13:24:13+00:00", "event": "run_skipped", "reason": "snapshot already exists (immutable)"}
 {"as_of": "2026-10-13", "at": "2026-10-14T17:35:52+00:00", "event": "run_skipped", "reason": "snapshot already exists (immutable)"}
+{"at": "2026-10-14T18:10:23+00:00", "checked_at": "2026-10-14", "event": "tradability_imported", "files": 1, "symbols_updated": 43}

@@ -2,7 +2,7 @@
  "source": "Robinhood MCP get_equity_tradability (read-only), checked from a Claude session",
  "rule": "Published only if Robinhood's read-only get_equity_tradability check reports tradeable = true, state = active, and 'tradable' for an individual account (regular hours), and the check is at most 35 days old. Not tradable, not found, unverified or stale checks exclude the stock with that reason (fail closed).",
  "max_age_days": 35,
- "updated_at": "2026-10-14T10:48:51+00:00",
+ "updated_at": "2026-10-14T18:10:23+00:00",
  "symbols": {
   "ABX": {
    "tradable": true,
@@ -14,7 +14,32 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "AI": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ALAB": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "AMAT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "AMD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "AMZN": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ANET": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -24,12 +49,42 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "APLD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ARM": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "ARQT": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "AVGO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "AVPT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "BBAI": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "CBRS": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "CEG": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -54,12 +109,32 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "COHR": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "CORZ": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "CRDO": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "CRWV": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "DCTH": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "DDOG": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -70,6 +145,11 @@
    "checked_at": "2026-10-14"
   },
   "DJCO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "DLR": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -94,7 +174,22 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "EME": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "ENVA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "EQIX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ETN": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -139,7 +234,17 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "GEV": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "GIC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "GLW": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -150,6 +255,11 @@
    "checked_at": "2026-10-14"
   },
   "GOLD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "GOOGL": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -204,12 +314,22 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "IREN": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "JOE": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
   },
   "KALU": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "KLAC": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -239,6 +359,11 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "LITE": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "LOCO": {
    "tradable": true,
    "reason": "",
@@ -249,7 +374,22 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "LRCX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "MAMA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MDB": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "META": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -260,6 +400,16 @@
    "checked_at": "2026-10-14"
   },
   "MPC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MRVL": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MSFT": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -280,6 +430,16 @@
    "checked_at": "2026-10-14"
   },
   "MYRG": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "NBIS": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "NOW": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -309,12 +469,32 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "ONTO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "OOMA": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "ORCL": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "P": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "PARR": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PATH": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -379,7 +559,27 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "SMCI": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "SNDK": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "SNOW": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "SOUN": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "SPCX": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -404,12 +604,22 @@
    "reason": "",
    "checked_at": "2026-10-14"
   },
+  "TEM": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
   "TER": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
   },
   "TGTX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "TLN": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
@@ -440,6 +650,11 @@
    "checked_at": "2026-10-14"
   },
   "VRT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "VST": {
    "tradable": true,
    "reason": "",
    "checked_at": "2026-10-14"
