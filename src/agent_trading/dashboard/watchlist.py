@@ -35,6 +35,7 @@ from .providers import canonical, common_stock_reason
 
 CONFIG_FILE = Path(__file__).resolve().parents[3] / "config" / "research_watchlist.json"
 TARGET = date.fromisoformat(spec.WATCHLIST_TARGET_DATE)
+FUND_NAME = re.compile(r"\bfund\b|beneficial interest", re.I)   # closed-end / interval funds listed as shares
 
 
 @dataclass(frozen=True)
@@ -115,7 +116,9 @@ def resolve(ticker: str, dirs: pd.DataFrame, sec: pd.DataFrame) -> dict:
             out["status"] = "listed"
         else:
             why = common_stock_reason(out["name"], False, False, str(d.get("financial_status", "")))
-            out["asset_type"] = "operating company (common stock)" if why is None else f"other security ({why})"
+            out["asset_type"] = ("operating company (common stock)" if why is None else
+                                 "fund or trust (not an operating company)" if FUND_NAME.search(out["name"] or "") else
+                                 f"other security: {why}")
             out["status"] = "listed"
     elif out["cik"] is not None:
         ex = str(sec.loc[ticker, "exchange"] or "")

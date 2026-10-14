@@ -24,14 +24,45 @@ TIME_GUIDE = (
 
 
 NUMBER = re.compile(r"\$?-?\d+(?:[,.]\d+)*(?:[%BMKx](?![A-Za-z]))?")
+NOT_CHECKED = "not checked for Robinhood tradability (only stocks that would make the list are checked)"
+# stored reason -> (group label that keeps the rule's threshold, the stock's own value); anything else falls back to NUMBER
+REASON_RULES = (
+    (re.compile(r"^Robinhood tradability not yet verified$"), lambda m: (NOT_CHECKED, "")),
+    (re.compile(r"^too little evidence: (\d+ of \d+) sub-metrics missing$"),
+     lambda m: ("too little evidence (too many sub-metrics missing)", m[1])),
+    (re.compile(r"^gate failed: (.+?) (\S+) \(needs (>=|<=) (.+)\)$"),
+     lambda m: (f'gate failed: {m[1]} {"below" if m[3] == ">=" else "above"} {m[4]}', m[2])),
+    (re.compile(r"^illiquid: (20-day median dollar volume) (\S+) < (\S+)$"), lambda m: (f"illiquid: {m[1]} below {m[3]}", m[2])),
+    (re.compile(r"^market cap (\S+) outside the band$"), lambda m: ("market cap outside the band", m[1])),
+    (re.compile(r"^price (\S+) below (\S+)$"), lambda m: (f"price below ${m[2]}", f"${m[1]}")),
+    (re.compile(r"^revenue growth (\S+) below the (.+)$"), lambda m: (f"revenue growth below the {m[2]}", m[1])),
+    (re.compile(r"^price data rejected: [^:]+: only (\d+) bars, need (\d+)$"),
+     lambda m: (f"price data rejected: too little price history (needs {m[2]} daily bars)", f"{m[1]} bars")),
+    (re.compile(r"^price data rejected: [^:]+: recent data anomaly \(frozen bars (\S+) to (\S+)\); feed unreliable$"),
+     lambda m: ("price data rejected: recent data anomaly (frozen bars); feed unreliable", f"{m[1]} to {m[2]}")),
+    (re.compile(r"^price data rejected: [^:]+: recent data anomaly \((.+) on (\S+)\); feed unreliable$"),
+     lambda m: (f"price data rejected: recent data anomaly ({m[1]}); feed unreliable", m[2])),
+    (re.compile(r"^price data rejected: [^:]+: (.+)$"), lambda m: (f"price data rejected: {m[1]}", "")),
+)
+
+
+def reason_group(reason: str) -> tuple[str, str]:
+    """('gate failed: TTM revenue growth below 15%', '6%'): a readable group label and the stock's own value.
+    Reasons without a known pattern are kept word for word (their numbers are part of the rule, e.g. '10-K')."""
+    for pattern, label in REASON_RULES:
+        m = pattern.match(reason)
+        if m:
+            return label(m)
+    return reason, ""
 
 
 def group_exclusions(excluded: list[dict]) -> list[tuple[str, list[tuple[str, str]]]]:
-    """Exclusions grouped by reason with the numbers taken out, largest group first: [(reason, [(ticker, numbers)])]."""
+    """Exclusions grouped by reason with the stock's own values taken out, largest group first:
+    [(reason, [(ticker, values)])]."""
     groups: dict[str, list[tuple[str, str]]] = {}
     for x in excluded:
-        key = NUMBER.sub("…", x["reason"])
-        groups.setdefault(key, []).append((x["ticker"], ", ".join(NUMBER.findall(x["reason"]))))
+        key, values = reason_group(x["reason"])
+        groups.setdefault(key, []).append((x["ticker"], values))
     return sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))
 
 
@@ -360,6 +391,17 @@ def move_cause(ch: dict, list_name: str) -> str:
     return f"{head}: " + "; ".join(parts)
 
 
+FLAG_LIST_MAX = 8      # longer flag lists collapse to a count, so a flag shared by most names doesn't bury the rest
+EARNINGS_SHOWN = 5     # the earnings panel shows the next five dates; the rest fold behind "N more"
+
+
+def _flag_item(group: str, tickers: list[str], total: int) -> str:
+    if len(tickers) <= FLAG_LIST_MAX:
+        return f'<li class="small"><strong>{E(group)}:</strong> {E(", ".join(tickers))}</li>'
+    return (f'<li class="small"><details><summary><strong>{E(group)}:</strong> {len(tickers)} of {total} listed '
+            f'names</summary>{E(", ".join(tickers))}</details></li>')
+
+
 def _last_results(i: dict) -> str:
     if i.get("last_results"):
         return (f'<br><span class="small">last results {E(i["last_results"])}, {E(i.get("last_results_status") or "")}'
@@ -375,11 +417,17 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
     items = ev.get("items")
     if items is None:
         earn = '<p class="small muted">Not collected in this snapshot.</p>'
+    elif not items and str(ev.get("note", "")).startswith("Earnings dates unavailable"):
+        earn = ('<p class="small">Earnings dates could not be collected for this snapshot, so upcoming reports are '
+                'not listed (this does not mean none are due).</p>'
+                f'<p class="small muted">{E(ev.get("note", ""))}</p>')
     else:
-        earn = "".join(f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">(scheduled, unverified; '
-                       f'{E(i["list"])})</span>{_last_results(i)}</li>'
-                       for i in items[:12]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
-        earn = f'<ul class="tight small">{earn}</ul><p class="small muted">{E(ev.get("note", ""))}</p>'
+        rows = [f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">(scheduled, unverified; '
+                f'{E(i["list"])})</span>{_last_results(i)}</li>' for i in items[:12]]
+        earn = "".join(rows[:EARNINGS_SHOWN]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
+        more = (f'<details class="small"><summary>{len(rows) - EARNINGS_SHOWN} more</summary><ul class="tight">'
+                f'{"".join(rows[EARNINGS_SHOWN:])}</ul></details>' if len(rows) > EARNINGS_SHOWN else "")
+        earn = f'<ul class="tight small">{earn}</ul>{more}<p class="small muted">{E(ev.get("note", ""))}</p>'
     new, gone, moves = [], [], []
     for k in ordered(bands):
         short = band_title(k, bands[k])
@@ -403,9 +451,9 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
         for c in bands[k]["candidates"]:
             for g in _risk_flags(c):
                 groups[g].append(c["ticker"])
+    total = len({c["ticker"] for k in ordered(bands) for c in bands[k]["candidates"]})
     risk = ("".join(f'<li class="small">{E(w)}</li>' for w in conc) +
-            "".join(f'<li class="small"><strong>{E(g)}:</strong> {E(", ".join(dict.fromkeys(ts)))}</li>'
-                    for g, ts in groups.items() if ts))
+            "".join(_flag_item(g, list(dict.fromkeys(ts)), total) for g, ts in groups.items() if ts))
     measured = any(v.get(h, {}).get("snapshots_measured") for v in ((tracking or {}).get("summary") or {}).values()
                    for h in spec.TRACK_HORIZONS)
     perf = f'<p class="small muted">{E(tracking_schedule(dates or [snap["as_of"]]))}</p>'
@@ -436,11 +484,14 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
 def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict | None) -> str:
     counts = " · ".join(f'{E(band_title(k, snap["bands"][k]))}: {len(snap["bands"][k]["candidates"])}'
                         for k in ordered(snap["bands"]))
-    return f"""<h1>Growth &amp; Options Research Dashboard</h1>
-<p class="lede">Week ending {E(snap["as_of"])} · {counts} · <a href="options.html">Options</a> ·
+    opts = bool((snap.get("options") or {}).get("enabled"))
+    return f"""<h1>{"Growth &amp; Options" if opts else "Growth"} Research Dashboard</h1>
+<p class="lede">Week ending {E(snap["as_of"])} · {counts} ·{' <a href="options.html">Options</a> ·' if opts else ''}
 <a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>
-{panels(snap, tracking, dates)}
-<details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details>
-{growth_section(snap)}
-{multibagger_section(snap)}
+<div class="overview">
+<div class="ov-panels">{panels(snap, tracking, dates)}
+<details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details></div>
+<div class="ov-lists">{growth_section(snap)}
+{multibagger_section(snap)}</div>
+</div>
 <p class="small muted">{len(dates)} weekly snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""

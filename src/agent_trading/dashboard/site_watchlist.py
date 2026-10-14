@@ -9,6 +9,12 @@ from . import spec
 from .fmt import cap, csv_value, money, net_position, num, ok, pct, sval
 
 E = html.escape
+OLD_TYPE_DETAIL = " (warrant, right, unit, preferred, note, fund or blank-check)"
+
+
+def tidy(text: str | None) -> str:
+    """Drop the nested type list older snapshots stored ('other security (not common stock (warrant, ...))')."""
+    return (text or "").replace(OLD_TYPE_DETAIL, "")
 
 
 def range_chart(entries: list[dict]) -> str:
@@ -111,7 +117,7 @@ def watchlist_page(snap: dict) -> str:
     bodies = []
     for i, e in enumerate(entries):
         rid = f"w-{i}"
-        status = e.get("unavailable_reason") or ""
+        status = tidy(e.get("unavailable_reason"))
         km = e.get("key_metrics") or {}
         km_txt = " · ".join(t for t in (
             f"revenue {cap(km.get('revenue_ttm'))} ({pct(km.get('revenue_growth_ttm'), 0, True)})" if km.get("revenue_ttm") else "",
@@ -123,13 +129,13 @@ def watchlist_page(snap: dict) -> str:
         bodies.append(f"""<tbody class="item" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
 <td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
 <div class="small muted">{E(e.get("name") or "name not resolved")}</div></td>
-<td class="small hide-sm" data-v="{E(e.get("asset_type") or "")}">{E(e.get("asset_type") or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
+<td class="small hide-sm" data-v="{E(tidy(e.get("asset_type")))}">{E(tidy(e.get("asset_type")) or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
 {_scen_cells(e)}
 <td class="small hide-sm">{E(e.get("method") or "")}</td><td class="small" data-v="{E(e.get("evidence_quality") or "")}">{E(e.get("evidence_quality") or "")}</td>
 <td class="small">{E(status)}</td></tr>
 <tr id="{rid}" class="detail" hidden><td colspan="9"><div class="evidence">
-<div><h4>Identity</h4><p class="small">{E(e.get("name") or "unresolved")} · {E(e.get("asset_type") or "")} · {E(e.get("exchange") or "")} ·
+<div><h4>Identity</h4><p class="small">{E(e.get("name") or "unresolved")} · {E(tidy(e.get("asset_type")))} · {E(e.get("exchange") or "")} ·
 status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") else ""}. Sector/theme: {E(e.get("sector") or "n/a")}.</p>
 <p class="small">{E(km_txt)}</p><p class="small">Trailing price returns: 1y {pct((e.get("returns") or {}).get("1y"), 0, True)},
 3y {pct((e.get("returns") or {}).get("3y"), 0, True)} (history from {E(str(e.get("history_start") or "n/a"))}).</p></div>
