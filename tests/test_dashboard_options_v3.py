@@ -29,9 +29,10 @@ UNDER = {"symbol": "ABC", "close": 100.0, "last_trade_time": f"{AS_OF}T16:00:00"
 # --- registration: the top-five change is a new, dated spec version with the other rules untouched -------------
 
 def test_top_five_is_registered_as_a_new_spec_version_with_eligibility_rules_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-14.6"
-    version, reason = spec.SPEC_CHANGELOG[-1]
-    assert version == spec.SPEC_VERSION and "5 contracts instead of 10" in reason and "theta" in reason
+    # the .6 entry stays in the version history; a later version (2026-10-14.7 added the AI lists) does not undo it
+    entry = dict(spec.SPEC_CHANGELOG)["2026-10-14.6"]
+    assert "5 contracts instead of 10" in entry and "theta" in entry and "registered before any snapshot" in entry
+    assert spec.SPEC_VERSION >= "2026-10-14.6" and [v for v, _ in spec.SPEC_CHANGELOG] == sorted(v for v, _ in spec.SPEC_CHANGELOG)
     r = spec.OPTION_RULES
     assert r["max_per_type_per_horizon"] == 5 and r["max_per_underlying_per_horizon"] == 2 and r["require_theta"]
     assert (r["min_open_interest"], r["min_volume"], r["max_spread_pct"], r["min_delta"], r["max_delta"],

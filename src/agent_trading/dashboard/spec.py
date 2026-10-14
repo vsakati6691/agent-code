@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.6"
+SPEC_VERSION = "2026-10-14.7"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
@@ -87,6 +87,22 @@ SPEC_CHANGELOG = [
                      "rules: the options page is always listed with its status; scenario-test flags are shown "
                      "separately from passing the research screen; pages name both the snapshot's methodology "
                      "version and the renderer version."),
+    ("2026-10-14.7", "Owner request (2026-10-14), registered before any snapshot was evaluated with it. New AI "
+                     "page with two new lists: (1) AI-exposed large cap (market cap of $10B or more) and AI-exposed "
+                     "mid cap ($2B to $10B), up to 5 stocks each, drawn from a fixed, curated universe of US-listed "
+                     "common stocks (AI_UNIVERSE) and evaluated by exactly the same data, liquidity, tradability and "
+                     "fixed-scale scoring rules as the growth lists (standard profile, same scales and weights); "
+                     "membership is a recorded judgement, and changing it needs a new version. (2) A top-20 "
+                     "market-cap scenario test (AI_TOP20_RULE): each listed AI stock's bear, base and bull scenario "
+                     "market caps at 5 and 10 years are compared with today's 20th-largest S&P 500 market cap, "
+                     "conditional and never a probability. (3) A context section for private AI companies "
+                     "(AI_PRIVATE_RULE): sourced, dated, labelled-unverified valuations from "
+                     "config/ai_private_companies.json; not ranked, scored or tradable. No probability of reaching "
+                     "the top 20 is shown, because none has out-of-sample calibration (PROBABILITY_GATE). The "
+                     "existing lists, scales, weights, gates, option rules and tracking rules are unchanged; the "
+                     "2026-10-13 snapshot stays as published under 2026-10-14.3. Display and reliability changes in "
+                     "the same release (lazy evidence rows, sortable header buttons, saved filters) carry no "
+                     "methodology change."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -120,7 +136,7 @@ DISCLAIMER = (
 class Band:
     key: str
     title: str
-    universe: str                 # "sp500", "broad", or "all" (both, de-duplicated)
+    universe: str                 # "sp500", "broad", "all" (both, de-duplicated) or "ai" (AI_UNIVERSE)
     min_cap: float | None         # USD, inclusive
     max_cap: float | None         # USD, exclusive
     min_price: float
@@ -136,7 +152,8 @@ class Band:
 
 
 BAND_TITLES_SHORT = {"large": "Large cap (S&P 500 members)", "mid": "Mid cap ($2B-$10B)",
-                     "small": "Small cap ($300M-$2B)", "multibagger": "Speculative multibagger (5-10 yr)"}
+                     "small": "Small cap ($300M-$2B)", "multibagger": "Speculative multibagger (5-10 yr)",
+                     "ai_large": "AI large cap ($10B+)", "ai_mid": "AI mid cap ($2B-$10B)"}
 # lists retired by a later spec version; old snapshots that contain them still render and are still tracked
 LEGACY_BANDS = {"spec": {"title": "Speculative potential multibagger research candidates (retired 2026-10-14.2)",
                          "benchmark": "IWM", "friction_bps_per_side": 50.0}}
@@ -153,6 +170,84 @@ BANDS = (
          gates=(("revenue_growth_ttm", ">=", 0.15), ("revenue_cagr_3y", ">=", 0.15), ("gross_margin", ">=", 0.35),
                 ("reported_quarters", ">=", 12), ("dilution", "<=", 0.08), ("survival", ">=", 1)),
          scenario_years=(1, 3, 5, 10)),
+    # 2026-10-14.7: AI-exposed lists. Same scoring profile, scales and weights as the growth lists; only the
+    # universe (AI_UNIVERSE) and the market-cap bands differ. Benchmarks are the growth lists' own.
+    Band("ai_large", "AI-exposed large-cap research candidates", "ai", 10e9, None, 5.0, 20e6, 5,
+         "SPY", "SPDR S&P 500 ETF (price return)", 15.0, scenario_years=(1, 3, 5, 10)),
+    Band("ai_mid", "AI-exposed mid-cap research candidates", "ai", 2e9, 10e9, 5.0, 5e6, 5,
+         "IJH", "iShares Core S&P Mid-Cap ETF (price return)", 25.0, scenario_years=(1, 3, 5, 10)),
+)
+
+# --- AI-exposed universe (2026-10-14.7) ------------------------------------------------------------
+# A curated, fixed list of US-listed common stocks, grouped by where the company sits in the AI supply chain.
+# Membership is a judgement recorded in advance: it is hashed with the rest of the spec, so adding or removing a
+# name is a new methodology version. A name that cannot be scored (a foreign filer, a new listing with little
+# history, a market cap outside both bands) stays visible on the excluded page with its reason.
+AI_ROLES = ("Accelerators and AI chips", "Memory and storage", "Chip equipment and test", "Networking and optical",
+            "Servers and systems", "Cloud and platforms", "AI software and data", "Neoclouds and data centers",
+            "Power, cooling and electrical", "Diversified, includes a frontier AI lab")
+AI_UNIVERSE = (
+    ("NVDA", "Accelerators and AI chips"), ("AMD", "Accelerators and AI chips"), ("AVGO", "Accelerators and AI chips"),
+    ("MRVL", "Accelerators and AI chips"), ("ARM", "Accelerators and AI chips"), ("CBRS", "Accelerators and AI chips"),
+    ("MU", "Memory and storage"), ("SNDK", "Memory and storage"), ("STX", "Memory and storage"),
+    ("WDC", "Memory and storage"), ("P", "Memory and storage"),     # Everpure, formerly Pure Storage (PSTG until April 2026)
+    ("AMAT", "Chip equipment and test"), ("LRCX", "Chip equipment and test"), ("KLAC", "Chip equipment and test"),
+    ("TER", "Chip equipment and test"), ("ONTO", "Chip equipment and test"),
+    ("ANET", "Networking and optical"), ("CIEN", "Networking and optical"), ("COHR", "Networking and optical"),
+    ("LITE", "Networking and optical"), ("CRDO", "Networking and optical"), ("ALAB", "Networking and optical"),
+    ("APH", "Networking and optical"), ("GLW", "Networking and optical"),
+    ("SMCI", "Servers and systems"), ("DELL", "Servers and systems"), ("HPE", "Servers and systems"),
+    ("MSFT", "Cloud and platforms"), ("GOOGL", "Cloud and platforms"), ("AMZN", "Cloud and platforms"),
+    ("META", "Cloud and platforms"), ("ORCL", "Cloud and platforms"),
+    ("PLTR", "AI software and data"), ("SNOW", "AI software and data"), ("NOW", "AI software and data"),
+    ("DDOG", "AI software and data"), ("MDB", "AI software and data"), ("AI", "AI software and data"),
+    ("PATH", "AI software and data"), ("SOUN", "AI software and data"), ("BBAI", "AI software and data"),
+    ("TEM", "AI software and data"),
+    ("CRWV", "Neoclouds and data centers"), ("NBIS", "Neoclouds and data centers"),
+    ("IREN", "Neoclouds and data centers"), ("APLD", "Neoclouds and data centers"),
+    ("CORZ", "Neoclouds and data centers"), ("EQIX", "Neoclouds and data centers"),
+    ("DLR", "Neoclouds and data centers"),
+    ("VRT", "Power, cooling and electrical"), ("ETN", "Power, cooling and electrical"),
+    ("GEV", "Power, cooling and electrical"), ("CEG", "Power, cooling and electrical"),
+    ("VST", "Power, cooling and electrical"), ("TLN", "Power, cooling and electrical"),
+    ("FIX", "Power, cooling and electrical"), ("PWR", "Power, cooling and electrical"),
+    ("EME", "Power, cooling and electrical"),
+    ("SPCX", "Diversified, includes a frontier AI lab"),
+)
+AI_UNIVERSE_DEFINITION = (
+    "AI-exposed universe: a fixed, curated list of US-listed common stocks (registered on the methodology page), grouped by where each "
+    "company sits in the AI supply chain: chips and accelerators, memory and storage, chip equipment, networking "
+    "and optical, servers, cloud platforms, AI software and data, neoclouds and data centers, power and cooling, "
+    "and a diversified group that includes a frontier AI lab. Membership is a judgement recorded in advance, not a "
+    "measurement and not a claim that any company will grow; adding or removing a name needs a new methodology "
+    "version. Foreign filers without US-GAAP XBRL (for example TSMC and ASML) cannot be scored and are left out. "
+    "Every name is then evaluated by exactly the rules of the growth lists (price and fundamentals data, liquidity, "
+    "Robinhood tradability, fixed-scale scoring with the same weights). AI large cap means a market cap of $10B or "
+    "more and AI mid cap $2B to $10B; the top 5 of each are shown. Where a company sits in the AI chain does not "
+    "say whether it gains or loses from AI growth, and none of this predicts that any company will rank among the "
+    "largest."
+)
+AI_TOP20_RULE = (
+    "Top-20 market-cap test: the threshold is the 20th-largest market cap among the S&P 500 members that have valid "
+    "data in the same weekly run (as-of close x SEC cover-page shares). For each listed AI candidate the test "
+    "compares the market cap implied by its bear, base and bull scenario values at 5 and 10 years (value per share "
+    "x the scenario's share count) with that threshold held at today's level. The threshold itself will probably "
+    "rise over the years, so passing means 'above today's bar', not 'a top-20 company'. Scenario values are "
+    "conditional on the stated assumptions; they are not forecasts and not probabilities."
+)
+AI_PRIVATE_RULE = (
+    "Private AI companies are shown for context only: they are not ranked, scored or tradable here, and have no "
+    "price, SEC financial statements or Robinhood tradability check. Each reported valuation comes from a named "
+    "press or law-firm source with its date and link, is labelled unverified, and is the value at the company's "
+    "last priced round or announcement, not a market capitalization. A record with a valuation but no source and "
+    "date is rejected. A reported valuation is compared with the current S&P 500 market caps only when it is in US "
+    "dollars. When a private company lists its shares, it joins the ranked lists only through a new methodology "
+    "version."
+)
+AI_PROBABILITY_NOTE = (
+    "No probability that any company reaches the top 20 by market cap is shown. A probability needs an "
+    "out-of-sample calibration record (the methodology page lists the gate) and none exists for this question, so the page shows "
+    "conditional scenarios and the scenario test instead."
 )
 MULTIBAGGER_RATIONALE = (
     "Why these criteria: research on the stocks that compounded many-fold over 5-10 years (for example "
@@ -720,6 +815,8 @@ def spec_dict() -> dict:
                       "leveraged_params": [LEVERAGED_KEYWORDS, LEVERAGED_FINANCING_RATE, LEVERAGED_ASSUMED_FEE,
                                            LEVERAGED_VOL_FACTORS, LEVERAGED_UNDERLYING_HINTS]},
         "legacy_bands": LEGACY_BANDS,
+        "ai": {"universe": [list(x) for x in AI_UNIVERSE], "roles": AI_ROLES, "definition": AI_UNIVERSE_DEFINITION,
+               "top20_rule": AI_TOP20_RULE, "private_rule": AI_PRIVATE_RULE, "probability_note": AI_PROBABILITY_NOTE},
         "display_rules": {"watchlist_price": [WATCHLIST_PRICE_RULE, WATCHLIST_MIN_PRICE_BARS],
                           "freshness": [FRESHNESS_RULE, FRESHNESS_STALE_SESSIONS, FRESHNESS_CALENDAR_DAYS],
                           "dataset_states": DATASET_STATES, "dataset_partial_below": DATASET_PARTIAL_BELOW,
@@ -748,6 +845,11 @@ def _check() -> None:
         raise ValueError(f"metrics without a documented definition: {sorted(missing_notes)}")
     if abs(sum(w for w, _ in OPTION_RANKING.values()) - 1.0) > 1e-9:
         raise ValueError("option ranking weights do not sum to 1")
+    tickers = [t for t, _ in AI_UNIVERSE]
+    if len(tickers) != len(set(tickers)):
+        raise ValueError("AI_UNIVERSE lists a ticker twice")
+    if {r for _, r in AI_UNIVERSE} - set(AI_ROLES):
+        raise ValueError("AI_UNIVERSE uses a role that is not in AI_ROLES")
 
 
 _check()

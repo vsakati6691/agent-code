@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 
 from . import changes as changes_mod, evidence, spec
@@ -14,7 +15,7 @@ from .site_scan import candidate_scan, market_context, scan_header
 
 E = html.escape
 GROWTH_KEYS = ("large", "mid", "small")
-ORDER = ("large", "mid", "small", "multibagger")
+ORDER = ("large", "mid", "small", "multibagger", "ai_large", "ai_mid")
 
 
 def ordered(bands: dict) -> list[str]:
@@ -257,6 +258,24 @@ fading to {pct(spec.SCENARIO_TERMINAL_GROWTH)}; exit EV/Sales {num(a.get("exit_e
 <p class="small"><a href="stock/{key}-{E(c["ticker"])}.html">Full research page →</a></p></div></div>"""
 
 
+def fragment_path(key: str, ticker: str) -> str:
+    """Where one candidate's evidence block lives: a small JSON file fetched when its row first opens, so the list
+    pages carry only the table rows (the full research page and the file hold the same figures)."""
+    return f"fragments/{key}-{E(ticker)}.json"
+
+
+def evidence_fragments(bands: dict) -> dict[str, str]:
+    """{published path: JSON text} for every candidate whose list page uses a lazy evidence row."""
+    out = {}
+    for key, band in bands.items():
+        if key == "multibagger":          # its cards are shown in full on the overview
+            continue
+        for c in band.get("candidates", []):
+            out[f"fragments/{key}-{c['ticker']}.json"] = json.dumps({"html": evidence_block(key, c, band)},
+                                                                    separators=(",", ":"))
+    return out
+
+
 def growth_table(key: str, band: dict) -> str:
     tid = f"t-{key}"
     bodies = []
@@ -271,7 +290,7 @@ def growth_table(key: str, band: dict) -> str:
 <td class="num" data-v="{c["rank"]}">{c["rank"]}</td>
 <td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}" title="Show evidence">
 <strong>{E(c["ticker"])}</strong></button><div class="small muted">{E(c.get("name") or "")}</div>
-<div class="small muted">{E(c.get("sector") or "Unknown")}</div></td>
+<div class="small muted">{E(c.get("sector") or "Unknown")}</div>{f'<div class="small muted">AI role: {E(c["ai_role"])}</div>' if c.get("ai_role") else ""}</td>
 <td class="num hide-sm" data-v="{sval(c.get("market_cap"))}">{cap(c.get("market_cap"))}</td>
 <td class="num" data-v="{sval(c.get("price"))}">{money(c.get("price"))}</td>
 <td class="num hide-sm" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
@@ -284,7 +303,8 @@ def growth_table(key: str, band: dict) -> str:
 <td class="num hide-sm" data-v="{sval(x1)}">{pct(x1, 0, True)}</td>
 <td class="hide-sm">{row_spark(c, band.get("benchmark", "benchmark"))}</td>
 <td class="small risk" title="{E(c.get("counterargument", ""))}">{E(short_risk(c.get("counterargument", "")))}</td></tr>
-<tr id="{rid}" class="detail" hidden><td colspan="14">{evidence_block(key, c, band)}</td></tr></tbody>""")
+<tr id="{rid}" class="detail" hidden><td colspan="14"><div class="lazy" data-src="{fragment_path(key, c["ticker"])}"
+data-page="stock/{key}-{E(c["ticker"])}.html"><p class="small muted">Loading the evidence…</p></div></td></tr></tbody>""")
     sectors = sorted({c.get("sector") or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
     head = ('<th class="num" data-sort="num">#</th><th class="tk" data-sort="text">Ticker / company / sector</th>'
@@ -307,7 +327,7 @@ return minus {E(band.get("benchmark", ""))}. Select a ticker to show its evidenc
 
 def growth_section(snap: dict) -> str:
     bands = snap["bands"]
-    keys = [k for k in ordered(bands) if k != "multibagger"]
+    keys = [k for k in ordered(bands) if k != "multibagger" and not k.startswith("ai_")]     # AI lists have their own page
     tabs = "".join(f'<button role="tab" id="tab-{k}" aria-controls="panel-{k}" data-tab="{k}" aria-selected="false">'
                    f'{E(band_title(k, bands[k]))}</button>' for k in keys)
     panels = []
@@ -544,6 +564,24 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
 <section class="card"><h3>Data coverage and freshness</h3>{cov}</section></div>"""
 
 
+def ai_teaser(snap: dict) -> str:
+    """Overview block: the top 5 of each AI list, linking to the AI page (nothing for a snapshot without AI lists)."""
+    bands = {k: snap["bands"][k] for k in ("ai_large", "ai_mid") if k in (snap.get("bands") or {})}
+    if not bands:
+        return ""
+    cards = []
+    for key, b in bands.items():
+        items = "".join(
+            f'<li><a href="stock/{key}-{E(c["ticker"])}.html"><strong>{E(c["ticker"])}</strong></a> {E(c.get("name") or "")} '
+            f'<span class="muted">· {E(c.get("ai_role") or "")} · score {num(c.get("composite"), 1)}</span></li>'
+            for c in b["candidates"])
+        cards.append(f'<section class="card"><h3>{E(band_title(key, b))}</h3>'
+                     f'<ol class="tight small">{items or "<li>none met every rule this week</li>"}</ol></section>')
+    return (f'<h2 id="ai-stocks">AI stocks</h2><p class="small">The top 5 AI-exposed stocks by the same fixed rules, a scenario test '
+            f'of whether any could reach the largest market caps, and private AI companies for context. Not forecasts, '
+            f'and no probabilities. <a href="ai.html">Open the AI page</a>.</p><div class="ow-grid">{"".join(cards)}</div>')
+
+
 def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict | None,
              prev_snap: dict | None = None) -> str:
     counts = " · ".join(f'{E(band_title(k, snap["bands"][k]))}: {len(snap["bands"][k]["candidates"])}'
@@ -564,7 +602,8 @@ def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict |
 <details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details></div>
 <div class="ov-lists">{watchlist_cards(snap)}
 {growth_section(snap)}
-{multibagger_section(snap)}</div>
+{multibagger_section(snap)}
+{ai_teaser(snap)}</div>
 </div>
 </details>
 <p class="small muted">{len(dates)} weekly snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""

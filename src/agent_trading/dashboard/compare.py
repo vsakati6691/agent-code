@@ -34,7 +34,7 @@ GROUPS = [
 ]
 RETURN_KEYS = ("3m", "6m", "1y", "3y", "5y")
 SESSIONS = dict(RETURN_WINDOWS)
-ORDER = ("large", "mid", "small", "multibagger")
+ORDER = ("large", "mid", "small", "multibagger", "ai_large", "ai_mid")
 
 
 def _ok(x) -> bool:

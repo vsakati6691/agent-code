@@ -1,0 +1,76 @@
+{
+  "reviewed_on": "2026-10-14",
+  "note": "Context for the AI page. Valuations are as reported by the named press or law-firm source on the date shown, are not from company filings, and are unverified. They are the value at the last priced round or announcement, not a market capitalization. A company with no valuation here had no figure corroborated by two or more independent sources when this list was reviewed.",
+  "companies": [
+    {
+      "name": "OpenAI",
+      "what": "Developer of ChatGPT and the GPT models.",
+      "valuation": 852,
+      "currency": "USD",
+      "basis": "post-money valuation after a $122 billion funding round that closed on 2026-03-31",
+      "valuation_date": "2026-03-31",
+      "source_label": "Bloomberg Law",
+      "source_url": "https://news.bloomberglaw.com/tech-and-telecom-law/openai-valued-at-852-billion-after-closing-122-billion-round",
+      "status_note": "Reported to have filed confidentially with the SEC for an IPO in 2026, with timing undecided; a later report says it is weighing an IPO as soon as 2027.",
+      "status_source_label": "Barchart",
+      "status_source_url": "https://www.barchart.com/story/news/3116486/openai-anthropic-ipo-what-s-confirmed-what-s-still-speculation"
+    },
+    {
+      "name": "Anthropic (Claude)",
+      "what": "Developer of the Claude models.",
+      "valuation": 965,
+      "currency": "USD",
+      "basis": "valuation including new money in a $65 billion Series H reported in late May 2026",
+      "valuation_date": "2026-05-28",
+      "source_label": "Bloomberg Law",
+      "source_url": "https://news.bloomberglaw.com/private-equity/anthropic-raises-at-965-billion-valuation-eclipsing-openai-1",
+      "status_note": "Reported to have filed confidentially with the SEC on 2026-06-01; no listing date was announced in the cited reports.",
+      "status_source_label": "Barchart",
+      "status_source_url": "https://www.barchart.com/story/news/3116486/openai-anthropic-ipo-what-s-confirmed-what-s-still-speculation"
+    },
+    {
+      "name": "Databricks",
+      "what": "Data and AI platform for enterprises.",
+      "valuation": 190,
+      "currency": "USD",
+      "basis": "valuation announced with a $5 billion round on 2026-08-13 (an earlier term-sheet report said $188 billion)",
+      "valuation_date": "2026-08-13",
+      "source_label": "Let's Data Science",
+      "source_url": "https://letsdatascience.com/news/databricks-closes-5-billion-funding-at-190-billion-2cbf4001"
+    },
+    {
+      "name": "Mistral AI",
+      "what": "French developer of open-weight and commercial language models.",
+      "valuation": 21,
+      "currency": "EUR",
+      "basis": "post-money valuation of more than 21 billion euros in a 3 billion euro Series D reported in September 2026",
+      "valuation_date": "2026-09",
+      "source_label": "Orrick (law firm announcement)",
+      "source_url": "https://www.orrick.com/en/News/2026/09/Orrick-Advises-Mistral-in-its-3B-Series-D-at-21B-Post-Money-Valuation"
+    },
+    {
+      "name": "xAI",
+      "what": "Developer of the Grok models.",
+      "valuation": null,
+      "no_valuation_reason": "Reported to have been acquired by SpaceX in February 2026 (about $250 billion in that deal, per anonymous sources), so it has no separate valuation. SpaceX (SPCX) reportedly listed on Nasdaq on 2026-06-12 and is in the ranked AI universe.",
+      "status_source_label": "Yahoo Finance",
+      "status_source_url": "https://finance.yahoo.com/news/elon-musks-spacex-merges-xai-153111324.html"
+    },
+    {"name": "Perplexity", "what": "AI answer engine.", "valuation": null,
+     "no_valuation_reason": "Reports of an early-2026 valuation near $20 billion and of talks above $30 billion are not corroborated by two independent sources."},
+    {"name": "Safe Superintelligence", "what": "Research lab co-founded by Ilya Sutskever.", "valuation": null,
+     "no_valuation_reason": "The most-cited figure ($32 billion, April 2025) is more than a year old, and reports of later rounds conflict."},
+    {"name": "Thinking Machines Lab", "what": "AI research lab led by Mira Murati.", "valuation": null,
+     "no_valuation_reason": "Reports of a 2026 round at a much higher valuation than its 2025 seed conflict with mainstream reporting."},
+    {"name": "Anysphere (Cursor)", "what": "Maker of the Cursor AI coding tool.", "valuation": null,
+     "no_valuation_reason": "Reports of a 2026 round and of a SpaceX purchase offer conflict on how the round ended."},
+    {"name": "Scale AI", "what": "Data and evaluation services for AI developers.", "valuation": null,
+     "no_valuation_reason": "No current valuation was collected."},
+    {"name": "Cohere", "what": "Enterprise-focused developer of language models.", "valuation": null,
+     "no_valuation_reason": "No current valuation was collected."},
+    {"name": "Lambda", "what": "GPU cloud for AI training and inference.", "valuation": null,
+     "no_valuation_reason": "Reported to be weighing a private round and a possible later IPO; neither is confirmed."},
+    {"name": "Crusoe", "what": "Builder of AI data centers.", "valuation": null,
+     "no_valuation_reason": "Reported to be private and evaluating its options; no current valuation was corroborated."}
+  ]
+}
