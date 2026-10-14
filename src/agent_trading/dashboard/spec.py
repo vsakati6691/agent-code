@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.3"
+SPEC_VERSION = "2026-10-14.4"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
@@ -47,6 +47,14 @@ SPEC_CHANGELOG = [
                      "scenario's margin shift) and the EV/FCF multiple that the 2030 value implies. A value "
                      "with negative 2030 FCF or an implied EV/FCF above 60x is flagged as not supported by "
                      "cash generation. Scenario prices, growth lists, options and scoring are unchanged."),
+    ("2026-10-14.4", "Data-gap fix approved by the owner on 2026-10-14 after the first live snapshot (2026-10-13), "
+                     "not to improve tracked results: companies tag diluted weighted-average shares for a fiscal "
+                     "fourth quarter only as a full-year figure, so the share-count change was missing whenever the "
+                     "latest quarter was a fiscal Q4 (seen for MU, STX and WDC). That scored the dilution input as 0 "
+                     "and failed the multibagger dilution gate as 'input unavailable'. Dilution now uses the newest "
+                     "quarter that has a quarterly diluted share count and the same quarter a year earlier (at most "
+                     "one quarter back). Scales, weights, gates and every other rule are unchanged; the 2026-10-13 "
+                     "snapshot stays as published under 2026-10-14.3."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -261,7 +269,9 @@ METRIC_NOTES = {
     "net_debt_to_ebitda": "(Debt - cash and short-term investments) / TTM EBITDA (operating income + D&A). Net "
                           "cash scores 1; net debt with zero or negative EBITDA scores 0.",
     "current_ratio": "Current assets / current liabilities.",
-    "dilution": "Change in diluted weighted-average shares, latest quarter vs a year before.",
+    "dilution": "Change in diluted weighted-average shares over one year: the latest quarter vs the same quarter "
+                "a year before, or the quarter before that when the latest (a fiscal Q4) has only a full-year "
+                "share count.",
     "sbc_to_revenue": "TTM share-based compensation / TTM revenue.",
     "ev_to_sales_per_growth": "(EV / TTM revenue) / (TTM revenue growth in percent). Zero or negative growth "
                               "scores 0.",
@@ -295,6 +305,7 @@ IMPLIED_GROWTH = {
     "years": 5,
 }
 ROIC_TAX_RATE = 0.21
+DILUTION_LOOKBACK_QUARTERS = 1   # a fiscal Q4 has only a full-year share count: compare the quarter before (2026-10-14.4)
 
 # --- Evidence confidence ---------------------------------------------------------------
 CONFIDENCE_RULES = (
@@ -487,6 +498,7 @@ def spec_dict() -> dict:
         "tie_break": TIE_BREAK,
         "implied_growth": IMPLIED_GROWTH,
         "roic_tax_rate": ROIC_TAX_RATE,
+        "dilution_lookback_quarters": DILUTION_LOOKBACK_QUARTERS,
         "confidence": CONFIDENCE_RULES,
         "scenarios": [asdict(s) for s in SCENARIOS],
         "scenario_params": {"years": SCENARIO_YEARS, "growth_cap": SCENARIO_GROWTH_CAP,
