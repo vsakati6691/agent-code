@@ -384,6 +384,9 @@ Requests by provider: {E(", ".join(f"{k} {v}" for k, v in usage.get("requests", 
 cache hits {E(str(usage.get("cache_hits", 0)))}.
 Problems: {E("; ".join(snap.get("problems", [])) or "none")}.</p>
 <h2>Data sources and terms</h2><ul class="small">{''.join(f'<li><strong>{E(k)}</strong>: {E(v)}</li>' for k, v in snap.get("sources", {}).items())}</ul>
+<h2>Machine-readable data</h2><ul class="small"><li><a href="data/schema.json">data/schema.json</a>: what every field means
+(ratios are decimals, money is USD, times are UTC)</li><li><a href="data/latest.json">data/latest.json</a>: the latest snapshot</li>
+{''.join(f'<li><a href="data/{E(d)}.json">data/{E(d)}.json</a>: week ending {E(d)}</li>' for d in reversed(store.dates()))}</ul>
 <h2>Events</h2><div class="table-wrap"><table aria-label="Audit events"><thead><tr><th>At (UTC)</th><th>Event</th><th>Details</th></tr></thead><tbody>{rows}</tbody></table></div>"""
 
 
@@ -540,6 +543,10 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         if s.get("watchlist"):
             (out / "downloads" / f"{d}_watchlist_2030.csv").write_text(watchlist_csv(s), encoding="utf-8")
     (out / "data" / "latest.json").write_text(json.dumps(snap, default=str), encoding="utf-8")
+    for s in history:
+        (out / "data" / f"{s['as_of']}.json").write_text(json.dumps(s, default=str), encoding="utf-8")
+    from .schema import SCHEMA
+    (out / "data" / "schema.json").write_text(json.dumps(SCHEMA, indent=1), encoding="utf-8")
     (out / "feed.xml").write_text(atom_feed(history), encoding="utf-8")
     leaks = scan_for_secrets(out, secret_env)
     if leaks:

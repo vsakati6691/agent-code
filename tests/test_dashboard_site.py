@@ -367,3 +367,20 @@ def test_atom_feed_lists_every_weekly_report(site):
         assert (site / href).exists() and e.find("a:updated", ns).text and "not advice" in e.find("a:summary", ns).text
     assert entries[0].find("a:title", ns).text == f"Week ending {reports[-1]}"          # newest first
     assert 'type="application/atom+xml"' in (site / "index.html").read_text(encoding="utf-8")
+
+
+# --- item 18: documented JSON ----------------------------------------------------------------
+
+def test_per_snapshot_json_schema_and_audit_links(site):
+    import json as _json
+    from agent_trading.dashboard.store import Store
+    store = Store(site.parent / "data")
+    for d in store.dates():
+        assert _json.loads((site / "data" / f"{d}.json").read_text()) == _json.loads(_json.dumps(store.load(d), default=str))
+    schema = _json.loads((site / "data" / "schema.json").read_text())
+    latest = _json.loads((site / "data" / "latest.json").read_text())
+    assert set(latest) <= set(schema["properties"]), set(latest) - set(schema["properties"])
+    cand = schema["properties"]["bands"]["additionalProperties"]["properties"]["candidates"]["items"]["properties"]
+    assert {"ticker", "rank", "composite", "scenarios"} <= set(cand)
+    audit = (site / "audit.html").read_text(encoding="utf-8")
+    assert 'href="data/schema.json"' in audit and all(f'href="data/{d}.json"' in audit for d in store.dates())
