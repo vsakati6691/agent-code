@@ -1,5 +1,7 @@
 """Static CSS and JavaScript for the dashboard site (no external scripts, fonts or trackers)."""
 
+from .assets_scan import CSS as SCAN_CSS, JS as SCAN_JS
+
 CSS = r"""
 :root {
   color-scheme: light;
@@ -334,10 +336,10 @@ JS = r"""
     window.addEventListener('hashchange', function () { if (fromHash()) render(false); });
     render(false);
   });
-  // sortable + searchable + sector-filtered tables; grouped tables move each <tbody class="item"> as a unit.
-  // Each header is a real button, and sort changes are announced politely. The last search, sector and sort of a
+  // sortable + searchable + filtered tables; grouped tables move each <tbody class="item"> as a unit.
+  // Each header is a real button, and sort changes are announced politely. The last search, filters and sort of a
   // table are remembered on this device only (localStorage, per page and table); a restored view is always shown
-  // as such, with a "Reset view" control next to the row count, and is never applied silently.
+  // as such, with a reset control, and is never applied silently.
   var announce = document.createElement('div');
   announce.className = 'sr-only';
   announce.setAttribute('role', 'status');
@@ -361,27 +363,38 @@ JS = r"""
     var search = document.querySelector('[data-search="' + table.id + '"]');
     var sector = document.querySelector('[data-sector="' + table.id + '"]');
     var count = document.querySelector('[data-count="' + table.id + '"]');
+    var filters = Array.from(document.querySelectorAll('[data-filter="' + table.id + '"]'));
+    var empty = document.querySelector('[data-empty="' + table.id + '"]');
     var ths = Array.prototype.slice.call(table.querySelectorAll('th[data-sort]'));
     var key = 'view:' + location.pathname + ':' + table.id;
-    var view = {q: '', s: '', col: null, label: '', dir: 1};    // dir: 1 ascending, -1 descending
-    var reset = document.createElement('button');
-    reset.type = 'button';
-    reset.className = 'linkbtn';
-    reset.textContent = 'Reset view';
-    reset.hidden = true;
-    if (count && count.parentNode) count.parentNode.insertBefore(reset, count.nextSibling);
-    function isDefault() { return !view.q && !view.s && view.col === null; }
+    var view = {q: '', s: '', f: {}, col: null, label: '', dir: 1};    // dir: 1 ascending, -1 descending
+    // a table with its own "Reset filters" button uses it; any other table gets a "Reset view" link next to the count
+    var ownReset = document.querySelector('[data-reset="' + table.id + '"]');
+    var reset = ownReset;
+    if (!reset) {
+      reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'linkbtn';
+      reset.textContent = 'Reset view';
+      reset.hidden = true;
+      if (count && count.parentNode) count.parentNode.insertBefore(reset, count.nextSibling);
+    }
+    function isDefault() { return !view.q && !view.s && !Object.keys(view.f).length && view.col === null; }
     function filter() {
       view.q = search ? search.value.trim() : '';
       view.s = sector ? sector.value : '';
+      view.f = {};
+      filters.forEach(function (f) { if (f.value) view.f[f.dataset.field] = f.value; });
       var q = view.q.toLowerCase(), s = view.s;
       var all = items(), shown = 0;
       all.forEach(function (it) {
-        var ok = (!q || it.textContent.toLowerCase().indexOf(q) >= 0) && (!s || it.dataset.sector === s);
+        var ok = (!q || it.textContent.toLowerCase().indexOf(q) >= 0) && (!s || it.dataset.sector === s) &&
+          filters.every(function (f) { return !f.value || it.dataset[f.dataset.field] === f.value; });
         it.hidden = !ok; if (ok) shown++;
       });
       if (count) count.textContent = shown + ' of ' + all.length + ' shown';
-      reset.hidden = isDefault();
+      if (empty) empty.hidden = shown > 0;
+      if (!ownReset) reset.hidden = isDefault();
       remember(key, isDefault() ? null : view);
     }
     function applySort(th, dir) {
@@ -392,7 +405,12 @@ JS = r"""
         var ca = head(a).cells[col], cb = head(b).cells[col];
         var x = ca.dataset.v !== undefined ? ca.dataset.v : ca.textContent;
         var y = cb.dataset.v !== undefined ? cb.dataset.v : cb.textContent;
-        if (numeric) { x = parseFloat(x); y = parseFloat(y); if (isNaN(x)) x = -Infinity; if (isNaN(y)) y = -Infinity; return (x - y) * dir; }
+        if (numeric) {
+          x = parseFloat(x); y = parseFloat(y);
+          if (isNaN(x)) return isNaN(y) ? 0 : 1;      // missing numbers sort last in either direction
+          if (isNaN(y)) return -1;
+          return (x - y) * dir;
+        }
         return String(x).localeCompare(String(y)) * dir;
       });
       ths.forEach(function (o) { o.setAttribute('aria-sort', 'none'); });
@@ -418,9 +436,12 @@ JS = r"""
     });
     if (search) search.addEventListener('input', filter);
     if (sector) sector.addEventListener('change', filter);
+    filters.forEach(function (f) { f.addEventListener('change', filter); });
+    document.addEventListener('pinschange', filter);
     reset.addEventListener('click', function () {
       if (search) search.value = '';
       if (sector) sector.value = '';
+      filters.forEach(function (f) { f.value = ''; });
       view.col = null; view.label = ''; view.dir = 1;
       ths.forEach(function (o) { o.setAttribute('aria-sort', 'none'); });
       original.forEach(function (it) { holder.appendChild(it); });
@@ -432,6 +453,10 @@ JS = r"""
       if (search && typeof saved.q === 'string') search.value = saved.q;
       if (sector && typeof saved.s === 'string' &&
           Array.prototype.some.call(sector.options, function (o) { return o.value === saved.s; })) sector.value = saved.s;
+      if (saved.f && typeof saved.f === 'object') filters.forEach(function (f) {
+        var v = saved.f[f.dataset.field];
+        if (typeof v === 'string' && Array.prototype.some.call(f.options, function (o) { return o.value === v; })) f.value = v;
+      });
       var th = ths.filter(function (t) {
         return Array.prototype.indexOf.call(t.parentNode.children, t) === saved.col &&
                t.querySelector('.sortbtn').textContent.trim() === saved.label;
@@ -441,7 +466,7 @@ JS = r"""
       }
     }
     filter();
-    if (!isDefault()) announce.textContent = 'Saved view restored for this table. Use Reset view to clear it.';
+    if (!isDefault()) announce.textContent = 'Saved view restored for this table. Use the reset control to clear it.';
   });
   // line chart crosshair + tooltip
   document.querySelectorAll('.chart[data-series]').forEach(function (box) {
@@ -476,3 +501,6 @@ JS = r"""
   });
 })();
 """
+
+CSS += SCAN_CSS
+JS += SCAN_JS

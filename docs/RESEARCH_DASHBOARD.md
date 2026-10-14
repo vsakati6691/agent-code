@@ -28,6 +28,23 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 
 ### Reading and using the site
 
+- **Daily review desk:** the overview opens with a snapshot summary and SPY, IJH and IWM context, then a single
+  candidate scanner. These are still **weekly snapshots**, not live quotes or a daily collection schedule.
+  Benchmark 1Y price returns are reused from matching stored return windows; conflicting or unavailable values
+  stay unavailable. Candidate counts are unique tickers, while the table keeps each ticker's list membership.
+- **Candidate filters:** combine ticker/company/risk search, research list, sector, evidence level and missing
+  inputs. Scores remain comparable within their original list only; the scanner does not rank across lists.
+  Star a ticker to pin it on the current device, then select Pinned tickers. Pins also appear on Watchlist 2030.
+  Browser storage failures leave pins usable for that page and display an explanation. `/` focuses the scanner
+  search; Reset filters clears the current view. Filters never change stored research or published rankings.
+- **Watchlist scan:** symbol/price/scenario counts lead the page; scenario availability and pinned-ticker filters
+  narrow the table. The full range chart and methods expand below it. Unavailable scenarios keep their reasons
+  and all table cells, so sorting remains aligned. Missing numerical values sort last in either direction.
+- **Further product work:** prioritize a separately stored daily market snapshot (with suitable source rights and
+  freshness checks), restore the earnings calendar, then add timestamped snapshot-to-snapshot change alerts and
+  saved comparison views. Keep the immutable weekly research series separate from any faster market feed.
+  The first scan release changes presentation only: no scores, gates, scenario assumptions or research rules change.
+
 - **Time frames** are kept separate: trailing returns, conditional scenarios, option expiry windows and tracking periods.
 - **Weekly changes:** "What changed since the previous snapshot?" lists filings, deterioration, dilution, thesis breaches
   and data-availability changes for names on both snapshots, and explains each rank move by the change in the 0-100
@@ -93,9 +110,12 @@ Nothing about the growth lists, scoring scales or weights, option rules or track
   opened.
 - **Sortable headers are real buttons**, with `aria-sort`, a visible arrow for the current order, and a polite
   screen-reader announcement ("Sorted by Score, descending.").
-- **Saved views.** The last search, sector filter and sort of each table are remembered in this browser only
-  (localStorage, per page and table, silently skipped when storage is blocked). A restored view is announced, the row
-  count shows what is hidden, and **Reset view** clears it. Tabs are still never restored silently.
+- **Saved views.** The last search, sector filter, filter selects (the candidate scanner's list, evidence, inputs and
+  pinned choices) and sort of each table are remembered in this browser only (localStorage, per page and table, silently
+  skipped when storage is blocked). A restored view is announced and the row count shows what is hidden. **Reset view**
+  (or the scanner's own **Reset filters**, which now also restores the default order) clears it; pinned tickers are kept.
+  Tabs are still never restored silently. The AI lists appear in the candidate scanner under their own list names, and
+  the scanner, the watchlist and the other tables share one table script.
 
 - **Tracking counts NYSE sessions.** `tracking.forward_return` decided "pending" or "prices stop (possible
   delisting)" by counting weekdays, which overstates elapsed sessions by one per exchange holiday. On the day a

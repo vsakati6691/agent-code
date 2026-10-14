@@ -386,3 +386,20 @@ def test_sortable_headers_are_buttons_that_announce_and_saved_views_are_visible_
     assert "localStorage.getItem('matrix'" not in JS and "localStorage.getItem('tab:" not in JS     # tabs are still not restored
     assert "lazy[data-src]" in JS and "fetch(box.dataset.src" in JS and "Open the full research page" in JS
     assert "th[data-sort] .sortbtn" in CSS and "th[aria-sort=\"descending\"] .sortbtn::after" in CSS and ".sortbtn:focus-visible" in CSS
+
+
+def test_the_merged_table_script_keeps_both_the_scanner_features_and_the_saved_views():
+    """The daily scan (PR #20: filter selects, empty state, Reset filters, pinned tickers, missing numbers last) and the
+    saved views (PR #21) share one table script; losing either half would break the other page."""
+    from agent_trading.dashboard.assets import JS
+    assert JS.count("document.querySelectorAll('table[data-table]')") == 1        # one script, not two competing ones
+    # from the scan: filters, empty message, its own reset button, the pins event, missing numbers sort last
+    assert "[data-filter=\"' + table.id" in JS and "[data-empty=\"' + table.id" in JS and "[data-reset=\"' + table.id" in JS
+    assert "document.addEventListener('pinschange', filter)" in JS and "if (isNaN(x)) return isNaN(y) ? 0 : 1;" in JS
+    assert "empty.hidden = shown > 0" in JS and "f.value = ''" in JS
+    # from the saved views: filter values are saved and restored only when the option still exists, and a table that
+    # has its own reset button does not also get a second "Reset view" link
+    assert "view.f[f.dataset.field] = f.value" in JS and "saved.f[f.dataset.field]" in JS
+    assert "var reset = ownReset;" in JS and "if (!ownReset) reset.hidden = isDefault();" in JS
+    assert "<<<<<<<" not in JS and ">>>>>>>" not in JS and "research-pins-v1" in JS
+
