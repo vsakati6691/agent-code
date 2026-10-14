@@ -85,6 +85,15 @@ def _assumptions(e: dict) -> str:
     return f'<ul class="tight small">{"".join(rows)}</ul>'
 
 
+def _earnings_line(e: dict) -> str:
+    ec = e.get("earnings_check") or {}
+    if ec.get("last_results"):
+        return f'<p class="small">Last results {E(ec["last_results"])}: verified (8-K).</p>'
+    if ec.get("last_results_status"):
+        return f'<p class="small muted">{E(ec["last_results_status"])}.</p>'
+    return ""
+
+
 def _unlock(e: dict) -> str:
     if not e.get("unlock"):
         return ""
@@ -127,7 +136,7 @@ status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") el
 <div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}
 {_unlock(e)}</div>
 <div><h4>Catalysts</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("catalysts", []))}</ul>
-<h4>Strongest bear case</h4><p class="small">{E(e.get("bear_case") or "n/a")}</p></div>
+{_earnings_line(e)}<h4>Strongest bear case</h4><p class="small">{E(e.get("bear_case") or "n/a")}</p></div>
 <div><h4>Thesis invalidation</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("invalidation", []))}</ul>
 <h4>Sources, evidence and gaps</h4><p class="small">Evidence quality: {E(e.get("evidence_quality") or "none")}. Sources:
 {E("; ".join(dict.fromkeys(e.get("sources", []))))}.</p><ul class="tight small">{''.join(f"<li>{E(m)}</li>" for m in e.get("missing", []))}</ul></div>

@@ -123,6 +123,16 @@ def sector_from_sic(sic: str | int | None) -> str:
     return best
 
 
+def parse_earnings_8k(subs: dict | None) -> list[str]:
+    """Filing dates of 8-K (or 8-K/A) reports that include item 2.02 'Results of Operations and Financial
+    Condition', newest first, from an SEC submissions payload."""
+    recent = ((subs or {}).get("filings") or {}).get("recent") or {}
+    forms, dates, items = recent.get("form") or [], recent.get("filingDate") or [], recent.get("items") or []
+    out = [d for f, d, it in zip(forms, dates, items + [""] * (len(forms) - len(items)))
+           if f in ("8-K", "8-K/A") and "2.02" in {s.strip() for s in str(it).split(",")}]
+    return sorted(set(out), reverse=True)
+
+
 # --- Nasdaq Trader ------------------------------------------------------------------------
 
 def _pipe_table(text: str) -> pd.DataFrame:

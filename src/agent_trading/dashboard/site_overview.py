@@ -360,6 +360,15 @@ def move_cause(ch: dict, list_name: str) -> str:
     return f"{head}: " + "; ".join(parts)
 
 
+def _last_results(i: dict) -> str:
+    if i.get("last_results"):
+        return (f'<br><span class="small">last results {E(i["last_results"])}, {E(i.get("last_results_status") or "")}'
+                f'{"; " + E(i["cadence_check"]) if i.get("cadence_check") else ""}</span>')
+    if i.get("last_results_status"):
+        return f'<br><span class="small muted">{E(i["last_results_status"])}</span>'
+    return ""
+
+
 def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) -> str:
     bands = snap["bands"]
     ev = (snap.get("events") or {})
@@ -367,7 +376,8 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
     if items is None:
         earn = '<p class="small muted">Not collected in this snapshot.</p>'
     else:
-        earn = "".join(f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">({E(i["list"])})</span></li>'
+        earn = "".join(f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">(scheduled, unverified; '
+                       f'{E(i["list"])})</span>{_last_results(i)}</li>'
                        for i in items[:12]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
         earn = f'<ul class="tight small">{earn}</ul><p class="small muted">{E(ev.get("note", ""))}</p>'
     new, gone, moves = [], [], []

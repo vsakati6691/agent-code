@@ -90,6 +90,7 @@ class FakeProviders:
         self.chains = {}        # ticker -> (under, rows)
         self.earnings = pd.DataFrame({"symbol": [], "reportDate": []})
         self.calls: list[str] = []
+        self.subs: dict = {}    # cik -> submissions payload (filings), default only an SIC code
         self.fail: set[str] = set()
 
     def add(self, ticker, cik, sp=True, name=None, sector="Information Technology", drift=0.001, n=1300, seed=None,
@@ -128,7 +129,8 @@ class FakeProviders:
         return self.facts[cik]
 
     def submissions(self, cik):
-        return {"sic": "7372"}
+        self._check(f"subs:{cik}")
+        return self.subs.get(cik, {"sic": "7372"})
 
     def symbol_directories(self):
         self._check("dirs")
@@ -208,6 +210,14 @@ def demo_site(tmp_path, two_weeks: bool = True):
             p.listed[t] = (name, "Nasdaq", True)
             p.bars[t] = make_bars(n=1300, start=start, drift=drift, vol=vol, seed=seed, end=as_of.isoformat())
         p.bars["QQQ"] = make_bars(n=1300, start=300, drift=0.0004, seed=79, end=as_of.isoformat())
+        for cik in (100 + i for i in range(12)):      # S&P names: quarterly 8-K item 2.02 earnings releases
+            p.subs[cik] = {"sic": "7372", "filings": {"recent": {
+                "form": ["8-K", "10-Q", "8-K", "8-K", "10-Q", "8-K", "10-K", "8-K"],
+                "filingDate": ["2026-07-30", "2026-07-31", "2026-06-02", "2026-04-29", "2026-04-30", "2026-01-28",
+                               "2026-02-15", "2025-10-29"],
+                "items": ["2.02,9.01", "", "5.07", "2.02,9.01", "", "2.02", "", "2.02,9.01"]}}}
+        p.earnings = __import__("pandas").DataFrame({"symbol": ["S04", "S08"], "reportDate": [
+            as_of + timedelta(days=21), as_of + timedelta(days=40)]})
         return p
 
     data, out = tmp_path / "data", tmp_path / "site"

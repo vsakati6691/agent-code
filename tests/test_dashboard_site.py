@@ -403,3 +403,55 @@ def test_print_stylesheet_hides_controls_and_expands_details():
     pr = CSS[CSS.index("@media print"):]
     assert "header.site" in pr and ".tabs" in pr and "display: none" in pr and "background: #fff" in pr
     assert "beforeprint" in JS and "setAttribute('open'" in JS
+
+
+# --- item 20: verified earnings dates (SEC 8-K item 2.02) ---------------------------------------
+
+SUBS = {"filings": {"recent": {"form": ["8-K", "10-Q", "8-K", "8-K", "8-K/A", "8-K"],
+                                "filingDate": ["2026-07-30", "2026-07-31", "2026-06-02", "2026-04-29", "2026-02-01", "2026-01-28"],
+                                "items": ["2.02,9.01", "", "5.07", "2.02", "2.02", "9.01"]}}}
+
+
+def test_parse_earnings_8k_keeps_only_item_2_02():
+    from agent_trading.dashboard.providers import parse_earnings_8k
+    assert parse_earnings_8k(SUBS) == ["2026-07-30", "2026-04-29", "2026-02-01"]
+    assert parse_earnings_8k({"sic": "1"}) == [] and parse_earnings_8k(None) == []
+
+
+class _Http:
+    def __init__(self, left):
+        self.left = left
+
+    def budget_left(self, provider):
+        return self.left
+
+
+class _Prov:
+    def __init__(self, left, subs):
+        self.http, self._subs, self.calls = _Http(left), subs, 0
+
+    def submissions(self, cik):
+        self.calls += 1
+        return self._subs
+
+
+def test_verify_earnings_labels_cadence_and_respects_the_budget():
+    from datetime import date
+    from agent_trading.dashboard.pipeline import Context, verify_earnings
+    ok = verify_earnings(Context(date(2026, 10, 9), _Prov(500, SUBS)), 1, "2026-10-29")
+    assert ok["last_results"] == "2026-07-30" and ok["last_results_status"] == "verified (8-K)"
+    assert ok["next_status"] == "scheduled (Alpha Vantage, unverified)" and ok["cadence_check"].startswith("consistent")
+    far = verify_earnings(Context(date(2026, 10, 9), _Prov(500, SUBS)), 1, "2027-01-30")
+    assert far["cadence_check"].startswith("differs by")
+    prov = _Prov(5, SUBS)
+    low = verify_earnings(Context(date(2026, 10, 9), prov), 1, "2026-10-29")
+    assert prov.calls == 0 and "budget" in low["last_results_status"] and low["next_status"].endswith("unverified)")
+    none = verify_earnings(Context(date(2026, 10, 9), _Prov(500, {"sic": "1"})), 1, None)
+    assert none["last_results"] is None and "no 8-K item 2.02" in none["last_results_status"]
+
+
+def test_site_shows_verified_8k_dates(site):
+    page = (site / "stock" / "large-S04.html").read_text(encoding="utf-8")
+    assert "verified (8-K)" in page and "last results 2026-07-30" in page and "unverified" in page
+    index = (site / "index.html").read_text(encoding="utf-8")
+    assert "S04</strong> 2026-10-30" in index and "verified (8-K)" in index

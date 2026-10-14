@@ -570,6 +570,46 @@ def _watchlist_etf(ctx, e, close, years) -> None:
                              "Company valuation formulas are not applied to funds.")
 
 
+SEC_RESERVE_FOR_EARNINGS = 25     # SEC requests kept back before the optional 8-K check runs
+
+
+def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -> dict:
+    """Last results date confirmed by an SEC 8-K item 2.02 filing, plus a cadence check of the scheduled date.
+
+    Uses the submissions file already allowed on data.sec.gov (GET via http.py). Skipped, with a note, when the
+    SEC request budget is nearly spent; the scheduled Alpha Vantage date then stays labelled unverified."""
+    out = {"next_scheduled": next_scheduled, "next_status": "scheduled (Alpha Vantage, unverified)" if next_scheduled
+           else "no scheduled date from the data source", "last_results": None, "last_results_status": None,
+           "cadence_check": None}
+    if cik is None:
+        out["last_results_status"] = "no SEC registrant, so no 8-K to check"
+        return out
+    left = getattr(getattr(ctx.providers, "http", None), "budget_left", None)
+    if callable(left) and left("sec") <= SEC_RESERVE_FOR_EARNINGS:
+        out["last_results_status"] = "not checked: SEC request budget nearly spent; the scheduled date stays unverified"
+        return out
+    sub, why = _guard(ctx, "sec", ctx.providers.submissions, cik)
+    if sub is None:
+        out["last_results_status"] = f"not checked ({why})"
+        return out
+    from .providers import parse_earnings_8k
+    dates = parse_earnings_8k(sub)
+    if not dates:
+        out["last_results_status"] = "no 8-K item 2.02 among the recent SEC filings"
+        return out
+    out["last_results"], out["last_results_status"] = dates[0], "verified (8-K)"
+    if next_scheduled and len(dates) >= 2:
+        gaps = sorted((date.fromisoformat(a) - date.fromisoformat(b)).days for a, b in zip(dates[:5], dates[1:5]))
+        gap = gaps[len(gaps) // 2]
+        expected = date.fromisoformat(dates[0]) + timedelta(days=gap)
+        off = (date.fromisoformat(next_scheduled) - expected).days
+        out["cadence_check"] = (f"consistent with the verified 8-K cadence (expected about {expected.isoformat()})"
+                                if abs(off) <= 21 else
+                                f"differs by {abs(off)} days from the verified 8-K cadence (expected about "
+                                f"{expected.isoformat()}); treat the scheduled date with care")
+    return out
+
+
 def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability,
                   todo: list[dict]) -> list:
     """Drop stocks without a fresh 'tradable' Robinhood verdict (fail closed) and re-rank the rest.
@@ -734,13 +774,22 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
     watch_payload = {"status": "no watchlist configured", "entries": []}
     if watchlist is not None:
         watch_payload = evaluate_watchlist(ctx, ref, watchlist, earnings)
+    for k, b in payload_bands.items():
+        for c in b["candidates"]:
+            c["earnings_check"] = _clean(verify_earnings(ctx, c.get("cik"), c.get("next_earnings")))
+    for e in watch_payload.get("entries", []):
+        if (e.get("asset_type") or "").startswith("operating company"):
+            e["earnings_check"] = _clean(verify_earnings(ctx, e.get("cik"), earnings.get(e["ticker"])))
     upcoming = []
     horizon_end = as_of + timedelta(days=45)
     for key, b in payload_bands.items():
         for c in b["candidates"]:
             if c.get("next_earnings") and c["next_earnings"] <= horizon_end.isoformat():
+                ec = c.get("earnings_check") or {}
                 upcoming.append({"ticker": c["ticker"], "date": c["next_earnings"], "list": key,
-                                 "event": "earnings (scheduled; Alpha Vantage; not independently verified)"})
+                                 "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+                                 "last_results": ec.get("last_results"), "last_results_status": ec.get("last_results_status"),
+                                 "cadence_check": ec.get("cadence_check")})
     for e in watch_payload.get("entries", []):
         d = earnings.get(e["ticker"])
         if d and d <= horizon_end.isoformat():

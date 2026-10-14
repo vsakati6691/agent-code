@@ -211,8 +211,8 @@ score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confi
 <div class="small muted">{E(c["sources"]["price"])}</div></div>
 <div class="card stat"><div class="label">Market cap</div><div class="value">{cap(c["market_cap"])}</div>
 <div class="small muted">{E(spec.MARKET_CAP_DEFINITION[:90])}…</div></div>
-<div class="card stat"><div class="label">Next earnings (unverified)</div><div class="value">{E(earn or "unknown")}</div>
-<div class="small muted">Alpha Vantage calendar</div></div>
+<div class="card stat"><div class="label">Earnings dates</div><div class="value">{E(earn or "unknown")}</div>
+<div class="small muted">next: scheduled, Alpha Vantage, unverified</div>{_earnings_check(c)}</div>
 <div class="card stat"><div class="label">Data timestamp</div><div class="value small">{E(str(c["data_timestamp"]).replace("+00:00", ""))} UTC</div>
 <div class="small muted">fundamentals: {E(fund.get("last_form") or "?")} filed {E(fund.get("last_filed") or "?")}</div></div></div>
 <p class="small">Flags: {flags}</p>
@@ -353,6 +353,16 @@ premium; the required move is measured downward. {E(spec.RISK_FREE_RATE_NOTE)}</
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
 <h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
 <h2>Version history</h2><ul>{log}</ul>"""
+
+
+def _earnings_check(c: dict) -> str:
+    ec = c.get("earnings_check") or {}
+    if ec.get("last_results"):
+        tail = f" · {E(ec['cadence_check'])}" if ec.get("cadence_check") else ""
+        return f'<div class="small">last results {E(ec["last_results"])}: <strong>verified (8-K)</strong>{tail}</div>'
+    if ec.get("last_results_status"):
+        return f'<div class="small muted">{E(ec["last_results_status"])}</div>'
+    return ""
 
 
 def _readable(d) -> str:
