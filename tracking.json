@@ -1,0 +1,211 @@
+{
+ "method": "Each weekly snapshot's ranked candidates form an equal-weighted research basket per category, bought at the as-of close and held for 1, 3, 6 and 12 months. Returns are PRICE returns (dividends excluded) minus the category's assumed friction on entry and exit, compared with the category benchmark over the same days. A candidate whose prices stop (delisting, ticker change) is reported as 'return unavailable' and counted in a separate column, never silently dropped; delisting returns are not available from the data sources. Turnover is the share of a category's names that changed from the previous week. No edge is claimed before at least 52 weekly snapshots exist, and none is claimed afterwards without a statistical test.",
+ "as_of": "2026-10-13",
+ "by_snapshot": [
+  {
+   "as_of": "2026-10-13",
+   "spec_version": "2026-10-14.3",
+   "band": "large",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-13",
+   "spec_version": "2026-10-14.3",
+   "band": "mid",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-13",
+   "spec_version": "2026-10-14.3",
+   "band": "multibagger",
+   "n": 5,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-13",
+   "spec_version": "2026-10-14.3",
+   "band": "small",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  }
+ ],
+ "summary": {
+  "large": {
+   "1m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "3m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "6m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "12m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "mean_weekly_turnover": null
+  },
+  "mid": {
+   "1m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "3m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "6m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "12m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "mean_weekly_turnover": null
+  },
+  "multibagger": {
+   "1m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "3m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "6m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "12m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "mean_weekly_turnover": null
+  },
+  "small": {
+   "1m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "3m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "6m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "12m": {
+    "snapshots_measured": 0,
+    "mean_excess_net": null,
+    "share_beating_benchmark": null
+   },
+   "mean_weekly_turnover": null
+  }
+ },
+ "turnover": {},
+ "weekly_chain": {},
+ "evidence_note": "1 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first.",
+ "friction": {
+  "spec": 50.0,
+  "large": 15.0,
+  "mid": 25.0,
+  "small": 50.0,
+  "multibagger": 35.0
+ },
+ "limitations": [
+  "Price returns only: dividends are excluded, which understates returns of dividend payers and benchmarks.",
+  "Delisting returns are not available from the data sources; affected names are listed as unavailable.",
+  "Friction is an assumption (bps per side), not measured execution cost."
+ ]
+}
