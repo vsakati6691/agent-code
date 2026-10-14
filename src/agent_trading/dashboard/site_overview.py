@@ -344,6 +344,19 @@ def _risk_flags(c: dict) -> list[str]:
     return [g for g, hit in zip(RISK_GROUPS, hits) if hit]
 
 
+def move_cause(ch: dict, list_name: str) -> str:
+    """'S04 up 4 to #1 (Large cap): score +5.3; growth +12.0, valuation -1.5' (older snapshots: stored text)."""
+    d = ch["change"]
+    head = f'{ch["ticker"]} {"up" if d > 0 else "down"} {abs(d)} to #{ch.get("to")} ({list_name})'
+    comps = ch.get("component_changes")
+    if comps is None:
+        return f'{head}: {ch.get("explanation", "")}'
+    sc = ch.get("score_change")
+    parts = ([f"score {sc:+.1f}"] if isinstance(sc, (int, float)) else []) + \
+        [", ".join(f"{k} {v:+.1f}" for k, v in comps.items()) or "component scores unchanged"]
+    return f"{head}: " + "; ".join(parts)
+
+
 def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) -> str:
     bands = snap["bands"]
     ev = (snap.get("events") or {})
@@ -355,19 +368,22 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
                        for i in items[:12]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
         earn = f'<ul class="tight small">{earn}</ul><p class="small muted">{E(ev.get("note", ""))}</p>'
     new, gone, moves = [], [], []
-    for k, b in bands.items():
-        for ch in b.get("rank_changes", []):
+    for k in ordered(bands):
+        short = band_title(k, bands[k])
+        for ch in bands[k].get("rank_changes", []):
             if ch["change"] in ("new", "new (first snapshot)"):
-                new.append(f'{ch["ticker"]} ({k})')
+                new.append(f'{ch["ticker"]} (#{ch.get("to")}, {short})')
             elif ch["change"] == "dropped":
-                gone.append(f'{ch["ticker"]} ({k})')
+                gone.append(f'{ch["ticker"]} (was #{ch.get("from")}, {short})')
             elif isinstance(ch["change"], int) and ch["change"]:
-                moves.append((abs(ch["change"]), f'{ch["ticker"]} {ch["change"]:+d} ({k})'))
+                moves.append((abs(ch["change"]), move_cause(ch, short)))
     first = all(ch["change"] == "new (first snapshot)" for b in bands.values() for ch in b.get("rank_changes", []))
+    move_items = "".join(f"<li>{E(t)}</li>" for _, t in sorted(moves, key=lambda m: -m[0])[:6])
     changes = ('<p class="small muted">First snapshot: no previous week to compare.</p>' if first else
                f'<p class="small"><strong>New:</strong> {E(", ".join(new) or "none")}<br><strong>Departed:</strong> '
-               f'{E(", ".join(gone) or "none")}<br><strong>Biggest moves:</strong> '
-               f'{E(", ".join(t for _, t in sorted(moves, reverse=True)[:5]) or "none")}</p>')
+               f'{E(", ".join(gone) or "none")}</p><p class="small"><strong>Biggest moves and why</strong> '
+               f'(change in the 0-100 score, then the component scores that moved most):</p>'
+               f'<ul class="tight small">{move_items or "<li>none</li>"}</ul>')
     conc = [f"{band_title(k, bands[k])}: {w}" for k in ordered(bands) for w in bands[k].get("concentration", [])]
     groups: dict[str, list[str]] = {g: [] for g in RISK_GROUPS}
     for k in ordered(bands):

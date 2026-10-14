@@ -393,9 +393,13 @@ def rank_changes(current: list[dict], previous: list[dict] | None) -> list[dict]
                         "explanation": "entered the top list this week"})
             continue
         deltas = {k: (c["components"].get(k) or 0) - (p["components"].get(k) or 0) for k in c["components"]}
-        top = sorted(deltas.items(), key=lambda kv: -abs(kv[1]))[:2]
+        top = sorted(deltas.items(), key=lambda kv: -abs(kv[1]))[:3]
         expl = ", ".join(f"{k} {v * 100:+.1f}" for k, v in top if abs(v) >= 0.005) or "component scores unchanged"
+        score_change = (c["composite"] - p["composite"]) if c.get("composite") is not None and \
+            p.get("composite") is not None else None
         out.append({"ticker": c["ticker"], "change": p["rank"] - c["rank"], "from": p["rank"], "to": c["rank"],
+                    "score_change": score_change,
+                    "component_changes": {k: round(v * 100, 1) for k, v in top if abs(v) >= 0.005},
                     "explanation": f"component score changes (points of 100): {expl}"})
     for t, p in prev.items():
         if t not in {c["ticker"] for c in current}:
@@ -680,7 +684,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         details = [candidate_detail(ctx, band, r, bench[band.benchmark], earnings) for r in top]
         prev_band = None
         if previous:
-            prev_band = [{"ticker": c["ticker"], "rank": c["rank"], "components": c["components"]}
+            prev_band = [{"ticker": c["ticker"], "rank": c["rank"], "components": c["components"],
+                          "composite": c.get("composite")}
                          for c in previous.get("bands", {}).get(band.key, {}).get("candidates", [])]
         payload_bands[band.key] = {
             "title": band.title, "benchmark": band.benchmark, "benchmark_name": band.benchmark_name,
@@ -696,7 +701,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             "excluded": [{"ticker": t, "reason": why} for t, why in sorted(ctx.excluded[band.key].items())],
             "evaluated": len(rows), "ranked": len(ranked),
             "concentration": concentration_warnings(top),
-            "rank_changes": rank_changes([{"ticker": d["ticker"], "rank": d["rank"], "components": d["components"]}
+            "rank_changes": rank_changes([{"ticker": d["ticker"], "rank": d["rank"], "components": d["components"],
+                                           "composite": d.get("composite")}
                                           for d in details], prev_band),
         }
 

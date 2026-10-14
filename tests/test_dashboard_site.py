@@ -323,3 +323,25 @@ def test_watchlist_page_lists_what_unlocks_each_unavailable_scenario(site):
     assert all(e["unlock"] for e in w.values() if e["scenarios"] is None)
     page = (site / "watchlist.html").read_text(encoding="utf-8")
     assert "Why unavailable, and what would unlock it" in page
+
+
+# --- item 16: week-over-week change causes ------------------------------------------------------
+
+def test_rank_changes_carry_score_and_component_moves():
+    from agent_trading.dashboard.pipeline import rank_changes
+    prev = [{"ticker": "A", "rank": 3, "composite": 60.0, "components": {"growth": 0.5, "valuation": 0.4, "quality": 0.6}}]
+    cur = [{"ticker": "A", "rank": 1, "composite": 65.3, "components": {"growth": 0.62, "valuation": 0.385, "quality": 0.6}}]
+    (ch,) = rank_changes(cur, prev)
+    assert ch["change"] == 2 and ch["score_change"] == pytest.approx(5.3)
+    assert ch["component_changes"] == {"growth": 12.0, "valuation": -1.5}
+
+
+def test_changes_panel_names_the_causes(site):
+    from agent_trading.dashboard.site_overview import move_cause
+    text = move_cause({"ticker": "S04", "change": 4, "to": 1, "score_change": 5.3,
+                       "component_changes": {"growth": 12.0, "valuation": -1.5}}, "Large cap")
+    assert text == "S04 up 4 to #1 (Large cap): score +5.3; growth +12.0, valuation -1.5"
+    old = move_cause({"ticker": "X", "change": -2, "to": 5, "explanation": "component score changes: growth -3.0"}, "Mid")
+    assert old == "X down 2 to #5 (Mid): component score changes: growth -3.0"
+    page = (site / "index.html").read_text(encoding="utf-8")
+    assert "Biggest moves and why" in page and re.search(r"(up|down) \d+ to #\d+ \(Large cap \(S&amp;P 500 members\)\): score [+-]", page)
