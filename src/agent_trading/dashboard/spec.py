@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.2"
+SPEC_VERSION = "2026-10-14.3"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
@@ -41,6 +41,12 @@ SPEC_CHANGELOG = [
                      "separate owner watchlist with conditional year-end-2030 price scenarios (companies, "
                      "unleveraged ETFs and leveraged ETFs each with their own method). Scoring scales and "
                      "weights did not change."),
+    ("2026-10-14.3", "Watchlist only, from the owner's watchlist requirements (connect margins to per-share "
+                     "value): each company scenario now carries an explicit free-cash-flow margin path to "
+                     "2030 (today's TTM FCF margin, or operating margin when FCF is unavailable, plus the "
+                     "scenario's margin shift) and the EV/FCF multiple that the 2030 value implies. A value "
+                     "with negative 2030 FCF or an implied EV/FCF above 60x is flagged as not supported by "
+                     "cash generation. Scenario prices, growth lists, options and scoring are unchanged."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -404,9 +410,14 @@ WATCHLIST_COMPANY_METHOD = (
     "Operating companies: revenue x EV/Sales path (the same bear/base/bull rules as the growth lists: starting "
     "growth = TTM revenue growth capped at 60% x the scenario multiplier + shift, fading 20% a year toward 4%; "
     "EV/Sales moves from today's to today's x the scenario factor by December 31, 2030), plus net cash held "
-    "flat, divided by shares growing at the trailing dilution rate + the scenario shift. Requires positive TTM "
-    "revenue, positive enterprise value and at least 4 reported quarters; otherwise 'Scenario unavailable'."
+    "flat, divided by shares growing at the trailing dilution rate + the scenario shift. Margins are linked "
+    "through a cross-check: each scenario's 2030 free-cash-flow margin (today's TTM FCF margin, or operating "
+    "margin when FCF is unavailable, plus the scenario's margin shift: bear -5 points, base 0, bull +5) gives "
+    "2030 FCF, and the implied EV/FCF multiple shows whether the value is supported by cash generation (flagged "
+    "when 2030 FCF is negative or EV/FCF exceeds 60x). Requires positive TTM revenue, positive enterprise value "
+    "and at least 4 reported quarters; otherwise 'Scenario unavailable'."
 )
+WATCHLIST_MAX_SUPPORTED_EV_FCF = 60.0
 # annual TOTAL-return assumptions for the fund's underlying exposure (before fees), by exposure class;
 # price return = total return - assumed fee - assumed distribution yield
 ETF_EXPOSURE_RULES = (
@@ -491,6 +502,7 @@ def spec_dict() -> dict:
         "risk_free_rate": RISK_FREE_RATE,
         "track_horizons": TRACK_HORIZONS,
         "watchlist": {"target": WATCHLIST_TARGET_DATE, "company_method": WATCHLIST_COMPANY_METHOD,
+                      "max_supported_ev_fcf": WATCHLIST_MAX_SUPPORTED_EV_FCF,
                       "etf_rules": ETF_EXPOSURE_RULES, "leveraged": LEVERAGED_METHOD,
                       "leveraged_params": [LEVERAGED_KEYWORDS, LEVERAGED_FINANCING_RATE, LEVERAGED_ASSUMED_FEE,
                                            LEVERAGED_VOL_FACTORS, LEVERAGED_UNDERLYING_HINTS]},

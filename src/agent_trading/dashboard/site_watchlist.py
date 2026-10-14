@@ -68,6 +68,11 @@ def _assumptions(e: dict) -> str:
                    f"{pct(spec.SCENARIO_TERMINAL_GROWTH)}; 2030 revenue {cap(a['revenue_2030'])}; exit EV/Sales "
                    f"{num(a['exit_ev_to_sales'], 1)}x; net cash held {cap(a['net_cash_held'])}; dilution "
                    f"{pct(a['annual_dilution'], 1)}/yr")
+            if a.get("margin_2030") is not None:
+                txt += (f"; {a.get('margin_source')} margin {pct(a['margin_today'])} → {pct(a['margin_2030'])} by 2030 "
+                        f"(2030 FCF {cap(a['fcf_2030'])}); cash check: {a['cash_support']}")
+            elif a.get("cash_support"):
+                txt += f"; cash check: {a['cash_support']}"
         elif "leverage" in a:
             txt = (f"{a['leverage']}x daily; index total return {pct(a['index_total_return'], 1)}/yr; index volatility "
                    f"{pct(a['index_volatility'])}; volatility drag {pct(a['volatility_drag'], 1)}/yr; financing "

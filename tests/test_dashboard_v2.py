@@ -325,3 +325,20 @@ def test_old_snapshot_still_renders_and_tracks(tmp_path):
     prices = {t: pd.Series([100 + i for i in range(40)], index=idx, dtype=float) for t in ("OLD", "IWM")}
     tr = track([old], prices, idx[-1].date())
     assert tr["by_snapshot"][0]["band"] == "spec" and tr["by_snapshot"][0]["horizons"]["1m"]["status"] == "ok"
+
+
+def test_company_scenarios_link_margins_without_changing_prices():
+    """Spec 2026-10-14.3: FCF-margin path and implied 2030 EV/FCF cross-check; prices unchanged."""
+    plain = wl.company_scenarios(10.0, 100.0, 100.0, 0.30, 5.0, 50.0, 0.0, 4.25)
+    sc = wl.company_scenarios(10.0, 100.0, 100.0, 0.30, 5.0, 50.0, 0.0, 4.25, margin=0.20)
+    for k, shift in (("bear", -0.05), ("base", 0.0), ("bull", 0.05)):
+        a = sc[k]["assumptions"]
+        assert sc[k]["price"] == pytest.approx(plain[k]["price"])
+        assert a["margin_2030"] == pytest.approx(0.20 + shift)
+        assert a["fcf_2030"] == pytest.approx(a["revenue_2030"] * a["margin_2030"])
+        assert a["implied_ev_to_fcf"] == pytest.approx(a["ev_2030"] / a["fcf_2030"])
+    assert sc["base"]["assumptions"]["cash_support"].startswith("consistent")
+    thin = wl.company_scenarios(10.0, 100.0, 100.0, 0.30, 5.0, 0.0, 0.0, 4.25, margin=0.03)
+    assert thin["bear"]["assumptions"]["cash_support"].startswith("not supported")     # 3% - 5 points < 0
+    assert thin["base"]["assumptions"]["cash_support"].startswith("stretched")         # EV/FCF far above 60x
+    assert plain["base"]["assumptions"]["cash_support"] == "not checked: no margin data"

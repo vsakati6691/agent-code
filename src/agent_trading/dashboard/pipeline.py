@@ -489,8 +489,12 @@ def _watchlist_company(ctx, e, df, close, years, earnings, sp) -> None:
     if m["enterprise_value"] is None or m["enterprise_value"] <= 0 or not m["ev_to_sales"]:
         e["unavailable_reason"] = "enterprise value not positive, so EV/Sales cannot anchor the valuation"
         return
+    margin, source = (m.get("fcf_margin"), "FCF") if m.get("fcf_margin") is not None else (m.get("operating_margin"), "operating")
+    if margin is None:
+        e["missing"].append("no margin data, so the cash-generation cross-check could not run")
     e["scenarios"] = wl_mod.company_scenarios(close, cap / close, m["revenue_ttm"], m["revenue_growth_ttm"],
-                                              m["ev_to_sales"], -(m["net_debt"] or 0.0), m.get("dilution"), years)
+                                              m["ev_to_sales"], -(m["net_debt"] or 0.0), m.get("dilution"), years,
+                                              margin, source)
     e["assumptions_note"] = spec.WATCHLIST_COMPANY_METHOD
 
 
