@@ -66,10 +66,10 @@ def _row(x: dict, kind: str, rid: str) -> str:
 · mid {money(x.get("mid"))} (reference only) · one-standard-deviation implied move {pct(x.get("implied_move_1sd"), 1)} ·
 time decay {pct(x.get("theta_share_per_day"), 2)} of the mid per day · ranking parts: liquidity {num(rc.get("liquidity"))},
 breakeven {num(rc.get("breakeven"))}, time decay {num(rc.get("time_decay"))}.</p><p>{flags}</p>
-<div class="grid"><div><h4>At expiration: payoff (premium paid at the ask)</h4><div class="table-wrap"><table>
+<div class="grid"><div><h4>At expiration: payoff (premium paid at the ask)</h4><div class="table-wrap"><table aria-label="Payoff at expiration">
 <thead><tr><th class="num">Stock move</th><th class="num">Stock price</th><th class="num">P/L per contract</th><th class="num">On premium</th></tr></thead>
 <tbody>{pay}</tbody></table></div></div>
-<div><h4>Before expiration: model estimate in {sens.get("days_forward", 30)} days</h4><div class="table-wrap"><table>
+<div><h4>Before expiration: model estimate in {sens.get("days_forward", 30)} days</h4><div class="table-wrap"><table aria-label="Model value before expiration">
 <thead><tr><th class="num">Stock move</th>{ivh}</tr></thead><tbody>{sgrid}</tbody></table></div>
 <p class="small muted">Black-Scholes MODEL estimate of value per share vs today's mid; not a quote. {E(sens.get("note", ""))}</p></div></div>
 </div></td></tr></tbody>"""

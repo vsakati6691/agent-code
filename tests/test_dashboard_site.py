@@ -201,3 +201,49 @@ def test_phone_nav_is_one_scrolling_row():
     phone = CSS[CSS.index("@media (max-width: 700px)"):]
     assert "nav { display: flex; flex-wrap: nowrap; overflow-x: auto;" in phone and "min-width: 0" in phone
     assert "nav a[aria-current]" in JS
+
+
+# --- item 12: structural output guards ----------------------------------------------------------
+
+def _pages(site):
+    return sorted(site.rglob("*.html"))
+
+
+def test_every_internal_link_and_source_resolves(site):
+    broken = []
+    for p in _pages(site):
+        for ref in re.findall(r'(?:href|src)="([^"]+)"', p.read_text(encoding="utf-8")):
+            if ref.startswith(("http://", "https://", "mailto:", "#", "data:")):
+                continue
+            target = (p.parent / ref.split("#")[0].split("?")[0]).resolve()
+            if not target.exists():
+                broken.append(f"{p.relative_to(site)} -> {ref}")
+    assert not broken, broken[:10]
+
+
+def test_every_page_is_under_300_kb(site):
+    big = [(p.name, p.stat().st_size) for p in _pages(site) if p.stat().st_size >= 300_000]
+    assert not big, big
+
+
+def test_every_table_has_a_caption_or_label(site):
+    missing = []
+    for p in _pages(site):
+        text = p.read_text(encoding="utf-8")
+        for m in re.finditer(r"<table\b[^>]*>", text):
+            if "aria-label=" not in m.group(0) and not text[m.end():m.end() + 40].lstrip().startswith("<caption"):
+                missing.append(f"{p.relative_to(site)}: {m.group(0)[:60]}")
+    assert not missing, missing[:10]
+
+
+def test_every_page_has_exactly_one_h1(site):
+    wrong = [(p.relative_to(site).as_posix(), len(re.findall(r"<h1\b", p.read_text(encoding="utf-8"))))
+             for p in _pages(site)]
+    assert all(n == 1 for _, n in wrong), [w for w in wrong if w[1] != 1]
+
+
+def test_excluded_lists_live_on_their_own_compact_pages(site):
+    index = (site / "index.html").read_text(encoding="utf-8")
+    assert re.search(r'href="excluded-(mid|small|multibagger).html"', index) and "<th>Reason</th>" not in index
+    page = (site / "excluded-small.html").read_text(encoding="utf-8")
+    assert page.count("<h1") == 1 and "Excluded from" in page

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import re
 
 from . import spec
 from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval, tracking_schedule
@@ -20,6 +21,40 @@ TIME_GUIDE = (
     "already happened), conditional forward scenarios (1-10 years, or to 2030 for the watchlist), option expiry "
     "horizons (3, 6 and 12 months), and tracking periods (1-12 months after each weekly snapshot)."
 )
+
+
+NUMBER = re.compile(r"\$?-?\d+(?:[,.]\d+)*(?:[%BMKx](?![A-Za-z]))?")
+
+
+def group_exclusions(excluded: list[dict]) -> list[tuple[str, list[tuple[str, str]]]]:
+    """Exclusions grouped by reason with the numbers taken out, largest group first: [(reason, [(ticker, numbers)])]."""
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for x in excluded:
+        key = NUMBER.sub("…", x["reason"])
+        groups.setdefault(key, []).append((x["ticker"], ", ".join(NUMBER.findall(x["reason"]))))
+    return sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+
+
+def excluded_summary(key: str, band: dict) -> str:
+    n = len(band.get("excluded", []))
+    if not n:
+        return '<p class="small muted">No stock was excluded.</p>'
+    top = "; ".join(f"{E(r)} ({len(t)})" for r, t in group_exclusions(band["excluded"])[:3])
+    return (f'<p class="small"><a href="excluded-{E(key)}.html">{n:,} excluded or not ranked: see every stock and '
+            f'reason →</a><br><span class="muted">Most common: {top}</span></p>')
+
+
+def excluded_page(key: str, band: dict) -> str:
+    groups = group_exclusions(band.get("excluded", []))
+    blocks = "".join(
+        f'<details><summary>{E(reason)} <span class="muted">({len(items):,})</span></summary><p class="small">'
+        + ", ".join(f"{E(t)}" + (f" ({E(d)})" if d else "") for t, d in items) + "</p></details>"
+        for reason, items in groups)
+    return (f'<p class="small"><a href="index.html#{E(key)}">&larr; back to the list</a></p>'
+            f'<h1>Excluded from: {E(band_title(key, band))}</h1>'
+            f'<p class="lede">Every stock that was considered for this list but not ranked or not shown, grouped by '
+            f'reason. Numbers in brackets are the values that failed the rule.</p>'
+            f'{blocks or "<p class=muted>No stock was excluded.</p>"}')
 
 
 def band_title(key: str, band: dict) -> str:
@@ -169,14 +204,11 @@ def growth_section(snap: dict) -> str:
     for k in keys:
         b = bands[k]
         short = f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ""
-        excl = "".join(f'<tr><td>{E(x["ticker"])}</td><td class="small">{E(x["reason"])}</td></tr>' for x in b["excluded"])
         panels.append(f"""<section data-panel-of="growthtabs" data-panel="{k}" role="tabpanel" hidden>
 <h3>{E(b.get("title", k))}</h3><p class="small">{E(definition_line(k, b))} Benchmark: {E(b.get("benchmark_name", b.get("benchmark", "")))}.
 Showing {len(b["candidates"])} of up to {b.get("max_results", 10)}; {b.get("ranked", "?")} ranked, {len(b["excluded"])} excluded.</p>
 {short}{growth_table(k, b)}
-<div class="small"><a href="downloads/{E(snap["as_of"])}_{k}.csv" download>Download CSV</a>
-<details><summary>Excluded ({len(b["excluded"])}) with reasons</summary><div class="table-wrap"><table>
-<thead><tr><th>Ticker</th><th>Reason</th></tr></thead><tbody>{excl}</tbody></table></div></details></div></section>""")
+<p class="small"><a href="downloads/{E(snap["as_of"])}_{k}.csv" download>Download CSV</a></p>{excluded_summary(k, b)}</section>""")
     return f"""<h2 id="growth">Growth stocks</h2><div class="tabs" data-tabs id="growthtabs" role="tablist"
 aria-label="Growth lists">{tabs}</div>{''.join(panels)}"""
 
@@ -217,7 +249,7 @@ def multibagger_section(snap: dict) -> str:
                 rows += f'<tr><td>{k}</td>' + "".join(
                     f'<td class="num">{money(sc[k]["years"][str(y)]["value_per_share"])}<div class="small muted">'
                     f'{num(sc[k]["years"][str(y)]["multiple_of_price"], 1)}x</div></td>' for y in yrs) + "</tr>"
-            scen = f'<div class="table-wrap"><table><thead><tr><th>Scenario</th>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
+            scen = f'<div class="table-wrap"><table aria-label="Bear, base and bull values per share"><thead><tr><th>Scenario</th>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
         else:
             scen = f'<p class="small muted">{E(c.get("scenario_note") or "Scenarios not computed.")}</p>'
         runway = m.get("cash_runway_years")
@@ -245,7 +277,8 @@ here implies multibagger returns within 3-12 months.
 <a href="methodology.html#multibagger">Criteria and rationale</a> ·
 <a href="downloads/{E(snap["as_of"])}_multibagger.csv" download>CSV</a></p>
 {f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ''}
-<div class="mb-list">{''.join(cards) or '<p class="muted">No stock passed every gate this week.</p>'}</div>"""
+<div class="mb-list">{''.join(cards) or '<p class="muted">No stock passed every gate this week.</p>'}</div>
+{excluded_summary("multibagger", b)}"""
 
 
 # --- compact panels ------------------------------------------------------------------------------
@@ -303,7 +336,7 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) ->
         rows = "".join(f'<tr><td>{E(k)}</td>' + "".join(
             f'<td class="num">{pct((v.get(h) or {}).get("mean_excess_net"), 1, True)}</td>' for h in spec.TRACK_HORIZONS) + "</tr>"
             for k, v in tracking["summary"].items())
-        perf = (f'<div class="table-wrap"><table class="small"><thead><tr><th>List</th>' +
+        perf = (f'<div class="table-wrap"><table class="small" aria-label="Mean excess return by list and horizon"><thead><tr><th>List</th>' +
                 "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS) +
                 f'</tr></thead><tbody>{rows}</tbody></table></div><p class="small muted">Mean excess return vs benchmark, net of '
                 f'assumed friction, from immutable prior snapshots. {E(tracking.get("evidence_note", ""))}</p>')
