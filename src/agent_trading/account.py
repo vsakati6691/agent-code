@@ -15,12 +15,14 @@ Input JSON shape:
   "account_type": "limited_margin",   # from get_accounts (informational)
   "portfolio": {"total_value": "1000", "cash": "1000", "buying_power": {"buying_power": "1000"}},
   "positions": [{"symbol": "SPY", "quantity": "1", "average_buy_price": "500"}],
-  "orders": [{"symbol": "SPY", "side": "buy", "state": "queued", "quantity": "1"}]
+  "orders": [{"symbol": "SPY", "side": "sell", "state": "confirmed", "quantity": "1",
+              "type": "market", "trigger": "stop", "stop_price": "480"}]   # as get_equity_orders returns them
 }
 """
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,9 +67,17 @@ def _num(value, name: str) -> float:
         out = float(value)
     except (TypeError, ValueError):
         raise SnapshotError(f"{name} is missing or not a number") from None
-    if out != out or out < 0:
-        raise SnapshotError(f"{name} must be a non-negative number")
+    if not math.isfinite(out) or out < 0:
+        raise SnapshotError(f"{name} must be a finite, non-negative number")
     return out
+
+
+def _price(value, name: str) -> float | None:
+    """Optional price: None when absent or zero (unknown), an error when not finite or negative."""
+    if value in (None, ""):
+        return None
+    out = _num(value, name)
+    return out if out > 0 else None
 
 
 def parse_snapshot(raw: dict) -> AccountSnapshot:
@@ -85,12 +95,14 @@ def parse_snapshot(raw: dict) -> AccountSnapshot:
     bp_value = bp.get("buying_power") if isinstance(bp, dict) else bp
     positions = [
         {"symbol": str(p["symbol"]).upper(), "quantity": _num(p.get("quantity"), "position quantity"),
-         "average_buy_price": float(p["average_buy_price"]) if p.get("average_buy_price") not in (None, "") else None}
+         "average_buy_price": _price(p.get("average_buy_price"), "average_buy_price")}
         for p in raw.get("positions") or []
     ]
+    # type/trigger/stop_price decide whether an open sell protects a position (live.stop_coverage)
     orders = [
         {"symbol": str(o.get("symbol", "")).upper(), "side": o.get("side"), "state": o.get("state"),
-         "quantity": o.get("quantity")}
+         "quantity": o.get("quantity"), "type": str(o.get("type") or "").lower(),
+         "trigger": str(o.get("trigger") or "").lower(), "stop_price": _price(o.get("stop_price"), "stop_price")}
         for o in raw.get("orders") or []
         if str(o.get("state", "")).lower() in OPEN_ORDER_STATES
     ]

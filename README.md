@@ -163,7 +163,8 @@ deliberate: the limits cap losses, and they also cap gains.
 | Order type | Day limit order at the last close ± 0.5%; after a buy fills, a GTC stop-loss sell at the ticket's stop |
 | Blocks | No new buys while any buy order is open, after a loss limit, or with an unverified snapshot |
 | Positions opened by hand | Stop unknown, so their whole value counts as risk (blocks new buys) |
-| Checks each run | Previous tickets (filled / still open / not placed); positions without a stop-loss order |
+| Checks each run | Previous tickets (filled / still open / not placed); positions not fully covered by open stop sell orders (limit sells don't count) |
+| Same-day reruns | Earlier tickets for the day are kept and count against the daily limits; a symbol is never ticketed twice in a day |
 | Alerts | One phone alert only for: trades to place, a missing stop, a failed run, or a halt |
 
 GTAA tickets appear only on the last trading day of a month. Desk tickets

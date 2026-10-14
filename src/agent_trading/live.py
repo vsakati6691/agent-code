@@ -12,7 +12,10 @@ quantity, limit, stop) that the account owner places in the Robinhood app.
     ticket (opened by hand) has an unknown stop and counts in full as open risk.
 
 Tickets are stored in the local journal database (`live_tickets`), so a later
-run knows each live position's stop and entry date.
+run knows each live position's stop and entry date. A ticket day's tickets are
+only ever added to: a rerun on the same day keeps the earlier tickets (they may
+already be placed), counts them against the daily limits, and never re-issues
+a symbol already ticketed that day.
 """
 from __future__ import annotations
 
@@ -86,6 +89,7 @@ class LiveResult:
     warnings: list[str] = field(default_factory=list)
     previous_date: str | None = None     # the last earlier ticket day, checked against the account
     previous: list[str] = field(default_factory=list)
+    issued_today: list[Ticket] = field(default_factory=list)   # tickets already issued for this ticket day
 
 
 class LiveLedger:
@@ -110,7 +114,8 @@ class LiveLedger:
             ).fetchone()
 
     def replace_tickets(self, as_of: date, tickets: list[Ticket]) -> None:
-        """Idempotent: a rerun for the same date replaces that date's tickets."""
+        """Replace a date's tickets. For tests and repairs only: the daily run uses add_tickets,
+        because a replaced ticket may already have been placed."""
         with closing(self._connect()) as conn, conn:
             conn.execute("DELETE FROM live_tickets WHERE created_date = ?", (as_of.isoformat(),))
             conn.executemany(
@@ -119,6 +124,24 @@ class LiveLedger:
                 [(as_of.isoformat(), t.symbol, t.side, t.quantity, t.limit_price, t.stop_price, t.strategy,
                   t.reason, t.planned_risk) for t in tickets],
             )
+
+    def add_tickets(self, as_of: date, tickets: list[Ticket]) -> None:
+        """Append a date's new tickets; a (symbol, side) already ticketed that date is not added again."""
+        have = {(t.symbol, t.side) for t in self.tickets_on(as_of)}
+        new = [t for t in tickets if (t.symbol, t.side) not in have]
+        with closing(self._connect()) as conn, conn:
+            conn.executemany(
+                "INSERT INTO live_tickets (created_date, symbol, side, quantity, limit_price, stop_price, strategy,"
+                " reason, planned_risk) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(as_of.isoformat(), t.symbol, t.side, t.quantity, t.limit_price, t.stop_price, t.strategy,
+                  t.reason, t.planned_risk) for t in new],
+            )
+
+    def tickets_on(self, as_of: date) -> list[Ticket]:
+        with closing(self._connect()) as conn:
+            rows = conn.execute("SELECT * FROM live_tickets WHERE created_date = ? ORDER BY id",
+                                (as_of.isoformat(),)).fetchall()
+        return [_ticket(r) for r in rows]
 
     def latest_tickets(self, before: date | None = None) -> tuple[str | None, list[Ticket]]:
         """The most recent day's tickets (optionally only days strictly before `before`)."""
@@ -131,8 +154,7 @@ class LiveLedger:
             if row is None or row["d"] is None:
                 return None, []
             rows = conn.execute("SELECT * FROM live_tickets WHERE created_date = ? ORDER BY id", (row["d"],)).fetchall()
-        return row["d"], [Ticket(r["symbol"], r["side"], r["quantity"], r["limit_price"], r["stop_price"],
-                                 r["strategy"], r["reason"] or "", r["planned_risk"]) for r in rows]
+        return row["d"], [_ticket(r) for r in rows]
 
     def equity_history(self) -> pd.Series:
         with closing(self._connect()) as conn:
@@ -142,6 +164,40 @@ class LiveLedger:
     def record_equity(self, as_of: date, equity: float) -> None:
         with closing(self._connect()) as conn, conn:
             conn.execute("INSERT OR REPLACE INTO live_equity (date, equity) VALUES (?, ?)", (as_of.isoformat(), equity))
+
+
+def _ticket(r: sqlite3.Row) -> Ticket:
+    return Ticket(r["symbol"], r["side"], r["quantity"], r["limit_price"], r["stop_price"], r["strategy"],
+                  r["reason"] or "", r["planned_risk"])
+
+
+STOP_ORDER_TYPES = {"stop", "stop_loss", "stop_limit", "stop_market", "trailing_stop"}
+
+
+def is_protective_stop(order: dict) -> bool:
+    """An open sell that triggers at a stop price. A limit sell (take-profit) or an order whose
+    type or stop price is unknown does not protect a position."""
+    if str(order.get("side", "")).lower() != "sell":
+        return False
+    stop = order.get("stop_price")
+    if not (isinstance(stop, (int, float)) and math.isfinite(stop) and stop > 0):
+        return False
+    return order.get("trigger") == "stop" or order.get("type") in STOP_ORDER_TYPES
+
+
+def stop_coverage(open_orders: list[dict]) -> dict[str, float]:
+    """Shares covered by open protective stop orders, per symbol."""
+    out: dict[str, float] = {}
+    for o in open_orders:
+        if not is_protective_stop(o):
+            continue
+        try:
+            qty = float(o.get("quantity"))
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(qty) and qty > 0:
+            out[o["symbol"]] = out.get(o["symbol"], 0.0) + qty
+    return out
 
 
 def prepare(settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None, as_of: date,
@@ -177,12 +233,20 @@ def prepare(settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None
         entry = avg if avg else float(t["limit_price"])
         filled = np.busday_offset(np.datetime64(t["created_date"]), 1, roll="forward").astype(date)
         res.positions[sym] = Position(p["quantity"], entry, float(t["stop_price"]), filled)
-    open_sells = {o["symbol"] for o in snap.open_orders if str(o.get("side", "")).lower() == "sell"}
+    covered = stop_coverage(snap.open_orders)
     for sym, pos in res.positions.items():
-        if pos.stop > 0 and sym not in open_sells:
-            res.warnings.append(f"{sym}: no open sell order at the broker, so its stop-loss is not protected; "
-                                f"place a good-till-cancelled stop-loss sell of {pos.quantity:g} at {pos.stop:.2f}")
+        if pos.stop <= 0:
+            continue
+        have = covered.get(sym, 0.0)
+        if have <= 0:
+            res.warnings.append(f"{sym}: no stop-loss order at the broker (an open limit sell does not count), so "
+                                f"the position is not protected; place a good-till-cancelled stop-loss sell of "
+                                f"{pos.quantity:g} at {pos.stop:.2f}")
+        elif have < pos.quantity - 1e-9:
+            res.warnings.append(f"{sym}: the open stop-loss orders cover only {have:g} of {pos.quantity:g} shares; "
+                                f"add a stop-loss sell of {pos.quantity - have:g} at {pos.stop:.2f}")
     res.previous_date, res.previous = reconcile(ledger, snap, res.positions, as_of)
+    res.issued_today = ledger.tickets_on(as_of)
     res.equity = min(snap.total_value, cfg.capital)
     res.cash = max(0.0, min(snap.cash, cfg.capital - invested))
     if record:
@@ -227,10 +291,12 @@ def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, in
     open_syms = {o["symbol"] for o in snap.open_orders}
     open_buys = [o for o in snap.open_orders if str(o.get("side", "")).lower() == "buy"]
 
+    issued_buys = [t for t in res.issued_today if t.side == "buy"]
+    ticketed = {(t.symbol, t.side) for t in res.issued_today}
     selling: set[str] = set()
     for it in [i for i in live if i.side == "sell"]:
         pos = res.positions.get(it.symbol)
-        if pos is None or it.symbol in selling:
+        if pos is None or it.symbol in selling or (it.symbol, "sell") in ticketed:
             continue  # nothing held: nothing to sell (no short selling)
         ref = it.ref_price if it.ref_price > 0 else pos.entry_price
         reason = it.reason + ("; cancel its open stop order first" if it.symbol in open_syms else "")
@@ -256,10 +322,14 @@ def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, in
     if cash is None:
         res.skipped += [f"{i.symbol}: settled cash unknown (snapshot has no unsettled_funds)" for i in buys]
         return res
-    bought, entries = 0.0, 0
+    # the day's limits include tickets issued by an earlier run for the same ticket day
+    bought, entries = sum(t.notional for t in issued_buys), len(issued_buys)
     for it in buys:
         if it.symbol in res.positions or it.symbol in selling:
             res.skipped.append(f"{it.symbol}: already held in the account")
+            continue
+        if (it.symbol, "buy") in ticketed:
+            res.skipped.append(f"{it.symbol}: already ticketed today")
             continue
         if it.stop is None or not math.isfinite(it.ref_price) or it.ref_price <= 0:
             res.skipped.append(f"{it.symbol}: no valid price or stop")
