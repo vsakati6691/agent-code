@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.7"
+SPEC_VERSION = "2026-10-14.8"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
@@ -103,6 +103,18 @@ SPEC_CHANGELOG = [
                      "2026-10-13 snapshot stays as published under 2026-10-14.3. Display and reliability changes in "
                      "the same release (lazy evidence rows, sortable header buttons, saved filters) carry no "
                      "methodology change."),
+    ("2026-10-14.8", "Owner request (2026-10-14), registered before any explorer data was evaluated. A separate "
+                     "small-bet options explorer uses the union of large, ai_large and ai_mid weekly candidates. "
+                     "Core uses existing OPTION_RULES. Long-shot requires 0.10 <= absolute delta < 0.30, open "
+                     "interest >= 200, volume >= 10, positive bid and ask above bid, spread <= 20% of mid, "
+                     "positive IV, nonzero theta and standard 100-share roots. Both use the existing 70-110, "
+                     "150-210 and 300-430 day windows. Per tier, type, horizon and premium band, keep at most "
+                     "12 contracts by the unchanged research score, ties by underlying, expiration, strike and "
+                     "OCC symbol. Ask x 100 premium bands are [0,100), [100,250), [250,500), [500,1000], and "
+                     "(1000,infinity). No padding, no per-underlying limit in the explorer, no short-dated "
+                     "contracts. Existing weekly top-five lists, OPTION_RULES, ranking weights, stock scores "
+                     "and tracking are unchanged. Browser budget filters and local slips do not rank or upload "
+                     "choices. No probability is established; no unsupported expiry-frequency assertion is made."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -509,6 +521,23 @@ OPTION_RULES = {
     "max_quote_age_business_days": 0,   # the chain's underlying quote must be from the as-of session
     "require_theta": True,              # 2026-10-14.6: no theta -> not eligible (never scored as zero decay)
 }
+
+# Registered before the explorer engine exists or any contracts are evaluated with these rules.
+EXPLORER_BANDS = ("large", "ai_large", "ai_mid")
+EXPLORER_LONG_RULES = {"min_delta": 0.10, "max_delta_exclusive": 0.30, "min_open_interest": 200,
+                       "min_volume": 10, "max_spread_pct": 0.20, "standard_multiplier": 100,
+                       "require_theta": True}
+EXPLORER_PREMIUM_BANDS = (("under100", 0, 100, False), ("100to250", 100, 250, False),
+                          ("250to500", 250, 500, False), ("500to1000", 500, 1000, True),
+                          ("over1000", 1000, None, False))
+EXPLORER_PER_BAND = 12
+EXPLORER_SELECTION = (
+    "Separate Core and Long-shot tiers; within each tier, option type, existing expiry horizon and premium "
+    "band, keep up to 12 by descending existing research score, then ascending underlying, expiration, strike "
+    "and OCC symbol. Duplicate OCC symbols appear once. No padding or per-underlying cap. Premium = ask x 100: "
+    "under $100; $100 to under $250; $250 to under $500; $500 through $1,000; over $1,000. "
+    "Selection preserves affordable qualifying contracts but does not guarantee any contract fits a budget."
+)
 # list size per option type and horizon by methodology version (older snapshots render with their own limit)
 OPTION_LIST_SIZE_HISTORY = (("2026-10-13.1", 5, "calls only"), ("2026-10-14.2", 10, "calls and puts"),
                             ("2026-10-14.6", 5, "calls and puts"))
@@ -797,6 +826,9 @@ def spec_dict() -> dict:
         "horizons": [asdict(h) for h in HORIZONS],
         "option_types": OPTION_TYPES, "premium_assumption": PREMIUM_ASSUMPTION,
         "option_rules": OPTION_RULES, "option_list_size_history": OPTION_LIST_SIZE_HISTORY,
+        "explorer": {"bands": EXPLORER_BANDS, "long_shot": EXPLORER_LONG_RULES,
+                     "premium_bands": EXPLORER_PREMIUM_BANDS, "per_band": EXPLORER_PER_BAND,
+                     "selection": EXPLORER_SELECTION},
         "option_ranking": {k: v[0] for k, v in OPTION_RANKING.items()},
         "option_texts": {"universe": OPTION_UNIVERSE_TEXT, "top": OPTION_TOP_DEFINITION, "theta": OPTION_THETA_RULE,
                          "quote": OPTION_QUOTE_RULE, "event": OPTION_EVENT_RULE, "fees": FEE_TREATMENT,

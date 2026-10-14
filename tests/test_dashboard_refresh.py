@@ -71,7 +71,9 @@ def test_refresh_writes_only_daily_preserves_weekly_and_tracking_and_appends_aud
     assert (tmp_path / "audit.jsonl").read_bytes().startswith(audit)
     assert [e["event"] for e in Store(tmp_path).audit_log()][-2:] == ["refresh_started", "refresh_finished"]
     assert set(out["quotes"]) == {"AAA", "AIA", "AIM", "SPY", "IJH", "IWM"}
-    assert {c for c in p.calls if c.startswith("chain:")} == {"chain:AAA"}
+    assert {c for c in p.calls if c.startswith("chain:")} == {"chain:AAA", "chain:AIA", "chain:AIM"}
+    assert out["options"]["underlyings"] == ["AAA"]  # extra explorer chains never enter the original top-five lists
+    assert set(out["chain_status"]) == {"AAA", "AIA", "AIM"}
     assert p.calls.count("earnings") == 1
     assert all(c.startswith(("quote:", "chain:")) or c == "earnings" for c in p.calls)
     expected = options.build_horizons({"AAA": p.chains["AAA"]}, AS_OF, {})

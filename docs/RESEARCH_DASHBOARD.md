@@ -277,6 +277,59 @@ daily data produces an explanation and leaves the weekly view available.
 owner must review the existing Cboe licensing/consent requirement below before enabling daily collection or
 publication; enabling daily collection does not itself obtain republishing rights.
 
+## Small-bet options explorer (spec 2026-10-14.8)
+
+`bets.html` is a separate research view. Its underlying union is the weekly `large`, `ai_large` and `ai_mid`
+candidates, de-duplicated. The daily collector obtains each chain once and reuses it in memory; the original
+daily top-five lists still receive only `large` chains. The weekly pipeline, option rules, score weights and
+tracking are unchanged. Extra explorer requests share the same 80-attempt Cboe and 14-minute client budgets.
+
+Rules were registered before the explorer was evaluated:
+
+| Tier | Absolute delta | Open interest | Session volume | Spread / mid |
+|---|---|---|---|---|
+| Core | 0.30 through 0.70 | at least 500 | at least 10 | at most 10% |
+| Long-shot | 0.10 through below 0.30 | at least 200 | at least 10 | at most 20% |
+
+Both require standard 100-share contract roots, positive bid, ask above bid, positive IV and nonzero theta.
+Calls have positive delta; puts have negative delta. Only 70–110, 150–210 and 300–430 days to expiry qualify.
+This release adds no short-dated options. There is no calibrated probability of profit or of expiring worthless;
+delta is not a probability. The banner therefore says contracts **can** expire worthless, rather than asserting
+that “most” do. The latter would require evidence the project does not have.
+
+Within each tier, type, horizon and premium band, retain up to 12 by the unchanged research score; ties sort by
+underlying, expiry, strike and OCC symbol. The bands have explicit boundaries: below $100, $100 to below $250,
+$250 to below $500, $500 through $1,000, and above $1,000. There is no per-underlying cap in this separate view.
+No group is padded. A maximum of 720 selected contracts is encoded as named columns plus value rows, preserving
+numeric precision while keeping the entire daily folder below 400,000 bytes. Raw chains are not published.
+Selection gives cheaper qualifying contracts space, but never guarantees that a visitor's budget has a match.
+
+Premium and maximum loss before fees equal ask × 100. Breakeven is strike plus ask for calls, strike minus ask
+for puts. Required move is the remaining favourable move from the underlying to that breakeven, floored at zero.
+The comparison move is IV × square root of years to expiry (one standard deviation), not a probability or price
+forecast. Ratios compare required and implied moves, using the same existing research-score inputs. Earnings
+before expiry is scheduled, none scheduled in the collected calendar, or unknown when the calendar is missing.
+
+The visitor's typed dollar budget filters one-contract premium. The sizing calculator counts whole contracts
+within that budget; results are arithmetic, not suggested trade sizes. Costs are rounded up to cents and budget
+input accepts up to two decimal places, from zero through $999,999,999.99. The local slip accepts 1–9,999 contracts
+per entry, at most 100 entries, and guards safe integer totals. Those are calculator input bounds, not changes to
+any trading risk limit. `bets.py` is the tested Python reference; `assets_bets.MATH_JS` mirrors it and has Node
+cross-runtime tests. Mobile rows expose maximum loss without horizontal page scrolling; sortable headers are
+keyboard buttons, controls have labels, and results use aria-live.
+
+The slip uses only `localStorage['betslip-v1']`, provides Remove/Clear, sums the entire premium at saved prices,
+and warns when the combined maximum loss exceeds the typed per-bet budget. Saved prices keep their original
+session, are not updated, and are not executable quotes. Storage failures show an explanation; invalid stored
+data is rejected. The budget itself is not stored. Nothing is uploaded, and the page calls no external endpoint.
+With JavaScript disabled, the selected public data remains downloadable. Missing or pre-explorer daily records
+render an explanation rather than reusing weekly contracts under a different label.
+
+**Owner actions:** review PR B after PR A; merging does not itself enable `DASHBOARD_DAILY`. After reviewing Cboe
+terms, enable the existing daily/options/publication variables only if desired. An enabled future refresh is
+needed for explorer contracts to appear; immutable older daily files are not backfilled. Neither the production
+workflow nor Pages deployment was run as part of this implementation.
+
 ## Data providers: what was checked and why
 
 Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners were not tested.

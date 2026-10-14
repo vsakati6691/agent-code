@@ -389,7 +389,8 @@ JS = r"""
       var all = items(), shown = 0;
       all.forEach(function (it) {
         var ok = (!q || it.textContent.toLowerCase().indexOf(q) >= 0) && (!s || it.dataset.sector === s) &&
-          filters.every(function (f) { return !f.value || it.dataset[f.dataset.field] === f.value; });
+          filters.every(function (f) { return !f.value || it.dataset[f.dataset.field] === f.value; }) &&
+          (typeof table.acceptRow !== 'function' || table.acceptRow(it));
         it.hidden = !ok; if (ok) shown++;
       });
       if (count) count.textContent = shown + ' of ' + all.length + ' shown';
@@ -435,6 +436,16 @@ JS = r"""
       });
     });
     if (search) search.addEventListener('input', filter);
+    // Optional local calculator predicates and compact-data tables reuse the same sorting/filter controls.
+    table.addEventListener('tablefilterchange', filter);
+    table.addEventListener('tabledatachange', function () {
+      original = items().slice();
+      var selected = ths.find(function (th) {
+        return Array.prototype.indexOf.call(th.parentNode.children, th) === view.col;
+      });
+      if (selected) applySort(selected, view.dir);
+      filter();
+    });
     if (sector) sector.addEventListener('change', filter);
     filters.forEach(function (f) { f.addEventListener('change', filter); });
     document.addEventListener('pinschange', filter);

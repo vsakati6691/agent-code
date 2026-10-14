@@ -7,7 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..market_calendar import is_trading_day
-from . import options, spec
+from . import bets, options, spec
 from .http import BudgetExceeded, FetchError, HttpClient
 from .providers import Providers, canonical
 from .refresh_store import RefreshStore
@@ -96,7 +96,9 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
                 future = sorted(d for d in group["reportDate"] if d > as_of)
                 if future:
                     events[symbol] = [{"date": future[0], "event": "earnings (scheduled, unverified)"}]
-        underlyings = {c["ticker"] for c in snap.get("bands", {}).get("large", {}).get("candidates", [])}
+        core_underlyings = {c["ticker"] for c in snap.get("bands", {}).get("large", {}).get("candidates", [])}
+        underlyings = {c["ticker"] for key in spec.EXPLORER_BANDS
+                       for c in snap.get("bands", {}).get(key, {}).get("candidates", [])}
         for symbol in sorted(underlyings):
             chain, reason = fetch(providers.option_chain, symbol)
             info = {}
@@ -113,7 +115,9 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
             chains[symbol] = reason if reason else chain
             chain_states[symbol] = {"status": "unavailable" if reason else "available",
                                     "reason": reason or "session verified", **info}
-        option_payload = compact_options(options.build_horizons(chains, as_of, events, events_known=events_known))
+        # The existing daily top-five view retains only the weekly large-list universe.
+        core_chains = {s: chain for s, chain in chains.items() if s in core_underlyings}
+        option_payload = compact_options(options.build_horizons(core_chains, as_of, events, events_known=events_known))
         option_payload.update(enabled=True, status="available" if option_payload["underlyings"] else "unavailable",
                               reason="eligible contracts only; lists are not padded", earnings_reason=earn_reason)
     partial = any(x["status"] != "available" for x in [*quotes.values(), *chain_states.values()])
@@ -122,7 +126,9 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
             "spec_version": spec.SPEC_VERSION, "spec_hash": spec.spec_hash(), "started_at": started,
             "collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "status": "partial" if partial else "ok", "quotes": quotes, "chain_status": chain_states,
-            "options": option_payload, "usage": providers.http.usage()}
+            "options": option_payload,
+            "explorer": bets.build(chains, as_of, events, events_known) if options_enabled else None,
+            "usage": providers.http.usage()}
 
 
 def run(data: Path, providers: Providers, as_of: date | None = None, *, options_enabled: bool = True,
