@@ -229,6 +229,54 @@ flowchart LR
 - **`site.py`** renders HTML, CSS, JS and CSV from stored snapshots without network access. The build refuses to publish if any secret value appears in the output.
 - Reused from the repo: `market_calendar` (NYSE holidays), `data.validation` (stale, split and frozen-feed checks), the Alpha Vantage earnings parser, and secret redaction from `logging_setup`.
 
+## Daily light refresh (separate from weekly research)
+
+**Owner actions:** after reviewing and merging the daily-refresh PR, set the repository variable
+`DASHBOARD_DAILY=true` only if you want the weekday workflow to run. It is off while that variable is absent
+or false. This change does not enable the variable or deploy anything. `DASHBOARD_OPTIONS` still gates chains
+and `DASHBOARD_PUBLISH` still gates Pages deployment. No additional secret is needed.
+
+`python -m agent_trading.dashboard refresh --data research-data --cache .cache/http` reads the latest verified
+weekly snapshot and fetches delayed closing quotes for its listed candidates (including both AI lists) and
+SPY/IJH/IWM. Options use the same large-list underlyings and the unchanged `options.build_horizons` rules.
+There is no fundamental rescan, broker access, new stock ranking or performance-tracking update. Optional
+`--no-options` collects quotes only; `--as-of YYYY-MM-DD` validates current provider responses against that
+session, not historical chains. It cannot reconstruct a historical option market.
+
+The workflow is scheduled for weekdays at 22:17 UTC (18:17 EDT / 17:17 EST), shares the weekly workflow's
+`research-dashboard` concurrency group without cancellation, and runs only from `main`. Holidays and runs
+before 17:00 New York are skipped with an audit reason. Existing cache entries are bypassed so a pre-close
+response cannot masquerade as a post-close refresh. Limits are tightened to 80 Cboe HTTP attempts, one Alpha
+Vantage attempt, and zero requests to other providers. Retries count against those limits. A 14-minute client
+deadline bounds new requests and waits; requests use a maximum 10-second timeout. The workflow also caps the
+collection step at 15 minutes. Provider outages can produce partial or failed refreshes; neither implies full
+coverage. GitHub schedule delays and runner networking remain outside the application's control.
+
+Each session writes `daily/YYYY-MM-DD/refresh.json` and a SHA-256 `manifest.json` once, atomically. Repeating a
+session verifies and keeps the first record, including its original gaps. A damaged first record is reported,
+never overwritten. Each folder is below 400,000 bytes; only selected eligible option rows are stored, with no
+raw chains or duplicated payoff grids. The existing ignored HTTP cache may contain provider responses, but is
+never copied into the data branch or site. `refresh_started`, `refresh_finished`, `refresh_skipped` and
+`refresh_failed` events append to `audit.jsonl`; snapshots, weekly status and `tracking.json` are untouched.
+`verify` checks both weekly and daily hashes. The site copies the last 30 verified daily records with their
+manifests; the data branch retains the full series.
+
+Every quote must match the requested ticker and have a finite positive close and a last-trade date equal to
+the session. Chains also pass `options.chain_status` and carry `quote_info`. Failed, stale and exhausted-budget
+items retain status and reason and are displayed as unavailable. The earnings calendar is optional; a failed
+or unconfigured request means **unknown**, never “none scheduled”. Daily option selection is independent of
+the weekly tracked lists. No probability estimate is calculated.
+
+Overview benchmark tiles and the growth candidate scanner label daily prices, the collection time in UTC,
+and the weekly snapshot date. Change since weekly is a simple, unadjusted close-to-close price comparison:
+splits and dividends can affect it; it is not tracked investment performance. Scores, ranks and trailing
+returns remain weekly. Options has a separate Daily view. Missing, incompatible, older-than-weekly or corrupt
+daily data produces an explanation and leaves the weekly view available.
+
+**Cboe terms:** these remain undocumented public endpoints, with no uptime or redistribution guarantee. The
+owner must review the existing Cboe licensing/consent requirement below before enabling daily collection or
+publication; enabling daily collection does not itself obtain republishing rights.
+
 ## Data providers: what was checked and why
 
 Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners were not tested.

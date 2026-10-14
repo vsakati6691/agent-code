@@ -144,10 +144,26 @@ def cmd_build(args) -> int:
 
 
 def cmd_verify(args) -> int:
-    problems = Store(Path(args.data)).verify_all()
+    from .refresh_store import RefreshStore
+    problems = Store(Path(args.data)).verify_all() + RefreshStore(Path(args.data)).verify_all()
     for p in problems:
         print(p)
     return 1 if problems else 0
+
+
+def cmd_refresh(args) -> int:
+    from .refresh import run as refresh_run
+    # No SEC calls are made; reuse the optional existing User-Agent secret without requiring it.
+    ua = os.environ.get("SEC_USER_AGENT", "agent-code public research dashboard")
+    key = os.environ.get("ALPHAVANTAGE_API_KEY") or None
+    register_secret(ua)
+    if key:
+        register_secret(key)
+    providers = Providers(HttpClient(Path(args.cache) if args.cache else None, ua), key)
+    result = refresh_run(Path(args.data), providers, date.fromisoformat(args.as_of) if args.as_of else None,
+                         options_enabled=not args.no_options, commit=args.commit)
+    print(f"daily refresh: {result['status']}")
+    return 2 if result["status"] == "failed" else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -162,6 +178,13 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--limit", type=int, default=None, help="process only N stocks per universe (smoke tests)")
     r.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
     r.set_defaults(func=cmd_run)
+    f = sub.add_parser("refresh", help="refresh delayed prices without changing weekly snapshots or tracking")
+    f.add_argument("--data", required=True)
+    f.add_argument("--cache", default=None)
+    f.add_argument("--as-of", default=None)
+    f.add_argument("--no-options", action="store_true")
+    f.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
+    f.set_defaults(func=cmd_refresh)
     b = sub.add_parser("build", help="render the static site from stored snapshots (no network)")
     b.add_argument("--data", required=True)
     b.add_argument("--out", required=True)

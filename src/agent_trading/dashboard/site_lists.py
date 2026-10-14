@@ -9,7 +9,7 @@ from .site_scan import candidate_scan
 E = html.escape
 
 
-def growth_page(snap: dict) -> str:
+def growth_page(snap: dict, daily: dict | None = None) -> str:
     bands = snap.get("bands") or {}
     keys = [k for k in ordered(bands) if list_page(k) == "growth.html"]
     links = "".join(f'<a class="action" href="#{E(k)}">{E(band_title(k, bands[k]))} →</a>' for k in keys)
@@ -19,7 +19,7 @@ def growth_page(snap: dict) -> str:
     return f'''<header class="watch-heading"><p class="eyebrow">RANKED COMPANY RESEARCH</p>
 <h1>Growth Stocks</h1><p class="lede">Find candidates across large, mid and small caps. Filter the scan, pin a ticker,
 then open its evidence and risks.</p><div class="hero-actions">{links}</div></header>
-{candidate_scan(snap, keys)}
+{candidate_scan(snap, keys, daily)}
 {detail}'''
 
 
