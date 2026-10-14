@@ -53,7 +53,7 @@ def _row(x: dict, kind: str, rid: str) -> str:
 <td class="num" data-v="{sval(x.get("theta"))}">{num(x.get("theta"), 3)}</td>
 <td class="num" data-v="{sval(rc.get("total"))}"><strong>{num(rc.get("total"), 1)}</strong></td>
 <td class="small">{E(ev)}</td></tr>
-<tr id="{rid}" class="detail" hidden><td colspan="19">
+<tr id="{rid}" class="detail" hidden><td colspan="19"><div class="pin">
 <p class="small"><strong>{E(x["option"])}</strong> · multiplier {x.get("multiplier", 100)}{" · ADJUSTED contract" if x.get("adjusted") else ""}
 · mid {money(x.get("mid"))} (reference only) · one-standard-deviation implied move {pct(x.get("implied_move_1sd"), 1)} ·
 time decay {pct(x.get("theta_share_per_day"), 2)} of the mid per day · ranking parts: liquidity {num(rc.get("liquidity"))},
@@ -64,7 +64,7 @@ breakeven {num(rc.get("breakeven"))}, time decay {num(rc.get("time_decay"))}.</p
 <div><h4>Before expiration: model estimate in {sens.get("days_forward", 30)} days</h4><div class="table-wrap"><table>
 <thead><tr><th class="num">Stock move</th>{ivh}</tr></thead><tbody>{sgrid}</tbody></table></div>
 <p class="small muted">Black-Scholes MODEL estimate of value per share vs today's mid; not a quote. {E(sens.get("note", ""))}</p></div></div>
-</td></tr></tbody>"""
+</div></td></tr></tbody>"""
 
 
 def _list(snap: dict, h, kind: str, data: dict | None) -> str:

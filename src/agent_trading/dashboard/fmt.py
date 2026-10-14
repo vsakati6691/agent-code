@@ -19,7 +19,9 @@ def num(v, digits: int = 2) -> str:
 
 
 def money(v, digits: int = 2) -> str:
-    return f"${v:,.{digits}f}" if ok(v) else "n/a"
+    if not ok(v):
+        return "n/a"
+    return f"-${-v:,.{digits}f}" if v < 0 else f"${v:,.{digits}f}"
 
 
 def cap(v) -> str:

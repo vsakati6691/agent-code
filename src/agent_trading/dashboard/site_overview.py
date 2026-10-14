@@ -8,6 +8,12 @@ from .fmt import cap, money, num, pct, sval
 
 E = html.escape
 GROWTH_KEYS = ("large", "mid", "small")
+ORDER = ("large", "mid", "small", "multibagger")
+
+
+def ordered(bands: dict) -> list[str]:
+    """Display order: the growth lists, the multibagger list, then any retired list from an old snapshot."""
+    return [k for k in ORDER if k in bands] + sorted(k for k in bands if k not in ORDER)
 TIME_GUIDE = (
     "Four different time frames appear on this site and are never mixed: trailing historical returns (what "
     "already happened), conditional forward scenarios (1-10 years, or to 2030 for the watchlist), option expiry "
@@ -32,6 +38,14 @@ def definition_line(key: str, band: dict) -> str:
     extra = f"; price ≥ ${d['min_price']:g}; 20-day median dollar volume ≥ {cap(d['min_dollar_volume'])}" \
         if d.get("min_price") else ""
     return f"Universe: {uni}; market cap {rng}{extra}. Market cap = as-of close x SEC cover-page shares."
+
+
+def short_risk(text: str, limit: int = 90) -> str:
+    """Compact form of the counterargument for the overview row (the full text is in the evidence panel)."""
+    t = (text or "").replace("Weakest evidence: ", "")
+    t = t.split(" (negative = ")[0].rstrip(".")
+    t = t[0].upper() + t[1:] if t else t
+    return t if len(t) <= limit else t[: limit - 1].rsplit(" ", 1)[0] + "…"
 
 
 def _ret(c: dict, k: str):
@@ -112,24 +126,24 @@ def growth_table(key: str, band: dict) -> str:
         bodies.append(f"""<tbody class="item" data-sector="{E(c.get("sector") or "Unknown")}"><tr>
 <td class="num" data-v="{c["rank"]}">{c["rank"]}</td>
 <td><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}" title="Show evidence">
-<strong>{E(c["ticker"])}</strong></button><div class="small muted">{E(c.get("name") or "")}</div></td>
-<td class="hide-sm" data-v="{E(c.get("sector") or "")}">{E(c.get("sector") or "Unknown")}</td>
+<strong>{E(c["ticker"])}</strong></button><div class="small muted">{E(c.get("name") or "")}</div>
+<div class="small muted">{E(c.get("sector") or "Unknown")}</div></td>
 <td class="num" data-v="{sval(c.get("market_cap"))}">{cap(c.get("market_cap"))}</td>
 <td class="num" data-v="{sval(c.get("price"))}">{money(c.get("price"))}</td>
 <td class="num" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(eg)}">{E(eg_txt)}</td>
-<td class="num hide-sm" data-v="{sval(m.get("ev_to_sales"))}">{E(_valuation(m))}</td>
+<td class="num val hide-sm" data-v="{sval(m.get("ev_to_sales"))}">{E(_valuation(m))}</td>
 <td class="num" data-v="{sval(c.get("composite"))}"><strong>{num(c.get("composite"), 1)}</strong></td>
 <td class="num hide-sm" data-v="{sval(r3)}">{pct(r3, 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(r6)}">{pct(r6, 0, True)}</td>
 <td class="num" data-v="{sval(r1)}">{pct(r1, 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(x1)}">{pct(x1, 0, True)}</td>
-<td class="small risk">{E(c.get("counterargument", ""))}</td></tr>
-<tr id="{rid}" class="detail" hidden><td colspan="14">{evidence_block(key, c, band)}</td></tr></tbody>""")
+<td class="small risk" title="{E(c.get("counterargument", ""))}">{E(short_risk(c.get("counterargument", "")))}</td></tr>
+<tr id="{rid}" class="detail" hidden><td colspan="13">{evidence_block(key, c, band)}</td></tr></tbody>""")
     sectors = sorted({c.get("sector") or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
-    head = ('<th class="num" data-sort="num">#</th><th data-sort="text">Ticker / company</th>'
-            '<th class="hide-sm" data-sort="text">Sector</th><th class="num" data-sort="num">Mkt cap</th>'
+    head = ('<th class="num" data-sort="num">#</th><th data-sort="text">Ticker / company / sector</th>'
+            '<th class="num" data-sort="num">Mkt cap</th>'
             '<th class="num" data-sort="num">Price</th><th class="num" data-sort="num" title="TTM revenue growth">Rev gr.</th>'
             '<th class="num hide-sm" data-sort="num" title="TTM free-cash-flow growth, else operating income growth">Earn/FCF gr.</th>'
             '<th class="num hide-sm" data-sort="num">Valuation</th><th class="num" data-sort="num">Score</th>'
@@ -140,14 +154,14 @@ def growth_table(key: str, band: dict) -> str:
 aria-label="Search {E(band_title(key, band))}"><select data-sector="{tid}" aria-label="Filter by sector"><option value="">All sectors</option>{opts}</select>
 <span class="small muted" data-count="{tid}" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="{tid}" data-table data-grouped><caption class="sr-only">{E(band_title(key, band))}</caption>
-<thead><tr>{head}</tr></thead>{''.join(bodies) or '<tbody><tr><td colspan="14" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
+<thead><tr>{head}</tr></thead>{''.join(bodies) or '<tbody><tr><td colspan="13" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
 <p class="small muted">Returns are trailing price returns to the as-of close (dividends excluded); "vs bench" is the 1-year
 return minus {E(band.get("benchmark", ""))}. Select a ticker to show its evidence.</p>"""
 
 
 def growth_section(snap: dict) -> str:
     bands = snap["bands"]
-    keys = [k for k in bands if k in GROWTH_KEYS] or [k for k in bands if k != "multibagger"]
+    keys = [k for k in ordered(bands) if k != "multibagger"]
     tabs = "".join(f'<button role="tab" data-tab="{k}" aria-selected="false">{E(band_title(k, bands[k]))}</button>'
                    for k in keys)
     panels = []
@@ -233,21 +247,17 @@ here implies multibagger returns within 3-12 months. {E(spec.MULTIBAGGER_DEFINIT
 
 # --- compact panels ------------------------------------------------------------------------------
 
+RISK_GROUPS = ("25%+ below the 52-week high", "5-year drawdown worse than -50%", "Negative free cash flow",
+               "Dilution above 5% a year", "EV/Sales above 15x")
+
+
 def _risk_flags(c: dict) -> list[str]:
+    """Downside-risk groups this candidate falls into (names from RISK_GROUPS)."""
     m = c.get("metrics") or {}
     dd = (c.get("history") or {}).get("drawdowns", {})
-    out = []
-    if (dd.get("from_52w_high") or 0) <= -0.25:
-        out.append(f"{pct(dd['from_52w_high'])} from 52-wk high")
-    if ((dd.get("max_5y") or {}).get("value") or 0) <= -0.5:
-        out.append(f"5-yr drawdown {pct(dd['max_5y']['value'])}")
-    if (m.get("fcf_ttm") or 0) < 0:
-        out.append("negative FCF")
-    if (m.get("dilution") or 0) > 0.05:
-        out.append(f"dilution {pct(m['dilution'])}")
-    if (m.get("ev_to_sales") or 0) > 15:
-        out.append(f"EV/S {num(m['ev_to_sales'], 0)}x")
-    return out
+    hits = [(dd.get("from_52w_high") or 0) <= -0.25, ((dd.get("max_5y") or {}).get("value") or 0) <= -0.5,
+            (m.get("fcf_ttm") or 0) < 0, (m.get("dilution") or 0) > 0.05, (m.get("ev_to_sales") or 0) > 15]
+    return [g for g, hit in zip(RISK_GROUPS, hits) if hit]
 
 
 def panels(snap: dict, tracking: dict | None) -> str:
@@ -274,11 +284,15 @@ def panels(snap: dict, tracking: dict | None) -> str:
                f'<p class="small"><strong>New:</strong> {E(", ".join(new) or "none")}<br><strong>Departed:</strong> '
                f'{E(", ".join(gone) or "none")}<br><strong>Biggest moves:</strong> '
                f'{E(", ".join(t for _, t in sorted(moves, reverse=True)[:5]) or "none")}</p>')
-    conc = [f"{k}: {w}" for k, b in bands.items() for w in b.get("concentration", [])]
-    flagged = [(c["ticker"], k, _risk_flags(c)) for k, b in bands.items() for c in b["candidates"]]
-    flagged = [x for x in flagged if x[2]]
+    conc = [f"{band_title(k, bands[k])}: {w}" for k in ordered(bands) for w in bands[k].get("concentration", [])]
+    groups: dict[str, list[str]] = {g: [] for g in RISK_GROUPS}
+    for k in ordered(bands):
+        for c in bands[k]["candidates"]:
+            for g in _risk_flags(c):
+                groups[g].append(c["ticker"])
     risk = ("".join(f'<li class="small">{E(w)}</li>' for w in conc) +
-            "".join(f'<li class="small"><strong>{E(t)}</strong> ({E(k)}): {E("; ".join(f))}</li>' for t, k, f in flagged[:10]))
+            "".join(f'<li class="small"><strong>{E(g)}:</strong> {E(", ".join(dict.fromkeys(ts)))}</li>'
+                    for g, ts in groups.items() if ts))
     perf = '<p class="small muted">No tracking data yet.</p>'
     if tracking and tracking.get("summary"):
         rows = "".join(f'<tr><td>{E(k)}</td>' + "".join(
@@ -305,7 +319,8 @@ def panels(snap: dict, tracking: dict | None) -> str:
 
 
 def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict | None) -> str:
-    counts = " · ".join(f'{E(band_title(k, b))}: {len(b["candidates"])}' for k, b in snap["bands"].items())
+    counts = " · ".join(f'{E(band_title(k, snap["bands"][k]))}: {len(snap["bands"][k]["candidates"])}'
+                        for k in ordered(snap["bands"]))
     return f"""<h1>Growth &amp; Options Research Dashboard</h1>
 <p class="lede">Week ending {E(snap["as_of"])} · {counts} · <a href="options.html">Options</a> ·
 <a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>

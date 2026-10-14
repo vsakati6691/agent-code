@@ -24,7 +24,7 @@ def range_chart(entries: list[dict]) -> str:
     def x(v):
         return L + (R - L) * (v - lo) / (hi - lo)
     ticks = []
-    for v in sorted({lo, 0.0, hi} | {t for t in (-0.5, 1.0, 2.0, 5.0) if lo < t < hi}):
+    for v in [t for t in (-0.75, -0.5, -0.25, 0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0) if lo <= t <= hi]:
         ticks.append(f'<line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="18" y2="{H - 6}" stroke="var(--border)" '
                      f'stroke-width="{2 if v == 0 else 1}"/><text x="{x(v):.1f}" y="12" text-anchor="middle" font-size="11" '
                      f'fill="var(--text-muted)">{v:+.0%}</text>')
@@ -43,7 +43,7 @@ def range_chart(entries: list[dict]) -> str:
                      f'<circle cx="{x(base):.1f}" cy="{y}" r="5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/></g>')
     return (f'<div class="legend"><span><i></i>bear-to-bull range</span><span>● base case</span>'
             f'<span class="muted">% change from the latest price to 2030-12-31 (price only)</span></div>'
-            f'<div class="chart"><svg viewBox="0 0 {W} {H}" role="img" aria-label="2030 scenario ranges by ticker">'
+            f'<div class="chart range"><svg viewBox="0 0 {W} {H}" role="img" aria-label="2030 scenario ranges by ticker">'
             f'{"".join(ticks)}{"".join(marks)}</svg></div>')
 
 
