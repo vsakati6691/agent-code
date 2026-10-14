@@ -12,6 +12,13 @@ MCP (read-only) and other market data connectors.
 > if any of that is enabled, and a test fails if any broker order call appears
 > in the source. Nothing here is investment advice.
 
+**Dashboard:** [Agent-trading desk](https://claude.ai/artifact/A3dcSc1pWfKjykdjFxHnNo)
+(claude.ai, private to the owner unless shared). It shows the latest post-close
+run: live tickets, desk and GTAA signals, the top 20 growth + momentum list, the
+scanner, risk headroom, data checks and headlines. It is a snapshot that a
+Claude session refreshes after a run, not a live feed. Runs write the full
+reports to `reports/`, which stays out of git.
+
 ## Architecture
 
 ### System overview
