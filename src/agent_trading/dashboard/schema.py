@@ -122,7 +122,7 @@ BAND = _obj("One ranked list.", {
 })
 SCHEMA = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "Growth Research Dashboard weekly snapshot",
+    "title": "Tikasa Stock Research weekly snapshot",
     "description": "Research comparisons from public data; not advice. Ratios are decimals (0.25 = 25%), money is USD, "
                    "dates are ISO 8601 and times UTC. Snapshots are immutable once written.",
     "type": "object",

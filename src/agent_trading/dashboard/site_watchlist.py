@@ -116,7 +116,7 @@ def watchlist_page(snap: dict) -> str:
     w = snap.get("watchlist")
     head = ('<div class="section-heading watch-heading"><div><p class="eyebrow">RESEARCH DESK / LONG VIEW</p>'
             '<h1>Watchlist — 2030 Outlook</h1><p class="lede">Scan the evidence. Explore the assumptions.</p></div>'
-            '<a class="action" href="index.html#candidate-scan">← Daily scan</a></div>')
+            '<a class="action" href="index.html">← Market overview</a></div>')
     if not w or w.get("status") != "ok":
         return head + '<div class="banner warn"><strong>Watchlist not available</strong>This snapshot has no watchlist ' \
                       'section (it predates spec 2026-10-14.2 or no list is configured).</div>'

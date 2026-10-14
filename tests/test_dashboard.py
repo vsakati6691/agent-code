@@ -490,7 +490,8 @@ def test_site_build_pages_downloads_and_privacy(tmp_path, cli_env, monkeypatch):
     assert cli(["run", "--data", str(data), "--as-of", "2026-10-09", "--no-options"]) == 0
     info = build_site(data, out)
     assert info["snapshot"] == "2026-10-09"
-    for page in ("index.html", "options.html", "history.html", "methodology.html", "audit.html", ".nojekyll",
+    assert info["pages"] == len(list(out.rglob("*.html")))
+    for page in ("index.html", "growth.html", "multibaggers.html", "options.html", "history.html", "methodology.html", "audit.html", ".nojekyll",
                  "downloads/2026-10-09_large.csv", "reports/2026-10-09.html", "data/latest.json"):
         assert (out / page).exists(), page
     top = json.loads((out / "data" / "latest.json").read_text())["bands"]["large"]["candidates"][0]["ticker"]
@@ -513,7 +514,8 @@ def test_site_build_pages_downloads_and_privacy(tmp_path, cli_env, monkeypatch):
 def test_site_without_any_snapshot_shows_unavailable(tmp_path):
     Store(tmp_path / "d").write_status("failed", "first run failed: SEC unavailable")
     build_site(tmp_path / "d", tmp_path / "s")
-    assert "No research data available" in (tmp_path / "s" / "index.html").read_text(encoding="utf-8")
+    for name in ("index.html", "growth.html", "multibaggers.html"):
+        assert "No research data available" in (tmp_path / "s" / name).read_text(encoding="utf-8")
 
 
 # --- Robinhood tradability (spec 2026-10-14.1) ---------------------------------------------------------------

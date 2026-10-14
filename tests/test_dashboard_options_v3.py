@@ -361,13 +361,13 @@ def test_overview_watchlist_shows_six_compact_lists_with_max_loss(built):
     index = (built[1] / "index.html").read_text(encoding="utf-8")
     assert 'id="options-watchlist"' in index and index.count("<h3>Calls ·") == 3 and index.count("<h3>Puts ·") == 3
     assert index.count("max loss") >= 30 and 'href="options.html#put-12m"' in index and 'href="options.html#call-3m"' in index
-    assert index.index('id="options-watchlist"') < index.index('id="growth"')
+    assert 'id="growth"' not in index
     cards = watchlist_cards({"as_of": "2026-10-09", "options": {"enabled": False, "status": "disabled in configuration"}})
     assert 'id="options-watchlist"' in cards and 'data-state="missing"' in cards and "ow-grid" not in cards
 
 
 def test_scenario_flags_are_separate_from_passing_the_research_screen(built):
-    index = (built[1] / "index.html").read_text(encoding="utf-8")
+    index = (built[1] / "multibaggers.html").read_text(encoding="utf-8")
     assert "Research screen:" in index and "Passing the screen is separate from" in index
     for label in ("2x in 5 years (bull case)", "5x in 5 years (bull case)", "5x in 10 years (bull case)", "2x in 10 years (base case)"):
         assert label in index, label

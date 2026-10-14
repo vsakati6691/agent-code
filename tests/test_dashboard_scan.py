@@ -82,6 +82,24 @@ def test_scanner_preserves_list_membership_escapes_text_and_does_not_mutate_snap
     assert 'data-sort="num">Score' not in page  # no cross-list score ranking
 
 
+def test_growth_scanner_excludes_multibagger_rows_and_filters_without_mutating_data():
+    s = snapshot()
+    s["bands"]["multibagger"] = deepcopy(s["bands"]["large"])
+    s["bands"]["multibagger"]["candidates"][0]["ticker"] = "MULTI"
+    before = deepcopy(s)
+    page = candidate_scan(s, ["large"])
+    assert 'data-ticker="ABC"' in page
+    assert 'data-ticker="MULTI"' not in page and 'value="multibagger"' not in page
+    assert s == before
+    assert "0 list entries" in candidate_scan(s, [])
+
+
+def test_research_pages_explain_absent_lists():
+    from agent_trading.dashboard.site_lists import growth_page, multibaggers_page
+    assert "Growth lists are not available" in growth_page({})
+    assert "multibagger list is not available" in multibaggers_page({})
+
+
 class Cells(HTMLParser):
     def __init__(self):
         super().__init__()

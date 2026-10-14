@@ -154,7 +154,7 @@ def _header_classes(page: str, table_id: str) -> list[tuple[str, str]]:
 
 
 def test_phone_width_keeps_only_the_named_columns(site):
-    over = _header_classes((site / "index.html").read_text(encoding="utf-8"), "t-large")
+    over = _header_classes((site / "growth.html").read_text(encoding="utf-8"), "t-large")
     kept = [label for label, cls in over if "hide-sm" not in cls]
     assert kept == ["#", "Ticker / company / sector", "Price", "Score", "1Y", "Main risk / weakest evidence"]
     opt = _header_classes((site / "options.html").read_text(encoding="utf-8"), "o-3m-call")
@@ -164,7 +164,7 @@ def test_phone_width_keeps_only_the_named_columns(site):
 
 
 def test_ticker_column_is_sticky_in_every_wide_table(site):
-    for page, tid in (("index.html", "t-large"), ("options.html", "o-3m-call"), ("watchlist.html", "t-watch")):
+    for page, tid in (("growth.html", "t-large"), ("options.html", "o-3m-call"), ("watchlist.html", "t-watch")):
         assert any("tk" in cls.split() for _, cls in _header_classes((site / page).read_text(encoding="utf-8"), tid)), page
 
 
@@ -175,7 +175,7 @@ def _outside_details(html: str) -> str:
 def test_long_paragraphs_are_folded_except_on_methodology(site):
     from agent_trading.dashboard import spec
     full = [spec.MULTIBAGGER_DEFINITION[:80], spec.PROBABILITY_STATEMENT[:80], spec.SCENARIO_METHOD[:80]]
-    pages = [site / "index.html"] + list((site / "stock").glob("*.html"))
+    pages = [site / "index.html", site / "growth.html", site / "multibaggers.html"] + list((site / "stock").glob("*.html"))
     for p in pages:
         text = p.read_text(encoding="utf-8").replace("&#x27;", "'")
         for f in full:
@@ -248,7 +248,7 @@ def test_every_page_has_exactly_one_h1(site):
 
 
 def test_excluded_lists_live_on_their_own_compact_pages(site):
-    index = (site / "index.html").read_text(encoding="utf-8")
+    index = (site / "growth.html").read_text(encoding="utf-8")
     assert re.search(r'href="excluded-(mid|small|multibagger).html"', index) and "<th>Reason</th>" not in index
     page = (site / "excluded-small.html").read_text(encoding="utf-8")
     assert page.count("<h1") == 1 and "Excluded from" in page
@@ -280,14 +280,14 @@ def test_every_page_has_the_inline_symbol_search(site):
 # --- item 15: sparklines and distribution strips ------------------------------------------------
 
 def test_list_rows_have_a_one_year_sparkline_vs_benchmark(site):
-    page = (site / "index.html").read_text(encoding="utf-8")
+    page = (site / "growth.html").read_text(encoding="utf-8")
     sparks = re.findall(r'<svg class="spark"[^>]*aria-label="1-year price: ([^"]+)"', page)
     assert len(sparks) >= 10 and all("SPY" in s or "IJH" in s or "IWM" in s for s in sparks)
     assert 'stroke-dasharray="3 2"' in page
 
 
 def test_lists_show_sector_and_market_cap_mix(site):
-    page = (site / "index.html").read_text(encoding="utf-8")
+    page = (site / "growth.html").read_text(encoding="utf-8")
     assert page.count('aria-label="Sector mix"') >= 3 and page.count('aria-label="Market-cap mix"') >= 3
     from agent_trading.dashboard.site_overview import distribution_strip
     strip = distribution_strip([{"sector": "Energy", "market_cap": 5e9}, {"sector": "Energy", "market_cap": 3e11}])
@@ -509,7 +509,7 @@ def test_exclusion_groups_keep_the_rule_and_drop_each_stocks_value():
 
 
 def test_excluded_summaries_on_the_site_have_no_placeholder_dots(site):
-    page = (site / "index.html").read_text(encoding="utf-8")
+    page = (site / "growth.html").read_text(encoding="utf-8")
     for summary in re.findall(r"Most common: (.*?)</span>", page):
         assert "…" not in summary, summary
 
@@ -533,13 +533,13 @@ def test_flags_shared_by_most_names_collapse_to_a_count():
     assert "<details>" in long and f"{FLAG_LIST_MAX + 1} of 35 listed names" in long
 
 
-def test_options_off_drops_options_from_the_name_but_keeps_the_page_linked(tmp_path):
-    """2026-10-14.6: the site name follows the data, but the options page stays in the menu and explains itself."""
+def test_tikasa_brand_and_options_link_stay_consistent_when_options_are_disabled(tmp_path):
+    """Dataset availability does not change the brand or hide the explanatory options page."""
     from agent_trading.dashboard.site import build_site
     from agent_trading.dashboard.store import Store
     data, out = demo_site(tmp_path / "a", two_weeks=False)
     on = (out / "index.html").read_text(encoding="utf-8")
-    assert "Growth &amp; Options Research" in on and 'href="options.html"' in on
+    assert "Tikasa Stock Research" in on and 'href="options.html"' in on
     snap = Store(data).load(Store(data).dates()[-1])
     snap["options"] = {"enabled": False, "status": "disabled in configuration"}
     off_data, off_out = tmp_path / "off-data", tmp_path / "off-site"
@@ -547,19 +547,54 @@ def test_options_off_drops_options_from_the_name_but_keeps_the_page_linked(tmp_p
     build_site(off_data, off_out)
     for name in ("index.html", "watchlist.html", "methodology.html"):
         page = (off_out / name).read_text(encoding="utf-8")
-        assert "Options Research" not in page and "Growth Research" in page, name
+        assert "Tikasa Stock Research" in page and "Growth Research" not in page, name
         assert re.search(r'<nav>.*href="options\.html"', page), name
     index = (off_out / "index.html").read_text(encoding="utf-8")
     assert 'id="options-watchlist"' in index and "not collected" in index
-    assert "<title>Growth Research: weekly reports</title>" in (off_out / "feed.xml").read_text(encoding="utf-8")
+    assert "<title>Tikasa Stock Research: weekly reports</title>" in (off_out / "feed.xml").read_text(encoding="utf-8")
 
 
-def test_phones_show_the_ranked_lists_before_the_context_panels(site):
-    from agent_trading.dashboard.assets import CSS
-    page = (site / "index.html").read_text(encoding="utf-8")
-    assert page.index('class="ov-panels"') < page.index('class="ov-lists"')      # desktop keeps the panels on top
-    phone = CSS[CSS.index("@media (max-width: 700px)"):]
-    assert ".ov-panels { order: 2; }" in phone and ".ov-lists { order: 1; }" in phone
+def test_every_page_uses_the_tikasa_name_in_header_and_title(site):
+    for p in _pages(site):
+        page = p.read_text(encoding="utf-8")
+        assert re.search(r'<a class="brand"[^>]+>Tikasa Stock Research</a>', page), p.name
+        assert re.search(r'<title>[^<]*Tikasa Stock Research</title>', page), p.name
+
+
+def test_overview_and_research_lists_have_separate_pages(site):
+    overview = (site / "index.html").read_text(encoding="utf-8")
+    growth = (site / "growth.html").read_text(encoding="utf-8")
+    multibaggers = (site / "multibaggers.html").read_text(encoding="utf-8")
+    assert "Market context" in overview and 'id="research-briefing"' in overview
+    assert 'id="t-scan"' not in overview and 'id="t-large"' not in overview and 'class="mb-list"' not in overview
+    assert 'id="t-scan"' in growth and 'id="t-large"' in growth and 'id="t-small"' in growth
+    assert 'data-list="multibagger"' not in growth and 'class="mb-list"' not in growth
+    assert 'class="mb-list"' in multibaggers and 'id="t-large"' not in multibaggers
+    assert "What must happen for a multibagger outcome" in multibaggers
+
+
+@pytest.mark.parametrize("name,label", [("index.html", "Overview"), ("growth.html", "Growth Stocks"),
+                                       ("multibaggers.html", "Multibaggers")])
+def test_primary_research_navigation_marks_only_the_active_page(site, name, label):
+    page = (site / name).read_text(encoding="utf-8")
+    nav = re.search(r"<nav>(.*?)</nav>", page, re.S)[1]
+    assert nav.count("aria-current=page") == 1
+    assert f'<a href="{name}" aria-current=page>{label}</a>' in nav
+    for route in ("index.html", "growth.html", "multibaggers.html"):
+        assert f'href="{route}"' in nav
+
+
+def test_research_backlinks_return_to_the_matching_list_page(site):
+    for p in (site / "stock").glob("*.html"):
+        band = p.stem.split("-", 1)[0]
+        target = "ai.html" if band.startswith("ai_") else "multibaggers.html" if band == "multibagger" else "growth.html"
+        page = p.read_text(encoding="utf-8")
+        assert f'href="../{target}#{band}"' in page
+        assert f'href="../{target}" aria-current=page' in page
+    for p in site.glob("excluded-*.html"):
+        band = p.stem.removeprefix("excluded-")
+        target = "ai.html" if band.startswith("ai_") else "multibaggers.html" if band == "multibagger" else "growth.html"
+        assert f'href="{target}#{band}"' in p.read_text(encoding="utf-8")
 
 
 def test_watchlist_fund_type_label_is_plain():
@@ -614,7 +649,7 @@ def _ids(page: str) -> set[str]:
 
 
 def test_tab_lists_name_their_panels_and_panels_name_their_tabs(site):
-    for name in ("index.html", "options.html"):
+    for name in ("growth.html", "options.html"):
         page = (site / name).read_text(encoding="utf-8")
         ids = _ids(page)
         tabs = re.findall(r'<button role="tab"[^>]*>', page)

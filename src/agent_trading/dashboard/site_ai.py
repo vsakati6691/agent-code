@@ -191,7 +191,7 @@ none of these numbers is a probability.</div>"""
         if not b:
             continue
         short = f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ""
-        panels.append(f"""<section aria-labelledby="h-{key}"><h2 id="h-{key}">{E(band_title(key, b))}: top {b.get("max_results", 5)}</h2>
+        panels.append(f"""<section id="{key}" aria-labelledby="h-{key}"><h2 id="h-{key}">{E(band_title(key, b))}: top {b.get("max_results", 5)}</h2>
 <p class="small">{E(_definition(b))} Benchmark: {E(b.get("benchmark_name", b.get("benchmark", "")))}. Showing {len(b["candidates"])} of up to
 {b.get("max_results", 5)}; {b.get("ranked", "?")} ranked, {len(b["excluded"])} excluded.</p>{short}{distribution_strip(b["candidates"])}
 {growth_table(key, b)}<p class="small"><a href="downloads/{E(snap["as_of"])}_{key}.csv" download>Download CSV</a></p>
