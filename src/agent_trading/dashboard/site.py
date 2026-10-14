@@ -19,7 +19,8 @@ from pathlib import Path
 
 from . import spec
 from .assets import CSS, JS
-from .fmt import SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval
+from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval,
+                  tracking_schedule)
 from .scenarios import implied_growth_text
 from .site_options import lists_of, options_page
 from .site_overview import band_title, overview
@@ -240,7 +241,7 @@ facts filed on or before {E(snap["as_of"])} only.</p>
 def history_page(dates: list[str], tracking: dict | None) -> str:
     items = "".join(f'<li><a href="reports/{d}.html">Week ending {d}</a></li>' for d in reversed(dates))
     if not tracking:
-        trk = '<p class="muted">No tracking yet.</p>'
+        trk = f'<p class="small">{E(tracking_schedule(dates))}</p>'
     else:
         rows = []
         for r in reversed(tracking["by_snapshot"]):
@@ -261,9 +262,10 @@ def history_page(dates: list[str], tracking: dict | None) -> str:
                         f'{pct(v["max_drawdown"], 1)}</li>' for k, v in tracking.get("weekly_chain", {}).items())
         hh = "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS)
         trk = f"""<div class="banner warn"><strong>Evidence status</strong>{E(tracking["evidence_note"])}</div>
+<p class="small">{E(tracking_schedule(dates))}</p>
 <h3>Average excess return net of friction, by category</h3><div class="table-wrap"><table><thead><tr><th>Category</th>{hh}
 <th class="num">Weekly turnover</th></tr></thead><tbody>{summ}</tbody></table></div>
-<h3>Weekly one-week chain</h3><ul class="small">{chain or '<li class="muted">not enough weeks</li>'}</ul>
+<h3>Weekly one-week chain</h3><ul class="small">{chain or '<li class="muted">Appears once a weekly list has been held for 5 trading sessions with prices for every name.</li>'}</ul>
 <h3>Each snapshot</h3><div class="table-wrap"><table><thead><tr><th>As of</th><th>Category</th><th>Spec</th>{hh}</tr></thead>
 <tbody>{''.join(rows)}</tbody></table></div>
 <p class="small">{E(tracking["method"])}</p><ul class="small">{''.join(f'<li>{E(x)}</li>' for x in tracking["limitations"])}</ul>
@@ -361,7 +363,7 @@ def audit_page(store: Store, snap: dict, integrity: list[str]) -> str:
     for d in reversed(store.dates()):
         m = json.loads((store.root / "snapshots" / d / "manifest.json").read_text(encoding="utf-8"))
         man.append(f'<tr><td>{E(d)}</td><td class="small"><code>{E(m["sha256"][:16])}…</code></td><td>{E(str(m.get("spec_version")))}</td>'
-                   f'<td class="small">{E(str(m.get("code_commit", ""))[:10])}</td><td>{E(str(m.get("status")))}</td></tr>')
+                   f'<td class="small">{E(str(m.get("code_commit") or "local build")[:10])}</td><td>{E(str(m.get("status")))}</td></tr>')
     ok = '<div class="banner info"><strong>Integrity</strong>Every stored snapshot matches its manifest hash.</div>' if not integrity else \
         '<div class="banner bad"><strong>Integrity problems</strong>' + E("; ".join(integrity)) + "</div>"
     usage = snap.get("usage", {})

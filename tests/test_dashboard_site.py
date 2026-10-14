@@ -177,3 +177,20 @@ def test_long_paragraphs_are_folded_except_on_methodology(site):
             assert f.replace("'", "'") not in _outside_details(text), (p.name, f[:30])
     meth = (site / "methodology.html").read_text(encoding="utf-8").replace("&#x27;", "'")
     assert all(f in _outside_details(meth) for f in full)
+
+
+def test_empty_states_say_what_appears_and_when(tmp_path):
+    from agent_trading.dashboard.fmt import tracking_schedule
+    text = tracking_schedule(["2026-10-09"])
+    assert "21 trading sessions after the first snapshot (2026-10-09)" in text and "2026-11-09" in text
+    assert "52 weekly snapshots" in text and "1 stored" in text
+    assert "first weekly snapshot" in tracking_schedule([])
+
+
+def test_history_overview_and_audit_explain_empty_states(site):
+    hist = (site / "history.html").read_text(encoding="utf-8")
+    assert "No tracking yet" not in hist and "trading sessions after the first snapshot" in hist
+    over = (site / "index.html").read_text(encoding="utf-8")
+    assert "No tracking data yet" not in over and "trading sessions after the first snapshot" in over
+    audit = (site / "audit.html").read_text(encoding="utf-8")
+    assert re.search(r"<td class=\"small\">(fixture|local build)</td>", audit)

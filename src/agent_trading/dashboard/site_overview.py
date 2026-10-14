@@ -4,7 +4,7 @@ from __future__ import annotations
 import html
 
 from . import spec
-from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval
+from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval, tracking_schedule
 from .scenarios import implied_growth_text
 
 E = html.escape
@@ -263,7 +263,7 @@ def _risk_flags(c: dict) -> list[str]:
     return [g for g, hit in zip(RISK_GROUPS, hits) if hit]
 
 
-def panels(snap: dict, tracking: dict | None) -> str:
+def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) -> str:
     bands = snap["bands"]
     ev = (snap.get("events") or {})
     items = ev.get("items")
@@ -296,8 +296,10 @@ def panels(snap: dict, tracking: dict | None) -> str:
     risk = ("".join(f'<li class="small">{E(w)}</li>' for w in conc) +
             "".join(f'<li class="small"><strong>{E(g)}:</strong> {E(", ".join(dict.fromkeys(ts)))}</li>'
                     for g, ts in groups.items() if ts))
-    perf = '<p class="small muted">No tracking data yet.</p>'
-    if tracking and tracking.get("summary"):
+    measured = any(v.get(h, {}).get("snapshots_measured") for v in ((tracking or {}).get("summary") or {}).values()
+                   for h in spec.TRACK_HORIZONS)
+    perf = f'<p class="small muted">{E(tracking_schedule(dates or [snap["as_of"]]))}</p>'
+    if tracking and tracking.get("summary") and measured:
         rows = "".join(f'<tr><td>{E(k)}</td>' + "".join(
             f'<td class="num">{pct((v.get(h) or {}).get("mean_excess_net"), 1, True)}</td>' for h in spec.TRACK_HORIZONS) + "</tr>"
             for k, v in tracking["summary"].items())
@@ -327,7 +329,7 @@ def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict |
     return f"""<h1>Growth &amp; Options Research Dashboard</h1>
 <p class="lede">Week ending {E(snap["as_of"])} · {counts} · <a href="options.html">Options</a> ·
 <a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>
-{panels(snap, tracking)}
+{panels(snap, tracking, dates)}
 <details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details>
 {growth_section(snap)}
 {multibagger_section(snap)}

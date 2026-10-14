@@ -105,6 +105,29 @@ def summary_details(summary: str, full: str, label: str = "Full definition") -> 
             f'</summary><p>{html.escape(full)}</p></details></div>')
 
 
+def tracking_schedule(dates: list[str]) -> str:
+    """When forward-return tracking and evidence claims become available, from the first snapshot date."""
+    from datetime import date as _date
+
+    from . import spec
+    from ..market_calendar import next_trading_day
+    if not dates:
+        return ("Tracking starts once the first weekly snapshot exists: 1-month results 21 trading sessions later, "
+                f"then 3, 6 and 12 months; no edge is claimed before {spec.MIN_SNAPSHOTS_FOR_EVIDENCE} snapshots.")
+    first = _date.fromisoformat(dates[0])
+
+    def after(n):
+        d = first
+        for _ in range(n):
+            d = next_trading_day(d)
+        return d.isoformat()
+    h = spec.TRACK_HORIZONS
+    return (f"Tracking starts {h['1m']} trading sessions after the first snapshot ({dates[0]}): 1-month results from "
+            f"about {after(h['1m'])}, 3-month from {after(h['3m'])}, 6-month from {after(h['6m'])} and 12-month from "
+            f"{after(h['12m'])}. Any claim of an edge waits for at least {spec.MIN_SNAPSHOTS_FOR_EVIDENCE} weekly "
+            f"snapshots ({len(dates)} stored so far).")
+
+
 def sval(v) -> str:
     """data-v attribute for numeric sorting (plain digits, never scientific notation)."""
     return plain(v, 8).replace(",", "") if ok(v) else ""
