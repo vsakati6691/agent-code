@@ -127,4 +127,4 @@ def test_options_page_never_says_zero_move(site):
 
 def test_no_backslash_escapes_inside_html_attributes(site):
     for p in site.rglob("*.html"):
-        assert "\'" not in p.read_text(encoding="utf-8"), p.name
+        assert "\\'" not in p.read_text(encoding="utf-8"), p.name     # a backslash before a quote
