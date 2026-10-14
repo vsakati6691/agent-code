@@ -351,3 +351,19 @@ def test_move_with_unchanged_own_score_says_others_moved():
     from agent_trading.dashboard.site_overview import move_cause
     t = move_cause({"ticker": "S11", "change": -2, "to": 3, "score_change": 0.0, "component_changes": {}}, "Large cap")
     assert t == "S11 down 2 to #3 (Large cap): its own score was unchanged; other stocks scored higher this week"
+
+
+# --- item 17: Atom feed -----------------------------------------------------------------------------
+
+def test_atom_feed_lists_every_weekly_report(site):
+    import xml.etree.ElementTree as ET
+    ns = {"a": "http://www.w3.org/2005/Atom"}
+    root = ET.fromstring((site / "feed.xml").read_bytes())
+    entries = root.findall("a:entry", ns)
+    reports = sorted(p.stem for p in (site / "reports").glob("*.html"))
+    assert sorted(e.find("a:title", ns).text.replace("Week ending ", "") for e in entries) == reports
+    for e in entries:
+        href = e.find("a:link", ns).get("href")
+        assert (site / href).exists() and e.find("a:updated", ns).text and "not advice" in e.find("a:summary", ns).text
+    assert entries[0].find("a:title", ns).text == f"Week ending {reports[-1]}"          # newest first
+    assert 'type="application/atom+xml"' in (site / "index.html").read_text(encoding="utf-8")

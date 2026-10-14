@@ -53,7 +53,8 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{E(title)} · Growth &amp; Options Research</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="{up}assets/style.css"></head>
+<link rel="stylesheet" href="{up}assets/style.css">
+<link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
 <body><header class="site"><div class="inner"><a class="brand" href="{up}index.html">Growth &amp; Options Research</a>
 <nav>{nav}</nav>{search}</div></header>
 <main>{freshness}{body}
@@ -440,6 +441,31 @@ def options_csv(rows: list[dict]) -> str:
 
 # --- build -------------------------------------------------------------------------------------------------
 
+def atom_feed(snaps: list[dict]) -> str:
+    """Static Atom feed of the weekly reports (newest first). Links are relative to the site root."""
+    from xml.sax.saxutils import escape as x
+
+    def stamp(s):
+        t = str(s.get("run_finished") or f"{s['as_of']}T21:00:00+00:00")
+        return t if ("+" in t[10:] or t.endswith("Z")) else t + "Z"
+    entries = []
+    for s in sorted(snaps, key=lambda s: str(s["as_of"]), reverse=True):
+        d = str(s["as_of"])
+        counts = "; ".join(f"{band_title(k, b)}: {len(b.get('candidates', []))}" for k, b in s.get("bands", {}).items())
+        entries.append(
+            f"<entry><title>Week ending {x(d)}</title><id>urn:agent-code:research-dashboard:{x(d)}</id>"
+            f'<link rel="alternate" type="text/html" href="reports/{x(d)}.html"/><updated>{x(stamp(s))}</updated>'
+            f"<summary>{x(counts)}. Status {x(str(s.get('status', '?')))}; methodology {x(str(s.get('spec_version', '?')))}. "
+            f"Research comparisons only, not advice.</summary></entry>")
+    updated = stamp(max(snaps, key=lambda s: str(s["as_of"]))) if snaps else "1970-01-01T00:00:00Z"
+    return ('<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">'
+            "<title>Growth &amp; Options Research: weekly reports</title>"
+            "<id>urn:agent-code:research-dashboard</id><link rel=\"self\" href=\"feed.xml\"/>"
+            '<link rel="alternate" type="text/html" href="history.html"/>'
+            f"<updated>{x(updated)}</updated><author><name>agent-code research dashboard</name></author>"
+            + "".join(entries) + "</feed>\n")
+
+
 def scan_for_secrets(out: Path, env_names: tuple[str, ...]) -> list[str]:
     """Files containing the value of any named environment variable (values are never printed)."""
     values = [os.environ[n] for n in env_names if len(os.environ.get(n, "")) >= 8]
@@ -514,6 +540,7 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         if s.get("watchlist"):
             (out / "downloads" / f"{d}_watchlist_2030.csv").write_text(watchlist_csv(s), encoding="utf-8")
     (out / "data" / "latest.json").write_text(json.dumps(snap, default=str), encoding="utf-8")
+    (out / "feed.xml").write_text(atom_feed(history), encoding="utf-8")
     leaks = scan_for_secrets(out, secret_env)
     if leaks:
         shutil.rmtree(out)
