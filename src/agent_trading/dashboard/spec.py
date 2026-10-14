@@ -17,9 +17,12 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-13.1"
+SPEC_VERSION = "2026-10-13.2"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
+    ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
+                     "a company with several listed share classes (e.g. GOOG and GOOGL) is evaluated once, using "
+                     "its most liquid class. No scoring rule, scale or weight changed."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -88,7 +91,8 @@ UNIVERSE_DEFINITION = (
     "rights, units, preferred shares, notes, depositary shares, blank-check companies (names containing "
     "'Acquisition Corp'), companies in bankruptcy, and companies without US-GAAP 10-K/10-Q XBRL data (most "
     "foreign private issuers file 20-F/40-F and cannot be compared on the same basis). Mid cap: $2B to $10B. "
-    "Speculative: $300M to $2B with trailing revenue growth of at least 20%."
+    "Speculative: $300M to $2B with trailing revenue growth of at least 20%. A company with several listed share "
+    "classes (one SEC CIK) is evaluated once, using the class with the highest 20-day median dollar volume."
 )
 LIMITED_HISTORY_QUARTERS = 8     # fewer reported quarters than this -> 'limited operating history' flag
 LIMITED_HISTORY_DAYS = 504       # fewer price bars than this (about 2 years) -> 'limited trading history' flag

@@ -26,7 +26,7 @@ def test_no_broker_order_paths_in_source():
 
 
 def test_no_network_calls_except_market_data():
-    allowed = {"data/alphavantage.py"}
+    allowed = {"data/alphavantage.py", "dashboard/http.py"}   # dashboard: GET only, allow-listed public hosts
     for path in SRC.rglob("*.py"):
         rel = path.relative_to(SRC).as_posix()
         text = path.read_text(encoding="utf-8")
