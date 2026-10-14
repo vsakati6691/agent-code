@@ -78,6 +78,9 @@ WATCH_ENTRY = _obj("One watchlist symbol.", {
     "asset_type": _f("string", "operating company (common stock), ETF, leveraged/inverse ETF, or other."),
     "status": _f("string", "listed, OTC, or unresolved (with the reason)."),
     "price": _f("number", "Latest verified close, USD."), "price_date": _f("string", "Date of that close."),
+    "price_validation": _f("string", "From 2026-10-14.5: how the as-of price was verified."),
+    "history_bars": _f("integer", "Daily bars available up to the as-of date."),
+    "history_note": _f("string", "Set when the price is verified but the history is too short for some analyses."),
     "method": _f("string", "Scenario method applied."),
     "scenarios": _f("object", "bear/base/bull: 2030-12-31 price, change and annualized price return, with assumptions."),
     "unavailable_reason": _f("string", "Why no scenario was computed (null when one was)."),
@@ -96,10 +99,12 @@ BAND = _obj("One ranked list.", {
     "rank_changes": _f("array", "Moves vs the previous snapshot with score and component changes."),
     "runners_up": _f("array", "The next ten by score."),
     "concentration": _f("array", "Sector or correlation concentration warnings."),
+    "history": _f("object", "Trailing price returns by window (from 2026-10-14.5 each with its start and end session "
+                            "and session count; the stock and its benchmark share the same sessions) and drawdowns."),
 })
 SCHEMA = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "Growth & Options Research Dashboard weekly snapshot",
+    "title": "Growth Research Dashboard weekly snapshot",
     "description": "Research comparisons from public data; not advice. Ratios are decimals (0.25 = 25%), money is USD, "
                    "dates are ISO 8601 and times UTC. Snapshots are immutable once written.",
     "type": "object",
@@ -110,7 +115,8 @@ SCHEMA = {
         "problems": _f("array", "Run-level problems (rate limits, budgets)."), "notes": _f("array", "Run-level notes."),
         "spec_version": _f("string", "Methodology version (spec.py)."), "spec_hash": _f("string", "Hash of every rule."),
         "sources": _f("object", "Data providers and their terms."), "usage": _f("object", "Requests by provider."),
-        "tradability": _f("object", "Robinhood tradability rule and how many verdicts were stored / are to check."),
+        "tradability": _f("object", "Robinhood tradability rule, how many verdicts were stored / are to check and, from "
+                                    "2026-10-14.5, the oldest and newest check times (no account data)."),
         "universe": _f("object", "Universe sizes, S&P 500 members and broad-universe exclusion counts."),
         "benchmarks": _f("object", "Benchmark closes on the as-of date."),
         "bands": {"type": "object", "additionalProperties": BAND, "description": "Lists by key: large, mid, small, multibagger."},
@@ -124,7 +130,13 @@ SCHEMA = {
                           {"entries": {"type": "array", "items": WATCH_ENTRY},
                            "imported_at": _f("string", "When the ticker list was imported (not synchronised)."),
                            "target_date": _f("string", "2030-12-31.")}),
-        "events": _f("object", "Upcoming scheduled earnings within 45 days (unverified source)."),
+        "events": _obj("Upcoming scheduled earnings within 45 days (unverified source).", {
+            "items": _f("array", "Scheduled report dates for listed and watchlist names."),
+            "status": _f("string", "From 2026-10-14.5: ok (the lookup succeeded, even with no dates) or unavailable."),
+            "state": _f("string", "Dataset state: available, missing (not configured) or provider_error."),
+            "reason": _f("string", "Why the lookup was unavailable."),
+            "calendar_rows": _f("integer", "Rows returned by the calendar lookup."),
+        }),
         "disclaimer": _f("string", "Research only, not advice."), "multibagger": _f("string", "Multibagger definition."),
         "probability": _f("string", "Why no probabilities are shown."),
     },

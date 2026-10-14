@@ -6,7 +6,9 @@ import html
 import io
 
 from . import spec
+from .evidence import quality_level
 from .fmt import cap, csv_value, money, net_position, num, ok, pct, sval
+from .site_research import quality_badge
 
 E = html.escape
 OLD_TYPE_DETAIL = " (warrant, right, unit, preferred, note, fund or blank-check)"
@@ -117,7 +119,7 @@ def watchlist_page(snap: dict) -> str:
     bodies = []
     for i, e in enumerate(entries):
         rid = f"w-{i}"
-        status = tidy(e.get("unavailable_reason"))
+        status = tidy(e.get("unavailable_reason")) or (e.get("history_note") or "")
         km = e.get("key_metrics") or {}
         km_txt = " · ".join(t for t in (
             f"revenue {cap(km.get('revenue_ttm'))} ({pct(km.get('revenue_growth_ttm'), 0, True)})" if km.get("revenue_ttm") else "",
@@ -132,7 +134,7 @@ def watchlist_page(snap: dict) -> str:
 <td class="small hide-sm" data-v="{E(tidy(e.get("asset_type")))}">{E(tidy(e.get("asset_type")) or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
 {_scen_cells(e)}
-<td class="small hide-sm">{E(e.get("method") or "")}</td><td class="small" data-v="{E(e.get("evidence_quality") or "")}">{E(e.get("evidence_quality") or "")}</td>
+<td class="small hide-sm">{E(e.get("method") or "")}</td><td class="small" data-v="{E(e.get("evidence_quality") or "")}">{quality_badge(quality_level(e.get("evidence_quality")), e.get("evidence_quality"), len(e.get("missing") or []))}</td>
 <td class="small">{E(status)}</td></tr>
 <tr id="{rid}" class="detail" hidden><td colspan="9"><div class="evidence">
 <div><h4>Identity</h4><p class="small">{E(e.get("name") or "unresolved")} · {E(tidy(e.get("asset_type")))} · {E(e.get("exchange") or "")} ·

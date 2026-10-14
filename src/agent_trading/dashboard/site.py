@@ -2,37 +2,43 @@
 
 The site is rebuilt from the latest snapshot that passed its integrity check.
 When the newest run failed, the previous snapshot stays up with a visible
-stale-data banner; a client-side check also warns when the data is older than
-nine days, in case no new build was deployed at all.
+stale-data banner; a client-side check also warns when more than
+spec.FRESHNESS_STALE_SESSIONS NYSE sessions have passed, in case no new build
+was deployed at all.
 """
 from __future__ import annotations
 
 import csv
+import hashlib
 import html
 import io
 import json
 import math
 import os
 import shutil
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
-from . import spec
+from ..market_calendar import is_trading_day
+from . import assets_research, changes, compare, evidence, lab, research, spec
 from .assets import CSS, JS
 from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval,
                   tracking_schedule)
-from .scenarios import implied_growth_text
+from .scenarios import RETURN_WINDOWS, implied_growth_text
+from .site_compare import compare_page
 from .site_options import lists_of, options_page
+from .site_research import changes_section, datasets_table, lab_section, quality_block, research_section
 from .site_overview import band_title, excluded_page, overview
 from .site_symbol import symbol_index, symbol_page
 
 _SYMBOLS: dict[str, str] = {}      # ticker -> name, for the header search (set by build_site)
-_SITE = {"options": True}          # whether the latest snapshot publishes options (set by build_site)
+_SITE = {"options": True, "v": ""}   # options published? and the asset version for cache busting (set by build_site)
 from .site_watchlist import watchlist_csv, watchlist_page
 from .store import Store, find_private_keys
 
 E = html.escape
 NAV = [("index.html", "Overview"), ("options.html", "Options"), ("watchlist.html", "Watchlist 2030"),
+       ("compare.html", "Compare"),
        ("history.html", "History & tracking"), ("methodology.html", "Methodology"), ("audit.html", "Audit trail")]
 COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", "balance": "Balance", "runway": "Runway",
               "valuation": "Value", "momentum": "Mom.", "relative": "Rel."}
@@ -45,7 +51,7 @@ def brand() -> str:
     return "Growth & Options Research" if _SITE["options"] else "Growth Research"
 
 
-def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "") -> str:
+def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "", scripts: tuple = ()) -> str:
     up = "../" * depth
     nav = "".join(f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>'
                   for href, label in NAV if _SITE["options"] or href != "options.html")
@@ -60,20 +66,37 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <title>{E(title)} · {E(brand())}</title>
 <meta name="robots" content="noindex">
 <script>try{{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}}catch(e){{}}</script>
-<link rel="stylesheet" href="{up}assets/style.css">
+<link rel="stylesheet" href="{up}assets/style.css{_SITE["v"]}">
 <link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
 <body><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
 <nav>{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
 <main>{freshness}{body}
 <footer>{E(spec.DISCLAIMER)} Methodology version {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
 Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>
-<script src="{up}assets/app.js"></script></body></html>"""
+<script src="{up}assets/app.js{_SITE["v"]}"></script>{"".join(f'<script src="{up}{s}{_SITE["v"]}"></script>' for s in scripts)}</body></html>"""
+
+
+def sessions_after(as_of: str, days: int = spec.FRESHNESS_CALENDAR_DAYS) -> list[str]:
+    """NYSE sessions after the as-of session, for the browser to count the data's age (spec FRESHNESS_RULE)."""
+    start = date.fromisoformat(str(as_of)[:10])
+    return [(start + timedelta(days=i)).isoformat() for i in range(1, days + 1)
+            if is_trading_day(start + timedelta(days=i))]
+
+
+def window_text(key: str, r: dict, as_of: str) -> str:
+    """The sessions a stored return covers; snapshots before spec 2026-10-14.5 stored no start date."""
+    n = r.get("sessions") or dict(RETURN_WINDOWS).get(key)
+    if r.get("start"):
+        return f"{r['start']} to {r['end']} ({n} sessions)"
+    return f"{n} trading sessions to {as_of}"
 
 
 def freshness_banner(snap: dict, status: dict | None) -> str:
     as_of = snap["as_of"]
-    parts = [f'<div class="banner info" id="freshness" data-asof="{E(as_of)}"><strong>Data as of the {E(as_of)} '
-             f'close (<span id="age">{E(as_of)}</span>).</strong>Snapshot built {E(str(snap.get("run_finished", "")).replace("+00:00", ""))} UTC. '
+    parts = [f'<div class="banner info" id="freshness" data-asof="{E(as_of)}" '
+             f'data-sessions="{E(",".join(sessions_after(as_of)))}" data-stale-after="{spec.FRESHNESS_STALE_SESSIONS}">'
+             f'<strong>Data as of the {E(as_of)} close (<span id="age">age counted in NYSE sessions when scripts run'
+             f'</span>).</strong>Snapshot built {E(str(snap.get("run_finished", "")).replace("+00:00", ""))} UTC. '
              f'Quotes are end-of-session and delayed, never live. Run status: {E(snap.get("status", "?"))}.</div>']
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):
         parts.append(f'<div class="banner bad"><strong>Stale data: the latest weekly update failed.</strong>'
@@ -84,7 +107,8 @@ def freshness_banner(snap: dict, status: dict | None) -> str:
                      'they are listed as excluded with the reason. ' + E("; ".join(snap.get("problems", [])[:3])) +
                      '</div>')
     parts.append('<div class="banner warn" id="stale-client" hidden><strong>This page may be out of date.</strong>'
-                 'The data is more than nine days old, so at least one weekly update did not publish.</div>')
+                 f'More than {spec.FRESHNESS_STALE_SESSIONS} NYSE sessions have passed since the as-of close, so at '
+                 'least one weekly update did not publish.</div>')
     return "".join(parts)
 
 
@@ -159,11 +183,12 @@ aria-label="{E(ticker)} price versus {E(bench)}, rebased to 100">{''.join(ticks)
 <div class="tip"></div></div>"""
 
 
-def detail(c: dict, snap: dict) -> str:
+def detail(c: dict, snap: dict, history: list[dict] | None = None, prev_snap: dict | None = None) -> str:
     m = c["metrics"]
     h = c["history"]
     rets = "".join(
-        f'<tr><td>{k}</td><td class="num">{pct(v["stock"], 1)}</td><td class="num">{pct(v["benchmark"], 1)}</td>'
+        f'<tr><td>{k}<div class="small muted">{E(window_text(k, v, snap["as_of"]))}</div></td>'
+        f'<td class="num">{pct(v["stock"], 1)}</td><td class="num">{pct(v["benchmark"], 1)}</td>'
         f'<td class="num">{pct(v["excess"], 1, True)}</td></tr>' if v else
         f'<tr><td>{k}</td><td class="num muted" colspan=3>not enough history</td></tr>'
         for k, v in ((k, h["returns"].get(k)) for k in ("1m", "3m", "6m", "1y", "3y", "5y")))
@@ -222,6 +247,9 @@ score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confi
 <div class="card stat"><div class="label">Data timestamp</div><div class="value small">{E(str(c["data_timestamp"]).replace("+00:00", ""))} UTC</div>
 <div class="small muted">fundamentals: {E(fund.get("last_form") or "?")} filed {E(fund.get("last_filed") or "?")}</div></div></div>
 <p class="small">Flags: {flags}</p>
+{changes_section(changes.compare(c, snap, prev_snap))}
+{research_section(research.panel(c, snap, history or [snap], profile_of(snap["bands"][c["band"]])))}
+{quality_block(evidence.company_check(c, str(snap["as_of"])))}
 <h2>Research thesis</h2><p>{E(c["thesis"])}</p><p class="small muted">Generated by fixed rules from reported data. It is a
 summary of evidence, not a recommendation.</p>
 <h2>Strongest bear case</h2><p>{E(c["bear_case"])}</p>
@@ -248,6 +276,7 @@ summary of evidence, not a recommendation.</p>
 </tbody></table></div><p class="small muted">* quarter derived from cumulative or annual filings. Source: {E(c["sources"]["fundamentals"])},
 facts filed on or before {E(snap["as_of"])} only.</p>
 <h2>Bear / base / bull valuation ranges</h2>{scen_html}
+{lab_section(lab.inputs(c))}
 <div class="banner info"><strong>Probability</strong>{summary_details(SUMMARIES["probability"], c["probability"], "Why")}</div>
 <h2>Key business risks</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["risks"])}</ul>
 <h2>What would invalidate the thesis</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["invalidation"])}</ul>"""
@@ -358,6 +387,27 @@ premium; the required move is measured downward. {E(spec.RISK_FREE_RATE_NOTE)}</
 <div class="table-wrap"><table aria-label="ETF exposure-class assumptions"><thead><tr><th>ETF exposure class</th><th>Name keywords</th><th class="num">Bear / base / bull total return</th>
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
 <h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
+<h2 id="display-rules">Data states, research panel and comparisons</h2>
+<p>These rules decide how evidence is labelled and compared. No score, gate or ranking uses them.</p>
+<ul>{''.join(f'<li><strong>{E(k.replace("_", " "))}</strong>: {E(v)}</li>' for k, v in spec.DATASET_STATES.items())}</ul>
+<p>{E(spec.FRESHNESS_RULE.replace("FRESHNESS_STALE_SESSIONS", str(spec.FRESHNESS_STALE_SESSIONS)))}</p>
+<p>{E(spec.WATCHLIST_PRICE_RULE)}</p>
+<p>Earnings-quality checks: free cash flow / net income (clean at {spec.FORENSIC_RULES["fcf_to_net_income"]["clean_at_least"]:.2f}x
+or more, concerning below {spec.FORENSIC_RULES["fcf_to_net_income"]["concerning_below"]:.2f}x) and stock-based pay / revenue
+(clean below {pct(spec.FORENSIC_RULES["sbc_to_revenue"]["clean_below"])}, concerning above
+{pct(spec.FORENSIC_RULES["sbc_to_revenue"]["concerning_above"])}). Not collected, so not checked:
+{E(", ".join(spec.FORENSIC_RULES["not_collected"]))}.</p>
+<p>{E(spec.THESIS_TRACKING_RULE)}</p>
+<p>What changed: listed when trailing revenue growth falls {pct(spec.CHANGE_RULES["revenue_growth_drop"])} or more, the operating or
+free-cash-flow margin falls {pct(spec.CHANGE_RULES["operating_margin_drop"])} or more, the one-year share-count change rises
+{pct(spec.CHANGE_RULES["dilution_rise"])} or more, free cash flow turns negative, a new filing or quarter appears, a thesis
+condition is breached, an input becomes available or unavailable, or the score moves {spec.CHANGE_RULES["score_move"]:.0f}
+points or more.</p>
+<p>{E(spec.COMPARE_RULES["note"])}</p><p>{E(spec.SCENARIO_LAB_BOUNDS["note"])}</p>
+<p class="small">Some of these structures are adapted from open-source projects: filingcopilot (MIT; comparison on common
+dates, bounded scenario inputs), ticker-dossier (MIT; dataset coverage records and evidence checks) and cc-equity-research
+(Apache-2.0; thesis tracking, earnings-quality and catalyst templates, turned into fixed rules). See
+<a href="https://github.com/vsakati6691/agent-code/blob/main/THIRD_PARTY_NOTICES.md" rel="noopener">THIRD_PARTY_NOTICES.md</a>.</p>
 <h2>Version history</h2><ul>{log}</ul>"""
 
 
@@ -394,7 +444,9 @@ def audit_page(store: Store, snap: dict, integrity: list[str]) -> str:
     ok = '<div class="banner info"><strong>Integrity</strong>Every stored snapshot matches its manifest hash.</div>' if not integrity else \
         '<div class="banner bad"><strong>Integrity problems</strong>' + E("; ".join(integrity)) + "</div>"
     usage = snap.get("usage", {})
-    return f"""<h1>Audit trail</h1>{ok}<h2>Snapshots</h2><div class="table-wrap"><table aria-label="Stored snapshots"><thead><tr><th>As of</th><th>SHA-256</th>
+    return f"""<h1>Audit trail</h1>{ok}<h2 id="data-status">Data status</h2>
+<p class="small">One state per dataset behind the {E(str(snap["as_of"]))} snapshot. Nothing falls back to sample or
+estimated data: anything not collected is shown as missing.</p>{datasets_table(evidence.datasets(snap))}<h2>Snapshots</h2><div class="table-wrap"><table aria-label="Stored snapshots"><thead><tr><th>As of</th><th>SHA-256</th>
 <th>Spec</th><th>Code</th><th>Status</th></tr></thead><tbody>{''.join(man)}</tbody></table></div>
 <h2>Latest run</h2><p class="small">Started {E(snap.get("run_started", ""))}, finished {E(snap.get("run_finished", ""))} UTC.
 Requests by provider: {E(", ".join(f"{k} {v}" for k, v in usage.get("requests", {}).items()) or "none (all answered from cache)")};
@@ -506,8 +558,13 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     if out.exists():
         shutil.rmtree(out)
     (out / "assets").mkdir(parents=True)
-    (out / "assets" / "style.css").write_text(CSS, encoding="utf-8")
+    # a content hash in every asset link, so a browser never pairs new pages with a cached old stylesheet or script
+    _SITE["v"] = "?v=" + hashlib.sha256((CSS + assets_research.CSS + JS + assets_research.COMPARE_JS +
+                                         assets_research.LAB_JS).encode("utf-8")).hexdigest()[:10]
+    (out / "assets" / "style.css").write_text(CSS + assets_research.CSS, encoding="utf-8")
     (out / "assets" / "app.js").write_text(JS, encoding="utf-8")
+    (out / "assets" / "compare.js").write_text(assets_research.COMPARE_JS, encoding="utf-8")
+    (out / "assets" / "lab.js").write_text(assets_research.LAB_JS, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
     status = store.status()
     if not dates:
@@ -524,15 +581,19 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     if hits:
         raise RuntimeError(f"refusing to publish: private-looking fields {hits[:5]}")
     fresh = freshness_banner(snap, status)
-    write = lambda rel, title, body, cur, depth=0, fr=fresh: (out / rel).write_text(  # noqa: E731
-        page(title, body, cur, depth, fr), encoding="utf-8")
+    write = lambda rel, title, body, cur, depth=0, fr=fresh, js=(): (out / rel).write_text(  # noqa: E731
+        page(title, body, cur, depth, fr, js), encoding="utf-8")
     tracking = store.read_json("tracking.json")
-    write("index.html", "Overview", overview(snap, status, dates, tracking), "index.html")
+    prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
+    write("index.html", "Overview", overview(snap, status, dates, tracking, prev_snap), "index.html")
     write("options.html", "Options research", options_page(snap), "options.html")
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
     write("history.html", "History", history_page(dates, tracking), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
     write("audit.html", "Audit trail", audit_page(store, snap, integrity), "audit.html")
+    profiles = {k: b.get("profile", "standard") for k, b in snap["bands"].items()}
+    write("compare.html", "Compare companies", compare_page(compare.payload(snap, profiles)), "compare.html",
+          js=("assets/compare.js",))
     (out / "stock").mkdir()
     (out / "reports").mkdir()
     (out / "downloads").mkdir()
@@ -546,7 +607,8 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     n = 0
     for key, band in snap["bands"].items():
         for c in band["candidates"]:
-            write(f"stock/{key}-{c['ticker']}.html", f"{c['ticker']} research", detail(c, snap), "", 1)
+            write(f"stock/{key}-{c['ticker']}.html", f"{c['ticker']} research", detail(c, snap, history, prev_snap),
+                  "", 1, js=("assets/lab.js",))
             n += 1
     for d in dates:
         s = snap if d == dates[-1] else store.load(d)

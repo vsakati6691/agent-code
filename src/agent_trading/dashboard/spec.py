@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.4"
+SPEC_VERSION = "2026-10-14.5"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
@@ -55,6 +55,20 @@ SPEC_CHANGELOG = [
                      "quarter that has a quarterly diluted share count and the same quarter a year earlier (at most "
                      "one quarter back). Scales, weights, gates and every other rule are unchanged; the 2026-10-13 "
                      "snapshot stays as published under 2026-10-14.3."),
+    ("2026-10-14.5", "Owner request (2026-10-14), registered before any snapshot was evaluated with it. Display "
+                     "and data-quality rules only: no ranking rule, scale, weight, gate, threshold or list size "
+                     "changes, so the published lists and scores are unaffected. (1) Watchlist: the as-of price is "
+                     "validated on its own (WATCHLIST_PRICE_RULE); too little history no longer hides a verified "
+                     "price, and only the analyses that need history become unavailable, each naming the missing "
+                     "input. (2) Return windows are stored with their start and end sessions, and list sparklines "
+                     "use the same 1-year window and figures as the return table. (3) Freshness is counted in NYSE "
+                     "sessions in New York time (FRESHNESS_RULE). (4) Each dataset gets one state (DATASET_STATES). "
+                     "(5) A company research panel with deterministic trend, forensic (FORENSIC_RULES) and thesis "
+                     "checks: thesis conditions are those recorded when a name first appeared on a list "
+                     "(THESIS_TRACKING_RULE). (6) 'What changed since the previous snapshot?' (CHANGE_RULES). "
+                     "(7) A comparison page (COMPARE_RULES) and an interactive scenario calculator whose results "
+                     "are never stored or ranked (SCENARIO_LAB_BOUNDS). Several structures are adapted from "
+                     "filingcopilot, ticker-dossier and cc-equity-research (see THIRD_PARTY_NOTICES.md)."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -476,6 +490,70 @@ TRACKING_METHOD = (
 )
 
 
+# --- Display and data-quality rules (2026-10-14.5) -----------------------------------------------------
+# None of these feed a score, gate or ranking. They decide how evidence is labelled and compared.
+
+WATCHLIST_PRICE_RULE = (
+    "A watchlist price is verified on its own: the latest daily bar must be the as-of session, with positive, "
+    "internally consistent open/high/low/close, no unadjusted-split gap and no frozen feed. Analyses that need "
+    "history (trailing returns, volatility, momentum) each require their own window and are shown as "
+    "unavailable, naming the missing bars, when it is too short."
+)
+WATCHLIST_MIN_PRICE_BARS = 1          # bars needed to verify the as-of price itself
+FRESHNESS_RULE = (
+    "Data age is counted in completed NYSE sessions after the as-of session, in New York time (a session counts "
+    "as completed at 16:00 ET). The page warns when more than FRESHNESS_STALE_SESSIONS sessions have passed."
+)
+FRESHNESS_STALE_SESSIONS = 6          # a weekly update normally lags at most five sessions
+FRESHNESS_CALENDAR_DAYS = 120         # sessions listed in each page for the browser to count
+DATASET_STATES = {
+    "available": "Collected for the snapshot and passed validation.",
+    "partial": "Collected, but some requested items failed validation or were not returned.",
+    "stale": "Collected earlier than the freshness rule allows for this dataset.",
+    "missing": "Not collected: disabled, not configured, or not provided by any permitted source.",
+    "provider_error": "The source was called and failed (error, rejected response or request budget spent).",
+}
+DATASET_PARTIAL_BELOW = 0.98          # coverage below this share of requested items -> 'partial'
+FORENSIC_RULES = {
+    # adapted from cc-equity-research community-skills/analyze/financial-forensics.md (Apache-2.0)
+    "fcf_to_net_income": {"clean_at_least": 0.85, "concerning_below": 0.70,
+                          "note": "TTM free cash flow / TTM net income (not meaningful when net income <= 0)."},
+    "sbc_to_revenue": {"clean_below": 0.05, "concerning_above": 0.10,
+                       "note": "TTM stock-based compensation / TTM revenue."},
+    "not_collected": ["receivables (days sales outstanding)", "inventory days", "non-GAAP reconciliation",
+                      "deferred revenue", "capitalised software and R&D"],
+}
+TREND_FLAT_BAND = 0.02                # quarter-over-quarter moves within +/-2 points read as flat
+THESIS_TRACKING_RULE = (
+    "A name's thesis conditions are those recorded in the first snapshot where it appeared on that list, and "
+    "every later snapshot checks them against current data (not a refreshed thesis). Each condition reads "
+    "breached, holding or not measurable."
+)
+CHANGE_RULES = {
+    "revenue_growth_drop": 0.05,      # TTM revenue growth down at least 5 points
+    "operating_margin_drop": 0.03,
+    "fcf_margin_drop": 0.03,
+    "dilution_rise": 0.02,            # one-year share-count change up at least 2 points
+    "score_move": 5.0,                # composite score change worth listing
+}
+COMPARE_RULES = {
+    "max_names": 4, "min_names": 2,
+    "max_quarter_end_gap_days": 45,   # TTM windows ending further apart are flagged as different periods
+    "note": ("All figures come from one snapshot: prices at its as-of close, fundamentals from SEC facts filed by "
+             "that date, in USD as reported. Fiscal quarters can end on different dates; windows ending more than "
+             "45 days apart are flagged. Score components are comparable only between lists with the same profile "
+             "and benchmark-relative figures only between names with the same benchmark."),
+}
+SCENARIO_LAB_BOUNDS = {
+    # inputs a visitor may set; adapted from filingcopilot scenarios.py bounds (MIT)
+    "starting_revenue_growth": (-0.50, 1.00), "exit_ev_to_sales": (0.1, 100.0),
+    "annual_dilution": (-0.10, 0.20), "fcf_margin": (-0.50, 0.80),
+    "note": ("Your inputs, not the published assumptions. The calculator applies the published scenario formula "
+             "to them in your browser; nothing is stored, ranked or published, and the result is a conditional "
+             "calculation, not a forecast, target or probability."),
+}
+
+
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
@@ -519,6 +597,12 @@ def spec_dict() -> dict:
                       "leveraged_params": [LEVERAGED_KEYWORDS, LEVERAGED_FINANCING_RATE, LEVERAGED_ASSUMED_FEE,
                                            LEVERAGED_VOL_FACTORS, LEVERAGED_UNDERLYING_HINTS]},
         "legacy_bands": LEGACY_BANDS,
+        "display_rules": {"watchlist_price": [WATCHLIST_PRICE_RULE, WATCHLIST_MIN_PRICE_BARS],
+                          "freshness": [FRESHNESS_RULE, FRESHNESS_STALE_SESSIONS, FRESHNESS_CALENDAR_DAYS],
+                          "dataset_states": DATASET_STATES, "dataset_partial_below": DATASET_PARTIAL_BELOW,
+                          "forensics": FORENSIC_RULES, "trend_flat_band": TREND_FLAT_BAND,
+                          "thesis_tracking": THESIS_TRACKING_RULE, "changes": CHANGE_RULES,
+                          "compare": COMPARE_RULES, "scenario_lab": SCENARIO_LAB_BOUNDS},
     }
 
 

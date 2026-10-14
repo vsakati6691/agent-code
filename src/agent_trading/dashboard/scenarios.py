@@ -87,10 +87,13 @@ def max_drawdown(close: pd.Series) -> tuple[float, str | None, str | None]:
     return float(dd.min()), str(peak_date.date()), str(trough.date())
 
 
+RETURN_WINDOWS = (("1m", 21), ("3m", 63), ("6m", 126), ("1y", 252), ("3y", 756), ("5y", 1260))   # trading sessions
+
+
 def history_stats(close: pd.Series, bench: pd.Series | None) -> dict:
     """Trailing price returns vs benchmark and drawdowns. Price returns (dividends excluded)."""
     out = {"returns": {}, "drawdowns": {}}
-    for key, n in (("1m", 21), ("3m", 63), ("6m", 126), ("1y", 252), ("3y", 756), ("5y", 1260)):
+    for key, n in RETURN_WINDOWS:
         if len(close) > n:
             r = float(close.iloc[-1] / close.iloc[-1 - n] - 1)
             b = None
@@ -98,7 +101,10 @@ def history_stats(close: pd.Series, bench: pd.Series | None) -> dict:
                 aligned = bench.reindex(close.index).ffill()
                 if len(aligned.dropna()) > n and aligned.iloc[-1 - n] > 0:
                     b = float(aligned.iloc[-1] / aligned.iloc[-1 - n] - 1)
-            out["returns"][key] = {"stock": r, "benchmark": b, "excess": None if b is None else r - b}
+            # the stock and its benchmark use the same start and end sessions (spec 2026-10-14.5)
+            out["returns"][key] = {"stock": r, "benchmark": b, "excess": None if b is None else r - b,
+                                   "start": str(close.index[-1 - n].date()), "end": str(close.index[-1].date()),
+                                   "sessions": n}
         else:
             out["returns"][key] = None
     five = close.iloc[-1261:]
@@ -116,7 +122,10 @@ def history_stats(close: pd.Series, bench: pd.Series | None) -> dict:
 def chart_series(close: pd.Series, bench: pd.Series | None, bars: int = 1260, step: int = 5) -> dict:
     """Weekly-sampled, rebased-to-100 series for the detail-page chart."""
     c = close.iloc[-bars - 1:]       # same base bar as the 5-year return in history_stats
-    idx = c.index[::step].append(c.index[-1:]).unique()
+    # weekly points plus the exact start session of every return window, so a chart cut at a window's start
+    # shows the same figure as the return table (spec 2026-10-14.5)
+    starts = [c.index[-1 - n] for _, n in RETURN_WINDOWS if len(c) > n]
+    idx = c.index[::step].append(pd.DatetimeIndex(starts)).append(c.index[-1:]).unique().sort_values()
     out = {"dates": [str(d.date()) for d in idx], "stock": [round(float(c.loc[d] / c.iloc[0] * 100), 2) for d in idx]}
     if bench is not None:
         b = bench.reindex(c.index).ffill()
@@ -201,21 +210,59 @@ def key_risks(m: dict, f_flags: list[str], hist: dict | None, concentration: flo
     return risks or ["No rule-based risk flag triggered; read the 10-K risk factors."]
 
 
-def invalidation(m: dict, scen: dict | None) -> list[str]:
-    """Observable conditions that would undercut the research case (checked by any later snapshot)."""
+def thesis_conditions(m: dict, scen: dict | None) -> list[dict]:
+    """Observable conditions that would undercut the research case, in a form a later snapshot can check.
+
+    Each: {"id", "text", "metric", "op", "value"}; `invalidation()` shows the texts (spec 2026-10-14.5 keeps them)."""
     out = []
     g = m.get("revenue_growth_ttm")
     if g is not None and g > 0:
-        out.append(f"Trailing revenue growth falls below {_pct(g / 2)} (half of today's {_pct(g)}).")
+        out.append({"id": "revenue_growth", "metric": "revenue_growth_ttm", "op": "<", "value": g / 2,
+                    "text": f"Trailing revenue growth falls below {_pct(g / 2)} (half of today's {_pct(g)})."})
     if m.get("operating_margin") is not None:
-        out.append(f"Operating margin falls more than 5 points below today's {_pct(m['operating_margin'])}.")
+        out.append({"id": "operating_margin", "metric": "operating_margin", "op": "<",
+                    "value": m["operating_margin"] - 0.05,
+                    "text": f"Operating margin falls more than 5 points below today's {_pct(m['operating_margin'])}."})
     if m.get("fcf_ttm") is not None and m["fcf_ttm"] > 0:
-        out.append("Trailing free cash flow turns negative.")
-    out.append("Diluted share count grows more than 5% in a year.")
+        out.append({"id": "fcf", "metric": "fcf_ttm", "op": "<", "value": 0.0,
+                    "text": "Trailing free cash flow turns negative."})
+    out.append({"id": "dilution", "metric": "dilution", "op": ">", "value": 0.05,
+                "text": "Diluted share count grows more than 5% in a year."})
     if m.get("excess_12m") is not None:
-        out.append("The stock trails its benchmark by more than 20 points over six months.")
+        out.append({"id": "relative", "metric": "excess_6m", "op": "<", "value": -0.20,
+                    "text": "The stock trails its benchmark by more than 20 points over six months."})
     if scen and scen["base"]["assumptions"]["starting_revenue_growth"] > 0:
         g0 = scen["base"]["assumptions"]["starting_revenue_growth"]
-        out.append(f"Two consecutive quarters of year-over-year revenue growth below the bear case's starting "
-                   f"rate ({_pct(scen['bear']['assumptions']['starting_revenue_growth'])}; base case {_pct(g0)}).")
+        bear = scen["bear"]["assumptions"]["starting_revenue_growth"]
+        out.append({"id": "quarterly_growth", "metric": "quarterly_yoy_last2", "op": "<", "value": bear,
+                    "text": f"Two consecutive quarters of year-over-year revenue growth below the bear case's "
+                            f"starting rate ({_pct(bear)}; base case {_pct(g0)})."})
     return out
+
+
+def invalidation(m: dict, scen: dict | None) -> list[str]:
+    """Observable conditions that would undercut the research case (checked by any later snapshot)."""
+    return [c["text"] for c in thesis_conditions(m, scen)]
+
+
+def quarterly_yoy(revenue: list) -> list[float | None]:
+    """Year-over-year growth of each of the latest quarters with a quarter four places back (newest first)."""
+    out = []
+    for i in range(max(0, len(revenue) - 4)):
+        a, b = revenue[i], revenue[i + 4]
+        out.append(a / b - 1 if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b > 0 else None)
+    return out
+
+
+def check_condition(cond: dict, metrics: dict, fundamentals: dict | None) -> tuple[str, object]:
+    """('breached' | 'holding' | 'not measurable', the observed value) for one thesis condition."""
+    if cond["metric"] == "quarterly_yoy_last2":
+        yoy = quarterly_yoy((fundamentals or {}).get("revenue") or [])
+        if len(yoy) < 2 or yoy[0] is None or yoy[1] is None:
+            return "not measurable", None
+        return ("breached" if yoy[0] < cond["value"] and yoy[1] < cond["value"] else "holding"), yoy[:2]
+    v = metrics.get(cond["metric"])
+    if not isinstance(v, (int, float)) or not math.isfinite(v):
+        return "not measurable", None
+    hit = v < cond["value"] if cond["op"] == "<" else v > cond["value"]
+    return ("breached" if hit else "holding"), v
