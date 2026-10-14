@@ -1,0 +1,103 @@
+# Disabled until the owner explicitly sets DASHBOARD_DAILY=true.
+# 22:17 UTC is 18:17 EDT / 17:17 EST: after the conservative post-close delay window.
+# Current public data only. No brokerage access, messages, weekly rescoring or tracking updates.
+name: research-dashboard-daily
+
+on:
+  schedule:
+    - cron: "17 22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-dashboard
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: vars.DASHBOARD_DAILY == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    outputs:
+      code: ${{ steps.refresh.outputs.code }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - name: Read existing weekly data
+        run: |
+          git config user.name "research-dashboard[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags --depth=1 origin research-data
+          git worktree add --detach research-data FETCH_HEAD
+      - name: Light refresh
+        id: refresh
+        timeout-minutes: 15
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
+        run: |
+          args=(refresh --data research-data --cache .cache/http --commit "$GITHUB_SHA")
+          [ "$OPTIONS" = "true" ] || args+=(--no-options)
+          set +e
+          python -m agent_trading.dashboard "${args[@]}"
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" != "0" ] && [ "$code" != "2" ]; then exit "$code"; fi
+      - name: Verify and save daily files and appended audit only
+        run: |
+          python -m agent_trading.dashboard verify --data research-data
+          cd research-data
+          git diff --exit-code -- snapshots tracking.json
+          git add -- audit.jsonl
+          if [ -d daily ]; then git add -- daily; fi
+          if ! git diff --cached --quiet; then
+            git commit -m "Daily public research refresh $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin HEAD:research-data
+          fi
+      - name: Build from stored data
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+        run: python -m agent_trading.dashboard build --data research-data --out site
+      - name: Upload Pages artifact
+        if: vars.DASHBOARD_PUBLISH == 'true'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: site
+
+  deploy:
+    needs: update
+    if: vars.DASHBOARD_DAILY == 'true' && vars.DASHBOARD_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  result:
+    needs: [update, deploy]
+    if: always() && vars.DASHBOARD_DAILY == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          UPDATE: ${{ needs.update.result }}
+          CODE: ${{ needs.update.outputs.code }}
+          DEPLOY: ${{ needs.deploy.result }}
+        run: |
+          [ "$UPDATE" = "success" ] && [ "$CODE" != "2" ] && [ "$DEPLOY" != "failure" ]

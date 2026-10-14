@@ -82,6 +82,8 @@ class HttpClient:
     _streak: dict[str, int] = field(default_factory=dict)
     cache_hits: int = 0
     _last: dict[str, float] = field(default_factory=dict)
+    deadline: float | None = None          # optional monotonic deadline, used by the light refresh only
+    fresh_only: bool = False              # bypass a pre-close cache on a post-close refresh
 
     def __post_init__(self) -> None:
         self.session = self.session or requests.Session()
@@ -94,7 +96,8 @@ class HttpClient:
                   cache_key_extra: str = "") -> bytes:
         provider = self._provider(url)
         key = self._key(url, params, cache_key_extra)
-        cached = self._read_cache(key, max_age_hours)
+        self._remaining()
+        cached = self._read_cache(key, 0 if self.fresh_only else max_age_hours)
         if cached is not None:
             self.cache_hits += 1
             return cached
@@ -122,6 +125,17 @@ class HttpClient:
                 "final_interval_s": {k: round(v.min_interval, 2) for k, v in self.limits.items()}}
 
     # --- internals ---------------------------------------------------------------------
+    def _remaining(self) -> float:
+        remaining = float("inf") if self.deadline is None else self.deadline - self.clock()
+        if remaining <= 0:
+            raise BudgetExceeded("refresh time budget spent")
+        return remaining
+
+    def _wait(self, seconds: float) -> None:
+        if seconds >= self._remaining():
+            raise BudgetExceeded("refresh time budget cannot accommodate provider wait")
+        self.sleep(seconds)
+
     @staticmethod
     def _provider(url: str) -> str:
         parts = urlsplit(url)
@@ -140,7 +154,7 @@ class HttpClient:
             self._pace(provider)
             self.used[provider] = self.used.get(provider, 0) + 1
             try:
-                resp = self.session.get(url, params=params, timeout=self.timeout, allow_redirects=False,
+                resp = self.session.get(url, params=params, timeout=min(self.timeout, self._remaining() / 2), allow_redirects=False,
                                         headers={"User-Agent": self.user_agent, "Accept-Encoding": "gzip, deflate"})
             except (requests.Timeout, requests.ConnectionError) as exc:
                 last_error = type(exc).__name__
@@ -172,9 +186,9 @@ class HttpClient:
                 except (TypeError, ValueError):
                     pass
                 wait = max(wait, 5.0)
-            if attempt < limit:
+            if attempt < limit and self.budget_left(provider) > 0:
                 log.info("%s: %s, retry %d/%d in %.0fs", host, last_error, attempt, limit - 1, wait)
-                self.sleep(wait)
+                self._wait(wait)
         raise FetchError(f"{host}: {last_error} after {attempt} attempts")
 
     def _recover(self, provider: str) -> None:
@@ -189,7 +203,7 @@ class HttpClient:
     def _pace(self, provider: str) -> None:
         wait = self.limits[provider].min_interval - (self.clock() - self._last.get(provider, -1e9))
         if wait > 0:
-            self.sleep(wait)
+            self._wait(wait)
         self._last[provider] = self.clock()
 
     @staticmethod

@@ -29,6 +29,7 @@ from .scenarios import RETURN_WINDOWS, implied_growth_text
 from .site_ai import ai_page, methodology_ai, top20_block
 from .site_compare import compare_page
 from .site_lists import growth_page, multibaggers_page
+from . import site_refresh
 from .site_options import lists_of, options_page
 from .site_research import changes_section, datasets_table, lab_section, quality_block, research_section
 from .site_overview import band_title, evidence_fragments, excluded_page, list_page, overview, scenario_flags_html
@@ -634,11 +635,12 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         page(title, body, cur, depth, fr, js), encoding="utf-8")
     tracking = store.read_json("tracking.json")
     prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
-    write("index.html", "Overview", overview(snap, status, dates, tracking, prev_snap), "index.html")
+    daily = site_refresh.load_context(data_dir, snap, out)
+    write("index.html", "Overview", overview(snap, status, dates, tracking, prev_snap, daily), "index.html")
     write("ai.html", "AI stocks", ai_page(snap), "ai.html")
-    write("growth.html", "Growth Stocks", growth_page(snap), "growth.html")
+    write("growth.html", "Growth Stocks", growth_page(snap, daily), "growth.html")
     write("multibaggers.html", "Multibaggers", multibaggers_page(snap), "multibaggers.html")
-    write("options.html", "Options research", options_page(snap), "options.html")
+    write("options.html", "Options research", options_page(snap, daily), "options.html")
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
     write("history.html", "History", history_page(dates, tracking), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
@@ -649,7 +651,7 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "stock").mkdir()
     (out / "reports").mkdir()
     (out / "downloads").mkdir()
-    (out / "data").mkdir()
+    (out / "data").mkdir(exist_ok=True)
     (out / "symbol").mkdir()
     (out / "fragments").mkdir()
     for rel, text in evidence_fragments(snap["bands"]).items():       # evidence rows load on demand (see assets.JS)

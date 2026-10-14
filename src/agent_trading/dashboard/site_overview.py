@@ -589,7 +589,7 @@ def ai_teaser(snap: dict) -> str:
 
 
 def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict | None,
-             prev_snap: dict | None = None) -> str:
+             prev_snap: dict | None = None, daily: dict | None = None) -> str:
     bands = snap["bands"]
     growth_count = len({c["ticker"] for k, b in bands.items() if list_page(k) == "growth.html" for c in b["candidates"]})
     multi = bands.get("multibagger")
@@ -598,7 +598,7 @@ def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict |
     if ai_summary:
         ai_summary = f'<details class="context-details"><summary>AI stocks summary</summary>{ai_summary}</details>'
     return f"""{scan_header(snap, prev_snap)}
-{market_context(snap)}
+{market_context(snap, daily)}
 <section aria-label="Choose a research list" class="research-paths">
 <a class="research-path" href="growth.html"><span class="eyebrow">LARGE · MID · SMALL CAP</span>
 <strong>Growth Stocks <span aria-hidden="true">↗</span></strong><span>Scan, filter and compare the ranked growth lists.</span>

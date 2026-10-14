@@ -5,6 +5,7 @@ import html
 
 from . import evidence, spec
 from .fmt import money, num, ok, pct, sval
+from . import site_refresh
 
 E = html.escape
 LIST_ORDER = ("large", "mid", "small", "multibagger")
@@ -37,21 +38,22 @@ def benchmark_return(snap: dict, ticker: str, window: str) -> float | None:
     return next(iter(values)) if len(values) == 1 else None
 
 
-def market_context(snap: dict) -> str:
+def market_context(snap: dict, daily: dict | None = None) -> str:
     cards = []
     for ticker, name in BENCHMARKS:
         b = (snap.get("benchmarks") or {}).get(ticker) or {}
         current = b.get("date") == snap.get("as_of")
-        value = money(b.get("close")) if current else "Unavailable"
+        close, note = site_refresh.price(ticker, b.get("close") if current else None, daily)
+        value = money(close) if close is not None else "Unavailable"
         r = benchmark_return(snap, ticker, "1y") if current else None
         direction = "positive" if ok(r) and r >= 0 else "negative" if ok(r) else "muted"
         cards.append(f'<article class="market-tile"><div class="market-label"><strong>{ticker}</strong>'
                      f'<span>{E(name)}</span></div><div class="market-value">{value}</div>'
                      f'<div class="market-foot"><span class="{direction}">{pct(r, 1, True)} · 1Y price return</span>'
-                     f'<span>{E(str(b.get("date") or "Date unavailable"))} close</span></div></article>')
+                     f'<span>{E(note)}</span><span>Weekly: {E(str(b.get("date") or "Date unavailable"))}</span></div></article>')
     return ('<section aria-label="Market context"><div class="section-heading"><h2>Market context</h2>'
             '<span class="small muted">ETF benchmarks · stored closing prices</span></div>'
-            f'<div class="market-grid">{"".join(cards)}</div></section>')
+            f'{site_refresh.banner(snap, daily)}<div class="market-grid">{"".join(cards)}</div></section>')
 
 
 def scan_header(snap: dict, prev_snap: dict | None) -> str:
@@ -84,7 +86,7 @@ def scan_header(snap: dict, prev_snap: dict | None) -> str:
             f'<div class="scan-stats" aria-label="Snapshot summary">{tiles}</div>')
 
 
-def candidate_scan(snap: dict, band_keys: list[str] | None = None) -> str:
+def candidate_scan(snap: dict, band_keys: list[str] | None = None, daily: dict | None = None) -> str:
     bands = snap.get("bands") or {}
     keys = [k for k in LIST_ORDER if k in bands] + sorted(k for k in bands if k not in LIST_ORDER)
     if band_keys is not None:
@@ -100,12 +102,13 @@ def candidate_scan(snap: dict, band_keys: list[str] | None = None) -> str:
             missing = len(c.get("missing") or [])
             ret = (((c.get("history") or {}).get("returns") or {}).get("1y") or {}).get("stock")
             risk = c.get("counterargument") or "Weakest evidence not recorded"
+            close, price_note = site_refresh.price(ticker, c.get("price"), daily)
             rows.append(f'''<tr data-ticker="{E(ticker)}" data-sector="{E(sector)}" data-list="{E(key)}"
 data-quality="{E(quality)}" data-gaps="{'yes' if missing else 'no'}">
 <td class="tk">{pin_button(ticker)}<a href="stock/{E(key)}-{E(ticker)}.html"><strong>{E(ticker)}</strong></a>
 <span class="scan-company">{E(c.get('name') or ticker)}</span></td>
 <td class="small">{E(_label(key, band))}<span class="scan-company">Rank #{c.get('rank', '—')} · {E(sector)}</span></td>
-<td class="num" data-v="{sval(c.get('price'))}">{money(c.get('price'))}<span class="scan-company">{E(str(c.get('price_date') or 'Date unavailable'))}</span></td>
+<td class="num" data-v="{sval(close)}">{money(close) if close is not None else 'Unavailable'}<span class="scan-company">{E(price_note)}</span><span class="scan-company">Weekly {E(str(c.get('price_date') or 'Date unavailable'))}</span></td>
 <td class="num" data-v="{sval(c.get('composite'))}"><strong>{num(c.get('composite'), 1)}</strong><span class="scan-company">within list / 100</span></td>
 <td class="num {'positive' if ok(ret) and ret >= 0 else 'negative' if ok(ret) else ''}" data-v="{sval(ret)}">{pct(ret, 1, True)}</td>
 <td class="small"><span class="pill {E(quality)}">{E(quality)} evidence</span><span class="scan-company">{missing} missing input{'s' if missing != 1 else ''}</span></td>
@@ -117,6 +120,7 @@ data-quality="{E(quality)}" data-gaps="{'yes' if missing else 'no'}">
 <a class="small" href="compare.html">Compare companies →</a></div>
 <p class="small muted">Scores and ranks apply within each list, not across lists. A ticker may appear in more than one list.
 1Y is a trailing price return; research scores are not probabilities.</p>
+{site_refresh.banner(snap, daily)}
 <div class="scan-toolbar controls">
 <label class="scan-search">Search candidates<input type="search" data-search="t-scan" placeholder="Ticker, company, sector or risk…" aria-label="Search candidates"></label>
 <label>Research list<select data-filter="t-scan" data-field="list"><option value="">All lists</option>{lists}</select></label>

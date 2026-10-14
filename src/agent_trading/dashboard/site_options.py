@@ -289,7 +289,8 @@ def _list(snap: dict, h, kind: str, data: dict | None, o: dict) -> str:
 <p class="small">Select an underlying to show every fact, assumption, risk and payoff for that contract. <a href="downloads/{E(snap["as_of"])}_options_{h.key}_{plural}.csv" download>Download {plural} (CSV)</a></p>{exclusions}"""
 
 
-def options_page(snap: dict) -> str:
+def options_page(snap: dict, daily: dict | None = None) -> str:
+    from .site_refresh import options_section
     o = snap.get("options") or {}
     r = spec.OPTION_RULES
     head = f"""<h1>Options watchlist: calls and puts</h1>
@@ -299,6 +300,8 @@ not recommendations.</p>
 <div class="banner bad small" id="options-critical"><strong>Buying an option can lose the entire premium.</strong>Maximum loss
 for every contract below is the premium paid (ask x 100), shown in its own column on every screen size. Figures are
 before fees. Every contract here carries the risk of losing all of that premium.</div>
+{options_section(snap, daily or {})}
+<h2>Weekly tracked view · {E(snap['as_of'])}</h2>
 {status_html(snap)}{version_line(snap)}
 <details class="card small" open><summary>What these lists are, and what "top" means</summary>
 <p>{E(spec.OPTION_UNIVERSE_TEXT)}</p><p>{E(spec.OPTION_TOP_DEFINITION)}</p><p>{E(spec.OPTION_RANKING_NOTE)}</p>
