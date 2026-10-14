@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Instructions for AI assistants (Claude Code and others) working in this repository.
+Instructions for AI assistants working in this repository. Claude Code reads this file directly; Codex and other tools are pointed here by [AGENTS.md](AGENTS.md).
 
 ## Project
 
