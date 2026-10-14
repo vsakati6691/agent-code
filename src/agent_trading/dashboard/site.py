@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import spec
 from .assets import CSS, JS
-from .fmt import cap, csv_value, metric, money, net_position, num, ok as _ok, pct, sval
+from .fmt import SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval
 from .scenarios import implied_growth_text
 from .site_options import lists_of, options_page
 from .site_overview import band_title, overview
@@ -185,8 +185,9 @@ def detail(c: dict, snap: dict) -> str:
         scen_html = f"""<div class="table-wrap"><table><thead><tr><th>Scenario</th>{yh}<th>Assumptions</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <p class="small">Bull case reaches 2x in five years: <strong>{yn("bull_doubles_in_5y")}</strong> ·
-5x in five years: <strong>{yn("bull_multibagger_5y")}</strong>{ten}. {E(spec.MULTIBAGGER_DEFINITION)}</p>
-<p class="small muted">{E(spec.SCENARIO_METHOD)}</p>"""
+5x in five years: <strong>{yn("bull_multibagger_5y")}</strong>{ten}.</p>
+{summary_details(SUMMARIES["multibagger"], spec.MULTIBAGGER_DEFINITION)}
+{summary_details(SUMMARIES["scenario_method"], spec.SCENARIO_METHOD, "How the scenarios are built")}"""
     earn = c.get("next_earnings")
     flags = "".join(f'<span class="pill">{E(f)}</span>' for f in c["flags"]) or '<span class="muted">none</span>'
     ns = "".join(f'<li><strong>{E(k.replace("_", " "))}:</strong> {E(v)}</li>' for k, v in c["not_scored"].items())
@@ -229,7 +230,7 @@ summary of evidence, not a recommendation.</p>
 </tbody></table></div><p class="small muted">* quarter derived from cumulative or annual filings. Source: {E(c["sources"]["fundamentals"])},
 facts filed on or before {E(snap["as_of"])} only.</p>
 <h2>Bear / base / bull valuation ranges</h2>{scen_html}
-<div class="banner info"><strong>Probability</strong>{E(c["probability"])}</div>
+<div class="banner info"><strong>Probability</strong>{summary_details(SUMMARIES["probability"], c["probability"], "Why")}</div>
 <h2>Key business risks</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["risks"])}</ul>
 <h2>What would invalidate the thesis</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["invalidation"])}</ul>"""
 

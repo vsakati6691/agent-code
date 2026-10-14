@@ -107,6 +107,8 @@ tr.detail > td { white-space: normal; }
   box-shadow: 1px 0 0 var(--border); min-width: 84px; }
 .table-wrap th.tk { background: var(--surface-2); }
 .spark { vertical-align: middle; }
+.summary { margin: 4px 0; } details.more { display: inline; } details.more > summary { display: inline; font-size: 13px; }
+details.more[open] > p { margin: 6px 0 0; }
 .chart.range { overflow-x: auto; } .chart.range svg { min-width: 560px; }
 caption { text-align: left; }
 @media (max-width: 700px) {

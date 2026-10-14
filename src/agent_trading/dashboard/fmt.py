@@ -89,6 +89,22 @@ def net_position(net_debt, capital: bool = True) -> str:
     return f"{'N' if capital else 'n'}et {word} {cap(abs(net_debt))}"
 
 
+SUMMARIES = {
+    "multibagger": "A 'multibagger' here means a bull case of at least 5x today's price in five years; 2x and "
+                   "10-year tests are shown separately, and none of it is a forecast.",
+    "probability": "No probabilities are shown, because no model here has proven out-of-sample calibration.",
+    "scenario_method": "Values come from a revenue growth path and an EV/Sales multiple, with every assumption "
+                       "listed; they are conditional, not forecasts.",
+}
+
+
+def summary_details(summary: str, full: str, label: str = "Full definition") -> str:
+    """One-sentence summary with the full text in a toggle (overview and detail pages)."""
+    import html
+    return (f'<div class="small summary">{html.escape(summary)} <details class="more"><summary>{html.escape(label)}'
+            f'</summary><p>{html.escape(full)}</p></details></div>')
+
+
 def sval(v) -> str:
     """data-v attribute for numeric sorting (plain digits, never scientific notation)."""
     return plain(v, 8).replace(",", "") if ok(v) else ""

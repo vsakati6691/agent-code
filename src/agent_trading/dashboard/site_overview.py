@@ -4,7 +4,7 @@ from __future__ import annotations
 import html
 
 from . import spec
-from .fmt import cap, money, num, pct, sval
+from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval
 from .scenarios import implied_growth_text
 
 E = html.escape
@@ -238,7 +238,9 @@ dilution {pct(m.get("dilution"), 1)}/yr · SBC {pct(m.get("sbc_to_revenue"))} of
 <h4>What would invalidate the thesis</h4><ul class="tight small">{inval}</ul></article>""")
     return f"""<h2 id="multibagger">Speculative multibagger research candidates</h2>
 <div class="banner warn small"><strong>5-10 year research horizon</strong>These are long-horizon research candidates. Nothing
-here implies multibagger returns within 3-12 months. {E(spec.MULTIBAGGER_DEFINITION)} {E(spec.PROBABILITY_STATEMENT)}</div>
+here implies multibagger returns within 3-12 months.
+{summary_details(SUMMARIES["multibagger"], spec.MULTIBAGGER_DEFINITION)}
+{summary_details(SUMMARIES["probability"], spec.PROBABILITY_STATEMENT, "Why no probabilities")}</div>
 <p class="small">{E(definition_line("multibagger", b))} Showing {len(b["candidates"])} of up to {b.get("max_results", 5)}.
 <a href="methodology.html#multibagger">Criteria and rationale</a> ·
 <a href="downloads/{E(snap["as_of"])}_multibagger.csv" download>CSV</a></p>

@@ -161,3 +161,19 @@ def test_phone_width_keeps_only_the_named_columns(site):
 def test_ticker_column_is_sticky_in_every_wide_table(site):
     for page, tid in (("index.html", "t-large"), ("options.html", "o-3m-call"), ("watchlist.html", "t-watch")):
         assert any("tk" in cls.split() for _, cls in _header_classes((site / page).read_text(encoding="utf-8"), tid)), page
+
+
+def _outside_details(html: str) -> str:
+    return re.sub(r"(?s)<details\b.*?</details>", " ", html)
+
+
+def test_long_paragraphs_are_folded_except_on_methodology(site):
+    from agent_trading.dashboard import spec
+    full = [spec.MULTIBAGGER_DEFINITION[:80], spec.PROBABILITY_STATEMENT[:80], spec.SCENARIO_METHOD[:80]]
+    pages = [site / "index.html"] + list((site / "stock").glob("*.html"))
+    for p in pages:
+        text = p.read_text(encoding="utf-8").replace("&#x27;", "'")
+        for f in full:
+            assert f.replace("'", "'") not in _outside_details(text), (p.name, f[:30])
+    meth = (site / "methodology.html").read_text(encoding="utf-8").replace("&#x27;", "'")
+    assert all(f in _outside_details(meth) for f in full)
