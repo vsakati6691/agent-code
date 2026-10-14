@@ -194,3 +194,10 @@ def test_history_overview_and_audit_explain_empty_states(site):
     assert "No tracking data yet" not in over and "trading sessions after the first snapshot" in over
     audit = (site / "audit.html").read_text(encoding="utf-8")
     assert re.search(r"<td class=\"small\">(fixture|local build)</td>", audit)
+
+
+def test_phone_nav_is_one_scrolling_row():
+    from agent_trading.dashboard.assets import CSS, JS
+    phone = CSS[CSS.index("@media (max-width: 700px)"):]
+    assert "nav { display: flex; flex-wrap: nowrap; overflow-x: auto;" in phone and "min-width: 0" in phone
+    assert "nav a[aria-current]" in JS

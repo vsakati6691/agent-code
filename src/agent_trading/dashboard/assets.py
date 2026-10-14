@@ -112,6 +112,10 @@ details.more[open] > p { margin: 6px 0 0; }
 .chart.range { overflow-x: auto; } .chart.range svg { min-width: 560px; }
 caption { text-align: left; }
 @media (max-width: 700px) {
+  header.site .inner { flex-direction: column; align-items: stretch; gap: 4px; padding-top: 8px; padding-bottom: 6px; }
+  nav { display: flex; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 14px; padding-bottom: 4px; min-width: 0; max-width: 100%;
+        scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  nav a { flex: none; margin-right: 0; padding: 4px 0; }
   h1 { font-size: 20px; } h2 { font-size: 17px; } th, td { padding: 6px 5px; } .hide-sm { display: none; }
   table { font-size: 13px; } td.risk { min-width: 140px; } .tabs button { padding: 6px 9px; }
 }
@@ -119,6 +123,11 @@ caption { text-align: left; }
 
 JS = r"""
 (function () {
+  // phone header: keep the current page's link in view inside the scrolling nav
+  var cur = document.querySelector('nav a[aria-current]');
+  if (cur && cur.parentNode.scrollWidth > cur.parentNode.clientWidth) {
+    cur.parentNode.scrollLeft = cur.offsetLeft - 16;
+  }
   // freshness: warn in the browser even if a failed update never redeployed the site
   var fresh = document.getElementById('freshness');
   if (fresh) {
