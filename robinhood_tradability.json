@@ -1,0 +1,463 @@
+{
+ "source": "Robinhood MCP get_equity_tradability (read-only), checked from a Claude session",
+ "rule": "Published only if Robinhood's read-only get_equity_tradability check reports tradeable = true, state = active, and 'tradable' for an individual account (regular hours), and the check is at most 35 days old. Not tradable, not found, unverified or stale checks exclude the stock with that reason (fail closed).",
+ "max_age_days": 35,
+ "updated_at": "2026-10-14T10:48:51+00:00",
+ "symbols": {
+  "ABX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "AGX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "AMD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "APH": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ARQT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "AVPT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "CF": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "CIEN": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "CNC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "COCO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "CRDO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "DCTH": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "DELL": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "DJCO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "DLTR": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "DXCM": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ECPG": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ELF": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ENVA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ETON": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "EXPE": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "FA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "FIVE": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "FIVN": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "FIX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "FLXS": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "FTNT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "GIC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "GMED": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "GOLD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "GRND": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "HALO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "HL": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "HPE": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "HRMY": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "HRTG": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "HUBS": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "IA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "IESC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "IMAX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "JOE": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "KALU": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "KRT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "LFST": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "LIF": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "LINC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "LIND": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "LOCO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "LQDT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MAMA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MNST": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MPC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MTW": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MU": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MYE": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "MYRG": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "NRIX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "NUTX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "NVDA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "NVT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "NWPX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "OOMA": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PARR": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PAYS": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PKE": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PLTR": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PNTG": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PRCH": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "PWR": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "QNST": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "RDVT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "RELY": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "ROST": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "SEZL": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "SHOO": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "SNDK": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "SSRM": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "STLD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "STX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "TCMD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "TER": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "TGTX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "TMDX": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "VCEL": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "VCTR": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "VCYT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "VMD": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "VRT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "VSXY": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "WDC": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  },
+  "WT": {
+   "tradable": true,
+   "reason": "",
+   "checked_at": "2026-10-14"
+  }
+ }
+}
