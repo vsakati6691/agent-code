@@ -5,7 +5,7 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 - Code: `src/agent_trading/dashboard/`
 - Workflow: `.github/workflows/research-dashboard.yml`
 - Rules: `src/agent_trading/dashboard/spec.py` (pre-registered and hashed)
-- Tests: `tests/test_dashboard.py`, `tests/test_dashboard_v2.py`, `tests/test_dashboard_http.py`
+- Tests: `tests/test_dashboard.py`, `tests/test_dashboard_v2.py`, `tests/test_dashboard_http.py`, `tests/test_dashboard_site.py` (builds a two-snapshot demo site and checks it: links, page size, table labels, one h1 per page, no raw values)
 - Site modules: `site.py` (shell, detail pages, history, methodology, audit, build), `site_overview.py`, `site_options.py`, `site_watchlist.py`, `fmt.py`
 
 ## What the site shows
@@ -14,12 +14,30 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 |---|---|
 | Overview | Freshness and stale-data banners, then five compact panels:
 <ul><li>upcoming earnings (scheduled, unverified)</li><li>new entrants, departures and rank moves</li><li>sector concentration and downside-risk flags</li><li>performance vs benchmarks from immutable snapshots</li><li>data coverage, freshness and missing-data warnings</li></ul>Then **Growth stocks**: tabs for the large-, mid- and small-cap top 10. Each tab states its market-cap definition and universe (large cap = S&P 500 members only). Its columns are rank, ticker/company, sector, market cap, price, revenue growth, earnings/FCF growth, valuation, research score, 3M/6M/1Y returns, 1Y vs benchmark, and main risk. Selecting a ticker expands its evidence, thesis, bear case, 8-quarter trend, base-case assumptions and invalidation. Then **Speculative multibagger research candidates**: top 5, 5-10 year horizon, with growth evidence, cash/runway, debt/dilution/valuation risk, bear/base/bull at 1/3/5/10 years, what must happen, and what would invalidate it |
-| Stock detail (one per candidate) | Price, market cap, sector, sources, timestamps; thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; risks; invalidation conditions; "probability not established" |
+| Stock detail (one per candidate) | Price, market cap, sector, sources, timestamps; earnings dates (next: scheduled, unverified; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; risks; invalidation conditions; "probability not established" |
 | Options | Calls/Puts toggle x 3-, 6- and 12-month tabs: six lists of up to 10 contracts each, at most 2 per underlying. Each list shows the actual count and the reasons other contracts were left out. Contracts show with bid/ask, spread, volume/OI, IV, Greeks, premium x 100, adjusted-contract flag, breakeven, maximum loss, payoffs at expiration, a 30-day Black-Scholes sensitivity grid, and earnings before expiry. Shows an unavailable state when no valid chain exists |
 | Watchlist 2030 | The owner's ticker list (imported 2026-10-14, not synchronised). Each symbol is verified (name, exchange, type, listing status), with the latest verified price and timestamp. Conditional year-end-2030 bear/base/bull PRICE scenarios (% change and annualized) come from a company, ETF or leveraged-ETF method, with expandable assumptions, catalysts, bear case, invalidation, sources, evidence quality and missing information. Also: a range chart, theme concentration, sorting, filters and CSV. Unresolved or unmodellable symbols stay visible as 'Scenario unavailable' with the reason |
+| Symbol pages (`symbol/<TICKER>.html`) | Everything known about one symbol: list ranks, listed option contracts, its watchlist scenario (or what would unlock one), and its ranks in every stored snapshot. Reached from the header's 'Find a ticker' box, which works offline from an inline list |
+| Excluded (`excluded-<list>.html`) | Every stock considered for a list but not shown, grouped by reason, with the failing value |
 | History & tracking | Every weekly report, and the forward returns of each stored list (1, 3, 6 and 12 months) vs benchmarks, net of assumed friction, with turnover and drawdown |
 | Methodology | Every rule from `spec.py`, rendered, with the version history |
-| Audit trail | Snapshot hashes, integrity check, request counts, data-source notes, and the append-only event log |
+| Audit trail | Snapshot hashes ("local build" when no commit), integrity check, request counts, data-source notes, links to `data/latest.json`, `data/<as-of>.json` and `data/schema.json` (field descriptions), and the append-only event log |
+| Feed | `feed.xml`: a static Atom feed of the weekly reports. The workflow sends nothing |
+
+### Reading and using the site
+
+- **Time frames** are kept separate: trailing returns, conditional scenarios, option expiry windows and tracking periods.
+- **Weekly changes:** "This week's changes" explains each rank move by the change in the 0-100 score and the component
+  scores that moved most.
+- **Options:** pages open on Calls / 3 months; a URL hash such as `#put-6m` selects another view, and the hash follows
+  each click. "Distance to breakeven" is signed, or reads "already past breakeven".
+- **Phone layout:** under 700px the lists keep rank, ticker, price, score, 1Y and main risk, and options keep rank,
+  underlying, expiry, strike, bid/ask, premium, breakeven and score. Ticker columns stay pinned while tables scroll,
+  and the navigation is one scrolling row.
+- **Theme and print:** the theme button cycles auto, light and dark, and is remembered on the device. Printing hides
+  controls and expands every section.
+- **Long definitions** (multibagger, probabilities, scenario method) are one sentence plus a toggle on the overview and
+  detail pages. The methodology page has the full text.
 
 ## Architecture
 

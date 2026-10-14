@@ -19,11 +19,19 @@ def lists_of(hz: dict) -> dict:
                                    "status": "puts were not collected in this snapshot (before spec 2026-10-14.2)"}}
 
 
+def distance_text(kind: str, signed) -> str:
+    """Signed distance from the stock price to the breakeven at expiry, in words a reader parses in one pass."""
+    if not isinstance(signed, (int, float)):
+        return "n/a"
+    if kind == "call":
+        return f"{signed:+.1%} (stock must rise)" if signed > 0 else             f"already past breakeven (breakeven {abs(signed):.1%} below the stock)"
+    return f"{signed:+.1%} (stock must fall)" if signed < 0 else         f"already past breakeven (breakeven {abs(signed):.1%} above the stock)"
+
+
 def _row(x: dict, kind: str, rid: str) -> str:
     rc = x.get("rank_components", {})
     ev = ", ".join(f'{e["date"]}' for e in x.get("events_before_expiry", [])) or "none scheduled"
-    req = x.get("required_move", abs(x.get("breakeven_move") or 0))
-    direction = "up" if kind == "call" else "down"
+    signed = x.get("breakeven_move")
     pay = "".join(f'<tr><td class="num">{pct(p["move"], 0, True)}</td><td class="num">{money(p["underlying"])}</td>'
                   f'<td class="num">{money(p["pl_per_contract"], 0)}</td><td class="num">{pct(p["return_on_premium"], 0, True)}</td></tr>'
                   for p in x.get("payoffs", []))
@@ -34,34 +42,34 @@ def _row(x: dict, kind: str, rid: str) -> str:
         for row in sens.get("grid", []))
     flags = "".join(f'<span class="pill">{E(f)}</span>' for f in x.get("flags", []))
     return f"""<tbody class="item" data-sector="{E(x["underlying"])}"><tr>
-<td class="num sticky" data-v="{x.get("rank")}">{x.get("rank")}</td>
-<td class="sticky2"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}">
+<td class="num" data-v="{x.get("rank")}">{x.get("rank")}</td>
+<td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}">
 <strong>{E(x["underlying"])}</strong></button><div class="small muted">{kind}</div></td>
-<td class="num" data-v="{E(x["expiration"])}">{E(x["expiration"])}</td><td class="num" data-v="{x["dte"]}">{x["dte"]}</td>
+<td class="num" data-v="{E(x["expiration"])}">{E(x["expiration"])}</td><td class="num hide-sm" data-v="{x["dte"]}">{x["dte"]}</td>
 <td class="num" data-v="{sval(x["strike"])}">{money(x["strike"])}</td>
-<td class="num" data-v="{sval(x.get("spot"))}">{money(x.get("spot"))}</td>
+<td class="num hide-sm" data-v="{sval(x.get("spot"))}">{money(x.get("spot"))}</td>
 <td class="num">{money(x["bid"])} / {money(x["ask"])}</td>
-<td class="num" data-v="{sval(x["spread_pct"])}">{pct(x["spread_pct"], 1)}</td>
+<td class="num hide-sm" data-v="{sval(x["spread_pct"])}">{pct(x["spread_pct"], 1)}</td>
 <td class="num" data-v="{sval(x["premium_per_contract_ask"])}">{money(x["premium_per_contract_ask"], 0)}</td>
 <td class="num" data-v="{sval(x["breakeven"])}">{money(x["breakeven"])}</td>
-<td class="num" data-v="{sval(req)}">{pct(req, 1)} {direction}</td>
-<td class="num" data-v="{sval(x["max_loss_per_contract"])}">{money(x["max_loss_per_contract"], 0)}</td>
-<td class="num" data-v="{sval(x.get("volume"))}">{num(x.get("volume"), 0)}</td>
-<td class="num" data-v="{sval(x.get("open_interest"))}">{num(x.get("open_interest"), 0)}</td>
-<td class="num" data-v="{sval(x.get("iv"))}">{pct(x.get("iv"), 1)}</td>
-<td class="num" data-v="{sval(x.get("delta"))}">{num(x.get("delta"))}</td>
-<td class="num" data-v="{sval(x.get("theta"))}">{num(x.get("theta"), 3)}</td>
+<td class="num dist hide-sm" data-v="{sval(signed)}">{E(distance_text(kind, signed))}</td>
+<td class="num hide-sm" data-v="{sval(x["max_loss_per_contract"])}">{money(x["max_loss_per_contract"], 0)}</td>
+<td class="num hide-sm" data-v="{sval(x.get("volume"))}">{num(x.get("volume"), 0)}</td>
+<td class="num hide-sm" data-v="{sval(x.get("open_interest"))}">{num(x.get("open_interest"), 0)}</td>
+<td class="num hide-sm" data-v="{sval(x.get("iv"))}">{pct(x.get("iv"), 1)}</td>
+<td class="num hide-sm" data-v="{sval(x.get("delta"))}">{num(x.get("delta"))}</td>
+<td class="num hide-sm" data-v="{sval(x.get("theta"))}">{num(x.get("theta"), 3)}</td>
 <td class="num" data-v="{sval(rc.get("total"))}"><strong>{num(rc.get("total"), 1)}</strong></td>
-<td class="small">{E(ev)}</td></tr>
+<td class="small hide-sm">{E(ev)}</td></tr>
 <tr id="{rid}" class="detail" hidden><td colspan="19"><div class="pin">
 <p class="small"><strong>{E(x["option"])}</strong> · multiplier {x.get("multiplier", 100)}{" · ADJUSTED contract" if x.get("adjusted") else ""}
 · mid {money(x.get("mid"))} (reference only) · one-standard-deviation implied move {pct(x.get("implied_move_1sd"), 1)} ·
 time decay {pct(x.get("theta_share_per_day"), 2)} of the mid per day · ranking parts: liquidity {num(rc.get("liquidity"))},
 breakeven {num(rc.get("breakeven"))}, time decay {num(rc.get("time_decay"))}.</p><p>{flags}</p>
-<div class="grid"><div><h4>At expiration: payoff (premium paid at the ask)</h4><div class="table-wrap"><table>
+<div class="grid"><div><h4>At expiration: payoff (premium paid at the ask)</h4><div class="table-wrap"><table aria-label="Payoff at expiration">
 <thead><tr><th class="num">Stock move</th><th class="num">Stock price</th><th class="num">P/L per contract</th><th class="num">On premium</th></tr></thead>
 <tbody>{pay}</tbody></table></div></div>
-<div><h4>Before expiration: model estimate in {sens.get("days_forward", 30)} days</h4><div class="table-wrap"><table>
+<div><h4>Before expiration: model estimate in {sens.get("days_forward", 30)} days</h4><div class="table-wrap"><table aria-label="Model value before expiration">
 <thead><tr><th class="num">Stock move</th>{ivh}</tr></thead><tbody>{sgrid}</tbody></table></div>
 <p class="small muted">Black-Scholes MODEL estimate of value per share vs today's mid; not a quote. {E(sens.get("note", ""))}</p></div></div>
 </div></td></tr></tbody>"""
@@ -81,15 +89,25 @@ def _list(snap: dict, h, kind: str, data: dict | None) -> str:
                        'weakened and no contracts are invented to fill the list.</div>'
     tid = f"o-{h.key}-{kind}"
     body = "".join(_row(x, kind, f"{tid}-{i}") for i, x in enumerate(rows))
-    head = ("<th class='num sticky' data-sort='num'>#</th><th class='sticky2' data-sort='text'>Underlying</th>"
-            "<th class='num' data-sort='text'>Expiry</th><th class='num' data-sort='num'>Days</th>"
-            "<th class='num' data-sort='num'>Strike</th><th class='num' data-sort='num'>Underlying</th><th class='num'>Bid / ask</th>"
-            "<th class='num' data-sort='num'>Spread</th><th class='num' data-sort='num' title='Ask x 100 shares'>Premium*</th>"
-            "<th class='num' data-sort='num'>Breakeven at expiry</th><th class='num' data-sort='num'>Required move</th>"
-            "<th class='num' data-sort='num'>Max loss</th><th class='num' data-sort='num'>Volume</th>"
-            "<th class='num' data-sort='num'>Open int.</th><th class='num' data-sort='num'>IV</th><th class='num' data-sort='num'>Delta</th>"
-            "<th class='num' data-sort='num'>Theta</th><th class='num' data-sort='num'>Research score</th>"
-            "<th>Earnings before expiry (unverified)</th>")
+    head = ("<th class='num' data-sort='num'>#</th><th class='tk' data-sort='text'>Underlying</th>"
+            "<th class='num' data-sort='text'>Expiry</th><th class='num hide-sm' data-sort='num'>Days</th>"
+            "<th class='num' data-sort='num'>Strike</th><th class='num hide-sm' data-sort='num' title='Underlying stock price at the "
+            "as-of close'>Stock price</th><th class='num' title='Delayed bid and ask per share'>Bid / ask</th>"
+            "<th class='num hide-sm' data-sort='num' title='Ask minus bid, as a share of the mid price'>Spread</th>"
+            "<th class='num' data-sort='num' title='Ask x 100 shares: the illustrative cost of one contract'>Premium*</th>"
+            "<th class='num' data-sort='num' title='Stock price at expiry where the contract breaks even'>Breakeven at expiry</th>"
+            "<th class='num hide-sm' data-sort='num' title='Move from the current stock price to the breakeven at expiry'>"
+            "Distance to breakeven</th>"
+            "<th class='num hide-sm' data-sort='num' title='Most you can lose: the premium paid'>Max loss</th>"
+            "<th class='num hide-sm' data-sort='num' title='Contracts traded in the last session'>Volume</th>"
+            "<th class='num hide-sm' data-sort='num' title='Open interest: contracts outstanding'>Open int.</th>"
+            "<th class='num hide-sm' data-sort='num' title='Implied volatility: the yearly move the option price assumes'>IV</th>"
+            "<th class='num hide-sm' data-sort='num' title='Price change per $1 move in the stock (model). Not a probability "
+            "of profit'>Delta</th>"
+            "<th class='num hide-sm' data-sort='num' title='Value lost per day from time decay, per share (model)'>Theta</th>"
+            "<th class='num' data-sort='num' title='Liquidity, breakeven vs implied move and time decay (0-100); not a "
+            "prediction of profit'>Research score</th>"
+            "<th class='hide-sm'>Earnings before expiry (unverified)</th>")
     return count + f"""<div class="table-wrap wide"><table id="{tid}" data-table data-grouped><caption class="sr-only">{E(h.title)} {plural}</caption>
 <thead><tr>{head}</tr></thead>{body}</table></div>
 <p class="small"><a href="downloads/{E(snap["as_of"])}_options_{h.key}_{plural}.csv" download>Download {plural} (CSV)</a></p>"""

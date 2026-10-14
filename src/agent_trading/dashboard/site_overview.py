@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import html
+import re
 
 from . import spec
-from .fmt import cap, money, num, pct, sval
+from .fmt import SUMMARIES, cap, money, num, pct, summary_details, sval, tracking_schedule
+from .scenarios import implied_growth_text
 
 E = html.escape
 GROWTH_KEYS = ("large", "mid", "small")
@@ -19,6 +21,40 @@ TIME_GUIDE = (
     "already happened), conditional forward scenarios (1-10 years, or to 2030 for the watchlist), option expiry "
     "horizons (3, 6 and 12 months), and tracking periods (1-12 months after each weekly snapshot)."
 )
+
+
+NUMBER = re.compile(r"\$?-?\d+(?:[,.]\d+)*(?:[%BMKx](?![A-Za-z]))?")
+
+
+def group_exclusions(excluded: list[dict]) -> list[tuple[str, list[tuple[str, str]]]]:
+    """Exclusions grouped by reason with the numbers taken out, largest group first: [(reason, [(ticker, numbers)])]."""
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for x in excluded:
+        key = NUMBER.sub("…", x["reason"])
+        groups.setdefault(key, []).append((x["ticker"], ", ".join(NUMBER.findall(x["reason"]))))
+    return sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+
+
+def excluded_summary(key: str, band: dict) -> str:
+    n = len(band.get("excluded", []))
+    if not n:
+        return '<p class="small muted">No stock was excluded.</p>'
+    top = "; ".join(f"{E(r)} ({len(t)})" for r, t in group_exclusions(band["excluded"])[:3])
+    return (f'<p class="small"><a href="excluded-{E(key)}.html">{n:,} excluded or not ranked: see every stock and '
+            f'reason →</a><br><span class="muted">Most common: {top}</span></p>')
+
+
+def excluded_page(key: str, band: dict) -> str:
+    groups = group_exclusions(band.get("excluded", []))
+    blocks = "".join(
+        f'<details><summary>{E(reason)} <span class="muted">({len(items):,})</span></summary><p class="small">'
+        + ", ".join(f"{E(t)}" + (f" ({E(d)})" if d else "") for t, d in items) + "</p></details>"
+        for reason, items in groups)
+    return (f'<p class="small"><a href="index.html#{E(key)}">&larr; back to the list</a></p>'
+            f'<h1>Excluded from: {E(band_title(key, band))}</h1>'
+            f'<p class="lede">Every stock that was considered for this list but not ranked or not shown, grouped by '
+            f'reason. Numbers in brackets are the values that failed the rule.</p>'
+            f'{blocks or "<p class=muted>No stock was excluded.</p>"}')
 
 
 def band_title(key: str, band: dict) -> str:
@@ -43,7 +79,7 @@ def definition_line(key: str, band: dict) -> str:
 def short_risk(text: str, limit: int = 90) -> str:
     """Compact form of the counterargument for the overview row (the full text is in the evidence panel)."""
     t = (text or "").replace("Weakest evidence: ", "")
-    t = t.split(" (negative = ")[0].rstrip(".")
+    t = t.split(" (negative = ")[0].rstrip(".")       # older snapshots carry the previous wording
     t = t[0].upper() + t[1:] if t else t
     return t if len(t) <= limit else t[: limit - 1].rsplit(" ", 1)[0] + "…"
 
@@ -82,6 +118,52 @@ def sparkline(values: list, label: str) -> str:
     pts = " ".join(f"{i * w / (len(vals) - 1):.1f},{h - 3 - (v - lo) / span * (h - 6):.1f}" for i, v in enumerate(vals))
     return (f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" aria-label="{E(label)}">'
             f'<polyline points="{pts}" fill="none" stroke="var(--series-1)" stroke-width="2"/></svg>')
+
+
+def row_spark(c: dict, bench: str) -> str:
+    """1-year sparkline of the stock (solid) vs its benchmark (dashed), both rebased to 100 at the start."""
+    ch = c.get("chart") or {}
+    s, b = (ch.get("stock") or [])[-53:], (ch.get("benchmark") or [])[-53:]
+    if len(s) < 10:
+        return '<span class="muted small">n/a</span>'
+    vals = [v / s[0] * 100 for v in s]
+    bvals = [v / b[0] * 100 for v in b] if len(b) == len(s) and b[0] else []
+    lo, hi = min(vals + bvals), max(vals + bvals)
+    span = (hi - lo) or 1
+    w, h = 96, 26
+
+    def pts(series):
+        return " ".join(f"{i * w / (len(series) - 1):.1f},{h - 2 - (v - lo) / span * (h - 4):.1f}" for i, v in enumerate(series))
+    r, br = vals[-1] / 100 - 1, (bvals[-1] / 100 - 1) if bvals else None
+    label = f"1-year price: {c['ticker']} {r:+.0%}" + (f", {bench} {br:+.0%}" if br is not None else "")
+    bench_line = (f'<polyline points="{pts(bvals)}" fill="none" stroke="var(--reference)" stroke-width="1.5" '
+                  f'stroke-dasharray="3 2"/>') if bvals else ""
+    return (f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" aria-label="{E(label)}">'
+            f'<title>{E(label)}</title>{bench_line}<polyline points="{pts(vals)}" fill="none" stroke="var(--series-1)" '
+            f'stroke-width="2"/></svg>')
+
+
+CAP_BUCKETS = ((0, 2e9, "under $2B"), (2e9, 10e9, "$2B-$10B"), (10e9, 50e9, "$10B-$50B"), (50e9, 200e9, "$50B-$200B"),
+               (200e9, float("inf"), "$200B+"))
+
+
+def distribution_strip(cands: list[dict]) -> str:
+    """Sector and market-cap mix of a list: one hue, bar length = count (no category colours needed)."""
+    if not cands:
+        return ""
+
+    def strip(title, counts):
+        total = sum(counts.values()) or 1
+        items = "".join(f'<span class="chip"><span class="chipbar" style="width:{max(6, 60 * n / total):.0f}px"></span>'
+                        f'{E(k)} <strong>{n}</strong></span>' for k, n in counts.items() if n)
+        return f'<div class="strip" role="group" aria-label="{E(title)}"><span class="muted">{E(title)}:</span>{items}</div>'
+    sectors: dict[str, int] = {}
+    for c in cands:
+        sectors[c.get("sector") or "Unknown"] = sectors.get(c.get("sector") or "Unknown", 0) + 1
+    sectors = dict(sorted(sectors.items(), key=lambda kv: (-kv[1], kv[0])))
+    caps = {label: sum(1 for c in cands if c.get("market_cap") is not None and lo <= c["market_cap"] < hi)
+            for lo, hi, label in CAP_BUCKETS}
+    return strip("Sector mix", sectors) + strip("Market-cap mix", caps)
 
 
 def evidence_block(key: str, c: dict, band: dict) -> str:
@@ -125,12 +207,12 @@ def growth_table(key: str, band: dict) -> str:
         rid = f"d-{key}-{c['ticker'].replace('.', '_')}"
         bodies.append(f"""<tbody class="item" data-sector="{E(c.get("sector") or "Unknown")}"><tr>
 <td class="num" data-v="{c["rank"]}">{c["rank"]}</td>
-<td><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}" title="Show evidence">
+<td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}" title="Show evidence">
 <strong>{E(c["ticker"])}</strong></button><div class="small muted">{E(c.get("name") or "")}</div>
 <div class="small muted">{E(c.get("sector") or "Unknown")}</div></td>
-<td class="num" data-v="{sval(c.get("market_cap"))}">{cap(c.get("market_cap"))}</td>
+<td class="num hide-sm" data-v="{sval(c.get("market_cap"))}">{cap(c.get("market_cap"))}</td>
 <td class="num" data-v="{sval(c.get("price"))}">{money(c.get("price"))}</td>
-<td class="num" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
+<td class="num hide-sm" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(eg)}">{E(eg_txt)}</td>
 <td class="num val hide-sm" data-v="{sval(m.get("ev_to_sales"))}">{E(_valuation(m))}</td>
 <td class="num" data-v="{sval(c.get("composite"))}"><strong>{num(c.get("composite"), 1)}</strong></td>
@@ -138,23 +220,25 @@ def growth_table(key: str, band: dict) -> str:
 <td class="num hide-sm" data-v="{sval(r6)}">{pct(r6, 0, True)}</td>
 <td class="num" data-v="{sval(r1)}">{pct(r1, 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(x1)}">{pct(x1, 0, True)}</td>
+<td class="hide-sm">{row_spark(c, band.get("benchmark", "benchmark"))}</td>
 <td class="small risk" title="{E(c.get("counterargument", ""))}">{E(short_risk(c.get("counterargument", "")))}</td></tr>
-<tr id="{rid}" class="detail" hidden><td colspan="13">{evidence_block(key, c, band)}</td></tr></tbody>""")
+<tr id="{rid}" class="detail" hidden><td colspan="14">{evidence_block(key, c, band)}</td></tr></tbody>""")
     sectors = sorted({c.get("sector") or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
-    head = ('<th class="num" data-sort="num">#</th><th data-sort="text">Ticker / company / sector</th>'
-            '<th class="num" data-sort="num">Mkt cap</th>'
-            '<th class="num" data-sort="num">Price</th><th class="num" data-sort="num" title="TTM revenue growth">Rev gr.</th>'
+    head = ('<th class="num" data-sort="num">#</th><th class="tk" data-sort="text">Ticker / company / sector</th>'
+            '<th class="num hide-sm" data-sort="num" title="Market cap: as-of close x SEC cover-page shares">Mkt cap</th>'
+            '<th class="num" data-sort="num">Price</th><th class="num hide-sm" data-sort="num" title="Revenue growth over the trailing twelve months (TTM)">Rev gr.</th>'
             '<th class="num hide-sm" data-sort="num" title="TTM free-cash-flow growth, else operating income growth">Earn/FCF gr.</th>'
-            '<th class="num hide-sm" data-sort="num">Valuation</th><th class="num" data-sort="num">Score</th>'
+            '<th class="num hide-sm" data-sort="num" title="EV/S = enterprise value / sales; P/E = price / earnings">Valuation</th><th class="num" data-sort="num" title="Research score 0-100 from fixed rules (see Methodology)">Score</th>'
             '<th class="num hide-sm" data-sort="num">3M</th><th class="num hide-sm" data-sort="num">6M</th>'
             '<th class="num" data-sort="num">1Y</th><th class="num hide-sm" data-sort="num" title="1-year return minus the benchmark">vs bench</th>'
-            '<th>Main risk / weakest evidence</th>')
+            '<th class="hide-sm" title="1-year price path: stock solid, benchmark dashed, both rebased to 100">1-yr path</th>'
+            '<th class="risk" title="The weakest scored evidence for this stock">Main risk / weakest evidence</th>')
     return f"""<div class="controls"><input type="search" placeholder="Search ticker, name, risk" data-search="{tid}"
 aria-label="Search {E(band_title(key, band))}"><select data-sector="{tid}" aria-label="Filter by sector"><option value="">All sectors</option>{opts}</select>
 <span class="small muted" data-count="{tid}" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="{tid}" data-table data-grouped><caption class="sr-only">{E(band_title(key, band))}</caption>
-<thead><tr>{head}</tr></thead>{''.join(bodies) or '<tbody><tr><td colspan="13" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
+<thead><tr>{head}</tr></thead>{''.join(bodies) or '<tbody><tr><td colspan="14" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
 <p class="small muted">Returns are trailing price returns to the as-of close (dividends excluded); "vs bench" is the 1-year
 return minus {E(band.get("benchmark", ""))}. Select a ticker to show its evidence.</p>"""
 
@@ -168,14 +252,11 @@ def growth_section(snap: dict) -> str:
     for k in keys:
         b = bands[k]
         short = f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ""
-        excl = "".join(f'<tr><td>{E(x["ticker"])}</td><td class="small">{E(x["reason"])}</td></tr>' for x in b["excluded"])
         panels.append(f"""<section data-panel-of="growthtabs" data-panel="{k}" role="tabpanel" hidden>
 <h3>{E(b.get("title", k))}</h3><p class="small">{E(definition_line(k, b))} Benchmark: {E(b.get("benchmark_name", b.get("benchmark", "")))}.
 Showing {len(b["candidates"])} of up to {b.get("max_results", 10)}; {b.get("ranked", "?")} ranked, {len(b["excluded"])} excluded.</p>
-{short}{growth_table(k, b)}
-<div class="small"><a href="downloads/{E(snap["as_of"])}_{k}.csv" download>Download CSV</a>
-<details><summary>Excluded ({len(b["excluded"])}) with reasons</summary><div class="table-wrap"><table>
-<thead><tr><th>Ticker</th><th>Reason</th></tr></thead><tbody>{excl}</tbody></table></div></details></div></section>""")
+{short}{distribution_strip(b["candidates"])}{growth_table(k, b)}
+<p class="small"><a href="downloads/{E(snap["as_of"])}_{k}.csv" download>Download CSV</a></p>{excluded_summary(k, b)}</section>""")
     return f"""<h2 id="growth">Growth stocks</h2><div class="tabs" data-tabs id="growthtabs" role="tablist"
 aria-label="Growth lists">{tabs}</div>{''.join(panels)}"""
 
@@ -216,7 +297,7 @@ def multibagger_section(snap: dict) -> str:
                 rows += f'<tr><td>{k}</td>' + "".join(
                     f'<td class="num">{money(sc[k]["years"][str(y)]["value_per_share"])}<div class="small muted">'
                     f'{num(sc[k]["years"][str(y)]["multiple_of_price"], 1)}x</div></td>' for y in yrs) + "</tr>"
-            scen = f'<div class="table-wrap"><table><thead><tr><th>Scenario</th>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
+            scen = f'<div class="table-wrap"><table aria-label="Bear, base and bull values per share"><thead><tr><th>Scenario</th>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
         else:
             scen = f'<p class="small muted">{E(c.get("scenario_note") or "Scenarios not computed.")}</p>'
         runway = m.get("cash_runway_years")
@@ -231,18 +312,21 @@ def multibagger_section(snap: dict) -> str:
 gross margin {pct(m.get("gross_margin"))} · operating margin {pct(m.get("operating_margin"))} · {E(cash_txt)}</p></div>
 <div><h4>Debt, dilution and valuation risk</h4><p class="small">Net debt/EBITDA {num(m.get("net_debt_to_ebitda"), 1)} ·
 dilution {pct(m.get("dilution"), 1)}/yr · SBC {pct(m.get("sbc_to_revenue"))} of revenue · EV/Sales {num(m.get("ev_to_sales"), 1)}x;
-the price implies about {pct(m.get("implied_revenue_cagr"))} revenue growth a year. {E(c.get("bear_case", ""))}</p></div></div>
+{E(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")))}. {E(c.get("bear_case", ""))}</p></div></div>
 <h4>Bear / base / bull (conditional values per share)</h4>{scen}
 <h4>What must happen for a multibagger outcome</h4><p class="small">{E(multibagger_needs(c))}</p>
 <h4>What would invalidate the thesis</h4><ul class="tight small">{inval}</ul></article>""")
     return f"""<h2 id="multibagger">Speculative multibagger research candidates</h2>
 <div class="banner warn small"><strong>5-10 year research horizon</strong>These are long-horizon research candidates. Nothing
-here implies multibagger returns within 3-12 months. {E(spec.MULTIBAGGER_DEFINITION)} {E(spec.PROBABILITY_STATEMENT)}</div>
+here implies multibagger returns within 3-12 months.
+{summary_details(SUMMARIES["multibagger"], spec.MULTIBAGGER_DEFINITION)}
+{summary_details(SUMMARIES["probability"], spec.PROBABILITY_STATEMENT, "Why no probabilities")}</div>
 <p class="small">{E(definition_line("multibagger", b))} Showing {len(b["candidates"])} of up to {b.get("max_results", 5)}.
 <a href="methodology.html#multibagger">Criteria and rationale</a> ·
 <a href="downloads/{E(snap["as_of"])}_multibagger.csv" download>CSV</a></p>
 {f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ''}
-<div class="mb-list">{''.join(cards) or '<p class="muted">No stock passed every gate this week.</p>'}</div>"""
+<div class="mb-list">{''.join(cards) or '<p class="muted">No stock passed every gate this week.</p>'}</div>
+{excluded_summary("multibagger", b)}"""
 
 
 # --- compact panels ------------------------------------------------------------------------------
@@ -260,30 +344,59 @@ def _risk_flags(c: dict) -> list[str]:
     return [g for g, hit in zip(RISK_GROUPS, hits) if hit]
 
 
-def panels(snap: dict, tracking: dict | None) -> str:
+def move_cause(ch: dict, list_name: str) -> str:
+    """'S04 up 4 to #1 (Large cap): score +5.3; growth +12.0, valuation -1.5' (older snapshots: stored text)."""
+    d = ch["change"]
+    head = f'{ch["ticker"]} {"up" if d > 0 else "down"} {abs(d)} to #{ch.get("to")} ({list_name})'
+    comps = ch.get("component_changes")
+    if comps is None:
+        return f'{head}: {ch.get("explanation", "")}'
+    sc = ch.get("score_change")
+    if not comps and (not isinstance(sc, (int, float)) or abs(sc) < 0.05):
+        why = "other stocks scored higher this week" if d < 0 else "stocks above it fell back or left the list"
+        return f"{head}: its own score was unchanged; {why}"
+    parts = ([f"score {sc:+.1f}"] if isinstance(sc, (int, float)) else []) + \
+        [", ".join(f"{k} {v:+.1f}" for k, v in comps.items()) or "component scores unchanged"]
+    return f"{head}: " + "; ".join(parts)
+
+
+def _last_results(i: dict) -> str:
+    if i.get("last_results"):
+        return (f'<br><span class="small">last results {E(i["last_results"])}, {E(i.get("last_results_status") or "")}'
+                f'{"; " + E(i["cadence_check"]) if i.get("cadence_check") else ""}</span>')
+    if i.get("last_results_status"):
+        return f'<br><span class="small muted">{E(i["last_results_status"])}</span>'
+    return ""
+
+
+def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None) -> str:
     bands = snap["bands"]
     ev = (snap.get("events") or {})
     items = ev.get("items")
     if items is None:
         earn = '<p class="small muted">Not collected in this snapshot.</p>'
     else:
-        earn = "".join(f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">({E(i["list"])})</span></li>'
-                       for i in items[:12]) or '<li class="muted">None in the next 45 days.</li>'
+        earn = "".join(f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">(scheduled, unverified; '
+                       f'{E(i["list"])})</span>{_last_results(i)}</li>'
+                       for i in items[:12]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
         earn = f'<ul class="tight small">{earn}</ul><p class="small muted">{E(ev.get("note", ""))}</p>'
     new, gone, moves = [], [], []
-    for k, b in bands.items():
-        for ch in b.get("rank_changes", []):
+    for k in ordered(bands):
+        short = band_title(k, bands[k])
+        for ch in bands[k].get("rank_changes", []):
             if ch["change"] in ("new", "new (first snapshot)"):
-                new.append(f'{ch["ticker"]} ({k})')
+                new.append(f'{ch["ticker"]} (#{ch.get("to")}, {short})')
             elif ch["change"] == "dropped":
-                gone.append(f'{ch["ticker"]} ({k})')
+                gone.append(f'{ch["ticker"]} (was #{ch.get("from")}, {short})')
             elif isinstance(ch["change"], int) and ch["change"]:
-                moves.append((abs(ch["change"]), f'{ch["ticker"]} {ch["change"]:+d} ({k})'))
+                moves.append((abs(ch["change"]), move_cause(ch, short)))
     first = all(ch["change"] == "new (first snapshot)" for b in bands.values() for ch in b.get("rank_changes", []))
+    move_items = "".join(f"<li>{E(t)}</li>" for _, t in sorted(moves, key=lambda m: -m[0])[:6])
     changes = ('<p class="small muted">First snapshot: no previous week to compare.</p>' if first else
                f'<p class="small"><strong>New:</strong> {E(", ".join(new) or "none")}<br><strong>Departed:</strong> '
-               f'{E(", ".join(gone) or "none")}<br><strong>Biggest moves:</strong> '
-               f'{E(", ".join(t for _, t in sorted(moves, reverse=True)[:5]) or "none")}</p>')
+               f'{E(", ".join(gone) or "none")}</p><p class="small"><strong>Biggest moves and why</strong> '
+               f'(change in the 0-100 score, then the component scores that moved most):</p>'
+               f'<ul class="tight small">{move_items or "<li>none</li>"}</ul>')
     conc = [f"{band_title(k, bands[k])}: {w}" for k in ordered(bands) for w in bands[k].get("concentration", [])]
     groups: dict[str, list[str]] = {g: [] for g in RISK_GROUPS}
     for k in ordered(bands):
@@ -293,12 +406,14 @@ def panels(snap: dict, tracking: dict | None) -> str:
     risk = ("".join(f'<li class="small">{E(w)}</li>' for w in conc) +
             "".join(f'<li class="small"><strong>{E(g)}:</strong> {E(", ".join(dict.fromkeys(ts)))}</li>'
                     for g, ts in groups.items() if ts))
-    perf = '<p class="small muted">No tracking data yet.</p>'
-    if tracking and tracking.get("summary"):
+    measured = any(v.get(h, {}).get("snapshots_measured") for v in ((tracking or {}).get("summary") or {}).values()
+                   for h in spec.TRACK_HORIZONS)
+    perf = f'<p class="small muted">{E(tracking_schedule(dates or [snap["as_of"]]))}</p>'
+    if tracking and tracking.get("summary") and measured:
         rows = "".join(f'<tr><td>{E(k)}</td>' + "".join(
             f'<td class="num">{pct((v.get(h) or {}).get("mean_excess_net"), 1, True)}</td>' for h in spec.TRACK_HORIZONS) + "</tr>"
             for k, v in tracking["summary"].items())
-        perf = (f'<div class="table-wrap"><table class="small"><thead><tr><th>List</th>' +
+        perf = (f'<div class="table-wrap"><table class="small" aria-label="Mean excess return by list and horizon"><thead><tr><th>List</th>' +
                 "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS) +
                 f'</tr></thead><tbody>{rows}</tbody></table></div><p class="small muted">Mean excess return vs benchmark, net of '
                 f'assumed friction, from immutable prior snapshots. {E(tracking.get("evidence_note", ""))}</p>')
@@ -324,7 +439,7 @@ def overview(snap: dict, status: dict | None, dates: list[str], tracking: dict |
     return f"""<h1>Growth &amp; Options Research Dashboard</h1>
 <p class="lede">Week ending {E(snap["as_of"])} · {counts} · <a href="options.html">Options</a> ·
 <a href="watchlist.html">Watchlist 2030</a>. {E(spec.DISCLAIMER)}</p>
-{panels(snap, tracking)}
+{panels(snap, tracking, dates)}
 <details class="card small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details>
 {growth_section(snap)}
 {multibagger_section(snap)}

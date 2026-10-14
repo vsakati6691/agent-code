@@ -19,9 +19,14 @@ from pathlib import Path
 
 from . import spec
 from .assets import CSS, JS
-from .fmt import cap, money, num, ok as _ok, pct, sval
+from .fmt import (SUMMARIES, cap, csv_value, metric, money, net_position, num, ok as _ok, pct, summary_details, sval,
+                  tracking_schedule)
+from .scenarios import implied_growth_text
 from .site_options import lists_of, options_page
-from .site_overview import band_title, overview
+from .site_overview import band_title, excluded_page, overview
+from .site_symbol import symbol_index, symbol_page
+
+_SYMBOLS: dict[str, str] = {}      # ticker -> name, for the header search (set by build_site)
 from .site_watchlist import watchlist_csv, watchlist_page
 from .store import Store, find_private_keys
 
@@ -38,13 +43,21 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
     up = "../" * depth
     nav = "".join(f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>'
                   for href, label in NAV)
+    opts = "".join(f'<option value="{E(t)}">{E(n)}</option>' for t, n in _SYMBOLS.items())
+    search = (f'<form class="symsearch" role="search" data-base="{up}symbol/" onsubmit="return false">'
+              f'<label class="sr-only" for="symq">Find a ticker</label><input id="symq" type="search" list="symlist" '
+              f'placeholder="Find a ticker" autocomplete="off" aria-describedby="symhint">'
+              f'<span id="symhint" class="sr-only">Choose a ticker from the list to open its page</span>'
+              f'<datalist id="symlist">{opts}</datalist></form>' if _SYMBOLS else "")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{E(title)} · Growth &amp; Options Research</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="{up}assets/style.css"></head>
+<script>try{{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}}catch(e){{}}</script>
+<link rel="stylesheet" href="{up}assets/style.css">
+<link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
 <body><header class="site"><div class="inner"><a class="brand" href="{up}index.html">Growth &amp; Options Research</a>
-<nav>{nav}</nav></div></header>
+<nav>{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
 <main>{freshness}{body}
 <footer>{E(spec.DISCLAIMER)} Methodology version {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
 Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>
@@ -80,14 +93,29 @@ def profile_of(band: dict) -> tuple:
 
 # --- detail page ----------------------------------------------------------------------------------------
 
+NICE_STEPS = (10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000)
+
+
+def nice_ticks(lo: float, hi: float, max_ticks: int = 7) -> list[float]:
+    """Round axis ticks (multiples of 10/25/50/100/250/500...) covering [lo, hi], at most `max_ticks`."""
+    import math as _m
+    for step in NICE_STEPS:
+        start, end = _m.floor(lo / step) * step, _m.ceil(hi / step) * step
+        if end == start:
+            end = start + step
+        if (end - start) / step + 1 <= max_ticks:
+            return [start + i * step for i in range(int(round((end - start) / step)) + 1)]
+    step = NICE_STEPS[-1]
+    return [_m.floor(lo / step) * step, _m.ceil(hi / step) * step]
+
+
 def line_chart(chart: dict, ticker: str, bench: str) -> str:
     if not chart or not chart.get("stock"):
         return '<p class="muted">Price history unavailable.</p>'
     W, H, L, R, T, B = 720, 260, 48, 660, 14, 230
     vals = chart["stock"] + (chart.get("benchmark") or [])
-    lo, hi = min(vals), max(vals)
-    pad = (hi - lo) * 0.06 or 1
-    lo, hi = lo - pad, hi + pad
+    tick_values = nice_ticks(min(vals), max(vals))
+    lo, hi = tick_values[0], tick_values[-1]
     n = len(chart["stock"])
 
     def xy(i, v):
@@ -97,8 +125,7 @@ def line_chart(chart: dict, ticker: str, bench: str) -> str:
         return " ".join(f'{"M" if i == 0 else "L"}{x:.1f},{y:.1f}' for i, (x, y) in
                         enumerate(xy(i, v) for i, v in enumerate(series)))
     ticks = []
-    for k in range(5):
-        v = lo + (hi - lo) * k / 4
+    for v in tick_values:
         _, y = xy(0, v)
         ticks.append(f'<line x1="{L}" x2="{R}" y1="{y:.1f}" y2="{y:.1f}" stroke="var(--border)" stroke-width="1"/>'
                      f'<text x="{L - 6}" y="{y + 4:.1f}" text-anchor="end" font-size="11" fill="var(--text-muted)">{v:.0f}</text>')
@@ -140,7 +167,8 @@ def detail(c: dict, snap: dict) -> str:
         f'<td class="num">{"missing" if c["components"].get(cp.key) is None else round(c["components"][cp.key] * 100)}</td>'
         f'<td><div class="bar"><span style="width:{(c["components"].get(cp.key) or 0) * 100:.0f}%"></span></div></td>'
         f'<td class="small">' + "; ".join(
-            f'{E(mk)} = {E(_metric(m.get(mk)))}{" (missing, scored 0)" if mk in c["missing"] else ""}'
+            f'<abbr title="{E(spec.METRIC_NOTES.get(mk, ""))}">{E(mk.replace("_", " "))}</abbr> = {E(metric(mk, m.get(mk)))}'
+            f'{" (missing, scored 0)" if mk in c["missing"] else ""}'
             for mk in cp.metrics) + "</td></tr>" for cp in profile_of(snap["bands"][c["band"]]))
     fund = c["fundamentals"]
     frow = lambda label, key: f'<tr><td>{label}</td>' + "".join(  # noqa: E731
@@ -160,42 +188,43 @@ def detail(c: dict, snap: dict) -> str:
             rows += (f'<tr><td><strong>{key}</strong></td>{cells}<td class="small">start growth {pct(a["starting_revenue_growth"])}'
                      f', fading to {pct(spec.SCENARIO_TERMINAL_GROWTH)}; exit EV/Sales {num(a["exit_ev_to_sales"], 1)}x; '
                      f'dilution {pct(a["annual_dilution"], 1)}/yr; FCF margin {pct(a["fcf_margin_start"])} &rarr; '
-                     f'{pct(a.get("fcf_margin_end", a.get("fcf_margin_year5")))} by year {years[-1]}; net cash held {cap(a["net_cash_held"]) if (a["net_cash_held"] or 0) >= 0 else "-" + cap(-a["net_cash_held"])}</td></tr>')
+                     f'{pct(a.get("fcf_margin_end", a.get("fcf_margin_year5")))} by year {years[-1]}; {net_position(-a["net_cash_held"] if _ok(a.get("net_cash_held")) else None, False)} held flat</td></tr>')
         fl = sc["flags"]
         yn = lambda k: "yes" if fl.get(k) else "no"  # noqa: E731
         ten = (f' · within ten years, bull case 5x: <strong>{yn("bull_5x_in_10y")}</strong>, base case 2x: '
                f'<strong>{yn("base_2x_in_10y")}</strong>') if "bull_5x_in_10y" in fl else ""
         yh = "".join(f'<th class="num">{y} year{"s" if y > 1 else ""}</th>' for y in years)
-        scen_html = f"""<div class="table-wrap"><table><thead><tr><th>Scenario</th>{yh}<th>Assumptions</th></tr></thead>
+        scen_html = f"""<div class="table-wrap"><table aria-label="Bear, base and bull scenario values"><thead><tr><th>Scenario</th>{yh}<th>Assumptions</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <p class="small">Bull case reaches 2x in five years: <strong>{yn("bull_doubles_in_5y")}</strong> ·
-5x in five years: <strong>{yn("bull_multibagger_5y")}</strong>{ten}. {E(spec.MULTIBAGGER_DEFINITION)}</p>
-<p class="small muted">{E(spec.SCENARIO_METHOD)}</p>"""
+5x in five years: <strong>{yn("bull_multibagger_5y")}</strong>{ten}.</p>
+{summary_details(SUMMARIES["multibagger"], spec.MULTIBAGGER_DEFINITION)}
+{summary_details(SUMMARIES["scenario_method"], spec.SCENARIO_METHOD, "How the scenarios are built")}"""
     earn = c.get("next_earnings")
     flags = "".join(f'<span class="pill">{E(f)}</span>' for f in c["flags"]) or '<span class="muted">none</span>'
     ns = "".join(f'<li><strong>{E(k.replace("_", " "))}:</strong> {E(v)}</li>' for k, v in c["not_scored"].items())
     return f"""<p class="small"><a href="../index.html#{E(c["band"])}">&larr; back to the list</a></p>
 <h1>{E(c["ticker"])} · {E(c["name"] or "")}</h1>
-<p class="lede">{E(c["sector"] or "Unknown")} · rank {c["rank"]} in {E(band_title(c["band"], snap["bands"][c["band"]]).lower())} ·
+<p class="lede">{E(c["sector"] or "Unknown")} · rank {c["rank"]} in the {E(band_title(c["band"], snap["bands"][c["band"]]))} list ·
 score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confidence_label"])}">{E(c["confidence_label"])}</span></p>
 <div class="grid"><div class="card stat"><div class="label">Price ({E(c["price_date"])} close)</div><div class="value">{money(c["price"])}</div>
 <div class="small muted">{E(c["sources"]["price"])}</div></div>
 <div class="card stat"><div class="label">Market cap</div><div class="value">{cap(c["market_cap"])}</div>
 <div class="small muted">{E(spec.MARKET_CAP_DEFINITION[:90])}…</div></div>
-<div class="card stat"><div class="label">Next earnings (unverified)</div><div class="value">{E(earn or "unknown")}</div>
-<div class="small muted">Alpha Vantage calendar</div></div>
+<div class="card stat"><div class="label">Earnings dates</div><div class="value">{E(earn or "unknown")}</div>
+<div class="small muted">next: scheduled, Alpha Vantage, unverified</div>{_earnings_check(c)}</div>
 <div class="card stat"><div class="label">Data timestamp</div><div class="value small">{E(str(c["data_timestamp"]).replace("+00:00", ""))} UTC</div>
 <div class="small muted">fundamentals: {E(fund.get("last_form") or "?")} filed {E(fund.get("last_filed") or "?")}</div></div></div>
 <p class="small">Flags: {flags}</p>
 <h2>Research thesis</h2><p>{E(c["thesis"])}</p><p class="small muted">Generated by fixed rules from reported data. It is a
 summary of evidence, not a recommendation.</p>
 <h2>Strongest bear case</h2><p>{E(c["bear_case"])}</p>
-<h2>Component scores</h2><div class="table-wrap"><table><thead><tr><th>Component</th><th class="num">Weight</th>
+<h2>Component scores</h2><div class="table-wrap"><table aria-label="Component scores and inputs"><thead><tr><th>Component</th><th class="num">Weight</th>
 <th class="num">Score</th><th></th><th>Inputs</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
 <p class="small muted">Missing inputs score 0; weights are never redistributed.</p>
 <h3>Not scored</h3><ul class="tight small">{ns}</ul>
 <h2>Price vs benchmark</h2>{line_chart(c["chart"], c["ticker"], c["benchmark"])}
-<div class="table-wrap"><table><thead><tr><th>Period</th><th class="num">{E(c["ticker"])}</th><th class="num">{E(c["benchmark"])}</th>
+<div class="table-wrap"><table aria-label="Trailing price returns vs benchmark"><thead><tr><th>Period</th><th class="num">{E(c["ticker"])}</th><th class="num">{E(c["benchmark"])}</th>
 <th class="num">Difference</th></tr></thead><tbody>{rets}</tbody></table></div>
 <p class="small">Max drawdown (5 years): <strong>{pct(dd["max_5y"]["value"])}</strong> ({E(str(dd["max_5y"]["peak"]))} to
 {E(str(dd["max_5y"]["trough"]))}) · from 52-week high: {pct(dd["from_52w_high"])} · worst 12-month return since
@@ -204,28 +233,18 @@ summary of evidence, not a recommendation.</p>
 <div class="grid small">
 <div class="card">Revenue TTM {cap(m.get("revenue_ttm"))} · growth {pct(m.get("revenue_growth_ttm"))} · 3-yr CAGR {pct(m.get("revenue_cagr_3y"))}</div>
 <div class="card">Gross margin {pct(m.get("gross_margin"))} · operating margin {pct(m.get("operating_margin"))} · FCF margin {pct(m.get("fcf_margin"))}</div>
-<div class="card">EV/Sales {num(m.get("ev_to_sales"), 1)}x · P/E {num(m.get("pe"), 1)} · FCF yield {pct(m.get("fcf_yield"), 1)} · implied revenue growth {pct(m.get("implied_revenue_cagr"))}</div>
-<div class="card">Net debt {cap(m.get("net_debt")) if (m.get("net_debt") or 0) >= 0 else "net cash " + cap(-m["net_debt"])} · current ratio {num(m.get("current_ratio"))} · dilution {pct(m.get("dilution"), 1)} · SBC/revenue {pct(m.get("sbc_to_revenue"))}</div>
+<div class="card">EV/Sales {num(m.get("ev_to_sales"), 1)}x · P/E {num(m.get("pe"), 1)} · FCF yield {pct(m.get("fcf_yield"), 1)} · {E(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")))}</div>
+<div class="card">{net_position(m.get("net_debt"))} · current ratio {num(m.get("current_ratio"))} · dilution {pct(m.get("dilution"), 1)} · SBC/revenue {pct(m.get("sbc_to_revenue"))}</div>
 </div>
-<div class="table-wrap"><table><thead><tr><th>USD millions</th>{fhead}</tr></thead><tbody>
+<div class="table-wrap"><table aria-label="Quarterly fundamentals in USD millions"><thead><tr><th>USD millions</th>{fhead}</tr></thead><tbody>
 {frow("Revenue", "revenue")}{frow("Gross profit", "gross_profit")}{frow("Operating income", "operating_income")}
 {frow("Net income", "net_income")}{frow("Operating cash flow", "ocf")}{frow("Capital expenditure", "capex")}{frow("Stock-based comp.", "sbc")}
 </tbody></table></div><p class="small muted">* quarter derived from cumulative or annual filings. Source: {E(c["sources"]["fundamentals"])},
 facts filed on or before {E(snap["as_of"])} only.</p>
 <h2>Bear / base / bull valuation ranges</h2>{scen_html}
-<div class="banner info"><strong>Probability</strong>{E(c["probability"])}</div>
+<div class="banner info"><strong>Probability</strong>{summary_details(SUMMARIES["probability"], c["probability"], "Why")}</div>
 <h2>Key business risks</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["risks"])}</ul>
 <h2>What would invalidate the thesis</h2><ul class="tight">{''.join(f'<li>{E(r)}</li>' for r in c["invalidation"])}</ul>"""
-
-
-def _metric(v) -> str:
-    if v is None:
-        return "n/a"
-    if isinstance(v, (int, float)):
-        if not math.isfinite(v):
-            return "not meaningful"
-        return f"{v:.3g}"
-    return str(v)
 
 
 # --- history, methodology, audit ------------------------------------------------------------------------
@@ -233,7 +252,7 @@ def _metric(v) -> str:
 def history_page(dates: list[str], tracking: dict | None) -> str:
     items = "".join(f'<li><a href="reports/{d}.html">Week ending {d}</a></li>' for d in reversed(dates))
     if not tracking:
-        trk = '<p class="muted">No tracking yet.</p>'
+        trk = f'<p class="small">{E(tracking_schedule(dates))}</p>'
     else:
         rows = []
         for r in reversed(tracking["by_snapshot"]):
@@ -254,15 +273,27 @@ def history_page(dates: list[str], tracking: dict | None) -> str:
                         f'{pct(v["max_drawdown"], 1)}</li>' for k, v in tracking.get("weekly_chain", {}).items())
         hh = "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS)
         trk = f"""<div class="banner warn"><strong>Evidence status</strong>{E(tracking["evidence_note"])}</div>
-<h3>Average excess return net of friction, by category</h3><div class="table-wrap"><table><thead><tr><th>Category</th>{hh}
+<p class="small">{E(tracking_schedule(dates))}</p>
+<h3>Average excess return net of friction, by category</h3><div class="table-wrap"><table aria-label="Average excess return by list"><thead><tr><th>Category</th>{hh}
 <th class="num">Weekly turnover</th></tr></thead><tbody>{summ}</tbody></table></div>
-<h3>Weekly one-week chain</h3><ul class="small">{chain or '<li class="muted">not enough weeks</li>'}</ul>
-<h3>Each snapshot</h3><div class="table-wrap"><table><thead><tr><th>As of</th><th>Category</th><th>Spec</th>{hh}</tr></thead>
+<h3>Weekly one-week chain</h3><ul class="small">{chain or '<li class="muted">Appears once a weekly list has been held for 5 trading sessions with prices for every name.</li>'}</ul>
+<h3>Each snapshot</h3><div class="table-wrap"><table aria-label="Tracking result for each snapshot"><thead><tr><th>As of</th><th>Category</th><th>Spec</th>{hh}</tr></thead>
 <tbody>{''.join(rows)}</tbody></table></div>
 <p class="small">{E(tracking["method"])}</p><ul class="small">{''.join(f'<li>{E(x)}</li>' for x in tracking["limitations"])}</ul>
-<p class="small">Assumed friction per side (bps): {E(json.dumps(tracking["friction"]))}.</p>"""
+<p class="small">Assumed trading friction per side: {E(", ".join(f"{k} {v:g} bps" for k, v in tracking["friction"].items()))}
+(bps = hundredths of a percent).</p>"""
     return f"""<h1>History and performance tracking</h1><p class="lede">Every weekly snapshot is stored unchanged. Later prices
 measure each list as it was published.</p><h2>Weekly reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
+
+
+_R = spec.OPTION_RULES
+OPTION_RULES_TEXT = (
+    f"up to {_R['max_per_type_per_horizon']} calls and {_R['max_per_type_per_horizon']} puts per expiry window, at most "
+    f"{_R['max_per_underlying_per_horizon']} per underlying per list; open interest at least {_R['min_open_interest']}; "
+    f"volume at least {_R['min_volume']}; bid-ask spread at most {_R['max_spread_pct']:.0%} of the mid price; |delta| "
+    f"{_R['min_delta']:g} to {_R['max_delta']:g}; standard {_R['standard_multiplier']}-share contracts only; the "
+    f"underlying must have traded in the as-of session"
+)
 
 
 def _component_rows(components) -> str:
@@ -290,7 +321,7 @@ def methodology_page() -> str:
     return f"""<h1>Methodology</h1><p class="lede">Version {E(spec.SPEC_VERSION)} (hash {E(spec.spec_hash())}). All rules were fixed
 before any results were computed; a change creates a new version and results are tracked separately per version.</p>
 <h2>Universes</h2><p>{E(spec.UNIVERSE_DEFINITION)}</p><p>{E(spec.MARKET_CAP_DEFINITION)}</p>
-<div class="table-wrap"><table><thead><tr><th>Category</th><th>Universe</th><th>Market cap</th><th>Min price</th>
+<div class="table-wrap"><table aria-label="List definitions"><thead><tr><th>Category</th><th>Universe</th><th>Market cap</th><th>Min price</th>
 <th>Min 20-day median $ volume</th><th>Gate</th><th>Benchmark</th><th>Max shown</th></tr></thead><tbody>{bands}</tbody></table></div>
 <p>Limited operating history: fewer than {spec.LIMITED_HISTORY_QUARTERS} reported quarters. Limited trading history: fewer than
 {spec.LIMITED_HISTORY_DAYS} daily bars. Fundamentals older than {spec.MAX_FILING_AGE_DAYS} days exclude a stock. The as-of close
@@ -298,13 +329,13 @@ must be present. Lists are never padded: fewer than ten qualifying stocks means 
 <h2>Scoring</h2><p>Each input maps to 0-1 on a fixed linear scale (absolute thresholds, not ranks). A component is the average of
 its inputs. A missing input scores 0 and is shown; weights are never redistributed. A stock with a critical component entirely
 missing, or more than {spec.MAX_MISSING_METRICS} missing inputs, is not ranked. Ties: {E(spec.TIE_BREAK)}.</p>
-<div class="table-wrap"><table><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
+<div class="table-wrap"><table aria-label="Scoring components and scales"><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
 <tbody>{comps}</tbody></table></div>
 <p>Momentum and benchmark-relative performance are separate components. {E(spec.CONFIDENCE_RULES)}</p>
 <h3 id="multibagger">Speculative multibagger research candidates (5-10 years)</h3><p>{E(spec.MULTIBAGGER_RATIONALE)}</p>
 <p>Eligibility gates (all must hold; a missing input fails the gate):</p><ul class="small">{gates}</ul>
 <p>Weights for this list (the other lists use the table above):</p>
-<div class="table-wrap"><table><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
+<div class="table-wrap"><table aria-label="Long-horizon scoring components"><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
 <tbody>{long_comps}</tbody></table></div>
 <h3>Robinhood tradability</h3><p>{E(spec.TRADABILITY_RULE)} Because scores use fixed scales, removing a stock that is not
 tradable does not change the order of the others. Checks run in a Claude session with the read-only Robinhood tool, since
@@ -312,37 +343,62 @@ GitHub Actions cannot reach it; no account data is stored.</p>
 <h3>Not scored</h3><ul>{''.join(f'<li>{E(k.replace("_", " "))}: {E(v)}</li>' for k, v in spec.NOT_SCORED_FACTORS.items())}</ul>
 <p>The strongest counterargument is the input with the largest weighted shortfall (missing critical data first).</p>
 <h2>Scenarios</h2><p>{E(spec.SCENARIO_METHOD)}</p><p>{E(spec.MULTIBAGGER_DEFINITION)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p>
-<h2>Options (calls and puts)</h2><p>{E(spec.OPTION_UNDERLYINGS)}</p><ul>{hz}</ul><p>Eligibility: {E(json.dumps(spec.OPTION_RULES))}.</p>
+<h2>Options (calls and puts)</h2><p>{E(spec.OPTION_UNDERLYINGS)}</p><ul>{hz}</ul><p>Eligibility: {E(OPTION_RULES_TEXT)}.</p>
 <p>Ranking (higher is better; maximum upside is not an input):</p><ul>{rk}</ul><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>{E(spec.DELTA_STATEMENT)}</p><p>{E(spec.PREMIUM_ASSUMPTION)} Puts: breakeven = strike - premium; payoff = max(strike - price, 0) -
 premium; the required move is measured downward. {E(spec.RISK_FREE_RATE_NOTE)}</p>
 <h2 id="watchlist">Watchlist: conditional 2030 price scenarios</h2><p>{E(spec.WATCHLIST_STATEMENT)}</p><p>{E(spec.WATCHLIST_SEPARATION)}</p>
 <p>{E(spec.WATCHLIST_COMPANY_METHOD)}</p><p>{E(spec.LEVERAGED_METHOD)}</p><p>{E(spec.FEE_NOTE)}</p>
-<div class="table-wrap"><table><thead><tr><th>ETF exposure class</th><th>Name keywords</th><th class="num">Bear / base / bull total return</th>
+<div class="table-wrap"><table aria-label="ETF exposure-class assumptions"><thead><tr><th>ETF exposure class</th><th>Name keywords</th><th class="num">Bear / base / bull total return</th>
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
 <h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
 <h2>Version history</h2><ul>{log}</ul>"""
 
 
+def _earnings_check(c: dict) -> str:
+    ec = c.get("earnings_check") or {}
+    if ec.get("last_results"):
+        tail = f" · {E(ec['cadence_check'])}" if ec.get("cadence_check") else ""
+        return f'<div class="small">last results {E(ec["last_results"])}: <strong>verified (8-K)</strong>{tail}</div>'
+    if ec.get("last_results_status"):
+        return f'<div class="small muted">{E(ec["last_results_status"])}</div>'
+    return ""
+
+
+def _readable(d) -> str:
+    """Audit details as 'key: value' text (no raw JSON on the page)."""
+    if isinstance(d, dict):
+        return "; ".join(f"{str(k).replace('_', ' ')}: {_readable(v)}" for k, v in d.items() if v not in (None, "", {}, []))
+    if isinstance(d, (list, tuple)):
+        return ", ".join(_readable(v) for v in d)
+    if isinstance(d, float):
+        return metric("", d)
+    return str(d)
+
+
 def audit_page(store: Store, snap: dict, integrity: list[str]) -> str:
-    rows = "".join(f'<tr><td class="small">{E(str(e.get("at")))}</td><td>{E(str(e.get("event")))}</td><td class="small">'
-                   f'{E(json.dumps({k: v for k, v in e.items() if k not in ("at", "event")}, default=str)[:400])}</td></tr>'
+    rows = "".join(f'<tr><td class="small">{E(str(e.get("at")).replace("+00:00", ""))}</td><td>{E(str(e.get("event")).replace("_", " "))}</td>'
+                   f'<td class="small">{E(_readable({k: v for k, v in e.items() if k not in ("at", "event")})[:400])}</td></tr>'
                    for e in reversed(store.audit_log()[-300:]))
     man = []
     for d in reversed(store.dates()):
         m = json.loads((store.root / "snapshots" / d / "manifest.json").read_text(encoding="utf-8"))
         man.append(f'<tr><td>{E(d)}</td><td class="small"><code>{E(m["sha256"][:16])}…</code></td><td>{E(str(m.get("spec_version")))}</td>'
-                   f'<td class="small">{E(str(m.get("code_commit", ""))[:10])}</td><td>{E(str(m.get("status")))}</td></tr>')
+                   f'<td class="small">{E(str(m.get("code_commit") or "local build")[:10])}</td><td>{E(str(m.get("status")))}</td></tr>')
     ok = '<div class="banner info"><strong>Integrity</strong>Every stored snapshot matches its manifest hash.</div>' if not integrity else \
         '<div class="banner bad"><strong>Integrity problems</strong>' + E("; ".join(integrity)) + "</div>"
     usage = snap.get("usage", {})
-    return f"""<h1>Audit trail</h1>{ok}<h2>Snapshots</h2><div class="table-wrap"><table><thead><tr><th>As of</th><th>SHA-256</th>
+    return f"""<h1>Audit trail</h1>{ok}<h2>Snapshots</h2><div class="table-wrap"><table aria-label="Stored snapshots"><thead><tr><th>As of</th><th>SHA-256</th>
 <th>Spec</th><th>Code</th><th>Status</th></tr></thead><tbody>{''.join(man)}</tbody></table></div>
 <h2>Latest run</h2><p class="small">Started {E(snap.get("run_started", ""))}, finished {E(snap.get("run_finished", ""))} UTC.
-Requests by provider: {E(json.dumps(usage.get("requests", {})))}; cache hits {E(str(usage.get("cache_hits", 0)))}.
+Requests by provider: {E(", ".join(f"{k} {v}" for k, v in usage.get("requests", {}).items()) or "none (all answered from cache)")};
+cache hits {E(str(usage.get("cache_hits", 0)))}.
 Problems: {E("; ".join(snap.get("problems", [])) or "none")}.</p>
 <h2>Data sources and terms</h2><ul class="small">{''.join(f'<li><strong>{E(k)}</strong>: {E(v)}</li>' for k, v in snap.get("sources", {}).items())}</ul>
-<h2>Events</h2><div class="table-wrap"><table><thead><tr><th>At (UTC)</th><th>Event</th><th>Details</th></tr></thead><tbody>{rows}</tbody></table></div>"""
+<h2>Machine-readable data</h2><ul class="small"><li><a href="data/schema.json">data/schema.json</a>: what every field means
+(ratios are decimals, money is USD, times are UTC)</li><li><a href="data/latest.json">data/latest.json</a>: the latest snapshot</li>
+{''.join(f'<li><a href="data/{E(d)}.json">data/{E(d)}.json</a>: week ending {E(d)}</li>' for d in reversed(store.dates()))}</ul>
+<h2>Events</h2><div class="table-wrap"><table aria-label="Audit events"><thead><tr><th>At (UTC)</th><th>Event</th><th>Details</th></tr></thead><tbody>{rows}</tbody></table></div>"""
 
 
 def weekly_report(snap: dict) -> str:
@@ -353,7 +409,7 @@ def weekly_report(snap: dict) -> str:
                        f'<td class="num">{num(c["composite"], 1)}</td><td>{E(c["confidence_label"])}</td>'
                        f'<td class="num">{money(c["price"])}</td><td class="small">{E(c["counterargument"])}</td></tr>'
                        for c in b["candidates"])
-        parts.append(f'<h2>{E(band_title(k, b))}</h2><div class="table-wrap"><table><thead><tr><th class="num">#</th><th>Ticker</th><th>Company</th>'
+        parts.append(f'<h2>{E(band_title(k, b))}</h2><div class="table-wrap"><table aria-label="Weekly list"><thead><tr><th class="num">#</th><th>Ticker</th><th>Company</th>'
                      f'<th class="num">Score</th><th>Confidence</th><th class="num">Price</th><th>Counterargument</th></tr></thead>'
                      f'<tbody>{rows or "<tr><td colspan=7>none qualified</td></tr>"}</tbody></table></div>'
                      f'<p class="small"><a href="../downloads/{E(snap["as_of"])}_{k}.csv" download>CSV</a></p>')
@@ -376,9 +432,9 @@ def band_csv(band: dict) -> str:
     w.writerow(["rank", "ticker", "name", "sector", "composite", *[f"component_{c.key}" for c in comps],
                 "confidence", "price", "market_cap", *keys, "missing", "flags", "counterargument"])
     for c in band["candidates"]:
-        w.writerow([c["rank"], c["ticker"], c["name"], c["sector"], c["composite"],
+        w.writerow([csv_value(x) for x in [c["rank"], c["ticker"], c["name"], c["sector"], c["composite"],
                     *[c["components"].get(k.key) for k in comps], c["confidence"], c["price"], c["market_cap"],
-                    *[c["metrics"].get(k) for k in keys], ";".join(c["missing"]), ";".join(c["flags"]), c["counterargument"]])
+                    *[c["metrics"].get(k) for k in keys], ";".join(c["missing"]), ";".join(c["flags"]), c["counterargument"]]])
     return buf.getvalue()
 
 
@@ -391,13 +447,38 @@ def options_csv(rows: list[dict]) -> str:
             "max_loss_per_contract"]
     w.writerow(cols + ["rank_score", "earnings_before_expiry", "flags"])
     for x in rows:
-        w.writerow([x.get(c, "call" if c == "type" else None) for c in cols] +
+        w.writerow([csv_value(v) for v in [x.get(c, "call" if c == "type" else None) for c in cols] +
                    [x["rank_components"]["total"], ";".join(str(e["date"]) for e in x.get("events_before_expiry", [])),
-                    ";".join(x["flags"])])
+                    ";".join(x["flags"])]])
     return buf.getvalue()
 
 
 # --- build -------------------------------------------------------------------------------------------------
+
+def atom_feed(snaps: list[dict]) -> str:
+    """Static Atom feed of the weekly reports (newest first). Links are relative to the site root."""
+    from xml.sax.saxutils import escape as x
+
+    def stamp(s):
+        t = str(s.get("run_finished") or f"{s['as_of']}T21:00:00+00:00")
+        return t if ("+" in t[10:] or t.endswith("Z")) else t + "Z"
+    entries = []
+    for s in sorted(snaps, key=lambda s: str(s["as_of"]), reverse=True):
+        d = str(s["as_of"])
+        counts = "; ".join(f"{band_title(k, b)}: {len(b.get('candidates', []))}" for k, b in s.get("bands", {}).items())
+        entries.append(
+            f"<entry><title>Week ending {x(d)}</title><id>urn:agent-code:research-dashboard:{x(d)}</id>"
+            f'<link rel="alternate" type="text/html" href="reports/{x(d)}.html"/><updated>{x(stamp(s))}</updated>'
+            f"<summary>{x(counts)}. Status {x(str(s.get('status', '?')))}; methodology {x(str(s.get('spec_version', '?')))}. "
+            f"Research comparisons only, not advice.</summary></entry>")
+    updated = stamp(max(snaps, key=lambda s: str(s["as_of"]))) if snaps else "1970-01-01T00:00:00Z"
+    return ('<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">'
+            "<title>Growth &amp; Options Research: weekly reports</title>"
+            "<id>urn:agent-code:research-dashboard</id><link rel=\"self\" href=\"feed.xml\"/>"
+            '<link rel="alternate" type="text/html" href="history.html"/>'
+            f"<updated>{x(updated)}</updated><author><name>agent-code research dashboard</name></author>"
+            + "".join(entries) + "</feed>\n")
+
 
 def scan_for_secrets(out: Path, env_names: tuple[str, ...]) -> list[str]:
     """Files containing the value of any named environment variable (values are never printed)."""
@@ -430,6 +511,8 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         (out / "methodology.html").write_text(page("Methodology", methodology_page(), "methodology.html"), encoding="utf-8")
         return {"pages": 2, "snapshot": None}
     snap = store.load(dates[-1])
+    _SYMBOLS.clear()
+    _SYMBOLS.update(symbol_index(snap))
     hits = find_private_keys(snap)
     if hits:
         raise RuntimeError(f"refusing to publish: private-looking fields {hits[:5]}")
@@ -447,6 +530,12 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "reports").mkdir()
     (out / "downloads").mkdir()
     (out / "data").mkdir()
+    (out / "symbol").mkdir()
+    history = [snap if d == dates[-1] else store.load(d) for d in dates]
+    for t in _SYMBOLS:
+        write(f"symbol/{t}.html", f"{t} · symbol", symbol_page(t, snap, history), "", 1)
+    for key, band in snap["bands"].items():
+        write(f"excluded-{key}.html", f"Excluded: {band_title(key, band)}", excluded_page(key, band), "index.html")
     n = 0
     for key, band in snap["bands"].items():
         for c in band["candidates"]:
@@ -465,6 +554,11 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         if s.get("watchlist"):
             (out / "downloads" / f"{d}_watchlist_2030.csv").write_text(watchlist_csv(s), encoding="utf-8")
     (out / "data" / "latest.json").write_text(json.dumps(snap, default=str), encoding="utf-8")
+    for s in history:
+        (out / "data" / f"{s['as_of']}.json").write_text(json.dumps(s, default=str), encoding="utf-8")
+    from .schema import SCHEMA
+    (out / "data" / "schema.json").write_text(json.dumps(SCHEMA, indent=1), encoding="utf-8")
+    (out / "feed.xml").write_text(atom_feed(history), encoding="utf-8")
     leaks = scan_for_secrets(out, secret_env)
     if leaks:
         shutil.rmtree(out)

@@ -52,7 +52,8 @@ p.lede { color: var(--text-secondary); margin-top: 0; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .tabs button { font: inherit; padding: 6px 12px; border: 1px solid var(--border); background: var(--surface-1);
   color: var(--text-primary); border-radius: 6px; cursor: pointer; }
-.tabs button[aria-selected="true"] { background: var(--surface-2); font-weight: 650; border-color: var(--text-secondary); }
+.tabs button[aria-selected="true"] { background: var(--series-1); color: #fff; font-weight: 650; border-color: var(--series-1);
+  box-shadow: inset 0 -3px 0 var(--text-primary); text-decoration: underline; text-underline-offset: 3px; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
 .controls input, .controls select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--surface-1); color: var(--text-primary); }
@@ -60,6 +61,7 @@ p.lede { color: var(--text-secondary); margin-top: 0; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { padding: 6px 7px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 td.val { white-space: normal; min-width: 92px; }
+td.dist { white-space: normal; min-width: 120px; }
 th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
 th[data-sort] { cursor: pointer; } th[data-sort]::after { content: " \2195"; color: var(--text-muted); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -79,6 +81,18 @@ details { margin: 6px 0; } summary { cursor: pointer; color: var(--link); }
 .legend i.ref { border-top: 2px dashed var(--reference); }
 ul.tight { margin: 4px 0; padding-left: 20px; }
 footer { color: var(--text-muted); font-size: 13px; border-top: 1px solid var(--border); margin-top: 32px; padding-top: 12px; }
+.themebtn { font: inherit; font-size: 13px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface-1); color: var(--text-secondary); cursor: pointer; }
+@media print {
+  header.site, .symsearch, .themebtn, .tabs, .controls, footer, #stale-client { display: none !important; }
+  :root, body { background: #fff !important; color: #000 !important; }
+  .card, .banner, .table-wrap, th, tr.detail td { background: #fff !important; box-shadow: none !important; }
+  .table-wrap { overflow: visible !important; border: 0; }
+  .table-wrap td.tk, .table-wrap th.tk { position: static; }
+  a { color: #000; text-decoration: underline; }
+  h1, h2, h3 { page-break-after: avoid; } tr, .card { page-break-inside: avoid; }
+  .chart svg { max-width: 100%; }
+}
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .rowtoggle { font: inherit; background: none; border: 0; padding: 0; color: var(--link); cursor: pointer; text-align: left; }
 .rowtoggle::after { content: " \25B8"; color: var(--text-muted); }
@@ -100,13 +114,27 @@ tr.detail > td { white-space: normal; }
 .card.mb header { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 4px; }
 .mb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 18px; }
 .rank { font-weight: 700; color: var(--text-secondary); }
-.tabs.seg button[aria-selected="true"] { background: var(--series-1); color: #fff; border-color: var(--series-1); }
-.table-wrap.wide td.sticky, .table-wrap.wide th.sticky { position: sticky; left: 0; background: var(--surface-1); z-index: 1; }
-.table-wrap.wide th.sticky { background: var(--surface-2); }
+/* the ticker column stays visible while a wide table scrolls sideways */
+.table-wrap td.tk, .table-wrap th.tk { position: sticky; left: 0; z-index: 2; background: var(--surface-1);
+  box-shadow: 1px 0 0 var(--border); min-width: 84px; }
+.table-wrap th.tk { background: var(--surface-2); }
 .spark { vertical-align: middle; }
+.strip { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 13px; margin: 4px 0; }
+.chip { display: inline-flex; align-items: center; gap: 5px; }
+.chipbar { display: inline-block; height: 8px; background: var(--series-1); border-radius: 4px; }
+.summary { margin: 4px 0; } details.more { display: inline; } details.more > summary { display: inline; font-size: 13px; }
+details.more[open] > p { margin: 6px 0 0; }
 .chart.range { overflow-x: auto; } .chart.range svg { min-width: 560px; }
 caption { text-align: left; }
+.symsearch input { font: inherit; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; width: 150px;
+  background: var(--surface-1); color: var(--text-primary); }
+header.site .inner .symsearch { margin-left: auto; }
 @media (max-width: 700px) {
+  header.site .inner .symsearch { margin-left: 0; } .symsearch input { width: 100%; }
+  header.site .inner { flex-direction: column; align-items: stretch; gap: 4px; padding-top: 8px; padding-bottom: 6px; }
+  nav { display: flex; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 14px; padding-bottom: 4px; min-width: 0; max-width: 100%;
+        scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  nav a { flex: none; margin-right: 0; padding: 4px 0; }
   h1 { font-size: 20px; } h2 { font-size: 17px; } th, td { padding: 6px 5px; } .hide-sm { display: none; }
   table { font-size: 13px; } td.risk { min-width: 140px; } .tabs button { padding: 6px 9px; }
 }
@@ -114,6 +142,46 @@ caption { text-align: left; }
 
 JS = r"""
 (function () {
+  // colour theme: auto (follows the system) -> light -> dark; the choice is remembered on this device only
+  var tb = document.querySelector('.themebtn');
+  if (tb) {
+    var order = ['auto', 'light', 'dark'];
+    var cur = 'auto';
+    try { cur = localStorage.getItem('theme') || 'auto'; } catch (e) {}
+    function apply(t) {
+      if (t === 'auto') { delete document.documentElement.dataset.theme; } else { document.documentElement.dataset.theme = t; }
+      tb.textContent = 'Theme: ' + t;
+      tb.setAttribute('aria-label', 'Colour theme: ' + (t === 'auto' ? 'automatic' : t) + '. Select to change.');
+      try { if (t === 'auto') localStorage.removeItem('theme'); else localStorage.setItem('theme', t); } catch (e) {}
+    }
+    apply(order.indexOf(cur) >= 0 ? cur : 'auto');
+    tb.addEventListener('click', function () {
+      var now = document.documentElement.dataset.theme || 'auto';
+      apply(order[(order.indexOf(now) + 1) % order.length]);
+    });
+  }
+  // printing: expand every collapsed section so the printout is complete
+  window.addEventListener('beforeprint', function () {
+    document.querySelectorAll('details').forEach(function (d) { d.setAttribute('open', ''); });
+  });
+  // header search: open the symbol page when the input matches a ticker in the inline datalist
+  var sf = document.querySelector('.symsearch');
+  if (sf) {
+    var q = sf.querySelector('input');
+    var known = {};
+    sf.querySelectorAll('datalist option').forEach(function (o) { known[o.value.toUpperCase()] = o.value; });
+    function go() {
+      var t = known[q.value.trim().toUpperCase()];
+      if (t) location.href = sf.dataset.base + encodeURIComponent(t) + '.html';
+    }
+    q.addEventListener('change', go);
+    q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+  }
+  // phone header: keep the current page's link in view inside the scrolling nav
+  var cur = document.querySelector('nav a[aria-current]');
+  if (cur && cur.parentNode.scrollWidth > cur.parentNode.clientWidth) {
+    cur.parentNode.scrollLeft = cur.offsetLeft - 16;
+  }
   // freshness: warn in the browser even if a failed update never redeployed the site
   var fresh = document.getElementById('freshness');
   if (fresh) {
@@ -129,17 +197,17 @@ JS = r"""
   // tabs
   document.querySelectorAll('[data-tabs]').forEach(function (group) {
     var buttons = group.querySelectorAll('button[data-tab]');
-    function show(key) {
+    // default to the first tab on every load; only an explicit URL hash selects another (no silent restore)
+    function show(key, push) {
       buttons.forEach(function (b) { b.setAttribute('aria-selected', b.dataset.tab === key ? 'true' : 'false'); });
       document.querySelectorAll('[data-panel-of="' + group.id + '"]').forEach(function (p) { p.hidden = p.dataset.panel !== key; });
-      try { localStorage.setItem('tab:' + group.id, key); } catch (e) {}
+      if (push) history.replaceState(null, '', '#' + key);
     }
-    buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab); }); });
-    var saved = null; try { saved = localStorage.getItem('tab:' + group.id); } catch (e) {}
+    buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab, true); }); });
     var hash = location.hash.replace('#', '');
     var first = buttons[0] && buttons[0].dataset.tab;
-    var want = [hash, saved, first].filter(function (k) { return k && group.querySelector('button[data-tab="' + k + '"]'); })[0];
-    if (want) show(want);
+    var want = [hash, first].filter(function (k) { return k && group.querySelector('button[data-tab="' + k + '"]'); })[0];
+    if (want) show(want, false);
   });
   // expandable rows (evidence, assumptions, payoffs)
   document.querySelectorAll('.rowtoggle').forEach(function (b) {
@@ -151,26 +219,28 @@ JS = r"""
     });
   });
   // two-dimensional tabs (option type x expiry horizon)
+  // Calls / 3 months on every load unless the URL hash names a tab (#put-6m); the hash follows each click
   document.querySelectorAll('[data-matrix]').forEach(function (box) {
     var state = {};
-    function render() {
+    function valid(d, v) { return v && box.querySelector('button[data-dim="' + d + '"][data-val="' + v + '"]'); }
+    function render(push) {
       box.querySelectorAll('button[data-dim]').forEach(function (b) {
         b.setAttribute('aria-selected', state[b.dataset.dim] === b.dataset.val ? 'true' : 'false');
       });
       box.querySelectorAll('section[data-type]').forEach(function (p) {
         p.hidden = !(p.dataset.type === state.type && p.dataset.hz === state.hz);
       });
-      try { localStorage.setItem('matrix', JSON.stringify(state)); } catch (e) {}
+      if (push) history.replaceState(null, '', '#' + state.type + '-' + state.hz);
     }
-    try { state = JSON.parse(localStorage.getItem('matrix') || '{}') || {}; } catch (e) { state = {}; }
-    ['type', 'hz'].forEach(function (d) {
+    var parts = location.hash.replace('#', '').split('-');
+    ['type', 'hz'].forEach(function (d, i) {
       var first = box.querySelector('button[data-dim="' + d + '"]');
-      if (!state[d] || !box.querySelector('button[data-dim="' + d + '"][data-val="' + state[d] + '"]')) state[d] = first && first.dataset.val;
+      state[d] = valid(d, parts[i]) ? parts[i] : (first && first.dataset.val);
     });
     box.querySelectorAll('button[data-dim]').forEach(function (b) {
-      b.addEventListener('click', function () { state[b.dataset.dim] = b.dataset.val; render(); });
+      b.addEventListener('click', function () { state[b.dataset.dim] = b.dataset.val; render(true); });
     });
-    render();
+    render(false);
   });
   // sortable + searchable + sector-filtered tables; grouped tables move each <tbody class="item"> as a unit
   document.querySelectorAll('table[data-table]').forEach(function (table) {

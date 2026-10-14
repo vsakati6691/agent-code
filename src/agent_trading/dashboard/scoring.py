@@ -193,8 +193,7 @@ COUNTER_TEXT = {   # neutral wording: the weakest input is not always "bad", onl
     "sbc_to_revenue": "Weakest evidence: stock-based compensation ({v:.0%} of revenue).",
     "ev_to_sales_per_growth": "Weakest evidence: valuation for the growth delivered (EV/Sales per point of growth {v:.2f}).",
     "fcf_yield": "Weakest evidence: free-cash-flow yield ({v:.1%}).",
-    "implied_growth_gap": "Weakest evidence: the price implies revenue growth {v:+.0%} away from recent results "
-                          "(negative = the price assumes faster growth).",
+    "implied_growth_gap": "Weakest evidence: expectations in the price (gap {v:+.0%}).",
     "return_12_1": "Weakest evidence: price momentum ({v:+.0%} over 12-1 months).",
     "excess_6m": "Weakest evidence: six-month return relative to the benchmark ({v:+.0%}).",
     "excess_12m": "Weakest evidence: twelve-month return relative to the benchmark ({v:+.0%}).",
@@ -215,6 +214,10 @@ def counterargument(sub: dict[str, float], metrics: dict, missing: list[str],
         return "Too little evidence to judge."
     _, worst = max(present)
     v = metrics.get(worst)
+    if worst == "implied_growth_gap":
+        from .scenarios import implied_growth_text
+        return "Weakest evidence: " + implied_growth_text(metrics.get("implied_revenue_cagr"),
+                                                         metrics.get("revenue_growth_ttm")) + "."
     text = COUNTER_TEXT[worst]
     if isinstance(v, (int, float)) and math.isfinite(v) and v != -1.0:
         try:

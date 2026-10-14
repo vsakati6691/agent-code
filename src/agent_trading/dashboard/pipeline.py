@@ -393,9 +393,13 @@ def rank_changes(current: list[dict], previous: list[dict] | None) -> list[dict]
                         "explanation": "entered the top list this week"})
             continue
         deltas = {k: (c["components"].get(k) or 0) - (p["components"].get(k) or 0) for k in c["components"]}
-        top = sorted(deltas.items(), key=lambda kv: -abs(kv[1]))[:2]
+        top = sorted(deltas.items(), key=lambda kv: -abs(kv[1]))[:3]
         expl = ", ".join(f"{k} {v * 100:+.1f}" for k, v in top if abs(v) >= 0.005) or "component scores unchanged"
+        score_change = (c["composite"] - p["composite"]) if c.get("composite") is not None and \
+            p.get("composite") is not None else None
         out.append({"ticker": c["ticker"], "change": p["rank"] - c["rank"], "from": p["rank"], "to": c["rank"],
+                    "score_change": score_change,
+                    "component_changes": {k: round(v * 100, 1) for k, v in top if abs(v) >= 0.005},
                     "explanation": f"component score changes (points of 100): {expl}"})
     for t, p in prev.items():
         if t not in {c["ticker"] for c in current}:
@@ -418,14 +422,16 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
         e = {**info, "price": None, "price_date": None, "price_source": SOURCES["cboe"], "method": None,
              "scenarios": None, "unavailable_reason": None, "missing": [], "assumptions_note": None,
              "sector": None, "catalysts": [], "bear_case": None, "invalidation": [], "evidence_quality": "none",
-             "sources": [SOURCES["nasdaqtrader"], SOURCES["sec"]], "returns": None, "key_metrics": {}}
+             "sources": [SOURCES["nasdaqtrader"], SOURCES["sec"]], "returns": None, "key_metrics": {}, "unlock": []}
         entries.append(e)
         if info["status"] != "listed":
             e["unavailable_reason"] = info["status"]
+            e["unlock"] = wl_mod.unlock_steps("unresolved" if info["status"].startswith("unresolved") else "type")
             continue
         df, why, pflags = latest_bars(ctx, t)
         if df is None:
             e["unavailable_reason"] = f"no verified as-of price ({why})"
+            e["unlock"] = wl_mod.unlock_steps("price")
             continue
         close = float(df["close"].iloc[-1])
         e.update(price=close, price_date=ctx.as_of, price_flags=pflags)
@@ -440,6 +446,7 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
             _watchlist_etf(ctx, e, close, years)
         else:
             e["unavailable_reason"] = f"no scenario method for this security type ({kind or 'unknown'})"
+            e["unlock"] = wl_mod.unlock_steps("type")
     themes: dict[str, int] = {}
     for e in entries:
         key = e["sector"] or ("Unresolved" if e["status"] != "listed" else "Unknown")
@@ -454,6 +461,7 @@ def _watchlist_company(ctx, e, df, close, years, earnings, sp) -> None:
     e["sector"] = sp.loc[e["ticker"], "sector"] if e["ticker"] in sp.index else None
     if e["cik"] is None:
         e["unavailable_reason"] = "no SEC registrant (CIK) for this symbol, so no reported fundamentals"
+        e["unlock"] = wl_mod.unlock_steps("no_cik")
         return
     f, why = _facts(ctx, e["cik"])
     if f is None:
@@ -462,9 +470,14 @@ def _watchlist_company(ctx, e, df, close, years, earnings, sp) -> None:
     if e["sector"] is None:
         sub, _ = _guard(ctx, "sec", ctx.providers.submissions, e["cik"])
         e["sector"] = sector_from_sic(sub.get("sic")) if sub else "Unknown"
+    def cadence():
+        sub, _ = _guard(ctx, "sec", ctx.providers.submissions, e["cik"])
+        return wl_mod.next_filing_estimate(sub, f.last_filed, ctx.as_of)
+
     flags, why = fundamentals_flags(f, ctx.as_of, len(df))
     if why:
         e["unavailable_reason"] = why
+        e["unlock"] = wl_mod.unlock_steps("stale", why=why, next_filing=cadence())
         return
     cap, cap_flags = market_cap(f, close)
     if cap is None:
@@ -480,14 +493,22 @@ def _watchlist_company(ctx, e, df, close, years, earnings, sp) -> None:
     e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
     if not earnings.get(e["ticker"]):
         e["missing"].append("no scheduled earnings date")
-    if not m["revenue_ttm"] or m["revenue_ttm"] <= 0 or f.n_quarters < 4:
-        e["unavailable_reason"] = "too little reported revenue for a revenue-based valuation (pre-revenue or new filer)"
+    if f.n_quarters < 4:
+        e["unavailable_reason"] = "too few reported quarters for a revenue-based valuation (new filer)"
+        e["unlock"] = wl_mod.unlock_steps("quarters", quarters=f.n_quarters, next_filing=cadence())
+        return
+    if not m["revenue_ttm"] or m["revenue_ttm"] <= 0:
+        e["unavailable_reason"] = "too little reported revenue for a revenue-based valuation (pre-revenue)"
+        e["unlock"] = wl_mod.unlock_steps("revenue", revenue=cap_text(m["revenue_ttm"]), next_filing=cadence())
         return
     if m["revenue_growth_ttm"] is None:
         e["unavailable_reason"] = "revenue growth not computable (fewer than 8 reported quarters)"
+        e["unlock"] = wl_mod.unlock_steps("growth", quarters=f.n_quarters, next_filing=cadence())
         return
     if m["enterprise_value"] is None or m["enterprise_value"] <= 0 or not m["ev_to_sales"]:
         e["unavailable_reason"] = "enterprise value not positive, so EV/Sales cannot anchor the valuation"
+        e["unlock"] = wl_mod.unlock_steps("ev", ev=cap_text(m["enterprise_value"]), net_cash=cap_text(-(m["net_debt"] or 0)),
+                                          cap=cap_text(cap))
         return
     margin, source = (m.get("fcf_margin"), "FCF") if m.get("fcf_margin") is not None else (m.get("operating_margin"), "operating")
     if margin is None:
@@ -496,6 +517,11 @@ def _watchlist_company(ctx, e, df, close, years, earnings, sp) -> None:
                                               m["ev_to_sales"], -(m["net_debt"] or 0.0), m.get("dilution"), years,
                                               margin, source)
     e["assumptions_note"] = spec.WATCHLIST_COMPANY_METHOD
+
+
+def cap_text(v) -> str:
+    from .fmt import cap as _cap
+    return _cap(v)
 
 
 def _watchlist_etf(ctx, e, close, years) -> None:
@@ -510,10 +536,12 @@ def _watchlist_etf(ctx, e, close, years) -> None:
         e["sector"] = f"Leveraged ETF ({lev}x)"
         if lev < 0:
             e["unavailable_reason"] = "inverse fund: the daily-reset model here covers long leverage only"
+            e["unlock"] = wl_mod.unlock_steps("inverse")
             return
         und = wl_mod.leveraged_underlying(name)
         if und is None:
             e["unavailable_reason"] = "the tracked index could not be identified from the fund name"
+            e["unlock"] = wl_mod.unlock_steps("lev_index")
             return
         rule = wl_mod.exposure_class(next(k for k, v in spec.LEVERAGED_UNDERLYING_HINTS.items()
                                           if v == und and wl_mod._has(name, k)))
@@ -521,6 +549,7 @@ def _watchlist_etf(ctx, e, close, years) -> None:
         sigma = wl_mod.realized_vol(udf["close"]) if udf is not None else None
         if rule is None or sigma is None:
             e["unavailable_reason"] = f"no 3-year price history for the tracked index fund {und}"
+            e["unlock"] = wl_mod.unlock_steps("lev_history", index=und)
             return
         e["scenarios"] = wl_mod.leveraged_scenarios(close, lev, rule, sigma, years)
         e["assumptions_note"] = spec.LEVERAGED_METHOD + f" Tracked index proxy: {und}; trailing volatility {sigma:.0%}."
@@ -532,12 +561,53 @@ def _watchlist_etf(ctx, e, close, years) -> None:
     if rule is None:
         e["sector"] = "ETF (exposure not classified)"
         e["unavailable_reason"] = "the fund's exposure could not be classified from its name; no assumption is made"
+        e["unlock"] = wl_mod.unlock_steps("etf_class")
         return
     e["sector"] = f"ETF: {rule[1]}"
     e["scenarios"] = wl_mod.etf_scenarios(close, rule, years)
     e["assumptions_note"] = ("Fund-level model: exposure-class total-return assumptions minus an assumed fee and "
                              "distribution yield give a price return, compounded to 2030-12-31. "
                              "Company valuation formulas are not applied to funds.")
+
+
+SEC_RESERVE_FOR_EARNINGS = 25     # SEC requests kept back before the optional 8-K check runs
+
+
+def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -> dict:
+    """Last results date confirmed by an SEC 8-K item 2.02 filing, plus a cadence check of the scheduled date.
+
+    Uses the submissions file already allowed on data.sec.gov (GET via http.py). Skipped, with a note, when the
+    SEC request budget is nearly spent; the scheduled Alpha Vantage date then stays labelled unverified."""
+    out = {"next_scheduled": next_scheduled, "next_status": "scheduled (Alpha Vantage, unverified)" if next_scheduled
+           else "no scheduled date from the data source", "last_results": None, "last_results_status": None,
+           "cadence_check": None}
+    if cik is None:
+        out["last_results_status"] = "no SEC registrant, so no 8-K to check"
+        return out
+    left = getattr(getattr(ctx.providers, "http", None), "budget_left", None)
+    if callable(left) and left("sec") <= SEC_RESERVE_FOR_EARNINGS:
+        out["last_results_status"] = "not checked: SEC request budget nearly spent; the scheduled date stays unverified"
+        return out
+    sub, why = _guard(ctx, "sec", ctx.providers.submissions, cik)
+    if sub is None:
+        out["last_results_status"] = f"not checked ({why})"
+        return out
+    from .providers import parse_earnings_8k
+    dates = parse_earnings_8k(sub)
+    if not dates:
+        out["last_results_status"] = "no 8-K item 2.02 among the recent SEC filings"
+        return out
+    out["last_results"], out["last_results_status"] = dates[0], "verified (8-K)"
+    if next_scheduled and len(dates) >= 2:
+        gaps = sorted((date.fromisoformat(a) - date.fromisoformat(b)).days for a, b in zip(dates[:5], dates[1:5]))
+        gap = gaps[len(gaps) // 2]
+        expected = date.fromisoformat(dates[0]) + timedelta(days=gap)
+        off = (date.fromisoformat(next_scheduled) - expected).days
+        out["cadence_check"] = (f"consistent with the verified 8-K cadence (expected about {expected.isoformat()})"
+                                if abs(off) <= 21 else
+                                f"differs by {abs(off)} days from the verified 8-K cadence (expected about "
+                                f"{expected.isoformat()}); treat the scheduled date with care")
+    return out
 
 
 def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability,
@@ -654,7 +724,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         details = [candidate_detail(ctx, band, r, bench[band.benchmark], earnings) for r in top]
         prev_band = None
         if previous:
-            prev_band = [{"ticker": c["ticker"], "rank": c["rank"], "components": c["components"]}
+            prev_band = [{"ticker": c["ticker"], "rank": c["rank"], "components": c["components"],
+                          "composite": c.get("composite")}
                          for c in previous.get("bands", {}).get(band.key, {}).get("candidates", [])]
         payload_bands[band.key] = {
             "title": band.title, "benchmark": band.benchmark, "benchmark_name": band.benchmark_name,
@@ -670,7 +741,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             "excluded": [{"ticker": t, "reason": why} for t, why in sorted(ctx.excluded[band.key].items())],
             "evaluated": len(rows), "ranked": len(ranked),
             "concentration": concentration_warnings(top),
-            "rank_changes": rank_changes([{"ticker": d["ticker"], "rank": d["rank"], "components": d["components"]}
+            "rank_changes": rank_changes([{"ticker": d["ticker"], "rank": d["rank"], "components": d["components"],
+                                           "composite": d.get("composite")}
                                           for d in details], prev_band),
         }
 
@@ -702,13 +774,22 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
     watch_payload = {"status": "no watchlist configured", "entries": []}
     if watchlist is not None:
         watch_payload = evaluate_watchlist(ctx, ref, watchlist, earnings)
+    for k, b in payload_bands.items():
+        for c in b["candidates"]:
+            c["earnings_check"] = _clean(verify_earnings(ctx, c.get("cik"), c.get("next_earnings")))
+    for e in watch_payload.get("entries", []):
+        if (e.get("asset_type") or "").startswith("operating company"):
+            e["earnings_check"] = _clean(verify_earnings(ctx, e.get("cik"), earnings.get(e["ticker"])))
     upcoming = []
     horizon_end = as_of + timedelta(days=45)
     for key, b in payload_bands.items():
         for c in b["candidates"]:
             if c.get("next_earnings") and c["next_earnings"] <= horizon_end.isoformat():
+                ec = c.get("earnings_check") or {}
                 upcoming.append({"ticker": c["ticker"], "date": c["next_earnings"], "list": key,
-                                 "event": "earnings (scheduled; Alpha Vantage; not independently verified)"})
+                                 "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+                                 "last_results": ec.get("last_results"), "last_results_status": ec.get("last_results_status"),
+                                 "cadence_check": ec.get("cadence_check")})
     for e in watch_payload.get("entries", []):
         d = earnings.get(e["ticker"])
         if d and d <= horizon_end.isoformat():

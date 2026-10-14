@@ -127,6 +127,19 @@ def chart_series(close: pd.Series, bench: pd.Series | None, bars: int = 1260, st
 
 # --- narrative ---------------------------------------------------------------------------------
 
+def implied_growth_text(implied, trailing) -> str:
+    """One-pass wording for 'the growth the price implies' (spec.IMPLIED_GROWTH) vs trailing growth."""
+    def ok(x):
+        return isinstance(x, (int, float)) and math.isfinite(x)
+    tail = f" vs {trailing:.0%} trailing" if ok(trailing) else ""
+    if not ok(implied):
+        return "The growth the price implies could not be computed"
+    if implied < 0:
+        return (f"The price implies shrinking revenue (about {abs(implied):.0%} a year smaller for 5 years)"
+                f"{tail}")
+    return f"Price implies about {implied:.0%}/yr revenue growth for 5 years{tail}"
+
+
 def _pct(v, fmt="{:.0%}"):
     return "n/a" if v is None or not isinstance(v, (int, float)) or not math.isfinite(v) else fmt.format(v)
 
@@ -144,17 +157,17 @@ def thesis(m: dict, comps: dict) -> str:
     s = " ".join(parts) + ". "
     s += f"Its strongest scored areas are {titles[best[0][1]]} and {titles[best[1][1]]}. "
     if m.get("ev_to_sales") is not None:
-        s += (f"It trades at {m['ev_to_sales']:.1f}x EV/Sales; the price implies about "
-              f"{_pct(m.get('implied_revenue_cagr'))} annual revenue growth for five years under the "
-              f"dashboard's fixed assumptions.")
+        s += (f"It trades at {m['ev_to_sales']:.1f}x EV/Sales. "
+              f"{implied_growth_text(m.get('implied_revenue_cagr'), m.get('revenue_growth_ttm'))} "
+              "(under the dashboard's fixed valuation assumptions).")
     return s
 
 
 def bear_case(m: dict, counter: str) -> str:
     items = [counter]
-    if m.get("implied_growth_gap") is not None and m["implied_growth_gap"] < 0:
-        items.append(f"The valuation needs about {_pct(m.get('implied_revenue_cagr'))} annual revenue growth, "
-                     f"above the trailing {_pct(m.get('revenue_growth_ttm'))}.")
+    if m.get("implied_growth_gap") is not None and m["implied_growth_gap"] < 0 and "implies" not in counter:
+        items.append(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")) +
+                     ": the valuation needs faster growth than recent results.")
     if m.get("growth_acceleration") is not None and m["growth_acceleration"] < 0:
         items.append(f"Growth is slowing ({_pct(m['growth_acceleration'], '{:+.0%}')} vs a year earlier).")
     if m.get("dilution") is not None and m["dilution"] > 0.03:

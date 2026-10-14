@@ -6,7 +6,7 @@ import html
 import io
 
 from . import spec
-from .fmt import cap, money, num, ok, pct, sval
+from .fmt import cap, csv_value, money, net_position, num, ok, pct, sval
 
 E = html.escape
 
@@ -66,7 +66,7 @@ def _assumptions(e: dict) -> str:
         if "starting_revenue_growth" in a:
             txt = (f"revenue growth starts at {pct(a['starting_revenue_growth'])} and fades toward "
                    f"{pct(spec.SCENARIO_TERMINAL_GROWTH)}; 2030 revenue {cap(a['revenue_2030'])}; exit EV/Sales "
-                   f"{num(a['exit_ev_to_sales'], 1)}x; net cash held {cap(a['net_cash_held'])}; dilution "
+                   f"{num(a['exit_ev_to_sales'], 1)}x; {net_position(-a['net_cash_held'], False)} held flat; dilution "
                    f"{pct(a['annual_dilution'], 1)}/yr")
             if a.get("margin_2030") is not None:
                 txt += (f"; {a.get('margin_source')} margin {pct(a['margin_today'])} → {pct(a['margin_2030'])} by 2030 "
@@ -83,6 +83,22 @@ def _assumptions(e: dict) -> str:
                    f"= price return {pct(a['price_return'], 1)}/yr")
         rows.append(f"<li><strong>{k}</strong>: {E(txt)}</li>")
     return f'<ul class="tight small">{"".join(rows)}</ul>'
+
+
+def _earnings_line(e: dict) -> str:
+    ec = e.get("earnings_check") or {}
+    if ec.get("last_results"):
+        return f'<p class="small">Last results {E(ec["last_results"])}: verified (8-K).</p>'
+    if ec.get("last_results_status"):
+        return f'<p class="small muted">{E(ec["last_results_status"])}.</p>'
+    return ""
+
+
+def _unlock(e: dict) -> str:
+    if not e.get("unlock"):
+        return ""
+    items = "".join(f"<li>{E(u)}</li>" for u in e["unlock"])
+    return f'<h4>Why unavailable, and what would unlock it</h4><ul class="tight small">{items}</ul>'
 
 
 def watchlist_page(snap: dict) -> str:
@@ -102,10 +118,10 @@ def watchlist_page(snap: dict) -> str:
             f"operating margin {pct(km.get('operating_margin'))}" if ok(km.get("operating_margin")) else "",
             f"FCF {cap(km.get('fcf_ttm'))}" if ok(km.get("fcf_ttm")) else "",
             f"EV/Sales {num(km.get('ev_to_sales'), 1)}x" if ok(km.get("ev_to_sales")) else "",
-            f"net debt {cap(km.get('net_debt'))}" if ok(km.get("net_debt")) else "",
+            net_position(km.get("net_debt"), False) if ok(km.get("net_debt")) else "",
             f"dilution {pct(km.get('dilution'), 1)}/yr" if ok(km.get("dilution")) else "") if t)
         bodies.append(f"""<tbody class="item" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
-<td><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
+<td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
 <div class="small muted">{E(e.get("name") or "name not resolved")}</div></td>
 <td class="small hide-sm" data-v="{E(e.get("asset_type") or "")}">{E(e.get("asset_type") or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
@@ -117,9 +133,10 @@ def watchlist_page(snap: dict) -> str:
 status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") else ""}. Sector/theme: {E(e.get("sector") or "n/a")}.</p>
 <p class="small">{E(km_txt)}</p><p class="small">Trailing price returns: 1y {pct((e.get("returns") or {}).get("1y"), 0, True)},
 3y {pct((e.get("returns") or {}).get("3y"), 0, True)} (history from {E(str(e.get("history_start") or "n/a"))}).</p></div>
-<div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}</div>
+<div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}
+{_unlock(e)}</div>
 <div><h4>Catalysts</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("catalysts", []))}</ul>
-<h4>Strongest bear case</h4><p class="small">{E(e.get("bear_case") or "n/a")}</p></div>
+{_earnings_line(e)}<h4>Strongest bear case</h4><p class="small">{E(e.get("bear_case") or "n/a")}</p></div>
 <div><h4>Thesis invalidation</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("invalidation", []))}</ul>
 <h4>Sources, evidence and gaps</h4><p class="small">Evidence quality: {E(e.get("evidence_quality") or "none")}. Sources:
 {E("; ".join(dict.fromkeys(e.get("sources", []))))}.</p><ul class="tight small">{''.join(f"<li>{E(m)}</li>" for m in e.get("missing", []))}</ul></div>
@@ -137,7 +154,7 @@ theme concentration: {conc}.</p>
 <select data-sector="t-watch" aria-label="Filter by sector or theme"><option value="">All sectors and themes</option>{opts}</select>
 <span class="small muted" data-count="t-watch" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="t-watch" data-table data-grouped><caption class="sr-only">Watchlist 2030 scenarios</caption>
-<thead><tr><th data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
+<thead><tr><th class="tk" data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
 <th class="num" data-sort="num">Bear 2030</th><th class="num" data-sort="num">Base 2030</th><th class="num" data-sort="num">Bull 2030</th>
 <th class="hide-sm">Method</th><th data-sort="text">Evidence</th><th>Unavailable / notes</th></tr></thead>{''.join(bodies)}</table></div>
 <p class="small"><a href="downloads/{E(snap["as_of"])}_watchlist_2030.csv" download>Download (CSV)</a> · Prices are split-adjusted
@@ -154,8 +171,8 @@ def watchlist_csv(snap: dict) -> str:
     for e in (snap.get("watchlist") or {}).get("entries", []):
         sc = e.get("scenarios") or {}
         g = lambda k, f: (sc.get(k) or {}).get(f)  # noqa: E731
-        wr.writerow([e["ticker"], e.get("name"), e.get("asset_type"), e.get("exchange"), e.get("status"), e.get("price"),
+        wr.writerow([csv_value(v) for v in [e["ticker"], e.get("name"), e.get("asset_type"), e.get("exchange"), e.get("status"), e.get("price"),
                      e.get("price_date"), e.get("method"), e.get("evidence_quality"),
                      *[g(k, "price") for k in ("bear", "base", "bull")], *[g(k, "change") for k in ("bear", "base", "bull")],
-                     *[g(k, "annualized") for k in ("bear", "base", "bull")], e.get("unavailable_reason")])
+                     *[g(k, "annualized") for k in ("bear", "base", "bull")], e.get("unavailable_reason")]])
     return buf.getvalue()
