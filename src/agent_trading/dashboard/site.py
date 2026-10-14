@@ -178,7 +178,7 @@ def detail(c: dict, snap: dict) -> str:
     ns = "".join(f'<li><strong>{E(k.replace("_", " "))}:</strong> {E(v)}</li>' for k, v in c["not_scored"].items())
     return f"""<p class="small"><a href="../index.html#{E(c["band"])}">&larr; back to the list</a></p>
 <h1>{E(c["ticker"])} · {E(c["name"] or "")}</h1>
-<p class="lede">{E(c["sector"] or "Unknown")} · rank {c["rank"]} in {E(band_title(c["band"], snap["bands"][c["band"]]).lower())} ·
+<p class="lede">{E(c["sector"] or "Unknown")} · rank {c["rank"]} in the {E(band_title(c["band"], snap["bands"][c["band"]]))} list ·
 score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confidence_label"])}">{E(c["confidence_label"])}</span></p>
 <div class="grid"><div class="card stat"><div class="label">Price ({E(c["price_date"])} close)</div><div class="value">{money(c["price"])}</div>
 <div class="small muted">{E(c["sources"]["price"])}</div></div>

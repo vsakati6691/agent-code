@@ -74,3 +74,8 @@ def test_detail_page_inputs_are_rounded_percentages():
     assert metric("net_debt_to_ebitda", 0.123456) == "0.1235x"
     assert metric("fcf_growth_ttm", -1.0) == "not meaningful (negative base)"
     assert metric("log_market_cap", 9.6).endswith("market cap")
+
+
+def test_detail_page_keeps_list_title_casing(site):
+    page = (site / "stock" / "large-S11.html").read_text(encoding="utf-8")
+    assert "in the Large cap (S&amp;P 500 members) list" in page and "s&amp;p 500 members" not in page
