@@ -24,7 +24,7 @@ from .store import Store, find_private_keys
 E = html.escape
 NAV = [("index.html", "Overview"), ("options.html", "Options research"), ("history.html", "History & tracking"),
        ("methodology.html", "Methodology"), ("audit.html", "Audit trail")]
-COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", "balance": "Balance",
+COMP_SHORT = {"growth": "Growth", "earnings": "Earn/FCF", "quality": "Quality", "balance": "Balance", "runway": "Runway",
               "valuation": "Value", "momentum": "Mom.", "relative": "Rel."}
 
 
@@ -98,13 +98,18 @@ def freshness_banner(snap: dict, status: dict | None) -> str:
 
 # --- overview ----------------------------------------------------------------------------------------
 
+def profile_of(band: dict) -> tuple:
+    return spec.PROFILES.get(band.get("profile", "standard"), spec.COMPONENTS)
+
+
 def band_table(key: str, band: dict) -> str:
+    band_keys = [c.key for c in profile_of(band)]
     rows = []
     changes = {c["ticker"]: c for c in band.get("rank_changes", [])}
     for c in band["candidates"]:
         comps = "".join(f'<td class="num" data-v="{sval(c["components"].get(k))}">'
                         f'{"n/a" if c["components"].get(k) is None else round(c["components"][k] * 100)}</td>'
-                        for k in COMP_SHORT)
+                        for k in band_keys)
         ch = changes.get(c["ticker"], {})
         mv = ch.get("change")
         mv_txt = mv if isinstance(mv, str) else ("=" if mv == 0 else f"{mv:+d}") if mv is not None else ""
@@ -121,8 +126,8 @@ def band_table(key: str, band: dict) -> str:
     sectors = sorted({c["sector"] or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
     tid = f"t-{key}"
-    head = "".join(f'<th class="num" data-sort="num" title="{E(t.title)}">{COMP_SHORT[t.key]}</th>'
-                   for t in spec.COMPONENTS)
+    head = "".join(f'<th class="num" data-sort="num" title="{E(t.title)} ({t.weight:.0%})">{COMP_SHORT[t.key]}</th>'
+                   for t in profile_of(band))
     return f"""<div class="controls"><input type="search" placeholder="Search ticker, name, reason" data-search="{tid}"
 aria-label="Search candidates"><select data-sector="{tid}" aria-label="Filter by sector"><option value="">All sectors</option>{opts}</select>
 <span class="small muted" data-count="{tid}"></span></div>
@@ -243,7 +248,7 @@ def detail(c: dict, snap: dict) -> str:
         f'<td><div class="bar"><span style="width:{(c["components"].get(cp.key) or 0) * 100:.0f}%"></span></div></td>'
         f'<td class="small">' + "; ".join(
             f'{E(mk)} = {E(_metric(m.get(mk)))}{" (missing, scored 0)" if mk in c["missing"] else ""}'
-            for mk in cp.metrics) + "</td></tr>" for cp in spec.COMPONENTS)
+            for mk in cp.metrics) + "</td></tr>" for cp in profile_of(snap["bands"][c["band"]]))
     fund = c["fundamentals"]
     frow = lambda label, key: f'<tr><td>{label}</td>' + "".join(  # noqa: E731
         f'<td class="num">{num((v or 0) / 1e6, 0) if v is not None else "n/a"}</td>' for v in fund[key]) + "</tr>"
@@ -251,22 +256,27 @@ def detail(c: dict, snap: dict) -> str:
     scen_html = f'<p class="muted">{E(c.get("scenario_note") or "")}</p>'
     if c.get("scenarios"):
         sc = c["scenarios"]
+        years = sorted(int(y) for y in sc["base"]["years"])
         rows = ""
         for key in ("bear", "base", "bull"):
             s = sc[key]
             a = s["assumptions"]
             cells = "".join(f'<td class="num">{money(s["years"][str(y)]["value_per_share"])}<div class="small muted">'
                             f'{num(s["years"][str(y)]["multiple_of_price"], 2)}x · {pct(s["years"][str(y)]["annualized"], 0, True)}/yr</div></td>'
-                            for y in spec.SCENARIO_YEARS)
+                            for y in years)
             rows += (f'<tr><td><strong>{key}</strong></td>{cells}<td class="small">start growth {pct(a["starting_revenue_growth"])}'
                      f', fading to {pct(spec.SCENARIO_TERMINAL_GROWTH)}; exit EV/Sales {num(a["exit_ev_to_sales"], 1)}x; '
                      f'dilution {pct(a["annual_dilution"], 1)}/yr; FCF margin {pct(a["fcf_margin_start"])} &rarr; '
-                     f'{pct(a["fcf_margin_year5"])}; net cash held {cap(a["net_cash_held"]) if (a["net_cash_held"] or 0) >= 0 else "-" + cap(-a["net_cash_held"])}</td></tr>')
+                     f'{pct(a.get("fcf_margin_end", a.get("fcf_margin_year5")))} by year {years[-1]}; net cash held {cap(a["net_cash_held"]) if (a["net_cash_held"] or 0) >= 0 else "-" + cap(-a["net_cash_held"])}</td></tr>')
         fl = sc["flags"]
-        scen_html = f"""<div class="table-wrap"><table><thead><tr><th>Scenario</th><th class="num">1 year</th><th class="num">3 years</th>
-<th class="num">5 years</th><th>Assumptions</th></tr></thead><tbody>{rows}</tbody></table></div>
-<p class="small">Bull case reaches 2x in five years: <strong>{"yes" if fl["bull_doubles_in_5y"] else "no"}</strong> ·
-5x ('multibagger' definition): <strong>{"yes" if fl["bull_multibagger_5y"] else "no"}</strong>. {E(spec.MULTIBAGGER_DEFINITION)}</p>
+        yn = lambda k: "yes" if fl.get(k) else "no"  # noqa: E731
+        ten = (f' · within ten years, bull case 5x: <strong>{yn("bull_5x_in_10y")}</strong>, base case 2x: '
+               f'<strong>{yn("base_2x_in_10y")}</strong>') if "bull_5x_in_10y" in fl else ""
+        yh = "".join(f'<th class="num">{y} year{"s" if y > 1 else ""}</th>' for y in years)
+        scen_html = f"""<div class="table-wrap"><table><thead><tr><th>Scenario</th>{yh}<th>Assumptions</th></tr></thead>
+<tbody>{rows}</tbody></table></div>
+<p class="small">Bull case reaches 2x in five years: <strong>{yn("bull_doubles_in_5y")}</strong> ·
+5x in five years: <strong>{yn("bull_multibagger_5y")}</strong>{ten}. {E(spec.MULTIBAGGER_DEFINITION)}</p>
 <p class="small muted">{E(spec.SCENARIO_METHOD)}</p>"""
     earn = c.get("next_earnings")
     flags = "".join(f'<span class="pill">{E(f)}</span>' for f in c["flags"]) or '<span class="muted">none</span>'
@@ -433,11 +443,18 @@ def history_page(dates: list[str], tracking: dict | None) -> str:
 measure each list as it was published.</p><h2>Weekly reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
 
 
-def methodology_page() -> str:
-    comps = "".join(
+def _component_rows(components) -> str:
+    return "".join(
         f'<tr><td>{E(c.title)}</td><td class="num">{c.weight:.0%}</td><td>{"yes" if c.critical else "no"}</td><td class="small">' +
         "<br>".join(f'<strong>{E(k)}</strong> ({"lower is better, " if s.reverse else ""}0 at {s.lo:g}, 1 at {s.hi:g}{" reversed" if s.reverse else ""}): '
-                    f'{E(spec.METRIC_NOTES[k])}' for k, s in c.metrics.items()) + "</td></tr>" for c in spec.COMPONENTS)
+                    f'{E(spec.METRIC_NOTES[k])}' for k, s in c.metrics.items()) + "</td></tr>" for c in components)
+
+
+def methodology_page() -> str:
+    comps = _component_rows(spec.COMPONENTS)
+    long_comps = _component_rows(spec.LONG_HORIZON_COMPONENTS)
+    gates = "".join(f'<li>{E(spec.METRIC_NOTES.get(m, spec.GATE_NOTES.get(m, m)))} Gate: {E(op)} {v:g}</li>'
+                    for b in spec.BANDS for m, op, v in b.gates)
     bands = "".join(f'<tr><td>{E(b.title)}</td><td>{E(b.universe)}</td><td>{cap(b.min_cap) if b.min_cap else "-"} to '
                     f'{cap(b.max_cap) if b.max_cap else "-"}</td><td>${b.min_price:g}</td><td>{cap(b.min_dollar_volume)}</td>'
                     f'<td>{"revenue growth ≥ " + pct(b.min_revenue_growth) if b.min_revenue_growth else "-"}</td><td>{E(b.benchmark)}</td>'
@@ -459,6 +476,14 @@ missing, or more than {spec.MAX_MISSING_METRICS} missing inputs, is not ranked. 
 <div class="table-wrap"><table><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
 <tbody>{comps}</tbody></table></div>
 <p>Momentum and benchmark-relative performance are separate components. {E(spec.CONFIDENCE_RULES)}</p>
+<h3>Long-horizon multibagger list (5-10 years)</h3><p>{E(spec.MULTIBAGGER_RATIONALE)}</p>
+<p>Eligibility gates (all must hold; a missing input fails the gate):</p><ul class="small">{gates}</ul>
+<p>Weights for this list (the other lists use the table above):</p>
+<div class="table-wrap"><table><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
+<tbody>{long_comps}</tbody></table></div>
+<h3>Robinhood tradability</h3><p>{E(spec.TRADABILITY_RULE)} Because scores use fixed scales, removing a stock that is not
+tradable does not change the order of the others. Checks run in a Claude session with the read-only Robinhood tool, since
+GitHub Actions cannot reach it; no account data is stored.</p>
 <h3>Not scored</h3><ul>{''.join(f'<li>{E(k.replace("_", " "))}: {E(v)}</li>' for k, v in spec.NOT_SCORED_FACTORS.items())}</ul>
 <p>The strongest counterargument is the input with the largest weighted shortfall (missing critical data first).</p>
 <h2>Scenarios</h2><p>{E(spec.SCENARIO_METHOD)}</p><p>{E(spec.MULTIBAGGER_DEFINITION)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p>
@@ -515,12 +540,13 @@ def weekly_report(snap: dict) -> str:
 def band_csv(band: dict) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
-    keys = [m for c in spec.COMPONENTS for m in c.metrics]
-    w.writerow(["rank", "ticker", "name", "sector", "composite", *[f"component_{c.key}" for c in spec.COMPONENTS],
+    comps = profile_of(band)
+    keys = [m for c in comps for m in c.metrics]
+    w.writerow(["rank", "ticker", "name", "sector", "composite", *[f"component_{c.key}" for c in comps],
                 "confidence", "price", "market_cap", *keys, "missing", "flags", "counterargument"])
     for c in band["candidates"]:
         w.writerow([c["rank"], c["ticker"], c["name"], c["sector"], c["composite"],
-                    *[c["components"].get(k.key) for k in spec.COMPONENTS], c["confidence"], c["price"], c["market_cap"],
+                    *[c["components"].get(k.key) for k in comps], c["confidence"], c["price"], c["market_cap"],
                     *[c["metrics"].get(k) for k in keys], ";".join(c["missing"]), ";".join(c["flags"]), c["counterargument"]])
     return buf.getvalue()
 

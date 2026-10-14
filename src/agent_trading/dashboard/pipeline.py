@@ -20,6 +20,7 @@ from . import scenarios, scoring, spec
 from .fundamentals import Fundamentals, build as build_fundamentals
 from .http import BudgetExceeded, FetchError
 from .providers import SOURCES, Providers, common_stock_reason, sector_from_sic
+from .tradability import Tradability
 from ..data.validation import DataQualityError, trim_bad_history, validate_bars
 from ..market_calendar import is_trading_day, previous_trading_day
 
@@ -206,6 +207,25 @@ def broad_universe(ctx: Context, ref: dict) -> tuple[pd.DataFrame, dict[str, int
 
 # --- scoring a band ------------------------------------------------------------------------------
 
+GATE_LABELS = {"revenue_growth_ttm": "TTM revenue growth", "revenue_cagr_3y": "3-year revenue growth",
+               "gross_margin": "gross margin", "reported_quarters": "reported quarters", "dilution": "dilution",
+               "survival": "survival (positive FCF or 2+ years of cash runway)"}
+
+
+def failed_gate(band: spec.Band, m: dict) -> str | None:
+    """The first eligibility gate the stock fails (missing input = fail), or None."""
+    for metric, op, limit in band.gates:
+        v = m.get(metric)
+        label = GATE_LABELS.get(metric, metric)
+        if v is None or not math.isfinite(v):
+            return f"gate input unavailable: {label}"
+        if (op == ">=" and v < limit) or (op == "<=" and v > limit):
+            shown = f"{v:.0%}" if abs(limit) < 5 and metric not in ("reported_quarters", "survival") else f"{v:g}"
+            want = f"{limit:.0%}" if abs(limit) < 5 and metric not in ("reported_quarters", "survival") else f"{limit:g}"
+            return f"gate failed: {label} {shown} (needs {op} {want})"
+    return None
+
+
 def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, str]],
              bench: pd.Series) -> list[dict]:
     """Score each (ticker, cik, name, sector) for `band`; exclusions are recorded on ctx."""
@@ -242,6 +262,10 @@ def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, s
             ctx.exclude(band.key, t, f"market cap ${cap / 1e9:.2f}B outside the band")
             continue
         m = scoring.compute_metrics(f, df["close"], bench, cap)
+        gate = failed_gate(band, m)
+        if gate:
+            ctx.exclude(band.key, t, gate)
+            continue
         if band.min_revenue_growth is not None and (m["revenue_growth_ttm"] is None
                                                     or m["revenue_growth_ttm"] < band.min_revenue_growth):
             g = m["revenue_growth_ttm"]
@@ -249,7 +273,7 @@ def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, s
                         f" below the {band.min_revenue_growth:.0%} speculative-band gate")
             continue
         flags = flags + cap_flags + pflags
-        s = scoring.score_one(t, m, f, flags)
+        s = scoring.score_one(t, m, f, flags, spec.PROFILES[band.profile])
         if s.excluded_reason:
             ctx.exclude(band.key, t, s.excluded_reason)
         out.append({"ticker": t, "cik": cik, "name": name, "sector": sector, "score": s, "metrics": m,
@@ -297,11 +321,14 @@ def candidate_detail(ctx: Context, band: spec.Band, row: dict, bench: pd.Series,
     scen = None
     scen_note = None
     try:
-        if m["ev_to_sales"] and m["revenue_growth_ttm"] is not None and m["revenue_ttm"]:
+        if m.get("enterprise_value") is not None and m["enterprise_value"] <= 0:
+            scen_note = ("Scenarios not computed: enterprise value is not positive (net cash exceeds market cap), "
+                         "so the EV/Sales scenario model does not apply.")
+        elif m["ev_to_sales"] and m["revenue_growth_ttm"] is not None and m["revenue_ttm"]:
             shares = m["market_cap"] / row["close"]
             scen = scenarios.scenario_table(row["close"], shares, m["revenue_ttm"], m["revenue_growth_ttm"],
                                             m["ev_to_sales"], -(m["net_debt"] or 0.0), m.get("fcf_margin"),
-                                            m.get("dilution"))
+                                            m.get("dilution"), band.scenario_years)
         else:
             scen_note = "Scenarios not computed: revenue, growth or EV/Sales unavailable."
     except ValueError as exc:
@@ -377,9 +404,36 @@ def rank_changes(current: list[dict], previous: list[dict] | None) -> list[dict]
 
 # --- the run ---------------------------------------------------------------------------------------
 
+def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability,
+                  todo: list[dict]) -> list:
+    """Drop stocks without a fresh 'tradable' Robinhood verdict (fail closed) and re-rank the rest.
+
+    Scores use fixed scales, so removing a stock never changes the order of the others. Unverified stocks
+    that would have been shown, or are within TRADABILITY_CHECK_DEPTH places of the cutoff, go on the
+    to-check list for the next Claude session."""
+    kept, unverified = [], 0
+    for s in ranked:
+        ok, why = trad.check(s.ticker, ctx.as_of)
+        if ok:
+            kept.append(s)
+            continue
+        ctx.exclude(band.key, s.ticker, why)
+        if ok is None and len(kept) + unverified < band.max_results + spec.TRADABILITY_CHECK_DEPTH:
+            todo.append({"ticker": s.ticker, "band": band.key, "composite": s.composite, "reason": why})
+        if ok is None:
+            unverified += 1
+    return scoring.rank(kept)
+
+
 def run(providers: Providers, as_of: date, previous: dict | None = None, options_enabled: bool = True,
-        limit: int | None = None) -> dict:
-    """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy."""
+        limit: int | None = None, tradability: Tradability | None = None,
+        todo_out: list | None = None) -> dict:
+    """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
+
+    `tradability`: stored Robinhood verdicts (None = none stored: nothing can be published).
+    `todo_out`: filled with the symbols that need a Robinhood check, even when the run fails."""
+    trad = tradability or Tradability()
+    todo = todo_out if todo_out is not None else []
     if not is_trading_day(as_of):
         raise RunFailed(f"{as_of} is not an NYSE trading day")
     ctx = Context(as_of, providers, limit=limit)
@@ -417,8 +471,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
     broad, broad_reasons = broad_universe(ctx, ref)
     log.info("reference data: %d S&P 500 members, %d listings, %d eligible broad-universe stocks",
              len(sp), len(ref["dirs"]), len(broad))
-    lo = min(b.min_cap for b in spec.BANDS if b.universe == "broad")
-    hi = max(b.max_cap for b in spec.BANDS if b.universe == "broad")
+    lo = min(b.min_cap for b in spec.BANDS if b.universe in ("broad", "all"))
+    hi = max(b.max_cap for b in spec.BANDS if b.universe in ("broad", "all"))
     prelim = []
     for n, (t, r) in enumerate(broad.iterrows(), 1):
         if n % 500 == 0:
@@ -435,7 +489,7 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         if 0.8 * lo <= cap < 1.25 * hi:      # buffer: the final band test uses point-in-time XBRL shares
             prelim.append((t, int(r["cik"]), r["name"], None))
         else:
-            k = "outside the $300M-$10B pre-screen (cover-page shares x close)"
+            k = f"outside the ${lo / 1e6:,.0f}M-${hi / 1e9:,.0f}B pre-screen (cover-page shares x close)"
             broad_reasons[k] = broad_reasons.get(k, 0) + 1
         if limit and len(prelim) >= limit:
             break
@@ -446,11 +500,14 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             rows = evaluate(ctx, band, sp_list, bench[band.benchmark])
         else:
             sp_set = set(sp.index)
-            rows = evaluate(ctx, band, [p for p in prelim], bench[band.benchmark])
+            pool = list(prelim)
+            if band.universe == "all":
+                pool = sp_list + [p for p in pool if p[0] not in {s[0] for s in sp_list}]
+            rows = evaluate(ctx, band, pool, bench[band.benchmark])
             for r in rows:
                 if r["ticker"] in sp_set:
                     r["sector"] = sp.loc[r["ticker"], "sector"]
-        ranked = scoring.rank([r["score"] for r in rows])
+        ranked = tradable_only(ctx, band, scoring.rank([r["score"] for r in rows]), trad, todo)
         by_t = {r["ticker"]: r for r in rows}
         top = [by_t[s.ticker] for s in ranked[: band.max_results]]
         for r in top + [by_t[s.ticker] for s in ranked[band.max_results: band.max_results + 10]]:
@@ -465,6 +522,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
                          for c in previous.get("bands", {}).get(band.key, {}).get("candidates", [])]
         payload_bands[band.key] = {
             "title": band.title, "benchmark": band.benchmark, "benchmark_name": band.benchmark_name,
+            "profile": band.profile, "components": [c.key for c in spec.PROFILES[band.profile]],
+            "gates": [list(g) for g in band.gates], "scenario_years": list(band.scenario_years),
             "max_results": band.max_results, "candidates": details,
             "shortfall_note": None if len(top) >= band.max_results else
             f"Only {len(top)} stocks met every rule; the list is not padded to {band.max_results}.",
@@ -482,6 +541,11 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
     if coverage < MIN_SP500_COVERAGE and not limit:
         raise RunFailed(f"only {coverage:.0%} of S&P 500 members had a valid as-of price "
                         f"(need {MIN_SP500_COVERAGE:.0%}); not publishing a partial ranking")
+
+    if not any(b["candidates"] for b in payload_bands.values()) and not any(
+            v.get("tradable") for v in trad.symbols.values()):
+        raise RunFailed("no Robinhood tradability verdicts are stored, so no stock can be published; check the "
+                        f"{len(todo)} symbols on the to-check list with a read-only Claude session")
 
     options_payload = {"enabled": options_enabled, "status": "disabled in configuration"}
     if options_enabled:
@@ -505,6 +569,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         "status": status, "problems": ctx.problems, "notes": ctx.notes + ([earn_note] if earn_note else []),
         "spec_version": spec.SPEC_VERSION, "spec_hash": spec.spec_hash(),
         "sources": SOURCES, "usage": providers.http.usage(),
+        "tradability": {"rule": spec.TRADABILITY_RULE, "verdicts_stored": len(trad.symbols),
+                        "to_check": len(todo), "source": "Robinhood MCP get_equity_tradability (read-only)"},
         "universe": {
             "sp500_members": sorted(sp.index), "sp500_count": len(sp), "sp500_price_coverage": coverage,
             "broad_eligible": len(broad), "broad_prescreen": len(prelim), "broad_exclusion_counts": broad_reasons,

@@ -22,7 +22,8 @@ def growth_path(start: float, years: int) -> list[float]:
 
 
 def scenario_table(price: float, shares: float, revenue_ttm: float, revenue_growth: float, ev_to_sales: float,
-                   net_cash: float, fcf_margin: float | None, dilution: float | None) -> dict:
+                   net_cash: float, fcf_margin: float | None, dilution: float | None,
+                   years: tuple = spec.SCENARIO_YEARS) -> dict:
     """{scenario: {"assumptions": {...}, "years": {1: {...}, 3: {...}, 5: {...}}}}."""
     if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in (price, shares, revenue_ttm, ev_to_sales)):
         raise ValueError("scenario inputs must be finite numbers")
@@ -31,25 +32,25 @@ def scenario_table(price: float, shares: float, revenue_ttm: float, revenue_grow
     base_g = min(spec.SCENARIO_GROWTH_CAP, max(spec.SCENARIO_GROWTH_FLOOR, revenue_growth))
     dil = dilution if dilution is not None and math.isfinite(dilution) else 0.0
     margin = fcf_margin if fcf_margin is not None and math.isfinite(fcf_margin) else None
-    horizon = max(spec.SCENARIO_YEARS)
+    horizon = max(years)
     out = {}
     for rule in spec.SCENARIOS:
         g0 = max(spec.SCENARIO_GROWTH_FLOOR, base_g * rule.growth_multiplier + rule.growth_shift)
         path = growth_path(g0, horizon)
         exit_mult = max(spec.SCENARIO_MIN_EV_SALES, ev_to_sales * rule.exit_multiple_factor)
         d = dil + rule.dilution_shift
-        years = {}
+        values = {}
         rev = revenue_ttm
         for y in range(1, horizon + 1):
             rev *= 1 + path[y - 1]
-            if y not in spec.SCENARIO_YEARS:
+            if y not in years:
                 continue
             frac = y / horizon
             mult = ev_to_sales + (exit_mult - ev_to_sales) * frac
             sh = shares * (1 + d) ** y
             equity = rev * mult + net_cash
             value = max(0.0, equity / sh)
-            years[y] = {
+            values[y] = {
                 "revenue": rev, "ev_to_sales": mult, "shares": sh, "value_per_share": value,
                 "multiple_of_price": value / price,
                 "annualized": (value / price) ** (1 / y) - 1 if value > 0 else -1.0,
@@ -59,13 +60,17 @@ def scenario_table(price: float, shares: float, revenue_ttm: float, revenue_grow
             "assumptions": {
                 "starting_revenue_growth": g0, "growth_path": path, "exit_ev_to_sales": exit_mult,
                 "annual_dilution": d, "fcf_margin_start": margin,
-                "fcf_margin_year5": None if margin is None else margin + rule.margin_shift,
+                "fcf_margin_end": None if margin is None else margin + rule.margin_shift,
+                "horizon_years": horizon,
                 "net_cash_held": net_cash,
             },
-            "years": years,
+            "years": values,
         }
-    bull5 = out["bull"]["years"][horizon]["multiple_of_price"]
+    bull5 = out["bull"]["years"][5]["multiple_of_price"]
     out["flags"] = {"bull_doubles_in_5y": bull5 >= 2.0, "bull_multibagger_5y": bull5 >= 5.0}
+    if 10 in years:
+        out["flags"]["bull_5x_in_10y"] = out["bull"]["years"][10]["multiple_of_price"] >= 5.0
+        out["flags"]["base_2x_in_10y"] = out["base"]["years"][10]["multiple_of_price"] >= 2.0
     return out
 
 

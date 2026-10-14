@@ -17,6 +17,7 @@ from agent_trading.dashboard.fundamentals import build, growth, ttm
 from agent_trading.dashboard.pipeline import RunFailed, as_of_for, rank_changes, run
 from agent_trading.dashboard.site import build_site
 from agent_trading.dashboard.store import IntegrityError, SnapshotExists, Store
+from agent_trading.dashboard.tradability import Tradability, TradabilityError, parse_results
 from tests.conftest import make_bars
 from tests.dashboard_fixtures import AS_OF, FakeProviders, benchmarks, make_facts, option_row
 
@@ -287,6 +288,10 @@ def test_tracking_applies_friction_turnover_and_never_claims_edge():
 
 # --- pipeline with fake providers -------------------------------------------------------------------------------
 
+def ok_all(p: FakeProviders) -> Tradability:
+    return Tradability.all_tradable(list(p.listed), "2026-10-08")
+
+
 @pytest.fixture
 def prov():
     p = FakeProviders()
@@ -302,7 +307,7 @@ def prov():
 
 
 def test_run_builds_ranked_lists_with_reasons(prov):
-    snap = run(prov, AS_OF, options_enabled=False)
+    snap = run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))
     large = snap["bands"]["large"]
     assert len(large["candidates"]) == 10 and [c["rank"] for c in large["candidates"]] == list(range(1, 11))
     assert snap["status"] == "ok" and snap["spec_hash"] == spec.spec_hash()
@@ -315,14 +320,15 @@ def test_run_builds_ranked_lists_with_reasons(prov):
     for key in ("thesis", "bear_case", "risks", "invalidation", "scenarios", "history", "counterargument"):
         assert c[key]
     assert c["probability"] == spec.PROBABILITY_STATEMENT
-    assert "account" not in json.dumps(snap).lower()
+    blob = json.dumps(snap)
+    assert "account_number" not in blob and not re.search(r"(?<![\d.])8204(?!\d)", blob)
 
 
 def test_stale_price_and_missing_fundamentals_are_excluded_with_reasons(prov):
     prov.bars["S01"] = prov.bars["S01"].iloc[:-3]                     # no bar for the as-of session
     prov.bars["S01"].index = prov.bars["S01"].index                   # history and quote both stale
     del prov.facts[102]
-    snap = run(prov, AS_OF, options_enabled=False)
+    snap = run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))
     ex = {x["ticker"]: x["reason"] for x in snap["bands"]["large"]["excluded"]}
     assert "stale" in ex["S01"] and "unavailable" in ex["S02"]
     assert "S01" not in [c["ticker"] for c in snap["bands"]["large"]["candidates"]]
@@ -331,7 +337,7 @@ def test_stale_price_and_missing_fundamentals_are_excluded_with_reasons(prov):
 def test_missing_benchmark_or_reference_data_fails_the_run(prov):
     del prov.bars["SPY"]
     with pytest.raises(RunFailed, match="benchmark SPY"):
-        run(prov, AS_OF, options_enabled=False)
+        run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))
     p2 = FakeProviders()
     p2.fail.add("sp500")
     with pytest.raises(RunFailed, match="reference data"):
@@ -342,7 +348,7 @@ def test_low_sp500_coverage_fails_instead_of_publishing_partial_ranking(prov):
     for t in [f"S{i:02d}" for i in range(3)]:
         del prov.bars[t]
     with pytest.raises(RunFailed, match="S&P 500"):
-        run(prov, AS_OF, options_enabled=False)
+        run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))
 
 
 def test_holiday_as_of_is_refused_and_as_of_rule():
@@ -356,19 +362,19 @@ def test_holiday_as_of_is_refused_and_as_of_rule():
 def test_one_share_class_per_company(prov):
     prov.add("S00B", 100, name="S00 Class B Common Stock", volume=100_000, shares=5e8)
     prov.facts[100] = make_facts(100, shares=5e8, growth=0.05)
-    snap = run(prov, AS_OF, options_enabled=False)
+    snap = run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))
     ex = {x["ticker"]: x["reason"] for x in snap["bands"]["large"]["excluded"]}
     assert "another share class" in ex["S00B"]
 
 
 def test_options_section_uses_only_valid_chains(prov):
     exp = AS_OF + timedelta(days=95)
-    snap0 = run(prov, AS_OF, options_enabled=False)
+    snap0 = run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))
     top = snap0["bands"]["large"]["candidates"][0]["ticker"]
     spot = prov.bars[top]["close"].iloc[-1]
     prov.chains[top] = ({"symbol": top, "close": spot, "last_trade_time": f"{AS_OF}T16:00:00"},
                         [option_row(top, exp, round(spot), spot * 0.05, spot * 0.051)])
-    snap = run(prov, AS_OF, options_enabled=True)
+    snap = run(prov, AS_OF, options_enabled=True, tradability=ok_all(prov))
     o = snap["options"]
     assert o["status"] == "ok" and o["3m"]["rows"][0]["underlying"] == top
     assert len(o["chain_problems"]) == 9                              # the other candidates have no chain
@@ -389,6 +395,7 @@ def test_rank_changes_explained():
 def cli_env(monkeypatch, prov):
     monkeypatch.setenv("SEC_USER_AGENT", "test research test@example.com")
     monkeypatch.setattr("agent_trading.dashboard.__main__._providers", lambda cache: prov)
+    monkeypatch.setattr("agent_trading.dashboard.__main__.Tradability.load", lambda root: ok_all(prov))
     return prov
 
 
@@ -443,3 +450,118 @@ def test_site_without_any_snapshot_shows_unavailable(tmp_path):
     Store(tmp_path / "d").write_status("failed", "first run failed: SEC unavailable")
     build_site(tmp_path / "d", tmp_path / "s")
     assert "No research data available" in (tmp_path / "s" / "index.html").read_text(encoding="utf-8")
+
+
+# --- Robinhood tradability (spec 2026-10-14.1) ---------------------------------------------------------------
+
+RESULT = {"symbol": "AAA", "tradeable": True, "state": "active",
+          "account_type_tradabilities": [{"account_type": "individual", "account_type_tradability": "tradable"}]}
+
+
+@pytest.mark.parametrize("row, ok", [
+    (RESULT, True),
+    (dict(RESULT, tradeable=False), False),
+    (dict(RESULT, state="inactive"), False),
+    (dict(RESULT, account_type_tradabilities=[{"account_type": "individual",
+                                               "account_type_tradability": "untradable"}]), False),
+    (dict(RESULT, account_type_tradabilities=[]), False),
+])
+def test_tradability_rule(row, ok):
+    v = parse_results({"data": {"results": [row], "not_found": ["ZZZ"]}}, "2026-10-08")
+    assert v["AAA"]["tradable"] is ok and v["ZZZ"]["tradable"] is False and "not found" in v["ZZZ"]["reason"]
+
+
+def test_tradability_payload_with_account_fields_is_rejected_and_never_stored(tmp_path):
+    with pytest.raises(TradabilityError):
+        parse_results({"account_number": "123456789", "data": {"results": [RESULT]}}, "2026-10-08")
+    t = Tradability()
+    t.merge(parse_results({"data": {"results": [RESULT]}}, "2026-10-08"))
+    text = t.save(tmp_path).read_text()
+    assert "account_number" not in text and not re.search(r"\d{9}", text)
+
+
+def test_tradability_staleness_and_unknown_symbols():
+    t = Tradability.all_tradable(["AAA"], "2026-09-01")
+    assert t.check("AAA", date(2026, 10, 5)) == (True, "")
+    ok, why = t.check("AAA", date(2026, 10, 9))                     # 38 days old
+    assert ok is None and "days old" in why
+    ok, why = t.check("BBB", date(2026, 10, 9))
+    assert ok is None and "not yet verified" in why
+
+
+def test_untradable_or_unverified_stocks_are_excluded_without_reordering_the_rest(prov):
+    full = run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))["bands"]["large"]["candidates"]
+    order = [c["ticker"] for c in full]
+    t = ok_all(prov)
+    t.symbols[order[0]] = {"tradable": False, "reason": "Robinhood: not tradeable", "checked_at": "2026-10-08"}
+    del t.symbols[order[1]]
+    todo = []
+    snap = run(prov, AS_OF, options_enabled=False, tradability=t, todo_out=todo)
+    got = [c["ticker"] for c in snap["bands"]["large"]["candidates"]]
+    assert got[:len(order) - 2] == order[2:]                        # the others keep their order
+    ex = {x["ticker"]: x["reason"] for x in snap["bands"]["large"]["excluded"]}
+    assert "not tradeable" in ex[order[0]] and "not yet verified" in ex[order[1]]
+    assert order[1] in [x["ticker"] for x in todo] and order[0] not in [x["ticker"] for x in todo]
+    assert [c["rank"] for c in snap["bands"]["large"]["candidates"]] == list(range(1, len(got) + 1))
+
+
+def test_no_stored_verdicts_fails_the_run_but_lists_what_to_check(prov):
+    todo = []
+    with pytest.raises(RunFailed, match="no Robinhood tradability verdicts"):
+        run(prov, AS_OF, options_enabled=False, todo_out=todo)
+    assert len(todo) > 0
+
+
+def test_cli_tradability_import_and_todo(tmp_path, capsys):
+    f = tmp_path / "r.json"
+    f.write_text(json.dumps({"data": {"results": [RESULT], "not_found": ["ZZZ"]}}))
+    assert cli(["tradability", "import", "--data", str(tmp_path), "--checked-at", "2026-10-08", str(f)]) == 0
+    t = Tradability.load(tmp_path)
+    assert t.symbols["AAA"]["tradable"] and not t.symbols["ZZZ"]["tradable"]
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"account_number": "1", "data": {"results": []}}))
+    assert cli(["tradability", "import", "--data", str(tmp_path), str(bad)]) == 1
+    (tmp_path / "robinhood_tradability_todo.json").write_text(json.dumps(
+        {"symbols": [{"ticker": f"T{i}"} for i in range(12)]}))
+    capsys.readouterr()
+    assert cli(["tradability", "todo", "--data", str(tmp_path)]) == 0
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert len(lines) == 2 and len(lines[0].split()) == 10 and len(lines[1].split()) == 2
+
+
+# --- long-horizon multibagger list ---------------------------------------------------------------------------
+
+def test_long_horizon_profile_and_gates_are_well_formed():
+    band = {b.key: b for b in spec.BANDS}["multibagger"]
+    assert band.universe == "all" and band.min_cap == 500e6 and band.max_cap == 50e9 and 10 in band.scenario_years
+    comps = spec.PROFILES[band.profile]
+    assert abs(sum(c.weight for c in comps) - 1) < 1e-12 and any(c.key == "runway" for c in comps)
+    assert {g[0] for g in band.gates} >= {"revenue_growth_ttm", "revenue_cagr_3y", "gross_margin", "survival"}
+
+
+def test_multibagger_list_applies_gates_and_long_horizon_scenarios(prov):
+    prov.add("LOWGM", 400, sp=False, shares=4e7, drift=0.0003, growth=0.40, gross=0.2)   # fails the margin gate
+    snap = run(prov, AS_OF, options_enabled=False, tradability=ok_all(prov))
+    mb = snap["bands"]["multibagger"]
+    tickers = [c["ticker"] for c in mb["candidates"]]
+    assert "MIDA" in tickers and "SPEC" in tickers
+    ex = {x["ticker"]: x["reason"] for x in mb["excluded"]}
+    assert "gross margin" in ex["LOWGM"] and ex["SLOW"].startswith("gate failed: TTM revenue growth")
+    c = next(x for x in mb["candidates"] if x["ticker"] == "MIDA")
+    assert "runway" in c["components"] and set(c["scenarios"]["base"]["years"]) == {"1", "3", "5", "10"}
+    assert {"bull_5x_in_10y", "base_2x_in_10y"} <= set(c["scenarios"]["flags"])
+    assert mb["profile"] == "long_horizon" and "runway" in mb["components"]
+    spec_c = next(x for x in mb["candidates"] if x["ticker"] == "SPEC")    # net cash > market cap: EV <= 0
+    assert spec_c["scenarios"] is None and "enterprise value" in spec_c["scenario_note"]
+    assert "runway" not in snap["bands"]["large"]["candidates"][0]["components"]   # other lists unchanged
+
+
+def test_survival_and_other_gates():
+    from agent_trading.dashboard.pipeline import failed_gate
+    band = {b.key: b for b in spec.BANDS}["multibagger"]
+    good = {"revenue_growth_ttm": .3, "revenue_cagr_3y": .3, "gross_margin": .6, "reported_quarters": 16.0,
+            "dilution": .02, "survival": 1.0}
+    assert failed_gate(band, good) is None
+    assert "survival" in failed_gate(band, dict(good, survival=0.0))
+    assert "unavailable" in failed_gate(band, dict(good, survival=None))
+    assert "dilution" in failed_gate(band, dict(good, dilution=0.12))

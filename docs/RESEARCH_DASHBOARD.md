@@ -11,7 +11,7 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US stoc
 
 | Page | Contents |
 |---|---|
-| Overview | Data-freshness and stale-data banners, the weekly summary, and three category tabs. Each tab has a searchable, sortable, sector-filtered table with component scores, confidence and the strongest counterargument. Each tab also shows rank changes with explanations, concentration warnings, the next ten names, every excluded stock with its reason, and a CSV download |
+| Overview | Data-freshness and stale-data banners, the weekly summary, and four category tabs. Each tab has a searchable, sortable, sector-filtered table with component scores, confidence and the strongest counterargument. Each tab also shows rank changes with explanations, concentration warnings, the next ten names, every excluded stock with its reason, and a CSV download |
 | Stock detail (one per candidate) | Price, market cap, sector, sources, timestamps; thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; risks; invalidation conditions; "probability not established" |
 | Options research | 3-, 6- and 12-month horizons. Up to five liquid call contracts per horizon, with bid/ask, spread, volume/OI, IV, Greeks, premium x 100, adjusted-contract flag, breakeven, maximum loss, payoffs at expiration, a 30-day Black-Scholes sensitivity grid, and earnings before expiry. Shows an unavailable state when no valid chain exists |
 | History & tracking | Every weekly report, and the forward returns of each stored list (1, 3, 6 and 12 months) vs benchmarks, net of assumed friction, with turnover and drawdown |
@@ -80,6 +80,31 @@ Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners w
 
 ## Definitions (from `spec.py`)
 
+Spec version 2026-10-14.1 applies two owner requests, written down before any data was run with them:
+- only stocks verified as tradable on Robinhood are published;
+- a new long-horizon multibagger list was added.
+
+- **Robinhood tradability (all lists):** a stock is published only if Robinhood's read-only
+  `get_equity_tradability` check, at most 35 days old, reports:
+  - `tradeable` true;
+  - state active;
+  - tradable for an individual account in regular hours.
+
+  Anything else excludes the stock with the reason: not tradable, not found, unverified or stale. Scores use
+  fixed scales, so removing a stock never reorders the others.
+- **Long-horizon multibagger list (5-10 years):** S&P 500 and broad universe together, $500M-$50B.
+  - **Gates, all required (a missing input fails):**
+    - TTM and 3-year revenue growth ≥ 15%;
+    - gross margin ≥ 35%;
+    - ≥ 12 reported quarters;
+    - dilution ≤ 8% a year;
+    - survival: positive FCF, or ≥ 2 years of cash runway.
+  - **Score weights (long-horizon profile):** growth durability 30%, earnings/FCF 10%, quality 15%, balance
+    sheet 15%, valuation 15%, runway + operating leverage 10% (new component), momentum 5%.
+  - **Scenarios:** 1, 3, 5 and 10 years. Flags show whether the bull case reaches 5x and the base case 2x
+    within ten years.
+  - **Rationale:** in `spec.MULTIBAGGER_RATIONALE`. Most stocks that pass will not become multibaggers, and
+    no probability is shown.
 - **Large cap:** current S&P 500 members.
 - **Mid cap:** $2B to $10B.
 - **Speculative:** $300M to $2B with at least 20% trailing revenue growth.
@@ -137,6 +162,25 @@ Live checks were run from a local machine on 2026-10-13; GitHub-hosted runners w
   - names whose prices stop are reported as "possible delisting", not dropped. Delisting returns are not available from these sources.
 - No edge is claimed before 52 snapshots, and none afterwards without a statistical test. Nothing is tuned on tracked results; a rule change creates a new spec version.
 
+## Robinhood tradability checks (Claude session, read-only)
+
+GitHub Actions cannot reach the Robinhood MCP, so verdicts are stored on the `research-data` branch in
+`robinhood_tradability.json`, with symbols, verdicts, reasons and dates only and no account data. Each run
+writes `robinhood_tradability_todo.json`: unverified names near or inside each list's cutoff. To refresh, in a
+Claude session:
+
+1. Run `git worktree add ..\agent-code-research-data research-data`, or update an existing worktree with
+   `git pull`.
+2. Run `python -m agent_trading.dashboard tradability todo --data ..\agent-code-research-data`. It prints
+   the symbols 10 per line.
+3. For each line, call the read-only Robinhood `get_equity_tradability` tool (Agent-trading account) and save
+   the JSON `data` to the scratchpad.
+4. Run `python -m agent_trading.dashboard tradability import --data ..\agent-code-research-data <files>`.
+   Payloads containing account fields are rejected.
+5. Commit and push `research-data`. The next weekly run uses the new verdicts.
+
+If no verdicts are stored at all, the run fails visibly instead of publishing unverified stocks.
+
 ## Commands
 
 ```powershell
@@ -151,6 +195,7 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 
 ## Owner actions (required before the first deployment)
 
+0. **Robinhood tradability verdicts:** run the refresh above at least monthly, or when the to-check list grows.
 1. **Merge the pull request into `main`.** Scheduled workflows only run from the default branch.
 2. **GitHub Pages and the private repository.**
    - On GitHub Free, Pages needs a public repository.

@@ -17,12 +17,20 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-13.2"
+SPEC_VERSION = "2026-10-14.1"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
                      "a company with several listed share classes (e.g. GOOG and GOOGL) is evaluated once, using "
                      "its most liquid class. No scoring rule, scale or weight changed."),
+    ("2026-10-14.1", "Owner requests (2026-10-14), written before any data was run with them: (1) only stocks "
+                     "Robinhood reports as tradable are published; a read-only Robinhood check no older than 35 "
+                     "days is required, and unverified stocks are excluded with that reason. (2) New list: "
+                     "long-horizon multibagger research candidates (5-10 years), $500M-$50B, with growth, margin, "
+                     "track-record, dilution and survival gates, a long-horizon weight profile with a new runway "
+                     "and operating-leverage component, and 10-year scenarios. The existing lists' rules, scales "
+                     "and weights did not change; fixed scales mean removing untradable stocks leaves the order "
+                     "of the others unchanged."),
 ]
 
 # --- Definitions -------------------------------------------------------------------
@@ -30,7 +38,8 @@ SPEC_CHANGELOG = [
 MULTIBAGGER_DEFINITION = (
     "A 'multibagger' scenario here means a bull-case value of at least 5x today's price after five years "
     "(about 38% a year). A 2x-in-five-years outcome (about 15% a year) is shown separately as 'doubling'. "
-    "Scenario values are conditional on the stated assumptions; they are not maximum prices, targets or "
+    "For the long-horizon list the test also runs at ten years: a bull case of at least 5x (about 17.5% a "
+    "year) and a base case of at least 2x (about 7% a year) within ten years. Scenario values are conditional on the stated assumptions; they are not maximum prices, targets or "
     "predictions."
 )
 PROBABILITY_STATEMENT = (
@@ -55,7 +64,7 @@ DISCLAIMER = (
 class Band:
     key: str
     title: str
-    universe: str                 # "sp500" or "broad"
+    universe: str                 # "sp500", "broad", or "all" (both, de-duplicated)
     min_cap: float | None         # USD, inclusive
     max_cap: float | None         # USD, exclusive
     min_price: float
@@ -65,6 +74,9 @@ class Band:
     benchmark_name: str
     friction_bps_per_side: float  # assumed slippage + half-spread for performance tracking
     min_revenue_growth: float | None = None   # eligibility gate (TTM YoY), None = no gate
+    profile: str = "standard"                 # which component weights score this list (PROFILES)
+    gates: tuple = ()                         # extra eligibility gates: (metric, ">=" or "<=", value)
+    scenario_years: tuple = (1, 3, 5)
 
 
 BANDS = (
@@ -74,6 +86,20 @@ BANDS = (
          "IJH", "iShares Core S&P Mid-Cap ETF (price return)", 25.0),
     Band("spec", "Speculative potential multibagger research candidates", "broad", 300e6, 2e9, 2.0, 2e6, 10,
          "IWM", "iShares Russell 2000 ETF (price return)", 50.0, min_revenue_growth=0.20),
+    Band("multibagger", "Long-horizon multibagger research candidates (5-10 years)", "all", 500e6, 50e9, 5.0, 5e6,
+         10, "IWM", "iShares Russell 2000 ETF (price return)", 35.0, profile="long_horizon",
+         gates=(("revenue_growth_ttm", ">=", 0.15), ("revenue_cagr_3y", ">=", 0.15), ("gross_margin", ">=", 0.35),
+                ("reported_quarters", ">=", 12), ("dilution", "<=", 0.08), ("survival", ">=", 1)),
+         scenario_years=(1, 3, 5, 10)),
+)
+MULTIBAGGER_RATIONALE = (
+    "Why these criteria: research on the stocks that compounded many-fold over 5-10 years (for example "
+    "Bessembinder's work on how concentrated long-run stock returns are, and Mayer's book 100 Baggers) finds "
+    "that they usually started small enough to have room to grow, grew revenue fast for many years, had gross "
+    "margins high enough to scale, did not dilute shareholders away, survived without distress, and were not "
+    "priced for perfection at the start. The gates encode those minimums; the long-horizon score ranks on growth "
+    "durability first and weights short-term momentum lightly. Most stocks that pass these screens will NOT "
+    "become multibaggers, and no probability is estimated."
 )
 
 MARKET_CAP_DEFINITION = (
@@ -91,9 +117,19 @@ UNIVERSE_DEFINITION = (
     "rights, units, preferred shares, notes, depositary shares, blank-check companies (names containing "
     "'Acquisition Corp'), companies in bankruptcy, and companies without US-GAAP 10-K/10-Q XBRL data (most "
     "foreign private issuers file 20-F/40-F and cannot be compared on the same basis). Mid cap: $2B to $10B. "
-    "Speculative: $300M to $2B with trailing revenue growth of at least 20%. A company with several listed share "
-    "classes (one SEC CIK) is evaluated once, using the class with the highest 20-day median dollar volume."
+    "Speculative: $300M to $2B with trailing revenue growth of at least 20%. Long-horizon multibagger list: "
+    "the S&P 500 and the broad universe together, $500M to $50B, passing every gate in its band definition. "
+    "A company with several listed share "
+    "classes (one SEC CIK) is evaluated once, using the class with the highest 20-day median dollar volume. Only "
+    "stocks verified as tradable on Robinhood are published (see TRADABILITY_RULE)."
 )
+TRADABILITY_RULE = (
+    "Published only if Robinhood's read-only get_equity_tradability check reports tradeable = true, state = "
+    "active, and 'tradable' for an individual account (regular hours), and the check is at most 35 days old. "
+    "Not tradable, not found, unverified or stale checks exclude the stock with that reason (fail closed)."
+)
+TRADABILITY_MAX_AGE_DAYS = 35
+TRADABILITY_CHECK_DEPTH = 15      # unverified names this far below each list's cutoff go on the to-check list
 LIMITED_HISTORY_QUARTERS = 8     # fewer reported quarters than this -> 'limited operating history' flag
 LIMITED_HISTORY_DAYS = 504       # fewer price bars than this (about 2 years) -> 'limited trading history' flag
 MAX_FILING_AGE_DAYS = 200        # latest 10-Q/10-K older than this -> fundamentals stale, excluded
@@ -164,6 +200,26 @@ COMPONENTS = (
         "excess_12m": Scale(-0.30, 0.50),
     }),
 )
+_BY_KEY = {c.key: c for c in COMPONENTS}
+LONG_HORIZON_COMPONENTS = (
+    Component("growth", _BY_KEY["growth"].title, 0.30, True, _BY_KEY["growth"].metrics),
+    Component("earnings", _BY_KEY["earnings"].title, 0.10, False, _BY_KEY["earnings"].metrics),
+    Component("quality", _BY_KEY["quality"].title, 0.15, False, _BY_KEY["quality"].metrics),
+    Component("balance", _BY_KEY["balance"].title, 0.15, True, _BY_KEY["balance"].metrics),
+    Component("valuation", _BY_KEY["valuation"].title, 0.15, True, _BY_KEY["valuation"].metrics),
+    Component("runway", "Runway and operating leverage", 0.10, False, {
+        "log_market_cap": Scale(8.7, 10.7, reverse=True),     # $500M -> 1, $50B -> 0: room to compound
+        "operating_margin_change": Scale(-0.05, 0.05),        # TTM operating margin vs the prior TTM
+    }),
+    Component("momentum", _BY_KEY["momentum"].title, 0.05, False, _BY_KEY["momentum"].metrics),
+)
+PROFILES = {"standard": COMPONENTS, "long_horizon": LONG_HORIZON_COMPONENTS}
+GATE_NOTES = {
+    "reported_quarters": "Number of reported quarters available (at least three years of history).",
+    "survival": "1 when TTM free cash flow is positive, or cash and short-term investments cover at least two "
+                "years of the current free-cash-flow burn; 0 otherwise.",
+}
+
 METRIC_NOTES = {
     "revenue_growth_ttm": "Trailing-twelve-month revenue vs the prior twelve months, from 10-Q/10-K XBRL facts.",
     "revenue_cagr_3y": "Annual revenue growth over three years (TTM vs the TTM three years earlier).",
@@ -193,6 +249,10 @@ METRIC_NOTES = {
     "return_12_1": "Price return from 252 to 21 trading days before the as-of date (skips the latest month).",
     "excess_6m": "6-month price return minus the benchmark's.",
     "excess_12m": "12-month price return minus the benchmark's.",
+    "log_market_cap": "log10 of market capitalization; smaller companies have more room to compound "
+                      "(long-horizon list only).",
+    "operating_margin_change": "TTM operating margin minus the prior TTM's; positive means operating leverage "
+                               "(long-horizon list only).",
 }
 NOT_SCORED_FACTORS = {
     "competitive_position": "Not scored: no reliable structured data source. Read the 10-K business and "
@@ -230,8 +290,8 @@ class ScenarioRule:
     key: str
     growth_multiplier: float      # x the starting growth rate (which is capped, below)
     growth_shift: float           # added to the starting growth rate
-    margin_shift: float           # added to the current FCF margin by year 5 (linear)
-    exit_multiple_factor: float   # x the current EV/Sales, reached by year 5 (linear)
+    margin_shift: float           # added to the current FCF margin by the last scenario year (linear)
+    exit_multiple_factor: float   # x the current EV/Sales, reached by the last scenario year (linear)
     dilution_shift: float         # added to the trailing annual dilution rate
 
 
@@ -249,7 +309,7 @@ SCENARIO_METHOD = (
     "Revenue starts at trailing-twelve-month revenue and grows at a starting rate that fades 20% a year "
     "toward 4%. The starting rate is TTM revenue growth (capped at 60%, floored at -30%) times the scenario "
     "multiplier plus the shift. The exit EV/Sales multiple moves linearly from today's to today's x the "
-    "scenario factor by year 5 (floor 0.5x). Equity value = EV + net cash (held at today's level). Shares "
+    "scenario factor by the last scenario year (year 5, or year 10 for the long-horizon list; floor 0.5x). Equity value = EV + net cash (held at today's level). Shares "
     "grow at the trailing dilution rate plus the scenario shift. FCF margin assumptions are shown for "
     "transparency and consistency checks; the value itself comes from the EV/Sales path. Every number is "
     "conditional on these assumptions; none is a forecast, a target or a maximum."
@@ -319,11 +379,17 @@ def spec_dict() -> dict:
         "version": SPEC_VERSION,
         "bands": [asdict(b) for b in BANDS],
         "market_cap_definition": MARKET_CAP_DEFINITION,
+        "tradability": {"rule": TRADABILITY_RULE, "max_age_days": TRADABILITY_MAX_AGE_DAYS,
+                        "check_depth": TRADABILITY_CHECK_DEPTH},
         "universe_definition": UNIVERSE_DEFINITION,
         "limits": {"limited_history_quarters": LIMITED_HISTORY_QUARTERS, "limited_history_days": LIMITED_HISTORY_DAYS,
                    "max_filing_age_days": MAX_FILING_AGE_DAYS, "max_price_lag": MAX_PRICE_LAG_BUSINESS_DAYS},
         "components": [{"key": c.key, "title": c.title, "weight": c.weight, "critical": c.critical,
                         "metrics": {k: asdict(v) for k, v in c.metrics.items()}} for c in COMPONENTS],
+        "profiles": {name: [{"key": c.key, "weight": c.weight, "critical": c.critical,
+                             "metrics": {k: asdict(v) for k, v in c.metrics.items()}} for c in comps]
+                     for name, comps in PROFILES.items()},
+        "gate_notes": GATE_NOTES, "multibagger_rationale": MULTIBAGGER_RATIONALE,
         "metric_notes": METRIC_NOTES,
         "not_scored": NOT_SCORED_FACTORS,
         "max_missing_metrics": MAX_MISSING_METRICS,
@@ -353,10 +419,14 @@ def spec_hash() -> str:
 
 
 def _check() -> None:
-    total = sum(c.weight for c in COMPONENTS)
-    if abs(total - 1.0) > 1e-9:
-        raise ValueError(f"component weights sum to {total}, not 1")
-    missing_notes = {m for c in COMPONENTS for m in c.metrics} - set(METRIC_NOTES)
+    for name, comps in PROFILES.items():
+        total = sum(c.weight for c in comps)
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError(f"{name} component weights sum to {total}, not 1")
+    for b in BANDS:
+        if b.profile not in PROFILES:
+            raise ValueError(f"band {b.key}: unknown profile {b.profile}")
+    missing_notes = {m for comps in PROFILES.values() for c in comps for m in c.metrics} - set(METRIC_NOTES)
     if missing_notes:
         raise ValueError(f"metrics without a documented definition: {sorted(missing_notes)}")
     if abs(sum(w for w, _ in OPTION_RANKING.values()) - 1.0) > 1e-9:
