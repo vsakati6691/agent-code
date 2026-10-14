@@ -208,17 +208,18 @@ def test_horizons_rank_without_upside_and_cap_per_underlying():
             ((95, 8.0, 0.65), (100, 5.0, 0.55), (105, 3.0, 0.45), (110, 1.6, 0.32))]
     chains = {"ABC": ({"symbol": "ABC", "close": 100.0, "last_trade_time": f"{AS_OF}T16:00:00"}, rows)}
     out = opt.build_horizons(chains, AS_OF, {})
-    got = out["3m"]["rows"]
+    got = out["3m"]["calls"]["rows"]
     assert len(got) == spec.OPTION_RULES["max_per_underlying_per_horizon"]
     assert all(set(x["rank_components"]) == {"liquidity", "breakeven", "time_decay", "total"} for x in got)
-    assert out["6m"]["status"].startswith("no contract") and out["6m"]["rows"] == []
+    assert out["6m"]["calls"]["status"].startswith("no call") and out["6m"]["calls"]["rows"] == []
 
 
 def test_stale_or_missing_chain_shows_unavailable_not_invented():
     exp = AS_OF + timedelta(days=90)
     stale = {"symbol": "ABC", "close": 100.0, "last_trade_time": f"{AS_OF - timedelta(days=3)}T16:00:00"}
     out = opt.build_horizons({"ABC": (stale, [option_row("ABC", exp, 100, 4.9, 5.1)]), "XYZ": "HTTP 403"}, AS_OF, {})
-    assert out["3m"]["rows"] == [] and out["3m"]["status"].startswith("unavailable")
+    assert out["3m"]["calls"]["rows"] == [] and out["3m"]["calls"]["status"].startswith("unavailable")
+    assert out["3m"]["puts"]["rows"] == [] and out["3m"]["puts"]["status"].startswith("unavailable")
     assert "stale chain" in out["chain_problems"]["ABC"] and out["chain_problems"]["XYZ"] == "HTTP 403"
 
 
@@ -300,7 +301,7 @@ def prov():
         p.add(f"S{i:02d}", 100 + i, growth=0.05 + 0.04 * i, drift=0.0004 + 0.0001 * i, shares=5e8)
     p.add("MIDA", 300, sp=False, shares=4e7, drift=0.0003, growth=0.25)       # ~$5B
     p.add("SPEC", 301, sp=False, shares=8e6, drift=0.0003, growth=0.50)       # ~$1B
-    p.add("SLOW", 302, sp=False, shares=8e6, drift=0.0003, growth=0.05)       # ~$1B, fails the 20% gate
+    p.add("SLOW", 302, sp=False, shares=8e6, drift=0.0003, growth=0.05)       # ~$1B, slow growth
     p.listed["WARR"] = ("Foo Corp Warrants", "Nasdaq", False)
     p.listed["FUND"] = ("Some ETF", "NYSE Arca", True)
     return p
@@ -311,9 +312,10 @@ def test_run_builds_ranked_lists_with_reasons(prov):
     large = snap["bands"]["large"]
     assert len(large["candidates"]) == 10 and [c["rank"] for c in large["candidates"]] == list(range(1, 11))
     assert snap["status"] == "ok" and snap["spec_hash"] == spec.spec_hash()
-    assert snap["bands"]["spec"]["candidates"][0]["ticker"] == "SPEC"
-    assert any(x["ticker"] == "SLOW" and "20%" in x["reason"] for x in snap["bands"]["spec"]["excluded"])
-    assert snap["bands"]["spec"]["shortfall_note"]                    # fewer than 10 are not padded
+    small = [c["ticker"] for c in snap["bands"]["small"]["candidates"]]
+    assert small[0] == "SPEC" and "SLOW" in small                        # small cap has no growth gate (spec .2)
+    assert snap["bands"]["small"]["shortfall_note"]                     # fewer than 10 are not padded
+    assert len(snap["bands"]["multibagger"]["candidates"]) <= 5
     counts = snap["universe"]["broad_exclusion_counts"]
     assert counts.get("ETF or fund") == 1 and any("warrant" in k for k in counts)
     c = large["candidates"][0]
@@ -376,9 +378,9 @@ def test_options_section_uses_only_valid_chains(prov):
                         [option_row(top, exp, round(spot), spot * 0.05, spot * 0.051)])
     snap = run(prov, AS_OF, options_enabled=True, tradability=ok_all(prov))
     o = snap["options"]
-    assert o["status"] == "ok" and o["3m"]["rows"][0]["underlying"] == top
+    assert o["status"] == "ok" and o["3m"]["calls"]["rows"][0]["underlying"] == top
     assert len(o["chain_problems"]) == 9                              # the other candidates have no chain
-    assert o["12m"]["rows"] == []
+    assert o["12m"]["calls"]["rows"] == [] and o["3m"]["puts"]["rows"] == []
 
 
 def test_rank_changes_explained():

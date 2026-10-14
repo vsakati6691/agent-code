@@ -18,6 +18,17 @@ from . import spec
 BANDS = {b.key: b for b in spec.BANDS}
 
 
+class _Legacy:
+    """A list retired by a later spec version, still tracked from old snapshots."""
+
+    def __init__(self, info: dict) -> None:
+        self.benchmark = info["benchmark"]
+        self.friction_bps_per_side = info["friction_bps_per_side"]
+
+
+ALL_BANDS = {**{k: _Legacy(v) for k, v in spec.LEGACY_BANDS.items()}, **BANDS}
+
+
 def forward_return(close: pd.Series | None, start: date, bars: int, as_of: date) -> tuple[float | None, str]:
     """(price return from the `start` close to `bars` sessions later, status)."""
     if close is None or close.empty:
@@ -46,7 +57,7 @@ def track(snapshots: list[dict], prices: dict[str, pd.Series], as_of: date) -> d
         version = snap.get("spec_version", "?")
         for key, band in snap.get("bands", {}).items():
             tickers = [c["ticker"] for c in band.get("candidates", [])]
-            cfg = BANDS.get(key)
+            cfg = ALL_BANDS.get(key)
             if cfg is None or not tickers:
                 continue
             fric = 2 * cfg.friction_bps_per_side / 1e4
@@ -93,7 +104,7 @@ def track(snapshots: list[dict], prices: dict[str, pd.Series], as_of: date) -> d
         out["weekly_chain"][key] = {"weeks": len(pts), "cumulative_net": float(eq[-1] - 1),
                                     "max_drawdown": float((eq / peak - 1).min()),
                                     "note": "Each week's list held five sessions, friction charged on turnover."}
-    for key in BANDS:
+    for key in sorted({r["band"] for r in out["by_snapshot"]} | set(BANDS)):
         rows = [r for r in out["by_snapshot"] if r["band"] == key]
         summ = {}
         for h in spec.TRACK_HORIZONS:
@@ -111,7 +122,7 @@ def track(snapshots: list[dict], prices: dict[str, pd.Series], as_of: date) -> d
         "statistical test are needed first." if n < spec.MIN_SNAPSHOTS_FOR_EVIDENCE else
         f"{n} weekly snapshots. Overlapping holding periods make naive t-statistics overstate significance; "
         "treat these figures as descriptive.")
-    out["friction"] = {k: b.friction_bps_per_side for k, b in BANDS.items()}
+    out["friction"] = {k: b.friction_bps_per_side for k, b in ALL_BANDS.items()}
     out["limitations"] = [
         "Price returns only: dividends are excluded, which understates returns of dividend payers and benchmarks.",
         "Delisting returns are not available from the data sources; affected names are listed as unavailable.",

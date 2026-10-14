@@ -29,6 +29,7 @@ from .providers import Providers
 from .site import build_site
 from .store import SnapshotExists, Store
 from .tradability import Tradability, TradabilityError, parse_results, read_todo, write_todo
+from .watchlist import WatchlistConfig
 from ..logging_setup import register_secret
 
 log = logging.getLogger("agent_trading.dashboard")
@@ -62,7 +63,7 @@ def cmd_run(args) -> int:
     try:
         try:
             payload = run(providers, as_of, previous, options_enabled=not args.no_options, limit=args.limit,
-                          tradability=trad, todo_out=todo)
+                          tradability=trad, todo_out=todo, watchlist=WatchlistConfig.load())
         finally:
             write_todo(store.root, todo, as_of)      # symbols the next Claude session should check on Robinhood
     except RunFailed as exc:

@@ -21,6 +21,8 @@ from .fundamentals import Fundamentals, build as build_fundamentals
 from .http import BudgetExceeded, FetchError
 from .providers import SOURCES, Providers, common_stock_reason, sector_from_sic
 from .tradability import Tradability
+from . import watchlist as wl_mod
+from .watchlist import WatchlistConfig
 from ..data.validation import DataQualityError, trim_bad_history, validate_bars
 from ..market_calendar import is_trading_day, previous_trading_day
 
@@ -404,6 +406,136 @@ def rank_changes(current: list[dict], previous: list[dict] | None) -> list[dict]
 
 # --- the run ---------------------------------------------------------------------------------------
 
+def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: dict) -> dict:
+    """Verify each watchlist symbol and build its conditional 2030 price scenarios (spec 2026-10-14.2).
+
+    Kept apart from the ranked lists: nothing here changes any ranking."""
+    years = wl_mod.years_to_target(ctx.as_of)
+    sp = ref["sp500"]
+    entries = []
+    for t in cfg.tickers:
+        info = wl_mod.resolve(t, ref["dirs"], ref["sec"])
+        e = {**info, "price": None, "price_date": None, "price_source": SOURCES["cboe"], "method": None,
+             "scenarios": None, "unavailable_reason": None, "missing": [], "assumptions_note": None,
+             "sector": None, "catalysts": [], "bear_case": None, "invalidation": [], "evidence_quality": "none",
+             "sources": [SOURCES["nasdaqtrader"], SOURCES["sec"]], "returns": None, "key_metrics": {}}
+        entries.append(e)
+        if info["status"] != "listed":
+            e["unavailable_reason"] = info["status"]
+            continue
+        df, why, pflags = latest_bars(ctx, t)
+        if df is None:
+            e["unavailable_reason"] = f"no verified as-of price ({why})"
+            continue
+        close = float(df["close"].iloc[-1])
+        e.update(price=close, price_date=ctx.as_of, price_flags=pflags)
+        e["sources"].append(SOURCES["cboe"])
+        hist = scenarios.history_stats(df["close"], None)
+        e["returns"] = {k: (v or {}).get("stock") for k, v in hist["returns"].items()}
+        e["history_start"] = hist["first_date"]
+        kind = info["asset_type"] or ""
+        if kind.startswith("operating company"):
+            _watchlist_company(ctx, e, df, close, years, earnings, sp)
+        elif kind in ("ETF", "leveraged/inverse ETF"):
+            _watchlist_etf(ctx, e, close, years)
+        else:
+            e["unavailable_reason"] = f"no scenario method for this security type ({kind or 'unknown'})"
+    themes: dict[str, int] = {}
+    for e in entries:
+        key = e["sector"] or ("Unresolved" if e["status"] != "listed" else "Unknown")
+        themes[key] = themes.get(key, 0) + 1
+    return {"imported_at": cfg.imported_at, "source": cfg.source, "target_date": spec.WATCHLIST_TARGET_DATE,
+            "years_to_target": years, "statement": spec.WATCHLIST_STATEMENT, "separation": spec.WATCHLIST_SEPARATION,
+            "entries": entries, "concentration": themes, "status": "ok"}
+
+
+def _watchlist_company(ctx, e, df, close, years, earnings, sp) -> None:
+    e["method"] = "company: revenue x EV/Sales to 2030-12-31"
+    e["sector"] = sp.loc[e["ticker"], "sector"] if e["ticker"] in sp.index else None
+    if e["cik"] is None:
+        e["unavailable_reason"] = "no SEC registrant (CIK) for this symbol, so no reported fundamentals"
+        return
+    f, why = _facts(ctx, e["cik"])
+    if f is None:
+        e["unavailable_reason"] = f"fundamentals unavailable ({why})"
+        return
+    if e["sector"] is None:
+        sub, _ = _guard(ctx, "sec", ctx.providers.submissions, e["cik"])
+        e["sector"] = sector_from_sic(sub.get("sic")) if sub else "Unknown"
+    flags, why = fundamentals_flags(f, ctx.as_of, len(df))
+    if why:
+        e["unavailable_reason"] = why
+        return
+    cap, cap_flags = market_cap(f, close)
+    if cap is None:
+        e["unavailable_reason"] = "market cap unavailable (no share count)"
+        return
+    m = scoring.compute_metrics(f, df["close"], None, cap)
+    e["key_metrics"] = {k: m.get(k) for k in ("market_cap", "revenue_ttm", "revenue_growth_ttm", "gross_margin",
+                                              "operating_margin", "fcf_ttm", "fcf_margin", "ev_to_sales",
+                                              "net_debt", "dilution", "sbc_to_revenue", "implied_revenue_cagr")}
+    e["missing"] += [f for f in flags + cap_flags]
+    e["evidence_quality"] = wl_mod.evidence_quality("company", f, len(df))
+    narrative = wl_mod.company_narrative(m, earnings.get(e["ticker"]))
+    e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
+    if not earnings.get(e["ticker"]):
+        e["missing"].append("no scheduled earnings date")
+    if not m["revenue_ttm"] or m["revenue_ttm"] <= 0 or f.n_quarters < 4:
+        e["unavailable_reason"] = "too little reported revenue for a revenue-based valuation (pre-revenue or new filer)"
+        return
+    if m["revenue_growth_ttm"] is None:
+        e["unavailable_reason"] = "revenue growth not computable (fewer than 8 reported quarters)"
+        return
+    if m["enterprise_value"] is None or m["enterprise_value"] <= 0 or not m["ev_to_sales"]:
+        e["unavailable_reason"] = "enterprise value not positive, so EV/Sales cannot anchor the valuation"
+        return
+    e["scenarios"] = wl_mod.company_scenarios(close, cap / close, m["revenue_ttm"], m["revenue_growth_ttm"],
+                                              m["ev_to_sales"], -(m["net_debt"] or 0.0), m.get("dilution"), years)
+    e["assumptions_note"] = spec.WATCHLIST_COMPANY_METHOD
+
+
+def _watchlist_etf(ctx, e, close, years) -> None:
+    name = e["name"] or ""
+    lev = wl_mod.leverage_of(name)
+    e["evidence_quality"] = wl_mod.evidence_quality("leveraged" if lev else "etf")
+    e["missing"].append(spec.FEE_NOTE)
+    if lev:
+        e["method"] = "leveraged ETF: daily-reset model with volatility drag"
+        narrative = wl_mod.etf_narrative(None, lev)
+        e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
+        e["sector"] = f"Leveraged ETF ({lev}x)"
+        if lev < 0:
+            e["unavailable_reason"] = "inverse fund: the daily-reset model here covers long leverage only"
+            return
+        und = wl_mod.leveraged_underlying(name)
+        if und is None:
+            e["unavailable_reason"] = "the tracked index could not be identified from the fund name"
+            return
+        rule = wl_mod.exposure_class(next(k for k, v in spec.LEVERAGED_UNDERLYING_HINTS.items()
+                                          if v == und and wl_mod._has(name, k)))
+        udf, why, _ = latest_bars(ctx, und)
+        sigma = wl_mod.realized_vol(udf["close"]) if udf is not None else None
+        if rule is None or sigma is None:
+            e["unavailable_reason"] = f"no 3-year price history for the tracked index fund {und}"
+            return
+        e["scenarios"] = wl_mod.leveraged_scenarios(close, lev, rule, sigma, years)
+        e["assumptions_note"] = spec.LEVERAGED_METHOD + f" Tracked index proxy: {und}; trailing volatility {sigma:.0%}."
+        return
+    rule = wl_mod.exposure_class(name)
+    narrative = wl_mod.etf_narrative(rule, None)
+    e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
+    e["method"] = "ETF: exposure-class return assumptions"
+    if rule is None:
+        e["sector"] = "ETF (exposure not classified)"
+        e["unavailable_reason"] = "the fund's exposure could not be classified from its name; no assumption is made"
+        return
+    e["sector"] = f"ETF: {rule[1]}"
+    e["scenarios"] = wl_mod.etf_scenarios(close, rule, years)
+    e["assumptions_note"] = ("Fund-level model: exposure-class total-return assumptions minus an assumed fee and "
+                             "distribution yield give a price return, compounded to 2030-12-31. "
+                             "Company valuation formulas are not applied to funds.")
+
+
 def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability,
                   todo: list[dict]) -> list:
     """Drop stocks without a fresh 'tradable' Robinhood verdict (fail closed) and re-rank the rest.
@@ -427,7 +559,7 @@ def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability
 
 def run(providers: Providers, as_of: date, previous: dict | None = None, options_enabled: bool = True,
         limit: int | None = None, tradability: Tradability | None = None,
-        todo_out: list | None = None) -> dict:
+        todo_out: list | None = None, watchlist: WatchlistConfig | None = None) -> dict:
     """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
 
     `tradability`: stored Robinhood verdicts (None = none stored: nothing can be published).
@@ -524,7 +656,9 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             "title": band.title, "benchmark": band.benchmark, "benchmark_name": band.benchmark_name,
             "profile": band.profile, "components": [c.key for c in spec.PROFILES[band.profile]],
             "gates": [list(g) for g in band.gates], "scenario_years": list(band.scenario_years),
-            "max_results": band.max_results, "candidates": details,
+            "max_results": band.max_results, "candidates": details, "short_title": spec.BAND_TITLES_SHORT.get(band.key),
+            "definition": {"universe": band.universe, "min_cap": band.min_cap, "max_cap": band.max_cap,
+                           "min_price": band.min_price, "min_dollar_volume": band.min_dollar_volume},
             "shortfall_note": None if len(top) >= band.max_results else
             f"Only {len(top)} stocks met every rule; the list is not padded to {band.max_results}.",
             "runners_up": [{"ticker": s.ticker, "rank": s.rank, "composite": s.composite,
@@ -557,7 +691,26 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
               for t, d in earnings.items()}
         options_payload = _clean({"enabled": True, **opt.build_horizons(chains, as_of, ev),
                                   "earnings_note": earn_note, "delta_statement": spec.DELTA_STATEMENT,
-                                  "underlying_rule": spec.OPTION_UNDERLYINGS, "status": "ok"})
+                                  "underlying_rule": spec.OPTION_UNDERLYINGS, "status": "ok",
+                                  "premium_assumption": spec.PREMIUM_ASSUMPTION,
+                                  "ranking_note": spec.OPTION_RANKING_NOTE})
+
+    watch_payload = {"status": "no watchlist configured", "entries": []}
+    if watchlist is not None:
+        watch_payload = evaluate_watchlist(ctx, ref, watchlist, earnings)
+    upcoming = []
+    horizon_end = as_of + timedelta(days=45)
+    for key, b in payload_bands.items():
+        for c in b["candidates"]:
+            if c.get("next_earnings") and c["next_earnings"] <= horizon_end.isoformat():
+                upcoming.append({"ticker": c["ticker"], "date": c["next_earnings"], "list": key,
+                                 "event": "earnings (scheduled; Alpha Vantage; not independently verified)"})
+    for e in watch_payload.get("entries", []):
+        d = earnings.get(e["ticker"])
+        if d and d <= horizon_end.isoformat():
+            upcoming.append({"ticker": e["ticker"], "date": d, "list": "watchlist",
+                             "event": "earnings (scheduled; Alpha Vantage; not independently verified)"})
+    upcoming.sort(key=lambda x: (x["date"], x["ticker"]))
 
     if ctx.transient_failures:
         ctx.problems.append(f"{ctx.transient_failures} request(s) still failed after retries (rate limits or server "
@@ -577,7 +730,10 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             "definitions": {"universe": spec.UNIVERSE_DEFINITION, "market_cap": spec.MARKET_CAP_DEFINITION},
         },
         "benchmarks": {b: {"close": float(s.iloc[-1]), "date": as_of} for b, s in bench.items()},
-        "bands": payload_bands, "options": options_payload,
+        "bands": payload_bands, "options": options_payload, "watchlist": _clean(watch_payload),
+        "events": {"window_days": 45, "items": upcoming, "note": earn_note or
+                   "Scheduled earnings dates from Alpha Vantage's calendar. They are not independently verified; "
+                   "other dated catalysts are not tracked."},
         "disclaimer": spec.DISCLAIMER, "multibagger": spec.MULTIBAGGER_DEFINITION,
         "probability": spec.PROBABILITY_STATEMENT,
     })

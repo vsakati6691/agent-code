@@ -1,0 +1,5 @@
+{
+  "imported_at": "2026-10-14",
+  "source": "Ticker symbols the owner provided from their Robinhood watchlist on 2026-10-14. Tickers only: no account details, quantities, cost basis or balances. This list is NOT synchronised with Robinhood; edit this file to change it.",
+  "tickers": ["LAZR", "NCLD", "QQQ", "AIPO", "CRWV", "EUV", "CBRS", "NASA", "DRAM", "OKLO", "TQQQ", "RVI", "SMH"]
+}

@@ -1,10 +1,16 @@
-"""Educational call-option comparisons for S&P 500 underlyings (not 'best calls to buy').
+"""Educational call AND put comparisons for S&P 500 underlyings (not 'best options to buy').
 
 Rules (spec.HORIZONS, OPTION_RULES, OPTION_RANKING) are fixed in advance. Contracts
 come only from a current, timestamped chain; when no valid chain exists the
 horizon shows an unavailable state. Nothing here invents prices or Greeks:
 Black-Scholes is used only for the clearly labelled before-expiration
 sensitivity table, starting from the chain's own implied volatility.
+
+Puts use the same windows, liquidity filters, per-underlying limit and ranking
+weights as calls, with put-specific math: |delta| for the delta band, breakeven
+= strike - premium, payoff = max(strike - price, 0) - premium, and the required
+move measured downward. Puts are ranked on contract characteristics for the
+same underlyings; they are not derived by reversing the growth rankings.
 """
 from __future__ import annotations
 
@@ -34,9 +40,32 @@ def bs_call(s: float, k: float, t: float, vol: float, r: float = spec.RISK_FREE_
     return s * _ncdf(d1) - k * math.exp(-r * t) * _ncdf(d2)
 
 
-def payoff_at_expiry(s_t: float, strike: float, premium: float) -> float:
-    """Profit per share of a long call held to expiration."""
-    return max(0.0, s_t - strike) - premium
+def bs_put(s: float, k: float, t: float, vol: float, r: float = spec.RISK_FREE_RATE) -> float:
+    """Black-Scholes European put value (no dividends), by put-call parity."""
+    if t <= 0 or vol <= 0:
+        return max(0.0, k - s)
+    return bs_call(s, k, t, vol, r) - s + k * math.exp(-r * t)
+
+
+def bs_value(kind: str, s: float, k: float, t: float, vol: float, r: float = spec.RISK_FREE_RATE) -> float:
+    return bs_call(s, k, t, vol, r) if kind == "call" else bs_put(s, k, t, vol, r)
+
+
+def payoff_at_expiry(s_t: float, strike: float, premium: float, kind: str = "call") -> float:
+    """Profit per share of a long option held to expiration."""
+    intrinsic = max(0.0, s_t - strike) if kind == "call" else max(0.0, strike - s_t)
+    return intrinsic - premium
+
+
+def breakeven(kind: str, strike: float, premium: float) -> float:
+    return strike + premium if kind == "call" else strike - premium
+
+
+def required_move(kind: str, spot: float, be: float) -> tuple[float, float]:
+    """(signed move from spot to breakeven, move still needed in the option's favourable direction >= 0)."""
+    signed = be / spot - 1
+    needed = max(0.0, signed) if kind == "call" else max(0.0, -signed)
+    return signed, needed
 
 
 # --- per-contract research row ------------------------------------------------------------
@@ -74,10 +103,10 @@ def contract_flags(row: dict, underlying: str, as_of: date) -> list[str]:
     return flags
 
 
-def eligible(row: dict, underlying: str, as_of: date) -> tuple[bool, str]:
+def eligible(row: dict, underlying: str, as_of: date, kind: str = "call") -> tuple[bool, str]:
     r = spec.OPTION_RULES
-    if row["type"] != "call":
-        return False, "not a call"
+    if row["type"] != kind:
+        return False, f"not a {kind}"
     if row["root"] != underlying.replace(".", ""):
         return False, "adjusted/non-standard contract"
     bid, ask = row.get("bid"), row.get("ask")
@@ -90,58 +119,61 @@ def eligible(row: dict, underlying: str, as_of: date) -> tuple[bool, str]:
     if (row.get("volume") or 0) < r["min_volume"]:
         return False, "volume too low"
     d = row.get("delta")
-    if d is None or not (r["min_delta"] <= d <= r["max_delta"]):
-        return False, "delta outside 0.30-0.70"
+    if d is None or (kind == "call" and d < 0) or (kind == "put" and d > 0) \
+            or not (r["min_delta"] <= abs(d) <= r["max_delta"]):
+        return False, "delta outside 0.30-0.70" if kind == "call" else "delta outside -0.70 to -0.30"
     if not row.get("iv") or row["iv"] <= 0:
         return False, "no implied volatility"
     return True, ""
 
 
 def research_row(row: dict, spot: float, as_of: date, underlying: str, events: list[dict]) -> dict:
+    kind = row["type"]
     bid, ask = row["bid"], row["ask"]
     mid = (bid + ask) / 2
     dte = (row["expiration"] - as_of).days
     t = dte / 365.0
-    premium = ask                         # cost to open at the quoted ask (conservative)
-    breakeven = row["strike"] + premium
-    be_move = breakeven / spot - 1
+    premium = ask                         # spec.PREMIUM_ASSUMPTION: cost to open at the delayed ask
+    be = breakeven(kind, row["strike"], premium)
+    signed, needed = required_move(kind, spot, be)
     iv = row["iv"]
     implied_move = iv * math.sqrt(t)
     theta_share = abs(row.get("theta") or 0.0) / mid if mid > 0 else None
     payoffs = []
     for mv in spec.PAYOFF_MOVES:
         s_t = spot * (1 + mv)
-        pl = payoff_at_expiry(s_t, row["strike"], premium)
+        pl = payoff_at_expiry(s_t, row["strike"], premium, kind)
         payoffs.append({"move": mv, "underlying": s_t, "pl_per_contract": pl * MULT, "return_on_premium": pl / premium})
-    sens = sensitivity(spot, row["strike"], t, iv, mid)
+    sens = sensitivity(spot, row["strike"], t, iv, mid, kind)
     before = [e for e in events if as_of < e["date"] <= row["expiration"]]
     return {
-        "underlying": underlying, "option": row["option"], "strike": row["strike"],
+        "type": kind, "underlying": underlying, "option": row["option"], "strike": row["strike"],
         "expiration": row["expiration"].isoformat(), "dte": dte, "bid": bid, "ask": ask, "mid": mid,
         "spread_pct": (ask - bid) / mid, "volume": row.get("volume"), "open_interest": row.get("open_interest"),
         "iv": iv, "delta": row.get("delta"), "gamma": row.get("gamma"), "theta": row.get("theta"),
         "vega": row.get("vega"), "rho": row.get("rho"), "multiplier": MULT,
-        "adjusted": row["root"] != underlying.replace(".", ""),
+        "adjusted": row["root"] != underlying.replace(".", ""), "premium_basis": "ask",
         "premium_per_contract_ask": premium * MULT, "premium_per_contract_mid": mid * MULT,
-        "breakeven": breakeven, "breakeven_move": be_move, "max_loss_per_contract": premium * MULT,
+        "breakeven": be, "breakeven_move": signed, "required_move": needed,
+        "max_loss_per_contract": premium * MULT,
         "implied_move_1sd": implied_move, "theta_share_per_day": theta_share,
         "payoffs": payoffs, "sensitivity": sens, "events_before_expiry": before,
         "flags": contract_flags(row, underlying, as_of), "spot": spot,
     }
 
 
-def sensitivity(spot: float, strike: float, t: float, iv: float, mid: float) -> dict:
-    """Model-estimated value change after `days_forward` days for price and IV shifts (Black-Scholes)."""
+def sensitivity(spot: float, strike: float, t: float, iv: float, mid: float, kind: str = "call") -> dict:
+    """Model-estimated value after `days_forward` days for price and IV shifts (Black-Scholes)."""
     p = spec.SENSITIVITY
     t2 = max(0.0, t - p["days_forward"] / 365.0)
     grid = []
     for mv in p["price_moves"]:
         row = []
         for dv in p["iv_shifts"]:
-            v = bs_call(spot * (1 + mv), strike, t2, max(0.01, iv + dv))
+            v = bs_value(kind, spot * (1 + mv), strike, t2, max(0.01, iv + dv))
             row.append({"price_move": mv, "iv_shift": dv, "model_value": v, "change_vs_mid": v / mid - 1 if mid else None})
         grid.append(row)
-    model_now = bs_call(spot, strike, t, iv)
+    model_now = bs_value(kind, spot, strike, t, iv)
     return {"days_forward": p["days_forward"], "grid": grid, "model_value_now": model_now,
             "model_vs_mid_now": model_now / mid - 1 if mid else None, "note": spec.RISK_FREE_RATE_NOTE}
 
@@ -152,7 +184,8 @@ def rank_score(r: dict) -> dict:
     oi = r["open_interest"] or 0
     oi_s = max(0.0, min(1.0, (math.log10(max(oi, 1)) - math.log10(500)) / (math.log10(20000) - math.log10(500))))
     liquidity = 0.5 * spread + 0.5 * oi_s
-    ratio = r["breakeven_move"] / r["implied_move_1sd"] if r["implied_move_1sd"] > 0 else float("inf")
+    needed = r.get("required_move", max(0.0, r["breakeven_move"]))
+    ratio = needed / r["implied_move_1sd"] if r["implied_move_1sd"] > 0 else float("inf")
     be = max(0.0, min(1.0, 1 - ratio))
     th = r["theta_share_per_day"]
     decay = 0.0 if th is None else max(0.0, min(1.0, 1 - th / 0.01))
@@ -180,12 +213,45 @@ def chain_status(under: dict, as_of: date) -> str | None:
     return None
 
 
+def _rank_list(usable: dict, h: spec.Horizon, kind: str, as_of: date, events: dict) -> dict:
+    r = spec.OPTION_RULES
+    rows, rejections, considered = [], {}, 0
+    for sym, (under, opts) in usable.items():
+        spot = under.get("close") or under.get("price")
+        cand = []
+        for o in opts:
+            dte = (o["expiration"] - as_of).days
+            if not (h.min_dte <= dte <= h.max_dte) or o["type"] != kind:
+                continue
+            considered += 1
+            ok, why = eligible(o, sym, as_of, kind)
+            if not ok:
+                rejections[why] = rejections.get(why, 0) + 1
+                continue
+            rr = research_row(o, spot, as_of, sym, events.get(sym, []))
+            rr["rank_components"] = rank_score(rr)
+            cand.append(rr)
+        cand.sort(key=lambda x: (-x["rank_components"]["total"], x["expiration"], x["strike"]))
+        kept = cand[: r["max_per_underlying_per_horizon"]]
+        if len(cand) > len(kept):
+            rejections["per-underlying limit"] = rejections.get("per-underlying limit", 0) + len(cand) - len(kept)
+        rows += kept
+    rows.sort(key=lambda x: (-x["rank_components"]["total"], x["underlying"], x["expiration"], x["strike"]))
+    if len(rows) > r["max_per_type_per_horizon"]:
+        rejections["list limit (ranked below the cutoff)"] = len(rows) - r["max_per_type_per_horizon"]
+    rows = rows[: r["max_per_type_per_horizon"]]
+    for i, x in enumerate(rows, 1):
+        x["rank"] = i
+    status = "ok" if rows else ("unavailable: no valid option chains" if not usable else
+                                f"no {kind} met the liquidity and delta rules")
+    return {"rows": rows, "count": len(rows), "considered": considered, "rejections": rejections, "status": status}
+
+
 def build_horizons(chains: dict[str, tuple[dict, list[dict]] | str], as_of: date,
                    events: dict[str, list[dict]]) -> dict:
-    """{horizon: {"rows": [...ranked...], "considered": n, "rejections": {...}, "status": ...}}.
+    """{horizon: {"calls": {...}, "puts": {...}}}, each list ranked separately.
 
     `chains`: underlying -> (underlying info, option rows) or an error string."""
-    r = spec.OPTION_RULES
     out = {}
     usable, chain_problems = {}, {}
     for sym, ch in chains.items():
@@ -198,32 +264,9 @@ def build_horizons(chains: dict[str, tuple[dict, list[dict]] | str], as_of: date
         else:
             usable[sym] = ch
     for h in spec.HORIZONS:
-        rows, rejections, considered = [], {}, 0
-        for sym, (under, opts) in usable.items():
-            spot = under.get("close") or under.get("price")
-            cand = []
-            for o in opts:
-                dte = (o["expiration"] - as_of).days
-                if not (h.min_dte <= dte <= h.max_dte) or o["type"] != "call":
-                    continue
-                considered += 1
-                ok, why = eligible(o, sym, as_of)
-                if not ok:
-                    rejections[why] = rejections.get(why, 0) + 1
-                    continue
-                rr = research_row(o, spot, as_of, sym, events.get(sym, []))
-                rr["rank_components"] = rank_score(rr)
-                cand.append(rr)
-            cand.sort(key=lambda x: (-x["rank_components"]["total"], x["expiration"], x["strike"]))
-            rows += cand[: r["max_per_underlying_per_horizon"]]
-        rows.sort(key=lambda x: (-x["rank_components"]["total"], x["underlying"], x["expiration"], x["strike"]))
-        rows = rows[: r["max_per_horizon"]]
-        for i, x in enumerate(rows, 1):
-            x["rank"] = i
-        status = "ok" if rows else ("unavailable: no valid option chains" if not usable else
-                                    "no contract met the liquidity and delta rules")
-        out[h.key] = {"title": h.title, "window": [h.min_dte, h.max_dte], "rows": rows, "considered": considered,
-                      "rejections": rejections, "status": status}
+        out[h.key] = {"title": h.title, "window": [h.min_dte, h.max_dte],
+                      **{f"{k}s": _rank_list(usable, h, k, as_of, events) for k in spec.OPTION_TYPES}}
     out["chain_problems"] = chain_problems
     out["underlyings"] = sorted(usable)
+    out["underlying_prices"] = {s: (u.get("close") or u.get("price")) for s, (u, _) in usable.items()}
     return out
