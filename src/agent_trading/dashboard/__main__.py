@@ -64,8 +64,11 @@ def cmd_run(args) -> int:
     todo: list[dict] = []
     try:
         try:
+            from .speculative import stored_history
+            from .refresh_store import RefreshStore
+            iv_history = stored_history(RefreshStore(store.root), as_of) if not args.no_options else {}
             payload = run(providers, as_of, previous, options_enabled=not args.no_options, limit=args.limit,
-                          tradability=trad, todo_out=todo, watchlist=WatchlistConfig.load())
+                          tradability=trad, todo_out=todo, watchlist=WatchlistConfig.load(), iv_history=iv_history)
         finally:
             write_todo(store.root, todo, as_of)      # symbols the next Claude session should check on Robinhood
     except RunFailed as exc:

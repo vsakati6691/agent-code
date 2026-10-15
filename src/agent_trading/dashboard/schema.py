@@ -31,6 +31,7 @@ CANDIDATE = _obj("One ranked stock in a list.", {
     "components": _f("object", "Component scores 0-1 by component key (null = all inputs missing)."),
     "sub_scores": _f("object", "Each input's 0-1 score on its fixed scale (missing inputs score 0)."),
     "metrics": _f("object", "Raw inputs: ratios as decimals, money in USD, multiples as plain numbers."),
+    "decision_research": _f("object", "Dated valuation/growth/balance/ownership/timing/quality field groups; each field has value, reason and as_of. Valuation percentiles are within-list. Includes attributed 10-K excerpts and a 1Y price sparkline."),
     "missing": _f("array", "Inputs that were unavailable and scored 0."),
     "confidence": _f("number", "Evidence confidence 0-1 (share of inputs present, reduced for data caveats)."),
     "confidence_label": _f("string", "high, medium or low."),
@@ -166,6 +167,7 @@ SCHEMA = {
             "probability": _f("object", "Calibration status per option type and horizon (all 'not established'), the "
                                         "gate, the data contract and the missing data."),
         }),
+        "speculative": {"type": ["object", "null"], "description": "Optional 30–90 DTE research on the top three names in each growth list. At most three contracts per ticker, IV context and reasons for missing data. Separate from weekly tracked lists. Same iv_method identifies comparable daily IV observations."},
         "watchlist": _obj("Owner watchlist with conditional 2030 price scenarios.",
                           {"entries": {"type": "array", "items": WATCH_ENTRY},
                            "imported_at": _f("string", "When the ticker list was imported (not synchronised)."),

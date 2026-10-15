@@ -519,3 +519,7 @@ JS += SCAN_JS
 from .assets_decisions import CSS as DECISION_CSS, JS as DECISION_JS
 CSS += DECISION_CSS
 JS += DECISION_JS
+
+from .assets_speculative import CSS as SPECULATIVE_CSS, JS as SPECULATIVE_JS
+CSS += SPECULATIVE_CSS
+JS += SPECULATIVE_JS

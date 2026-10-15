@@ -255,6 +255,20 @@ def demo_site(tmp_path, two_weeks: bool = True):
         with mock.patch.object(spec, "AI_UNIVERSE", FAKE_AI_UNIVERSE):
             snap = run(p, as_of, store.latest(before=str(as_of)), options_enabled=False, tradability=t, watchlist=wl)
         snap["options"] = {"enabled": True, "status": "ok", **opt.build_horizons(chains_for(6), as_of, {})}
+        from agent_trading.dashboard import speculative
+        focus_chains = {}
+        for ticker in speculative.targets(snap):
+            rows = []
+            for days in (30, 60):
+                for kind in ("call", "put"):
+                    item = option_row(ticker, as_of + timedelta(days=days), 100, 2.0, 2.1, delta=.3, iv=.4)
+                    if kind == "put":
+                        item.update(type="put", delta=-.3, option=f"{ticker}{item['expiration']:%y%m%d}P00100000")
+                    rows.append(item)
+            focus_chains[ticker] = ({"symbol":ticker,"close":100,"last_trade_time":f"{as_of}T16:00:00",
+                                     "timestamp":f"{as_of} 22:00:00"},rows)
+        snap["speculative"] = speculative.build(focus_chains,as_of,{ticker:[{"date":as_of+timedelta(days=21),"event":"earnings"}]
+                                                                   for ticker in focus_chains})
         store.write_snapshot(snap, "fixture")
         snaps.append(snap)
     store.write_json("tracking.json", tracking.track(snaps, {k: v["close"] for k, v in p.bars.items()}, AS_OF))

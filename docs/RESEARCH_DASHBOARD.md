@@ -623,3 +623,54 @@ allow-list. Deterministic section/sentence extraction supplies issuer business,
 growth and risk excerpts with filing date and source link; ambiguous sections
 stay n/a. These are issuer statements, not independent forecasts. Existing
 snapshots have n/a for fields they never collected; no history is rewritten.
+
+
+## Speculative 30–90 DTE research on options.html
+
+`DASHBOARD_OPTIONS` gates both collection and display. The new section covers
+up to the top three names in each large/mid/small growth list. The pin filter
+uses existing device-local pins within that fixed coverage; pins never trigger
+network requests. No eligible contracts means n/a and screen-exclusion counts.
+The six tracked option lists and the separate bets.html explorer retain their
+previous underlying sets, selection rules and tracking; added mid/small chains
+cannot enter them. Daily Cboe attempts remain capped at 80 and Alpha Vantage at
+one earnings-calendar request. Weekly and daily records remain write-once.
+
+At most three standard 100-share calls/puts per ticker: 30–90 calendar DTE,
+absolute delta 0.25–0.40 with the correct sign, OI strictly above 500, volume at
+least 10, positive two-sided quotes, spread at most 10% of mid, positive IV and
+finite nonzero theta. Rank uses the existing liquidity/breakeven/time-decay
+score; ties break on expiry, strike, type and OCC identifier. Premium and max
+loss are ask × 100 before fees. Breakeven is strike + ask for calls, strike −
+ask for puts; needed move is directional and floored at zero.
+
+ATM IV is the mean call/put IV at the paired strike closest to spot, in the
+20–40 DTE expiry closest to 30 days (earlier expiry then lower strike breaks
+ties). IV rank is 100 × (current − low)/(high − low) over 252 comparable stored
+trading sessions within 366 calendar days, including today. It requires the
+same `iv_method`, excludes future/duplicate dates, and is n/a for insufficient
+history or a zero range. Observations accumulate prospectively in verified
+daily records; none are fabricated or backfilled. Weekly collection can read
+these verified prior observations but does not modify them.
+
+Expected move to earnings is a constant-IV model: paired ATM IV from the first
+expiry at/after the scheduled report within 90 days × sqrt(days to report/365).
+The percentage and dollar distance are shown with the date. This is not an
+event-specific forecast, calibrated probability or promise of a tradable move.
+The put/call ratio is total put volume / call volume across standard 30–90 DTE
+contracts; a missing volume input or no positive call volume produces n/a.
+
+The hypothetical account-value calculator defaults to a 5% options cap and
+1% per-trade cap, computes money in cents, and warns prominently when one
+contract exceeds either cap. Blank/invalid values never become zero budgets.
+Inputs remain only in the browser page's memory; they are never saved, sent,
+used as investment recommendations, or connected to brokerage limits. Existing
+option exposure is unknown, so a within-cap result is not an aggregate exposure
+check. A per-trade cap greater than the total cap is also flagged.
+
+The +100% profit, −50% loss, and 21 DTE exit examples are illustrative user
+planning presets, not validated strategies or automated orders. Quotes are
+delayed, not live, and every contract can lose 100% of its premium. Full-loss
+labels and the site's existing disclaimer remain visible on phones and in dark
+mode. All field calculations and missing-input boundaries have unit tests;
+the browser budget has a matching cents-boundary test.

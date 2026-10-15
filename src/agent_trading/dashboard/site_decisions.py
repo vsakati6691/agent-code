@@ -54,7 +54,12 @@ def flattened(c: dict) -> dict:
             value_text = formatted(value, kind)
             arrow = {"accelerating": "↑", "improving": "↑", "stable": "→", "decelerating": "↓", "deteriorating": "↓"}.get(item.get("trend") or value, "") if not isinstance(value, list) else ""
             out[key] = {"v": value, "text": f"{arrow} {value_text}".strip(), "reason": reason,
-                        "note": peer_text, "as_of": stamp, "kind": kind, "label": label}
+                        "note": peer_text or item.get("period", ""), "as_of": stamp, "kind": kind, "label": label}
+            if group == "valuation":
+                out[key + "_percentile"] = {"v": peer.get("value"), "text": formatted(peer.get("value"), "number"),
+                    "reason": peer.get("reason", "Percentile not collected") if peer.get("value") is None else "",
+                    "note": f"{peer.get('n', 0)} available values in this list; 0–100", "as_of": stamp,
+                    "kind": "number", "label": label + " percentile"}
     business = research.get("business") or {}
     for key, label in (("description", "Business · 10-K"), ("growth", "Why it could keep growing · 10-K"), ("risk", "Why it could fail · 10-K")):
         out["business_" + key] = {"v": business.get(key), "text": business.get(key) or "n/a",
@@ -82,6 +87,8 @@ def scanner_controls() -> str:
         groups.append(f'<optgroup label="{group.title()}">{options}</optgroup>')
     groups.append('<optgroup label="Business">' + ''.join(f'<option value="business_{key}">{label}</option>' for key, label in
                   (("description", "Business description"), ("growth", "Why it could grow"), ("risk", "Why it could fail"))) + '</optgroup>')
+    groups.append('<optgroup label="Valuation percentiles">' + ''.join(f'<option value="{key}_percentile">{E(label)} percentile</option>'
+                  for key, label, _ in FIELDS["valuation"]) + '</optgroup>')
     return f'''<div class="decision-controls controls">
 <label>Research field<select id="research-field">{''.join(groups)}</select></label>
 <label>Minimum<input id="research-min" type="number" step="any" placeholder="No minimum"></label>
@@ -117,5 +124,6 @@ def detail(c: dict) -> str:
 Valuation percentiles compare available values in this same published list; higher means numerically higher, not better.</p>
 <p class="small muted">Prices: {E(research.get('price_as_of') or 'n/a')} · delayed, not live. SEC filed through {E(research.get('filing_as_of') or 'n/a')}; quarter ended {E(research.get('period_end') or 'n/a')}.
 Estimates are current observations, not historical forecasts. Margin trends compare TTM with prior TTM.</p>
+<p class="small muted">Registered score and scenario panels retain their reported-debt definitions. The decision fields require complete debt inputs and can be n/a when those older inputs are available.</p>
 <div class="decision-grid">{''.join(cards)}</div><div class="card business-evidence">{narrative}
 <p class="small muted">Issuer excerpts · data as of {E(business.get('filed') or 'n/a')} · {source}. These are issuer statements, not independently verified forecasts.</p></div></section>'''

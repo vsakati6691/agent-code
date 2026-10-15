@@ -422,6 +422,15 @@ GitHub Actions cannot reach it; no account data is stored.</p>
 <p>The strongest counterargument is the input with the largest weighted shortfall (missing critical data first).</p>
 <h2>Scenarios</h2><p>{E(spec.SCENARIO_METHOD)}</p><p>{E(spec.MULTIBAGGER_DEFINITION)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p>
 {methodology_ai()}
+<h2>Speculative small bets · 30–90 DTE</h2>
+<p>The new options section covers the top three names per growth list, up to three contracts each. Standard calls and puts
+require 30–90 DTE, |delta| 0.25–0.40, OI above 500, volume at least 10, positive bid/ask, spread at most 10% of mid,
+positive IV and nonzero theta. Existing liquidity/breakeven/decay ranking applies. These contracts can lose 100%.</p>
+<p>ATM IV averages paired call and put IV at the closest strike, in the 20–40 DTE expiry nearest 30 days.
+IV rank needs 252 comparable stored sessions within 366 days; insufficient history is n/a. Earnings move is a
+constant-IV square-root-time model to the scheduled event using the first expiry at/after it, not a calibrated forecast.
+Put/call ratio uses 30–90 DTE contract volumes. The browser-only hypothetical 5%/1% caps check one premium, not existing exposure.
+Exit examples (+100%, −50%, 21 DTE) are illustrative and cannot guarantee execution or limit loss.</p>
 <h2>Options (calls and puts)</h2><p>{E(spec.OPTION_UNDERLYINGS)}</p><ul>{hz}</ul><p>Eligibility: {E(OPTION_RULES_TEXT)}.</p>
 <p>Ranking (higher is better; maximum upside is not an input):</p><ul>{rk}</ul><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>{E(spec.DELTA_STATEMENT)}</p><p>{E(spec.PREMIUM_ASSUMPTION)} Puts: breakeven = strike - premium; payoff = max(strike - price, 0) -

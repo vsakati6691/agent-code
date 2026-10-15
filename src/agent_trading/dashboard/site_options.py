@@ -291,6 +291,7 @@ def _list(snap: dict, h, kind: str, data: dict | None, o: dict) -> str:
 
 def options_page(snap: dict, daily: dict | None = None) -> str:
     from .site_refresh import options_section
+    from .site_speculative import section as speculative_section
     o = snap.get("options") or {}
     r = spec.OPTION_RULES
     head = f"""<h1>Options watchlist: calls and puts</h1>
@@ -300,6 +301,7 @@ not recommendations.</p>
 <div class="banner bad small" id="options-critical"><strong>Buying an option can lose the entire premium.</strong>Maximum loss
 for every contract below is the premium paid (ask x 100), shown in its own column on every screen size. Figures are
 before fees. Every contract here carries the risk of losing all of that premium.</div>
+{speculative_section(snap, daily)}
 {options_section(snap, daily or {})}
 <h2>Weekly tracked view · {E(snap['as_of'])}</h2>
 {status_html(snap)}{version_line(snap)}

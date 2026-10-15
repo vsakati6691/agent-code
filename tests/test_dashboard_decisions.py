@@ -4,7 +4,7 @@ from agent_trading.dashboard import decisions as d
 from agent_trading.dashboard import decision_sources as sources
 from agent_trading.dashboard.fundamentals import build, annual_series
 from tests.dashboard_fixtures import make_facts, AS_OF
-from datetime import date
+from datetime import date, timedelta
 from copy import deepcopy
 import pytest
 
@@ -165,3 +165,38 @@ def test_filing_url_is_bounded_and_point_in_time():
     assert sources.latest_10k(sub,1,AS_OF)[0].startswith('https://www.sec.gov/Archives/edgar/data/1/')
     recent["primaryDocument"]=["../secret.htm"]
     assert sources.latest_10k(sub,1,AS_OF) is None
+
+
+def test_current_enrichment_stops_after_quota_and_never_backfills(monkeypatch):
+    from agent_trading.dashboard import pipeline
+    from agent_trading.dashboard.http import FetchError
+    class Provider:
+        def __init__(self): self.calls=[]
+        def overview(self,ticker):
+            self.calls.append('overview')
+            raise FetchError('Alpha Vantage quota or entitlement response; further enrichment stopped')
+        def insider_transactions(self,ticker):
+            self.calls.append('insider')
+            return {}
+        def annual_filing(self,cik,day): return {"reason":"no reliable sections"}
+    p=Provider();ctx=pipeline.Context(AS_OF,p)
+    monkeypatch.setattr(pipeline,'as_of_for',lambda now:AS_OF)
+    first=pipeline.decision_enrichment(ctx,{"ticker":"A","cik":1})
+    pipeline.decision_enrichment(ctx,{"ticker":"B","cik":2})
+    assert p.calls==['overview'] and ctx.problems
+    assert 'quota' in first['estimates_reason']
+    old=pipeline.Context(AS_OF-timedelta(days=7),p)
+    result=pipeline.decision_enrichment(old,{"ticker":"C","cik":3})
+    assert 'backfilled' in result['estimates_reason'] and p.calls==['overview']
+
+
+def test_missing_quarter_cannot_shift_year_earlier_comparison():
+    f=fixture_research()
+    # Remove the year-earlier quarter entirely; the next older quarter is not a substitute.
+    f.quarters.pop(4)
+    for values in f.flows.values():
+        if len(values)>4: values.pop(4)
+    f.diluted_shares.pop(4);f.quarterly_eps.pop(4)
+    r=d.build(f,{},[],[],AS_OF,None,'x')['groups']
+    assert r['growth']['fields']['revenue_yoy']['value'] is None
+    assert r['balance']['fields']['share_change']['value'] is None

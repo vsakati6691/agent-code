@@ -7,7 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..market_calendar import is_trading_day
-from . import bets, options, spec
+from . import bets, options, spec, speculative
 from .http import BudgetExceeded, FetchError, HttpClient
 from .providers import Providers, canonical
 from .refresh_store import RefreshStore
@@ -70,7 +70,8 @@ def fetch(fn, *args):
         return None, "provider response unreadable"
 
 
-def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool, started: str) -> dict:
+def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool, started: str,
+            iv_history: dict | None = None) -> dict:
     candidates = {c["ticker"] for b in snap.get("bands", {}).values() for c in b.get("candidates", [])}
     quotes, chain_states, chains = {}, {}, {}
     for symbol in sorted(candidates | set(BENCHMARKS)):
@@ -99,7 +100,7 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
         core_underlyings = {c["ticker"] for c in snap.get("bands", {}).get("large", {}).get("candidates", [])}
         underlyings = {c["ticker"] for key in spec.EXPLORER_BANDS
                        for c in snap.get("bands", {}).get(key, {}).get("candidates", [])}
-        for symbol in sorted(underlyings):
+        for symbol in sorted(underlyings | set(speculative.targets(snap))):
             chain, reason = fetch(providers.option_chain, symbol)
             info = {}
             if chain is not None:
@@ -127,7 +128,9 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
             "collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "status": "partial" if partial else "ok", "quotes": quotes, "chain_status": chain_states,
             "options": option_payload,
-            "explorer": bets.build(chains, as_of, events, events_known) if options_enabled else None,
+            "explorer": bets.build({s: ch for s, ch in chains.items() if s in underlyings}, as_of, events, events_known) if options_enabled else None,
+            "speculative": speculative.build({s: chains[s] for s in speculative.targets(snap)}, as_of, events,
+                                               iv_history, events_known) if options_enabled else None,
             "usage": providers.http.usage()}
 
 
@@ -155,7 +158,8 @@ def run(data: Path, providers: Providers, as_of: date | None = None, *, options_
         if snap is None or snap["as_of"] > str(session):
             raise ValueError("no weekly snapshot at or before the refresh session")
         constrain(providers.http)
-        payload = collect(providers, snap, session, options_enabled, started)
+        iv_history = speculative.stored_history(daily, session) if options_enabled else {}
+        payload = collect(providers, snap, session, options_enabled, started, iv_history)
         written = daily.write(payload, commit)
         store.audit("refresh_finished" if written else "refresh_skipped", as_of=str(session),
                     status=payload["status"], reason="saved" if written else "first refresh kept unchanged",
