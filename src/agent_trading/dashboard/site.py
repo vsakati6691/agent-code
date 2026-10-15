@@ -200,6 +200,7 @@ aria-label="{E(ticker)} price versus {E(bench)}, rebased to 100">{''.join(ticks)
 
 
 def detail(c: dict, snap: dict, history: list[dict] | None = None, prev_snap: dict | None = None) -> str:
+    from . import site_decisions
     m = c["metrics"]
     h = c["history"]
     rets = "".join(
@@ -258,6 +259,7 @@ score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confi
 <div class="card stat"><div class="label">Data timestamp</div><div class="value small">{E(str(c["data_timestamp"]).replace("+00:00", ""))} UTC</div>
 <div class="small muted">fundamentals: {E(fund.get("last_form") or "?")} filed {E(fund.get("last_filed") or "?")}</div></div></div>
 <p class="small">Flags: {flags}</p>
+{site_decisions.detail(c)}
 {changes_section(changes.compare(c, snap, prev_snap))}
 {research_section(research.panel(c, snap, history or [snap], profile_of(snap["bands"][c["band"]])))}
 {quality_block(evidence.company_check(c, str(snap["as_of"])))}
@@ -353,6 +355,7 @@ def _component_rows(components) -> str:
 def methodology_page() -> str:
     comps = _component_rows(spec.COMPONENTS)
     long_comps = _component_rows(spec.LONG_HORIZON_COMPONENTS)
+    growth_comps = _component_rows(spec.GROWTH_COMPONENTS)
     gates = "".join(f'<li>{E(spec.METRIC_NOTES.get(m, spec.GATE_NOTES.get(m, m)))} Gate: {E(op)} {v:g}</li>'
                     for b in spec.BANDS for m, op, v in b.gates)
     bands = "".join(f'<tr><td>{E(b.title)}</td><td>{E(b.universe)}</td><td>{cap(b.min_cap) if b.min_cap else "-"} to '
@@ -387,7 +390,21 @@ before any results were computed; a change creates a new version and results are
 <p>Limited operating history: fewer than {spec.LIMITED_HISTORY_QUARTERS} reported quarters. Limited trading history: fewer than
 {spec.LIMITED_HISTORY_DAYS} daily bars. Fundamentals older than {spec.MAX_FILING_AGE_DAYS} days exclude a stock. The as-of close
 must be present. Lists are never padded: fewer than ten qualifying stocks means fewer than ten shown.</p>
-<h2>Scoring</h2><p>Each input maps to 0-1 on a fixed linear scale (absolute thresholds, not ranks). A component is the average of
+<h2 id="decision-research">Growth decision research · version 2026-10-14.9</h2>
+<p>New large, mid and small lists rank fundamental quality alone. Price momentum and benchmark-relative returns
+are displayed separately. Annual price returns over 150% are flagged extended. Existing snapshots retain their original ranks.</p>
+<div class="table-wrap"><table aria-label="Growth quality weights"><thead><tr><th>Component</th><th>Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead><tbody>{growth_comps}</tbody></table></div>
+<p>Annual revenue and diluted EPS CAGR require positive full fiscal-year endpoints, matched within 45 days of
+3 or 5 years apart. Latest-quarter revenue acceleration compares its YoY rate with the preceding quarter's YoY rate;
+within 2 percentage points is stable. TTM margin trends compare the previous four quarters; within 1 point is stable.
+Interest coverage is TTM operating income / positive interest expense. Net debt / EBITDA uses signed debt less cash
+and equivalents and positive operating income plus depreciation/amortization. Incomplete debt inputs are n/a.</p>
+<p>Valuation percentiles are average ranks of finite values in the same published list, scaled from 0 to 100,
+with at least two observations. A higher percentile means a higher numerical value, not a better investment.
+Forward P/E, PEG, analyst targets and five-category rating counts are current Alpha Vantage observations, never used
+for historical backfills or scores. Insider acquisitions/disposals without Form 4 P/S codes cannot establish net market buying.
+Business, growth and risk text is excerpted from identified 10-K sections and may be unavailable. Missing values always carry reasons.</p>
+<h2>Legacy / AI scoring</h2><p>Each input maps to 0-1 on a fixed linear scale (absolute thresholds, not ranks). A component is the average of
 its inputs. A missing input scores 0 and is shown; weights are never redistributed. A stock with a critical component entirely
 missing, or more than {spec.MAX_MISSING_METRICS} missing inputs, is not ranked. Ties: {E(spec.TIE_BREAK)}.</p>
 <div class="table-wrap"><table aria-label="Scoring components and scales"><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
@@ -395,7 +412,7 @@ missing, or more than {spec.MAX_MISSING_METRICS} missing inputs, is not ranked. 
 <p>Momentum and benchmark-relative performance are separate components. {E(spec.CONFIDENCE_RULES)}</p>
 <h3 id="multibagger">Speculative multibagger research candidates (5-10 years)</h3><p>{E(spec.MULTIBAGGER_RATIONALE)}</p>
 <p>Eligibility gates (all must hold; a missing input fails the gate):</p><ul class="small">{gates}</ul>
-<p>Weights for this list (the other lists use the table above):</p>
+<p>Weights for the multibagger list:</p>
 <div class="table-wrap"><table aria-label="Long-horizon scoring components"><thead><tr><th>Component</th><th class="num">Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead>
 <tbody>{long_comps}</tbody></table></div>
 <h3>Robinhood tradability</h3><p>{E(spec.TRADABILITY_RULE)} Because scores use fixed scales, removing a stock that is not
@@ -405,6 +422,15 @@ GitHub Actions cannot reach it; no account data is stored.</p>
 <p>The strongest counterargument is the input with the largest weighted shortfall (missing critical data first).</p>
 <h2>Scenarios</h2><p>{E(spec.SCENARIO_METHOD)}</p><p>{E(spec.MULTIBAGGER_DEFINITION)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p>
 {methodology_ai()}
+<h2>Speculative small bets · 30–90 DTE</h2>
+<p>The new options section covers the top three names per growth list, up to three contracts each. Standard calls and puts
+require 30–90 DTE, |delta| 0.25–0.40, OI above 500, volume at least 10, positive bid/ask, spread at most 10% of mid,
+positive IV and nonzero theta. Existing liquidity/breakeven/decay ranking applies. These contracts can lose 100%.</p>
+<p>ATM IV averages paired call and put IV at the closest strike, in the 20–40 DTE expiry nearest 30 days.
+IV rank needs 252 comparable stored sessions within 366 days; insufficient history is n/a. Earnings move is a
+constant-IV square-root-time model to the scheduled event using the first expiry at/after it, not a calibrated forecast.
+Put/call ratio uses 30–90 DTE contract volumes. The browser-only hypothetical 5%/1% caps check one premium, not existing exposure.
+Exit examples (+100%, −50%, 21 DTE) are illustrative and cannot guarantee execution or limit loss.</p>
 <h2>Options (calls and puts)</h2><p>{E(spec.OPTION_UNDERLYINGS)}</p><ul>{hz}</ul><p>Eligibility: {E(OPTION_RULES_TEXT)}.</p>
 <p>Ranking (higher is better; maximum upside is not an input):</p><ul>{rk}</ul><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>{E(spec.DELTA_STATEMENT)}</p><p>{E(spec.PREMIUM_ASSUMPTION)} Puts: breakeven = strike - premium; payoff = max(strike - price, 0) -

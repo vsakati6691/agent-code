@@ -96,3 +96,14 @@ tests/                        unit, integration (mocked) and safety tests
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): diagrams, Strategy B rules, live-ticket settings, data sources, known limitations.
 - [docs/FINAL_REPORT_2026-10-12.md](docs/FINAL_REPORT_2026-10-12.md): research findings.
 - **AI assistants:** rules live in [CLAUDE.md](CLAUDE.md); [AGENTS.md](AGENTS.md) points Codex and other tools there.
+
+
+Growth decision research (methodology 2026-10-14.9) adds dated valuation,
+fiscal-year growth, margin/balance-sheet, ownership and timing fields to the
+Growth Stocks scanner and company pages. Fundamental quality and momentum are
+separate. `options.html` includes speculative 30–90 DTE comparisons and a local
+hypothetical risk-budget calculator when `DASHBOARD_OPTIONS` is enabled.
+Missing data stays n/a with its reason, including unclassified insider trades
+and IV rank until 252 comparable sessions exist. See
+[the research dashboard methodology](docs/RESEARCH_DASHBOARD.md) for formulas,
+source coverage, request budgets and the unchanged full-loss disclaimer.

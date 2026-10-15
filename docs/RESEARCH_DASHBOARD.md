@@ -566,3 +566,111 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 - **Debt:** total debt can be overstated when a filer's `LongTermDebt` tag already includes the current portion (conservative).
 - **Option events:** only scheduled earnings dates are checked, from Alpha Vantage, and they are labelled unverified because no verified calendar is reachable from CI. Ex-dividend dates and other corporate events before expiry are not.
 - **Thesis and invalidation text:** these are template-generated from the numbers. They summarize evidence; they are not analyst judgement.
+
+
+## Growth decision research (2026-10-14.9)
+
+New snapshots use a `fundamental_growth` profile for large/mid/small: revenue
+25%; earnings, quality, balance and valuation 18.75% each. The existing scales,
+missing-input penalties and eligibility gates remain. Momentum is displayed
+separately as the mean of the three normalized price/relative-return metrics;
+all three must be available. A one-year price return strictly above 150% is
+labelled extended. Historical snapshots and their tracked scores are unchanged.
+
+The scanner's Research field selector exposes every numeric field, business
+excerpt and trend with sorting, range/text filters and available/n/a filters.
+Percentage ranges use percentage points. Pins share the existing local device
+storage; sector concentration counts unique pinned tickers present in the scan,
+not invested capital. Company pages show every group simultaneously, sources,
+filing/price dates and a one-year closing-price sparkline.
+
+SEC company facts provide full fiscal-year revenue and diluted EPS for 3Y/5Y
+CAGR (positive endpoints, fiscal end dates within 45 days of the target year),
+direct latest-quarter EPS, quarterly revenue growth, TTM gross/operating/FCF
+margins and changes versus prior TTM. Revenue trend compares latest quarter YoY
+with preceding quarter YoY; ±2 percentage points is stable. Margin trends use
+±1 point. Shares compare the latest quarter with four quarters earlier, with no
+fallback to a different year. Missing annual EPS and nonpositive bases are n/a.
+
+Debt requires either a total-debt tag or all three current/long-term/short-term
+components. Missing components are not assumed zero. Cash means cash and cash
+equivalents, excluding short-term investments. Net debt / EBITDA preserves a
+negative net-cash numerator and requires positive EBITDA (operating income plus
+D&A). Coverage is operating income / positive interest expense. The displayed
+EV/Sales uses complete debt/cash; legacy score inputs keep their registered
+historical definitions. P/E is market cap / positive TTM net income, and FCF
+yield is (operating cash flow − capex) / market cap.
+
+Valuation percentiles rank available finite values within the same published
+list, not the whole market: 100 × (count below + (count equal − 1)/2)/(n − 1).
+At least two values are required. High means numerically high, not attractive.
+
+Alpha Vantage OVERVIEW supplies current forward P/E, PEG, analyst target and
+rating counts (all five categories required). These never enter scores or
+historical backfills. Weekly collection permits at most 61 attempts at the
+existing 13-second spacing; daily collection still permits one calendar call.
+A quota/entitlement response stops enrichment. The configured premium key is
+used only on the server. No keys, brokerage data or paid new sources reach Pages.
+
+INSIDER_TRANSACTIONS currently provides A/D classifications without Form 4
+P/S codes. Grants, vesting, gifts and exercises cannot be called purchases:
+net buying/selling therefore displays n/a with that reason. When unambiguous
+P/S codes are supplied, net shares cover six calendar months, excluding future
+transactions. Empty or incomplete source responses are not zero buying.
+
+The latest eligible 10-K primary document is fetched through the existing SEC
+allow-list. Deterministic section/sentence extraction supplies issuer business,
+growth and risk excerpts with filing date and source link; ambiguous sections
+stay n/a. These are issuer statements, not independent forecasts. Existing
+snapshots have n/a for fields they never collected; no history is rewritten.
+
+
+## Speculative 30–90 DTE research on options.html
+
+`DASHBOARD_OPTIONS` gates both collection and display. The new section covers
+up to the top three names in each large/mid/small growth list. The pin filter
+uses existing device-local pins within that fixed coverage; pins never trigger
+network requests. No eligible contracts means n/a and screen-exclusion counts.
+The six tracked option lists and the separate bets.html explorer retain their
+previous underlying sets, selection rules and tracking; added mid/small chains
+cannot enter them. Daily Cboe attempts remain capped at 80 and Alpha Vantage at
+one earnings-calendar request. Weekly and daily records remain write-once.
+
+At most three standard 100-share calls/puts per ticker: 30–90 calendar DTE,
+absolute delta 0.25–0.40 with the correct sign, OI strictly above 500, volume at
+least 10, positive two-sided quotes, spread at most 10% of mid, positive IV and
+finite nonzero theta. Rank uses the existing liquidity/breakeven/time-decay
+score; ties break on expiry, strike, type and OCC identifier. Premium and max
+loss are ask × 100 before fees. Breakeven is strike + ask for calls, strike −
+ask for puts; needed move is directional and floored at zero.
+
+ATM IV is the mean call/put IV at the paired strike closest to spot, in the
+20–40 DTE expiry closest to 30 days (earlier expiry then lower strike breaks
+ties). IV rank is 100 × (current − low)/(high − low) over 252 comparable stored
+trading sessions within 366 calendar days, including today. It requires the
+same `iv_method`, excludes future/duplicate dates, and is n/a for insufficient
+history or a zero range. Observations accumulate prospectively in verified
+daily records; none are fabricated or backfilled. Weekly collection can read
+these verified prior observations but does not modify them.
+
+Expected move to earnings is a constant-IV model: paired ATM IV from the first
+expiry at/after the scheduled report within 90 days × sqrt(days to report/365).
+The percentage and dollar distance are shown with the date. This is not an
+event-specific forecast, calibrated probability or promise of a tradable move.
+The put/call ratio is total put volume / call volume across standard 30–90 DTE
+contracts; a missing volume input or no positive call volume produces n/a.
+
+The hypothetical account-value calculator defaults to a 5% options cap and
+1% per-trade cap, computes money in cents, and warns prominently when one
+contract exceeds either cap. Blank/invalid values never become zero budgets.
+Inputs remain only in the browser page's memory; they are never saved, sent,
+used as investment recommendations, or connected to brokerage limits. Existing
+option exposure is unknown, so a within-cap result is not an aggregate exposure
+check. A per-trade cap greater than the total cap is also flagged.
+
+The +100% profit, −50% loss, and 21 DTE exit examples are illustrative user
+planning presets, not validated strategies or automated orders. Quotes are
+delayed, not live, and every contract can lose 100% of its premium. Full-loss
+labels and the site's existing disclaimer remain visible on phones and in dark
+mode. All field calculations and missing-input boundaries have unit tests;
+the browser budget has a matching cents-boundary test.

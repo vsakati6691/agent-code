@@ -61,6 +61,8 @@ class Context:
     quotes: dict = field(default_factory=dict)
     histories: dict = field(default_factory=dict)
     facts: dict = field(default_factory=dict)
+    decision_extras: dict = field(default_factory=dict)
+    earnings_reason: str | None = None
 
     def exclude(self, band: str, ticker: str, reason: str) -> None:
         self.excluded[band].setdefault(ticker, reason)
@@ -78,6 +80,9 @@ def _guard(ctx: Context, provider: str, fn, *args):
         ctx.problems.append(str(exc))
         return None, "not evaluated: request budget spent"
     except FetchError as exc:
+        if provider == "alphavantage" and "quota or entitlement" in str(exc):
+            ctx.budget_hit.add(provider)
+            ctx.problems.append(str(exc))
         if "attempts" in str(exc):
             ctx.transient_failures += 1
         return None, f"data unavailable ({exc})"
@@ -158,7 +163,7 @@ def _facts(ctx: Context, cik: int) -> tuple[Fundamentals | None, str | None]:
     elif not (raw.get("facts") or {}).get("us-gaap"):
         ctx.facts[cik] = (None, "no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)")
     else:
-        ctx.facts[cik] = (build_fundamentals(raw, ctx.as_of), None)
+        ctx.facts[cik] = (build_fundamentals(raw, ctx.as_of, max_quarters=spec.DECISION_RULES["max_quarters"]), None)
     return ctx.facts[cik]
 
 
@@ -373,11 +378,17 @@ def candidate_detail(ctx: Context, band: spec.Band, row: dict, bench: pd.Series,
         "cover_shares": f.cover_shares, "cover_shares_date": f.cover_shares_date,
     }
     next_earn = earnings.get(row["ticker"])
+    from . import decisions
+    research = decisions.build(f, m, df["close"], df["high"], ctx.as_of, next_earn, ctx.started,
+                               decision_enrichment(ctx, row) if band.key in spec.DECISION_RULES["growth_bands"] else None)
+    if next_earn is None and ctx.earnings_reason:
+        research["groups"]["timing"]["fields"]["next_earnings"]["reason"] = ctx.earnings_reason
     return _clean({
         "ticker": row["ticker"], "name": row["name"], "sector": row["sector"], "band": band.key, "rank": s.rank,
         "price": row["close"], "price_date": ctx.as_of, "market_cap": m["market_cap"], "cik": row["cik"],
         "sources": {"price": SOURCES["cboe"], "fundamentals": SOURCES["sec"]},
         "data_timestamp": ctx.started, "composite": s.composite, "components": s.components,
+        "decision_research": research,
         "sub_scores": s.sub_scores, "metrics": m, "missing": s.missing, "confidence": s.confidence,
         "confidence_label": s.confidence_label, "flags": s.flags, "counterargument": s.counterargument,
         "thesis": scenarios.thesis(m, s.components), "bear_case": scenarios.bear_case(m, s.counterargument),
@@ -661,10 +672,38 @@ def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability
     return scoring.rank(kept)
 
 
+def decision_enrichment(ctx: Context, row: dict) -> dict:
+    """Current vendor estimates are display-only; never backfill a historical run."""
+    from .decision_sources import estimates, insider_net
+    ticker = row["ticker"]
+    if ticker in ctx.decision_extras:
+        return ctx.decision_extras[ticker]
+    out = {}
+    for method, key in (("overview", "estimates"), ("insider_transactions", "insider")):
+        fn = getattr(ctx.providers, method, None)
+        if ctx.as_of != as_of_for(datetime.now(timezone.utc)):
+            raw, why = None, "Current-only provider data cannot be backfilled into a historical snapshot"
+        elif not callable(fn):
+            raw, why = None, "Provider does not implement this dataset"
+        else:
+            raw, why = _guard(ctx, "alphavantage", fn, ticker)
+        if raw is None:
+            out[key + "_reason"] = why
+        elif key == "estimates":
+            out[key] = estimates(raw, ctx.started)
+        else:
+            out["insider_net"] = insider_net(raw, ctx.as_of, ctx.started)
+    fn = getattr(ctx.providers, "annual_filing", None)
+    raw, why = _guard(ctx, "sec", fn, row["cik"], ctx.as_of) if callable(fn) else (None, "Provider does not implement 10-K text retrieval")
+    out["business"] = raw or {"reason": why}
+    ctx.decision_extras[ticker] = out
+    return out
+
+
 def run(providers: Providers, as_of: date, previous: dict | None = None, options_enabled: bool = True,
         limit: int | None = None, tradability: Tradability | None = None,
         todo_out: list | None = None, watchlist: WatchlistConfig | None = None,
-        ai_private: dict | None = None) -> dict:
+        ai_private: dict | None = None, iv_history: dict | None = None) -> dict:
     """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
 
     `tradability`: stored Robinhood verdicts (None = none stored: nothing can be published).
@@ -690,6 +729,7 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
     earn_status = {"status": "ok", "state": "available", "calendar_rows": 0, "retrieved_at": ctx.started}
     if cal is None:
         earn_note = f"Earnings dates unavailable: {why}"
+        ctx.earnings_reason = earn_note
         earn_status = {"status": "unavailable", "retrieved_at": ctx.started, "reason": why,
                        "state": "missing" if "not configured" in str(why) else "provider_error"}
     else:
@@ -773,6 +813,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
                 r["sector"] = sector_from_sic(sub.get("sic")) if sub else "Unknown"
         results[band.key] = (rows, ranked, top)
         details = [candidate_detail(ctx, band, r, bench[band.benchmark], earnings) for r in top]
+        from .decisions import add_percentiles
+        add_percentiles(details)
         if band.universe == "ai":
             for d in details:
                 d["ai_role"] = roles.get(d["ticker"])
@@ -812,16 +854,21 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
         raise RunFailed("no Robinhood tradability verdicts are stored, so no stock can be published; check the "
                         f"{len(todo)} symbols on the to-check list with a read-only Claude session")
 
+    from . import speculative
+    speculative_payload = None
     options_payload = {"enabled": options_enabled, "status": "disabled in configuration"}
     if options_enabled:
         chains = {}
-        for c in payload_bands["large"]["candidates"]:
-            ch, why = _guard(ctx, "cboe", providers.option_chain, c["ticker"])
-            chains[c["ticker"]] = ch if ch is not None else why
+        large_tickers = {c["ticker"] for c in payload_bands["large"]["candidates"]}
+        focus = speculative.targets({"bands": payload_bands})
+        for ticker in sorted(large_tickers | set(focus)):
+            ch, why = _guard(ctx, "cboe", providers.option_chain, ticker)
+            chains[ticker] = ch if ch is not None else why
         ev = {t: [{"date": date.fromisoformat(d), "event": "earnings (scheduled, unverified)"}]
               for t, d in earnings.items()}
         # spec 2026-10-14.6: without a collected calendar every contract's earnings status is 'unknown'
-        options_payload = _clean({"enabled": True, **opt.build_horizons(chains, as_of, ev, events_known=cal is not None),
+        speculative_payload = speculative.build({t: chains[t] for t in focus}, as_of, ev, iv_history, events_known=cal is not None)
+        options_payload = _clean({"enabled": True, **opt.build_horizons({t: ch for t, ch in chains.items() if t in large_tickers}, as_of, ev, events_known=cal is not None),
                                   "earnings_note": earn_note, "delta_statement": spec.DELTA_STATEMENT,
                                   "underlying_rule": spec.OPTION_UNDERLYINGS, "status": "ok",
                                   "premium_assumption": spec.PREMIUM_ASSUMPTION,
@@ -895,7 +942,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
             "definitions": {"universe": spec.UNIVERSE_DEFINITION, "market_cap": spec.MARKET_CAP_DEFINITION},
         },
         "benchmarks": {b: {"close": float(s.iloc[-1]), "date": as_of} for b, s in bench.items()},
-        "bands": payload_bands, "options": options_payload, "watchlist": _clean(watch_payload), "ai": ai_payload,
+        "bands": payload_bands, "options": options_payload, "speculative": speculative_payload,
+        "watchlist": _clean(watch_payload), "ai": ai_payload,
         "events": {"window_days": 45, "items": upcoming, **earn_status, "note": earn_note or
                    "Scheduled earnings dates from Alpha Vantage's calendar. They are not independently verified; "
                    "other dated catalysts are not tracked."},

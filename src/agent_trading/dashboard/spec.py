@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.8"
+SPEC_VERSION = "2026-10-14.9"
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
     ("2026-10-13.2", "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
@@ -115,7 +115,44 @@ SPEC_CHANGELOG = [
                      "contracts. Existing weekly top-five lists, OPTION_RULES, ranking weights, stock scores "
                      "and tracking are unchanged. Browser budget filters and local slips do not rank or upload "
                      "choices. No probability is established; no unsupported expiry-frequency assertion is made."),
+    ("2026-10-14.9", "Owner decision-research request, registered before any data is evaluated with these rules. "
+                     "Future large/mid/small growth lists use fundamental_growth: growth 25%, earnings, quality, "
+                     "balance and valuation 18.75% each, with existing scales/gates. Price momentum and relative "
+                     "performance are displayed separately, never added to this score. Other lists and existing "
+                     "option explorers stay unchanged. Extended means 1Y price return >150%. Annual revenue/EPS "
+                     "CAGR uses matched reported fiscal years 3/5 years apart; positive endpoints required. "
+                     "Quarterly growth trend compares latest YoY with previous-quarter YoY, stable within 2pp. "
+                     "Margin trends compare TTM with prior TTM, stable within 1pp. Valuation percentiles use "
+                     "same-list nonmissing observations, average ties, 0-100, at least two observations. "
+                     "Current Alpha Vantage estimates and six-calendar-month reported insider activity are "
+                     "display-only, never historical backfills or scoring inputs. SEC 10-K excerpts are dated "
+                     "and attributed; unsupported fields remain n/a. Up to 61 Alpha Vantage attempts per weekly "
+                     "run at existing pacing; daily earnings remain one request. New speculative options section "
+                     "uses top three candidates in each growth list, up to three contracts per ticker, 30-90 DTE, "
+                     "absolute delta 0.25-0.40, OI >500, volume >=10, positive two-sided markets, spread <=10% "
+                     "of mid, positive IV, nonzero theta and standard 100-share roots. Select by existing score, "
+                     "ties by expiry, strike, type, OCC. IV proxy averages ATM call/put IV in the nearest 20-40 "
+                     "DTE expiry to 30 days; IV rank needs 252 stored comparable sessions in 366 days. Earnings "
+                     "move uses ATM IV at the first expiry on/after the event within 90 days times sqrt(days/365). "
+                     "Put/call ratio is standard-contract 30-90 DTE volume. Local hypothetical budgets default "
+                     "to 5% overall and 1% per trade, with warnings, no storage/upload and no trading-limit "
+                     "changes. Exit examples are +100%, -50% and 21 DTE, never automated or claimed optimal."),
 ]
+
+DECISION_RULES = {
+    "growth_bands": ("large", "mid", "small"), "max_quarters": 24,
+    "growth_weights": {"growth": .25, "earnings": .1875, "quality": .1875, "balance": .1875, "valuation": .1875},
+    "extended_return": 1.5, "growth_trend_band": .02, "margin_trend_band": .01,
+    "cagr_years": (3, 5), "annual_match_days": 45, "insider_months": 6, "weekly_av_attempts": 61,
+    "percentile": "100*(count below + (count equal-1)/2)/(n-1); same list, finite values, n>=2",
+}
+SPECULATIVE_RULES = {
+    "top_per_list": 3, "per_ticker": 3, "min_dte": 30, "max_dte": 90,
+    "min_delta": .25, "max_delta": .40, "open_interest_above": 500, "min_volume": 10,
+    "max_spread_pct": .10, "iv_min_dte": 20, "iv_max_dte": 40, "iv_target_dte": 30,
+    "iv_rank_sessions": 252, "iv_rank_days": 366, "options_cap_pct": 5, "trade_cap_pct": 1,
+    "profit_exit": 1.0, "loss_exit": -.5, "exit_dte": 21,
+}
 
 # --- Definitions -------------------------------------------------------------------
 
@@ -172,11 +209,11 @@ LEGACY_BANDS = {"spec": {"title": "Speculative potential multibagger research ca
 
 BANDS = (
     Band("large", "Large-cap growth research candidates", "sp500", None, None, 5.0, 20e6, 10,
-         "SPY", "SPDR S&P 500 ETF (price return)", 15.0),
+         "SPY", "SPDR S&P 500 ETF (price return)", 15.0, profile="fundamental_growth"),
     Band("mid", "Mid-cap growth research candidates", "broad", 2e9, 10e9, 5.0, 5e6, 10,
-         "IJH", "iShares Core S&P Mid-Cap ETF (price return)", 25.0),
+         "IJH", "iShares Core S&P Mid-Cap ETF (price return)", 25.0, profile="fundamental_growth"),
     Band("small", "Small-cap growth research candidates", "broad", 300e6, 2e9, 2.0, 2e6, 10,
-         "IWM", "iShares Russell 2000 ETF (price return)", 50.0),
+         "IWM", "iShares Russell 2000 ETF (price return)", 50.0, profile="fundamental_growth"),
     Band("multibagger", "Speculative multibagger research candidates (5-10 year horizon)", "all", 500e6, 50e9, 5.0,
          5e6, 5, "IWM", "iShares Russell 2000 ETF (price return)", 35.0, profile="long_horizon",
          gates=(("revenue_growth_ttm", ">=", 0.15), ("revenue_cagr_3y", ">=", 0.15), ("gross_margin", ">=", 0.35),
@@ -383,7 +420,9 @@ LONG_HORIZON_COMPONENTS = (
     }),
     Component("momentum", _BY_KEY["momentum"].title, 0.05, False, _BY_KEY["momentum"].metrics),
 )
-PROFILES = {"standard": COMPONENTS, "long_horizon": LONG_HORIZON_COMPONENTS}
+GROWTH_COMPONENTS = tuple(Component(key, _BY_KEY[key].title, weight, _BY_KEY[key].critical, _BY_KEY[key].metrics)
+                          for key, weight in DECISION_RULES["growth_weights"].items())
+PROFILES = {"standard": COMPONENTS, "long_horizon": LONG_HORIZON_COMPONENTS, "fundamental_growth": GROWTH_COMPONENTS}
 GATE_NOTES = {
     "reported_quarters": "Number of reported quarters available (at least three years of history).",
     "survival": "1 when TTM free cash flow is positive, or cash and short-term investments cover at least two "
@@ -797,6 +836,8 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "decision_research": DECISION_RULES,
+        "speculative_options": SPECULATIVE_RULES,
         "bands": [asdict(b) for b in BANDS],
         "market_cap_definition": MARKET_CAP_DEFINITION,
         "tradability": {"rule": TRADABILITY_RULE, "max_age_days": TRADABILITY_MAX_AGE_DAYS,

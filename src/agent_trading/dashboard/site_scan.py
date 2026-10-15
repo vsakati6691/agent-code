@@ -5,7 +5,7 @@ import html
 
 from . import evidence, spec
 from .fmt import money, num, ok, pct, sval
-from . import site_refresh
+from . import site_refresh, site_decisions
 
 E = html.escape
 LIST_ORDER = ("large", "mid", "small", "multibagger")
@@ -103,16 +103,20 @@ def candidate_scan(snap: dict, band_keys: list[str] | None = None, daily: dict |
             ret = (((c.get("history") or {}).get("returns") or {}).get("1y") or {}).get("stock")
             risk = c.get("counterargument") or "Weakest evidence not recorded"
             close, price_note = site_refresh.price(ticker, c.get("price"), daily)
+            research = site_decisions.flattened(c)
+            momentum = research["momentum"]["text"]
+            extension = research["extended"]["text"]
             rows.append(f'''<tr data-ticker="{E(ticker)}" data-sector="{E(sector)}" data-list="{E(key)}"
 data-quality="{E(quality)}" data-gaps="{'yes' if missing else 'no'}">
 <td class="tk">{pin_button(ticker)}<a href="stock/{E(key)}-{E(ticker)}.html"><strong>{E(ticker)}</strong></a>
 <span class="scan-company">{E(c.get('name') or ticker)}</span></td>
 <td class="small">{E(_label(key, band))}<span class="scan-company">Rank #{c.get('rank', '—')} · {E(sector)}</span></td>
 <td class="num" data-v="{sval(close)}">{money(close) if close is not None else 'Unavailable'}<span class="scan-company">{E(price_note)}</span><span class="scan-company">Weekly {E(str(c.get('price_date') or 'Date unavailable'))}</span></td>
-<td class="num" data-v="{sval(c.get('composite'))}"><strong>{num(c.get('composite'), 1)}</strong><span class="scan-company">within list / 100</span></td>
-<td class="num {'positive' if ok(ret) and ret >= 0 else 'negative' if ok(ret) else ''}" data-v="{sval(ret)}">{pct(ret, 1, True)}</td>
+<td class="num" data-label="Within-list score" data-v="{sval(c.get('composite'))}"><strong>{num(c.get('composite'), 1)}</strong><span class="scan-company">{'quality' if band.get('profile') == 'fundamental_growth' else 'recorded score'} / 100</span></td>
+<td data-label="Momentum">{E(momentum)}<span class="scan-company">/ 100 · separate</span></td>
+<td class="num {'positive' if ok(ret) and ret >= 0 else 'negative' if ok(ret) else ''}" data-v="{sval(ret)}">{pct(ret, 1, True)}<span class="scan-company">{E(extension)}</span>{site_decisions.spark(c)}</td>
 <td class="small"><span class="pill {E(quality)}">{E(quality)} evidence</span><span class="scan-company">{missing} missing input{'s' if missing != 1 else ''}</span></td>
-<td class="small scan-risk">{E(risk)}</td></tr>''')
+<td class="small scan-risk">{E(risk)}</td><td class="research-value" data-research-value data-v="">n/a · select a research field</td></tr>''')
     lists = "".join(f'<option value="{E(k)}">{E(_label(k, bands[k]))}</option>' for k in keys)
     sector_options = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sorted(sectors))
     return f'''<section id="candidate-scan" aria-labelledby="scan-title">
@@ -121,6 +125,7 @@ data-quality="{E(quality)}" data-gaps="{'yes' if missing else 'no'}">
 <p class="small muted">Scores and ranks apply within each list, not across lists. A ticker may appear in more than one list.
 1Y is a trailing price return; research scores are not probabilities.</p>
 {site_refresh.banner(snap, daily)}
+{site_decisions.scanner_controls()}
 <div class="scan-toolbar controls">
 <label class="scan-search">Search candidates<input type="search" data-search="t-scan" placeholder="Ticker, company, sector or risk…" aria-label="Search candidates"></label>
 <label>Research list<select data-filter="t-scan" data-field="list"><option value="">All lists</option>{lists}</select></label>
@@ -131,11 +136,12 @@ data-quality="{E(quality)}" data-gaps="{'yes' if missing else 'no'}">
 <button class="action" type="button" data-reset="t-scan">Reset filters</button></div>
 <div class="scan-meta"><span class="small" data-count="t-scan" aria-live="polite">{len(rows)} list entries</span>
 <span class="small muted" data-pin-status>Pins are saved only on this device. Press / to search.</span></div>
-<div class="table-wrap"><table id="t-scan" data-table><caption class="sr-only">Research candidate scanner</caption><thead><tr>
+<div class="table-wrap"><table id="t-scan" class="decision-scan" data-table><caption class="sr-only">Research candidate scanner</caption><thead><tr>
 <th class="tk">Ticker / company</th><th>Research list / sector</th><th class="num" data-sort="num">Price</th>
-<th class="num" title="Compare scores within the same research list">Score</th><th class="num" data-sort="num">1Y</th>
-<th>Evidence</th><th>Main risk / weakest evidence</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
+<th class="num" data-sort="num" title="Within-list score; fundamental quality for new growth snapshots">Quality / recorded score</th><th data-sort="num">Momentum</th><th class="num" data-sort="num">1Y</th>
+<th>Evidence</th><th>Main risk / weakest evidence</th><th data-sort="num" data-research-heading>Research field</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
 <p class="scan-empty" data-empty="t-scan" hidden>No candidates match these filters. Clear the search or reset filters.
 To use Pinned tickers, first select a star beside a ticker.</p>
-<noscript><p class="small">All candidates are shown. Enable JavaScript to search, filter, sort or pin tickers.</p></noscript>
+{site_decisions.scanner_payload(snap, keys)}
+<noscript><p class="small">Open company pages for all decision fields. All candidates are shown. Enable JavaScript to search, filter, sort or pin tickers.</p></noscript>
 </section>'''
