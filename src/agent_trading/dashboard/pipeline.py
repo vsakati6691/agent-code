@@ -61,6 +61,7 @@ class Context:
     quotes: dict = field(default_factory=dict)
     histories: dict = field(default_factory=dict)
     facts: dict = field(default_factory=dict)
+    decision_extras: dict = field(default_factory=dict)
 
     def exclude(self, band: str, ticker: str, reason: str) -> None:
         self.excluded[band].setdefault(ticker, reason)
@@ -78,6 +79,9 @@ def _guard(ctx: Context, provider: str, fn, *args):
         ctx.problems.append(str(exc))
         return None, "not evaluated: request budget spent"
     except FetchError as exc:
+        if provider == "alphavantage" and "quota or entitlement" in str(exc):
+            ctx.budget_hit.add(provider)
+            ctx.problems.append(str(exc))
         if "attempts" in str(exc):
             ctx.transient_failures += 1
         return None, f"data unavailable ({exc})"
@@ -158,7 +162,7 @@ def _facts(ctx: Context, cik: int) -> tuple[Fundamentals | None, str | None]:
     elif not (raw.get("facts") or {}).get("us-gaap"):
         ctx.facts[cik] = (None, "no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)")
     else:
-        ctx.facts[cik] = (build_fundamentals(raw, ctx.as_of), None)
+        ctx.facts[cik] = (build_fundamentals(raw, ctx.as_of, max_quarters=spec.DECISION_RULES["max_quarters"]), None)
     return ctx.facts[cik]
 
 
@@ -373,11 +377,15 @@ def candidate_detail(ctx: Context, band: spec.Band, row: dict, bench: pd.Series,
         "cover_shares": f.cover_shares, "cover_shares_date": f.cover_shares_date,
     }
     next_earn = earnings.get(row["ticker"])
+    from . import decisions
+    research = decisions.build(f, m, df["close"], df["high"], ctx.as_of, next_earn, ctx.started,
+                               decision_enrichment(ctx, row) if band.key in spec.DECISION_RULES["growth_bands"] else None)
     return _clean({
         "ticker": row["ticker"], "name": row["name"], "sector": row["sector"], "band": band.key, "rank": s.rank,
         "price": row["close"], "price_date": ctx.as_of, "market_cap": m["market_cap"], "cik": row["cik"],
         "sources": {"price": SOURCES["cboe"], "fundamentals": SOURCES["sec"]},
         "data_timestamp": ctx.started, "composite": s.composite, "components": s.components,
+        "decision_research": research,
         "sub_scores": s.sub_scores, "metrics": m, "missing": s.missing, "confidence": s.confidence,
         "confidence_label": s.confidence_label, "flags": s.flags, "counterargument": s.counterargument,
         "thesis": scenarios.thesis(m, s.components), "bear_case": scenarios.bear_case(m, s.counterargument),
@@ -661,6 +669,35 @@ def tradable_only(ctx: Context, band: spec.Band, ranked: list, trad: Tradability
     return scoring.rank(kept)
 
 
+def decision_enrichment(ctx: Context, row: dict) -> dict:
+    """Current vendor estimates are display-only; never backfill a historical run."""
+    from .decision_sources import estimates, insider_net
+    from .decisions import field as value_field
+    ticker = row["ticker"]
+    if ticker in ctx.decision_extras:
+        return ctx.decision_extras[ticker]
+    out = {}
+    for method, key in (("overview", "estimates"), ("insider_transactions", "insider")):
+        fn = getattr(ctx.providers, method, None)
+        if ctx.as_of != as_of_for(datetime.now(timezone.utc)):
+            raw, why = None, "Current-only provider data cannot be backfilled into a historical snapshot"
+        elif not callable(fn):
+            raw, why = None, "Provider does not implement this dataset"
+        else:
+            raw, why = _guard(ctx, "alphavantage", fn, ticker)
+        if raw is None:
+            out[key + "_reason"] = why
+        elif key == "estimates":
+            out[key] = estimates(raw, ctx.started)
+        else:
+            out["insider_net"] = insider_net(raw, ctx.as_of, ctx.started)
+    fn = getattr(ctx.providers, "annual_filing", None)
+    raw, why = _guard(ctx, "sec", fn, row["cik"], ctx.as_of) if callable(fn) else (None, "Provider does not implement 10-K text retrieval")
+    out["business"] = raw or {"reason": why}
+    ctx.decision_extras[ticker] = out
+    return out
+
+
 def run(providers: Providers, as_of: date, previous: dict | None = None, options_enabled: bool = True,
         limit: int | None = None, tradability: Tradability | None = None,
         todo_out: list | None = None, watchlist: WatchlistConfig | None = None,
@@ -773,6 +810,8 @@ def run(providers: Providers, as_of: date, previous: dict | None = None, options
                 r["sector"] = sector_from_sic(sub.get("sic")) if sub else "Unknown"
         results[band.key] = (rows, ranked, top)
         details = [candidate_detail(ctx, band, r, bench[band.benchmark], earnings) for r in top]
+        from .decisions import add_percentiles
+        add_percentiles(details)
         if band.universe == "ai":
             for d in details:
                 d["ai_role"] = roles.get(d["ticker"])

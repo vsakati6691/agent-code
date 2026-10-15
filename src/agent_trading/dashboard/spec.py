@@ -209,11 +209,11 @@ LEGACY_BANDS = {"spec": {"title": "Speculative potential multibagger research ca
 
 BANDS = (
     Band("large", "Large-cap growth research candidates", "sp500", None, None, 5.0, 20e6, 10,
-         "SPY", "SPDR S&P 500 ETF (price return)", 15.0),
+         "SPY", "SPDR S&P 500 ETF (price return)", 15.0, profile="fundamental_growth"),
     Band("mid", "Mid-cap growth research candidates", "broad", 2e9, 10e9, 5.0, 5e6, 10,
-         "IJH", "iShares Core S&P Mid-Cap ETF (price return)", 25.0),
+         "IJH", "iShares Core S&P Mid-Cap ETF (price return)", 25.0, profile="fundamental_growth"),
     Band("small", "Small-cap growth research candidates", "broad", 300e6, 2e9, 2.0, 2e6, 10,
-         "IWM", "iShares Russell 2000 ETF (price return)", 50.0),
+         "IWM", "iShares Russell 2000 ETF (price return)", 50.0, profile="fundamental_growth"),
     Band("multibagger", "Speculative multibagger research candidates (5-10 year horizon)", "all", 500e6, 50e9, 5.0,
          5e6, 5, "IWM", "iShares Russell 2000 ETF (price return)", 35.0, profile="long_horizon",
          gates=(("revenue_growth_ttm", ">=", 0.15), ("revenue_cagr_3y", ">=", 0.15), ("gross_margin", ">=", 0.35),
@@ -420,7 +420,9 @@ LONG_HORIZON_COMPONENTS = (
     }),
     Component("momentum", _BY_KEY["momentum"].title, 0.05, False, _BY_KEY["momentum"].metrics),
 )
-PROFILES = {"standard": COMPONENTS, "long_horizon": LONG_HORIZON_COMPONENTS}
+GROWTH_COMPONENTS = tuple(Component(key, _BY_KEY[key].title, weight, _BY_KEY[key].critical, _BY_KEY[key].metrics)
+                          for key, weight in DECISION_RULES["growth_weights"].items())
+PROFILES = {"standard": COMPONENTS, "long_horizon": LONG_HORIZON_COMPONENTS, "fundamental_growth": GROWTH_COMPONENTS}
 GATE_NOTES = {
     "reported_quarters": "Number of reported quarters available (at least three years of history).",
     "survival": "1 when TTM free cash flow is positive, or cash and short-term investments cover at least two "

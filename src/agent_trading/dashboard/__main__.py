@@ -57,6 +57,8 @@ def cmd_run(args) -> int:
         return 0
     store.audit("run_started", as_of=as_of, commit=args.commit, limit=args.limit, options=not args.no_options)
     providers = _providers(Path(args.cache) if args.cache else None)
+    if hasattr(providers.http, "limits"):
+        providers.http.limits["alphavantage"].budget = spec.DECISION_RULES["weekly_av_attempts"]
     previous = store.latest(before=str(as_of))
     trad = Tradability.load(store.root)
     todo: list[dict] = []

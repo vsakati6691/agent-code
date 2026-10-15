@@ -376,7 +376,10 @@ def test_site_has_compare_page_research_panels_and_data_status(demo):
     assert 'id="cmp-data"' in cmp_page and "assets/compare.js" in cmp_page and (out / "assets" / "compare.js").exists()
     data = json.loads(re.search(r'<script type="application/json" id="cmp-data">(.*?)</script>', cmp_page, re.S)[1])
     assert data["rules"]["max_names"] == 4 and data["date_sets"]
-    stock = next((out / "stock").glob("large-*.html")).read_text(encoding="utf-8")
+    # A newly ranked first name may not have a previous record. Test comparison on a common name.
+    common = set.intersection(*({c["ticker"] for c in s["bands"]["large"]["candidates"]} for s in demo["snaps"]))
+    assert common
+    stock = (out / "stock" / f"large-{sorted(common)[0]}.html").read_text(encoding="utf-8")
     for text in ("Company research panel", "Earnings-quality checks", "Thesis conditions", "Missing information",
                  "Sources and dates", "Evidence quality", "Try your own assumptions", "Your experiment",
                  "What changed since the previous snapshot?", "Compared with the snapshot of", "assets/lab.js"):

@@ -393,3 +393,33 @@ class Providers:
             raise FetchError(str(exc)) from None
         df["symbol"] = df["symbol"].map(canonical)
         return df
+
+    def _overview_data(self, function: str, symbol: str) -> dict:
+        if not self.av_key:
+            raise FetchError("Alpha Vantage key not configured (ALPHAVANTAGE_API_KEY)")
+        from ..logging_setup import register_secret
+        register_secret(self.av_key)
+        raw = self.http.get_json(AV_URL, {"function": function, "symbol": symbol, "apikey": self.av_key}, max_age_hours=24)
+        if not isinstance(raw, dict) or not raw:
+            raise FetchError("Alpha Vantage returned no company data")
+        if raw.get("Note") or raw.get("Information"):
+            raise FetchError("Alpha Vantage quota or entitlement response; further enrichment stopped")
+        if raw.get("Error Message"):
+            raise FetchError("Alpha Vantage rejected company data request")
+        if function == "OVERVIEW" and canonical(raw.get("Symbol", "")) != canonical(symbol):
+            raise FetchError("Alpha Vantage company symbol missing or mismatched")
+        return raw
+
+    def overview(self, symbol: str) -> dict:
+        return self._overview_data("OVERVIEW", symbol)
+
+    def insider_transactions(self, symbol: str) -> dict:
+        return self._overview_data("INSIDER_TRANSACTIONS", symbol)
+
+    def annual_filing(self, cik: int, as_of: date) -> dict:
+        from .decision_sources import latest_10k, filing_excerpts
+        filing = latest_10k(self.submissions(cik), cik, as_of)
+        if filing is None:
+            raise FetchError("No dated 10-K primary document in recent SEC submissions")
+        url, filed = filing
+        return filing_excerpts(self.http.get_text(url, max_age_hours=168), url, filed)

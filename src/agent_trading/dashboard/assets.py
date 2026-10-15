@@ -515,3 +515,7 @@ JS = r"""
 
 CSS += SCAN_CSS
 JS += SCAN_JS
+
+from .assets_decisions import CSS as DECISION_CSS, JS as DECISION_JS
+CSS += DECISION_CSS
+JS += DECISION_JS

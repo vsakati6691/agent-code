@@ -566,3 +566,60 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 - **Debt:** total debt can be overstated when a filer's `LongTermDebt` tag already includes the current portion (conservative).
 - **Option events:** only scheduled earnings dates are checked, from Alpha Vantage, and they are labelled unverified because no verified calendar is reachable from CI. Ex-dividend dates and other corporate events before expiry are not.
 - **Thesis and invalidation text:** these are template-generated from the numbers. They summarize evidence; they are not analyst judgement.
+
+
+## Growth decision research (2026-10-14.9)
+
+New snapshots use a `fundamental_growth` profile for large/mid/small: revenue
+25%; earnings, quality, balance and valuation 18.75% each. The existing scales,
+missing-input penalties and eligibility gates remain. Momentum is displayed
+separately as the mean of the three normalized price/relative-return metrics;
+all three must be available. A one-year price return strictly above 150% is
+labelled extended. Historical snapshots and their tracked scores are unchanged.
+
+The scanner's Research field selector exposes every numeric field, business
+excerpt and trend with sorting, range/text filters and available/n/a filters.
+Percentage ranges use percentage points. Pins share the existing local device
+storage; sector concentration counts unique pinned tickers present in the scan,
+not invested capital. Company pages show every group simultaneously, sources,
+filing/price dates and a one-year closing-price sparkline.
+
+SEC company facts provide full fiscal-year revenue and diluted EPS for 3Y/5Y
+CAGR (positive endpoints, fiscal end dates within 45 days of the target year),
+direct latest-quarter EPS, quarterly revenue growth, TTM gross/operating/FCF
+margins and changes versus prior TTM. Revenue trend compares latest quarter YoY
+with preceding quarter YoY; ±2 percentage points is stable. Margin trends use
+±1 point. Shares compare the latest quarter with four quarters earlier, with no
+fallback to a different year. Missing annual EPS and nonpositive bases are n/a.
+
+Debt requires either a total-debt tag or all three current/long-term/short-term
+components. Missing components are not assumed zero. Cash means cash and cash
+equivalents, excluding short-term investments. Net debt / EBITDA preserves a
+negative net-cash numerator and requires positive EBITDA (operating income plus
+D&A). Coverage is operating income / positive interest expense. The displayed
+EV/Sales uses complete debt/cash; legacy score inputs keep their registered
+historical definitions. P/E is market cap / positive TTM net income, and FCF
+yield is (operating cash flow − capex) / market cap.
+
+Valuation percentiles rank available finite values within the same published
+list, not the whole market: 100 × (count below + (count equal − 1)/2)/(n − 1).
+At least two values are required. High means numerically high, not attractive.
+
+Alpha Vantage OVERVIEW supplies current forward P/E, PEG, analyst target and
+rating counts (all five categories required). These never enter scores or
+historical backfills. Weekly collection permits at most 61 attempts at the
+existing 13-second spacing; daily collection still permits one calendar call.
+A quota/entitlement response stops enrichment. The configured premium key is
+used only on the server. No keys, brokerage data or paid new sources reach Pages.
+
+INSIDER_TRANSACTIONS currently provides A/D classifications without Form 4
+P/S codes. Grants, vesting, gifts and exercises cannot be called purchases:
+net buying/selling therefore displays n/a with that reason. When unambiguous
+P/S codes are supplied, net shares cover six calendar months, excluding future
+transactions. Empty or incomplete source responses are not zero buying.
+
+The latest eligible 10-K primary document is fetched through the existing SEC
+allow-list. Deterministic section/sentence extraction supplies issuer business,
+growth and risk excerpts with filing date and source link; ambiguous sections
+stay n/a. These are issuer statements, not independent forecasts. Existing
+snapshots have n/a for fields they never collected; no history is rewritten.

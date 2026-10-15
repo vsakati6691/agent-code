@@ -29,6 +29,7 @@ FLOW_TAGS = {
     "sbc": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
     "dna": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization",
             "DepreciationAmortizationAndAccretionNet"],
+    "interest_expense": ["InterestExpense", "InterestAndDebtExpense", "InterestExpenseDebt"],
 }
 SHARE_TAGS = ["WeightedAverageNumberOfDilutedSharesOutstanding"]
 INSTANT_TAGS = {
@@ -42,6 +43,7 @@ INSTANT_TAGS = {
     "current_assets": ["AssetsCurrent"],
     "current_liabilities": ["LiabilitiesCurrent"],
     "equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
+    "debt_total": ["LongTermDebtAndShortTermBorrowings"],
 }
 CONCENTRATION_TAG = "ConcentrationRiskPercentage1"
 
@@ -65,6 +67,8 @@ class Fundamentals:
     last_form: str | None
     concentration: float | None = None
     notes: list[str] = field(default_factory=list)
+    annual: dict[str, dict[str, float]] = field(default_factory=dict)
+    quarterly_eps: list[float | None] = field(default_factory=list)
 
     @property
     def n_quarters(self) -> int:
@@ -83,7 +87,8 @@ def _facts(group: dict, tag: str, unit_ok, as_of: date) -> list[dict]:
         if not unit_ok(unit):
             continue
         for f in arr:
-            if f.get("form") in FORMS and f.get("filed") and _d(f["filed"]) <= as_of:
+            if (f.get("form") in FORMS and f.get("filed") and _d(f["filed"]) <= as_of
+                    and f.get("end") and _d(f["end"]) <= as_of):
                 out.append(f)
     return out
 
@@ -154,6 +159,7 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
     usd = lambda u: u == "USD"   # noqa: E731
     series = {k: _quarterly(gaap, tags, usd, as_of) for k, tags in FLOW_TAGS.items()}
     shares = _quarterly(gaap, SHARE_TAGS, lambda u: u == "shares", as_of, additive=False)
+    eps = _quarterly(gaap, ["EarningsPerShareDiluted"], lambda u: u == "USD/shares", as_of, additive=False)
 
     anchor = series["revenue"] or series["net_income"]
     ends: list[str] = []
@@ -203,7 +209,27 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
         instants=instants, cover_shares=cover, cover_shares_date=cover_date,
         last_filed=last["filed"] if last else None, last_form=last["form"] if last else None,
         concentration=conc[0] if conc else None,
+        annual={"revenue": annual_series(gaap, FLOW_TAGS["revenue"], "USD", as_of),
+                "eps": annual_series(gaap, ["EarningsPerShareDiluted"], "USD/shares", as_of)},
+        quarterly_eps=[v[0] if v else None for v in (_near(eps, e) for e in ends)],
     )
+
+
+def annual_series(group: dict, tags: list[str], unit: str, as_of: date) -> dict[str, float]:
+    """Full fiscal years, one consistent tag; latest available restatement wins."""
+    candidates = []
+    for tag in tags:
+        by_end = {}
+        for f in _facts(group, tag, lambda u: u == unit, as_of):
+            if not f.get("start") or not 330 <= (_d(f["end"]) - _d(f["start"])).days <= 380:
+                continue
+            old = by_end.get(f["end"])
+            if old is None or _rank(f) > _rank(old):
+                by_end[f["end"]] = f
+        if by_end:
+            candidates.append(by_end)
+    best = max(candidates, key=lambda x: (max(x), len(x)), default={})
+    return {end: float(f["val"]) for end, f in best.items()}
 
 
 def ttm(values: list[float | None], offset: int = 0) -> float | None:
