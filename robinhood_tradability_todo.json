@@ -1,6 +1,31 @@
 {
- "as_of": "2026-10-13",
- "count": 0,
+ "as_of": "2026-10-14",
+ "count": 4,
  "instructions": "Check with the read-only Robinhood get_equity_tradability tool (Agent-trading account, at most 10 symbols per call), save each response, then run: python -m agent_trading.dashboard tradability import --data <dir> <files>",
- "symbols": []
+ "symbols": [
+  {
+   "ticker": "TPR",
+   "band": "large",
+   "composite": 69.75,
+   "reason": "Robinhood tradability not yet verified"
+  },
+  {
+   "ticker": "VIAV",
+   "band": "mid",
+   "composite": 73.91,
+   "reason": "Robinhood tradability not yet verified"
+  },
+  {
+   "ticker": "OII",
+   "band": "mid",
+   "composite": 72.9,
+   "reason": "Robinhood tradability not yet verified"
+  },
+  {
+   "ticker": "INNV",
+   "band": "small",
+   "composite": 70.82,
+   "reason": "Robinhood tradability not yet verified"
+  }
+ ]
 }
