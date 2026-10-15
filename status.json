@@ -1,6 +1,7 @@
 {
  "status": "ok",
- "message": "snapshot for 2026-10-14 already exists; kept unchanged",
- "as_of": "2026-10-14",
- "at": "2026-10-15T14:30:32+00:00"
+ "message": "weekly update completed",
+ "as_of": "2026-10-15",
+ "at": "2026-10-15T16:52:09+00:00",
+ "problems": []
 }

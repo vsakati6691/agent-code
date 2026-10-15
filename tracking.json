@@ -1,6 +1,6 @@
 {
  "method": "Each weekly snapshot's ranked candidates form an equal-weighted research basket per category, bought at the as-of close and held for 1, 3, 6 and 12 months. Returns are PRICE returns (dividends excluded) minus the category's assumed friction on entry and exit, compared with the category benchmark over the same days. A candidate whose prices stop (delisting, ticker change) is reported as 'return unavailable' and counted in a separate column, never silently dropped; delisting returns are not available from the data sources. Turnover is the share of a category's names that changed from the previous week. No edge is claimed before at least 52 weekly snapshots exist, and none is claimed afterwards without a statistical test.",
- "as_of": "2026-10-14",
+ "as_of": "2026-10-15",
  "by_snapshot": [
   {
    "as_of": "2026-10-13",
@@ -101,6 +101,150 @@
   {
    "as_of": "2026-10-14",
    "spec_version": "2026-10-14.8",
+   "band": "ai_large",
+   "n": 5,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-14",
+   "spec_version": "2026-10-14.8",
+   "band": "ai_mid",
+   "n": 3,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-14",
+   "spec_version": "2026-10-14.8",
+   "band": "large",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-14",
+   "spec_version": "2026-10-14.8",
+   "band": "mid",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-14",
+   "spec_version": "2026-10-14.8",
+   "band": "multibagger",
+   "n": 5,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-14",
+   "spec_version": "2026-10-14.8",
+   "band": "small",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-15",
+   "spec_version": "2026-10-14.9",
    "band": "ai_large",
    "n": 5,
    "horizons": {
@@ -207,10 +351,10 @@
    }
   },
   {
-   "as_of": "2026-10-14",
-   "spec_version": "2026-10-14.8",
+   "as_of": "2026-10-15",
+   "spec_version": "2026-10-14.9",
    "band": "ai_mid",
-   "n": 3,
+   "n": 4,
    "horizons": {
     "1m": {
      "status": "unavailable",
@@ -221,6 +365,10 @@
       },
       {
        "ticker": "APLD",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "IREN",
        "status": "no close on the snapshot date"
       },
       {
@@ -241,6 +389,10 @@
        "status": "no close on the snapshot date"
       },
       {
+       "ticker": "IREN",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "CORZ",
        "status": "no close on the snapshot date"
       }
@@ -255,6 +407,10 @@
       },
       {
        "ticker": "APLD",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "IREN",
        "status": "no close on the snapshot date"
       },
       {
@@ -275,6 +431,10 @@
        "status": "no close on the snapshot date"
       },
       {
+       "ticker": "IREN",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "CORZ",
        "status": "no close on the snapshot date"
       }
@@ -283,8 +443,8 @@
    }
   },
   {
-   "as_of": "2026-10-14",
-   "spec_version": "2026-10-14.8",
+   "as_of": "2026-10-15",
+   "spec_version": "2026-10-14.9",
    "band": "large",
    "n": 10,
    "horizons": {
@@ -300,19 +460,7 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "STX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "HPE",
+       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       },
       {
@@ -320,15 +468,27 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AMD",
+       "ticker": "TER",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "AVGO",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PLTR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "DELL",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "STX",
        "status": "no close on the snapshot date"
       },
       {
        "ticker": "WDC",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       }
      ]
@@ -345,19 +505,7 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "STX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "HPE",
+       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       },
       {
@@ -365,15 +513,27 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AMD",
+       "ticker": "TER",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "AVGO",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PLTR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "DELL",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "STX",
        "status": "no close on the snapshot date"
       },
       {
        "ticker": "WDC",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       }
      ]
@@ -390,19 +550,7 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "STX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "HPE",
+       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       },
       {
@@ -410,15 +558,27 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AMD",
+       "ticker": "TER",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "AVGO",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PLTR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "DELL",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "STX",
        "status": "no close on the snapshot date"
       },
       {
        "ticker": "WDC",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       }
      ]
@@ -435,19 +595,7 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "STX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "HPE",
+       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       },
       {
@@ -455,15 +603,27 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AMD",
+       "ticker": "TER",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "AVGO",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PLTR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "DELL",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "STX",
        "status": "no close on the snapshot date"
       },
       {
        "ticker": "WDC",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NVDA",
        "status": "no close on the snapshot date"
       }
      ]
@@ -471,8 +631,8 @@
    }
   },
   {
-   "as_of": "2026-10-14",
-   "spec_version": "2026-10-14.8",
+   "as_of": "2026-10-15",
+   "spec_version": "2026-10-14.9",
    "band": "mid",
    "n": 10,
    "horizons": {
@@ -492,6 +652,14 @@
        "status": "no close on the snapshot date"
       },
       {
+       "ticker": "AGX",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "SHOO",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "RELY",
        "status": "no close on the snapshot date"
       },
@@ -500,23 +668,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VSXY",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "PARR",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "SHOO",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "FIVN",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "ECPG",
+       "ticker": "SSRM",
        "status": "no close on the snapshot date"
       }
      ]
@@ -537,6 +697,14 @@
        "status": "no close on the snapshot date"
       },
       {
+       "ticker": "AGX",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "SHOO",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "RELY",
        "status": "no close on the snapshot date"
       },
@@ -545,23 +713,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VSXY",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "PARR",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "SHOO",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "FIVN",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "ECPG",
+       "ticker": "SSRM",
        "status": "no close on the snapshot date"
       }
      ]
@@ -582,6 +742,14 @@
        "status": "no close on the snapshot date"
       },
       {
+       "ticker": "AGX",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "SHOO",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "RELY",
        "status": "no close on the snapshot date"
       },
@@ -590,23 +758,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VSXY",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "PARR",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "SHOO",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "FIVN",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "ECPG",
+       "ticker": "SSRM",
        "status": "no close on the snapshot date"
       }
      ]
@@ -627,6 +787,14 @@
        "status": "no close on the snapshot date"
       },
       {
+       "ticker": "AGX",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "SHOO",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "RELY",
        "status": "no close on the snapshot date"
       },
@@ -635,23 +803,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VSXY",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "PARR",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "SHOO",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "FIVN",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "ECPG",
+       "ticker": "SSRM",
        "status": "no close on the snapshot date"
       }
      ]
@@ -659,8 +819,8 @@
    }
   },
   {
-   "as_of": "2026-10-14",
-   "spec_version": "2026-10-14.8",
+   "as_of": "2026-10-15",
+   "spec_version": "2026-10-14.9",
    "band": "multibagger",
    "n": 5,
    "horizons": {
@@ -767,8 +927,8 @@
    }
   },
   {
-   "as_of": "2026-10-14",
-   "spec_version": "2026-10-14.8",
+   "as_of": "2026-10-15",
+   "spec_version": "2026-10-14.9",
    "band": "small",
    "n": 10,
    "horizons": {
@@ -776,19 +936,11 @@
      "status": "unavailable",
      "unavailable": [
       {
+       "ticker": "MAMA",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "NWPX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "PAYS",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "KRT",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       },
       {
@@ -796,15 +948,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "FLXS",
+       "ticker": "PAYS",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "MAMA",
+       "ticker": "PKE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "LQDT",
+       "ticker": "LINC",
        "status": "no close on the snapshot date"
       },
       {
@@ -812,7 +964,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "OOMA",
+       "ticker": "KRT",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "VMD",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       }
      ]
@@ -821,19 +981,11 @@
      "status": "unavailable",
      "unavailable": [
       {
+       "ticker": "MAMA",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "NWPX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "PAYS",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "KRT",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       },
       {
@@ -841,15 +993,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "FLXS",
+       "ticker": "PAYS",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "MAMA",
+       "ticker": "PKE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "LQDT",
+       "ticker": "LINC",
        "status": "no close on the snapshot date"
       },
       {
@@ -857,7 +1009,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "OOMA",
+       "ticker": "KRT",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "VMD",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       }
      ]
@@ -866,19 +1026,11 @@
      "status": "unavailable",
      "unavailable": [
       {
+       "ticker": "MAMA",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "NWPX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "PAYS",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "KRT",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       },
       {
@@ -886,15 +1038,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "FLXS",
+       "ticker": "PAYS",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "MAMA",
+       "ticker": "PKE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "LQDT",
+       "ticker": "LINC",
        "status": "no close on the snapshot date"
       },
       {
@@ -902,7 +1054,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "OOMA",
+       "ticker": "KRT",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "VMD",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       }
      ]
@@ -911,19 +1071,11 @@
      "status": "unavailable",
      "unavailable": [
       {
+       "ticker": "MAMA",
+       "status": "no close on the snapshot date"
+      },
+      {
        "ticker": "NWPX",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "PAYS",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "KRT",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       },
       {
@@ -931,15 +1083,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "FLXS",
+       "ticker": "PAYS",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "MAMA",
+       "ticker": "PKE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "LQDT",
+       "ticker": "LINC",
        "status": "no close on the snapshot date"
       },
       {
@@ -947,7 +1099,15 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "OOMA",
+       "ticker": "KRT",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "VMD",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "NUTX",
        "status": "no close on the snapshot date"
       }
      ]
@@ -977,7 +1137,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": null
+   "mean_weekly_turnover": 0.0
   },
   "ai_mid": {
    "1m": {
@@ -1000,7 +1160,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": null
+   "mean_weekly_turnover": 0.0
   },
   "large": {
    "1m": {
@@ -1023,7 +1183,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.0
+   "mean_weekly_turnover": 0.09999999999999998
   },
   "mid": {
    "1m": {
@@ -1046,7 +1206,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.09999999999999998
+   "mean_weekly_turnover": 0.25
   },
   "multibagger": {
    "1m": {
@@ -1092,7 +1252,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.09999999999999998
+   "mean_weekly_turnover": 0.2
   }
  },
  "turnover": {
@@ -1100,17 +1260,29 @@
    {
     "as_of": "2026-10-14",
     "turnover": 0.0
+   },
+   {
+    "as_of": "2026-10-15",
+    "turnover": 0.19999999999999996
    }
   ],
   "mid": [
    {
     "as_of": "2026-10-14",
     "turnover": 0.09999999999999998
+   },
+   {
+    "as_of": "2026-10-15",
+    "turnover": 0.4
    }
   ],
   "multibagger": [
    {
     "as_of": "2026-10-14",
+    "turnover": 0.0
+   },
+   {
+    "as_of": "2026-10-15",
     "turnover": 0.0
    }
   ],
@@ -1118,11 +1290,27 @@
    {
     "as_of": "2026-10-14",
     "turnover": 0.09999999999999998
+   },
+   {
+    "as_of": "2026-10-15",
+    "turnover": 0.30000000000000004
+   }
+  ],
+  "ai_large": [
+   {
+    "as_of": "2026-10-15",
+    "turnover": 0.0
+   }
+  ],
+  "ai_mid": [
+   {
+    "as_of": "2026-10-15",
+    "turnover": 0.0
    }
   ]
  },
  "weekly_chain": {},
- "evidence_note": "2 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first.",
+ "evidence_note": "3 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first.",
  "friction": {
   "spec": 50.0,
   "large": 15.0,
