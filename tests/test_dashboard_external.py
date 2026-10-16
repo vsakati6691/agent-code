@@ -224,6 +224,33 @@ def test_risk_refresh_max_two_attempts_retains_prior_excerpt():
     assert len(session.calls) == 2
 
 
+def test_legacy_risk_quotation_is_reused_without_efts_when_current():
+    c, session = http([])
+    p = Providers(c)
+    p._submissions[123] = {
+        "filings": {
+            "recent": {
+                "form": ["10-K"],
+                "filingDate": ["2026-02-01"],
+                "accessionNumber": ["0000000123-26-000001"],
+                "primaryDocument": ["annual.htm"],
+            }
+        }
+    }
+    ctx = SimpleNamespace(as_of=AS_OF, providers=p)
+    prior = {
+        "legacy_business": {
+            "risk": "Previously stored issuer quotation.",
+            "filed": "2026-02-01",
+            "url": "https://www.sec.gov/Archives/annual.htm",
+        }
+    }
+    result = pipeline_external._risk(ctx, 123, prior, {})
+    assert result["excerpt"] == prior["legacy_business"]["risk"]
+    assert result["state"] == "available" and result["character_range"] is None
+    assert "Legacy" in result["range_reason"] and not session.calls
+
+
 def test_fred_vintage_cpi_dates_and_missing_year_prior():
     raw = json.loads(fixture("fred.json"))
     result = macro.parse_series(raw["observations"], raw["metadata"], "CPIAUCSL", AS_OF)

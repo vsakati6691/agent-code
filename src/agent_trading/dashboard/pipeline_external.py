@@ -122,21 +122,23 @@ def _short(providers, as_of: date) -> dict:
 
 def _risk(ctx, cik: int, previous: dict, business: dict) -> dict:
     prior = previous.get("risk_excerpt") or {}
-    if (business.get("risk_record") or {}).get("excerpt") and (business["risk_record"].get("filed") or "") >= (
-        prior.get("filed") or ""
-    ):
-        prior = business["risk_record"]
-    if not prior.get("excerpt") and business.get("risk"):
-        prior = {
-            "state": "available",
-            "excerpt": business["risk"],
-            "filed": business.get("filed"),
-            "url": business.get("url"),
-            "form": "10-K",
-            "reason": None,
-            "character_range": None,
-            "range_reason": "Legacy stored excerpt has no character offsets",
-        }
+    # The immediately preceding snapshot can predate external.risk_excerpt.
+    # Its original decision-research quotation is still reusable evidence.
+    for existing in (previous.get("legacy_business") or {}, business):
+        candidate = existing.get("risk_record") or {}
+        if not candidate.get("excerpt") and existing.get("risk"):
+            candidate = {
+                "state": "available",
+                "excerpt": existing["risk"],
+                "filed": existing.get("filed"),
+                "url": existing.get("url"),
+                "form": "10-K",
+                "reason": None,
+                "character_range": None,
+                "range_reason": "Legacy stored excerpt has no character offsets",
+            }
+        if candidate.get("excerpt") and (candidate.get("filed") or "") >= (prior.get("filed") or ""):
+            prior = candidate
     try:
         # Reuse submissions obtained for the insider list; no extra risk lookup outside the two-attempt cap.
         sub = getattr(ctx.providers, "_submissions", {}).get(cik, {})
@@ -175,7 +177,13 @@ def _risk(ctx, cik: int, previous: dict, business: dict) -> dict:
 def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None) -> dict:
     companies = subjects(bands, watchlist)
     previous_companies = subjects((previous or {}).get("bands", {}), (previous or {}).get("watchlist", {}))
-    prior = {t: rows[0].get("external", {}) for t, rows in previous_companies.items()}
+    prior = {
+        t: {
+            **(rows[0].get("external") or {}),
+            "legacy_business": (rows[0].get("decision_research") or {}).get("business") or {},
+        }
+        for t, rows in previous_companies.items()
+    }
     summaries = {}
     current_collection = ctx.as_of == as_of_for(datetime.fromisoformat(ctx.started))
     try:
