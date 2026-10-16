@@ -283,6 +283,30 @@ def test_every_page_has_exactly_one_h1(site):
     assert all(n == 1 for _, n in wrong), [w for w in wrong if w[1] != 1]
 
 
+def test_favicon_and_404_work_for_nested_missing_paths(site):
+    from xml.etree import ElementTree
+
+    icon = site / "assets" / "favicon.svg"
+    assert ElementTree.fromstring(icon.read_text(encoding="utf-8")).tag.endswith("svg")
+    assert "T/S" in icon.read_text(encoding="utf-8")
+    fallback = (site / "404.html").read_text(encoding="utf-8")
+    assert '<base href="https://vsakati6691.github.io/agent-code/">' in fallback
+    assert '<a href="index.html">Return to the research overview</a>' in fallback
+    for path in site.rglob("*.html"):
+        assert 'rel="icon" type="image/svg+xml"' in path.read_text(encoding="utf-8")
+
+
+def test_empty_site_has_working_fallback_and_navigation(tmp_path):
+    from agent_trading.dashboard.site import build_site
+    from tests.dashboard_ci import check_links
+
+    out = tmp_path / "site"
+    result = build_site(tmp_path / "data", out)
+    assert result["snapshot"] is None
+    assert (out / "404.html").is_file()
+    assert check_links(out) == []
+
+
 def test_excluded_lists_live_on_their_own_compact_pages(site):
     index = (site / "growth.html").read_text(encoding="utf-8")
     assert re.search(r'href="excluded-(mid|small|multibagger).html"', index) and "<th>Reason</th>" not in index

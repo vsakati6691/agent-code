@@ -30,6 +30,7 @@ from . import (
     lab,
     probability,
     research,
+    site_basics,
     site_bets,
     site_refresh,
     spec,
@@ -126,6 +127,7 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{E(title)} · {E(brand())}</title>
+<link rel="icon" type="image/svg+xml" href="{up}assets/favicon.svg">
 <meta name="robots" content="noindex">
 <script>try{{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}}catch(e){{}}</script>
 <link rel="stylesheet" href="{up}assets/style.css{_SITE["v"]}">
@@ -872,6 +874,8 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     if out.exists():
         shutil.rmtree(out)
     (out / "assets").mkdir(parents=True)
+    _SYMBOLS.clear()
+    (out / "assets" / "favicon.svg").write_text(site_basics.FAVICON_SVG, encoding="utf-8")
     # a content hash in every asset link, so a browser never pairs new pages with a cached old stylesheet or script
     _SITE["v"] = (
         "?v="
@@ -893,6 +897,12 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "assets" / "lab.js").write_text(assets_research.LAB_JS, encoding="utf-8")
     (out / "assets" / "bets.js").write_text(assets_bets.JS, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
+
+    def write_fallback():
+        fallback = page("Page not found", site_basics.NOT_FOUND, "")
+        fallback = fallback.replace("<head>", f'<head><base href="{site_basics.PAGES_BASE}">', 1)
+        (out / "404.html").write_text(fallback, encoding="utf-8")
+
     status = store.status()
     if not dates:
         msg = (status or {}).get("message", "no weekly snapshot has been produced yet")
@@ -905,10 +915,17 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
             page("Methodology", methodology_page(), "methodology.html"), encoding="utf-8"
         )
         (out / "bets.html").write_text(page("Small bets", site_bets.bets_page({}, None), "bets.html"), encoding="utf-8")
-        return {"pages": 5, "snapshot": None}
+        for rel, title in NAV:
+            if not (out / rel).exists():
+                empty = f"<h1>{E(title)}</h1><p>No research data available. {E(msg)}</p>"
+                (out / rel).write_text(page(title, empty, rel), encoding="utf-8")
+        (out / "feed.xml").write_text(atom_feed([]), encoding="utf-8")
+        write_fallback()
+        return {"pages": len(list(out.rglob("*.html"))), "snapshot": None}
     snap = store.load(dates[-1])
     _SYMBOLS.clear()
     _SYMBOLS.update(symbol_index(snap))
+    write_fallback()
     hits = find_private_keys(snap)
     if hits:
         raise RuntimeError(f"refusing to publish: private-looking fields {hits[:5]}")
