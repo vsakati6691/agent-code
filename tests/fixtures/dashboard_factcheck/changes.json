@@ -1,0 +1,1209 @@
+{
+  "source": "research-data d8666d8095614a2a1a53c050ccede55d65d7769a",
+  "snapshots": [
+    {
+      "as_of": "2026-10-14",
+      "spec_version": "2026-10-14.8",
+      "bands": {
+        "ai_large": {
+          "candidates": [
+            {
+              "band": "ai_large",
+              "cik": 1137789,
+              "composite": 81.27,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-27)",
+                "last_results": "2026-07-28",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-10-27",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-04",
+                "last_form": "10-K",
+                "quarters": [
+                  "2026-07-03",
+                  "2026-04-03",
+                  "2026-01-02",
+                  "2025-10-03",
+                  "2025-06-27",
+                  "2025-03-28",
+                  "2024-12-27",
+                  "2024-09-27"
+                ],
+                "revenue": [
+                  3629000000.0,
+                  3112000000.0,
+                  2825000000.0,
+                  2629000000.0,
+                  2444000000.0,
+                  2160000000.0,
+                  2325000000.0,
+                  2168000000.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.04913758523866827,
+                "current_ratio": 1.669651423089223,
+                "dilution": 0.06018518518518512,
+                "enterprise_value": 163580929373.72,
+                "ev_to_sales": 13.413770346348503,
+                "ev_to_sales_per_growth": 0.3938833726298654,
+                "excess_12m": 2.089889331432997,
+                "excess_6m": 0.2737258365684614,
+                "fcf_growth_ttm": 2.795843520782396,
+                "fcf_margin": 0.25461254612546125,
+                "fcf_margin_change": 0.1646927923604838,
+                "fcf_ttm": 3105000000.0,
+                "fcf_yield": 0.01919985998030353,
+                "gross_margin": 0.45576055760557604,
+                "growth_acceleration": 0.18968335332540587,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": -0.1301086437249177,
+                "implied_revenue_cagr": 0.4706604739986344,
+                "log_market_cap": 11.208763542996719,
+                "market_cap": 161719929373.72,
+                "net_debt": 1861000000.0,
+                "net_debt_to_ebitda": 0.425858123569794,
+                "net_income_ttm": 3184000000.0,
+                "operating_income_growth_ttm": 1.1661375661375661,
+                "operating_income_ttm": 4094000000.0,
+                "operating_margin": 0.33571135711357114,
+                "operating_margin_change": 0.1279505568497479,
+                "pe": 50.791435104811555,
+                "reported_quarters": 16.0,
+                "return_12_1": 2.5160584939182726,
+                "return_12m": 2.2506036171472825,
+                "return_6m": 0.37324865280985353,
+                "revenue_cagr_3y": 0.18203419083564842,
+                "revenue_growth_ttm": 0.3405518302737167,
+                "revenue_ttm": 12195000000.0,
+                "roic": 0.8029443892750745,
+                "sbc_to_revenue": 0.017466174661746617,
+                "survival": 1.0
+              },
+              "missing": [],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.06018518518518512,
+                    "exit_ev_to_sales": 10.060327759761378,
+                    "fcf_margin_end": 0.25461254612546125,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.3405518302737167,
+                      0.28044146421897337,
+                      0.2323531713751787,
+                      0.19388253710014294,
+                      0.16310602968011434,
+                      0.13848482374409146,
+                      0.11878785899527317,
+                      0.10303028719621854,
+                      0.09042422975697484,
+                      0.08033938380557987
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.3405518302737167
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.07018518518518511,
+                    "exit_ev_to_sales": 6.706885173174252,
+                    "fcf_margin_end": 0.20461254612546126,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.12027591513685836,
+                      0.10422073210948668,
+                      0.09137658568758934,
+                      0.08110126855007148,
+                      0.07288101484005718,
+                      0.06630481187204575,
+                      0.061043849497636596,
+                      0.056835079598109274,
+                      0.05346806367848742,
+                      0.050774450942789935
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.12027591513685836
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.05518518518518512,
+                    "exit_ev_to_sales": 13.413770346348503,
+                    "fcf_margin_end": 0.30461254612546124,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.4727173793558317,
+                      0.38617390348466535,
+                      0.3169391227877323,
+                      0.2615512982301858,
+                      0.21724103858414864,
+                      0.1817928308673189,
+                      0.15343426469385513,
+                      0.1307474117550841,
+                      0.11259792940406727,
+                      0.09807834352325381
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.4727173793558317
+                  }
+                }
+              },
+              "ticker": "STX"
+            }
+          ]
+        },
+        "ai_mid": {
+          "candidates": []
+        },
+        "large": {
+          "candidates": [
+            {
+              "band": "large",
+              "cik": 1137789,
+              "composite": 81.27,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-27)",
+                "last_results": "2026-07-28",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-10-27",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-04",
+                "last_form": "10-K",
+                "quarters": [
+                  "2026-07-03",
+                  "2026-04-03",
+                  "2026-01-02",
+                  "2025-10-03",
+                  "2025-06-27",
+                  "2025-03-28",
+                  "2024-12-27",
+                  "2024-09-27"
+                ],
+                "revenue": [
+                  3629000000.0,
+                  3112000000.0,
+                  2825000000.0,
+                  2629000000.0,
+                  2444000000.0,
+                  2160000000.0,
+                  2325000000.0,
+                  2168000000.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.04913758523866827,
+                "current_ratio": 1.669651423089223,
+                "dilution": 0.06018518518518512,
+                "enterprise_value": 163580929373.72,
+                "ev_to_sales": 13.413770346348503,
+                "ev_to_sales_per_growth": 0.3938833726298654,
+                "excess_12m": 2.089889331432997,
+                "excess_6m": 0.2737258365684614,
+                "fcf_growth_ttm": 2.795843520782396,
+                "fcf_margin": 0.25461254612546125,
+                "fcf_margin_change": 0.1646927923604838,
+                "fcf_ttm": 3105000000.0,
+                "fcf_yield": 0.01919985998030353,
+                "gross_margin": 0.45576055760557604,
+                "growth_acceleration": 0.18968335332540587,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": -0.1301086437249177,
+                "implied_revenue_cagr": 0.4706604739986344,
+                "log_market_cap": 11.208763542996719,
+                "market_cap": 161719929373.72,
+                "net_debt": 1861000000.0,
+                "net_debt_to_ebitda": 0.425858123569794,
+                "net_income_ttm": 3184000000.0,
+                "operating_income_growth_ttm": 1.1661375661375661,
+                "operating_income_ttm": 4094000000.0,
+                "operating_margin": 0.33571135711357114,
+                "operating_margin_change": 0.1279505568497479,
+                "pe": 50.791435104811555,
+                "reported_quarters": 16.0,
+                "return_12_1": 2.5160584939182726,
+                "return_12m": 2.2506036171472825,
+                "return_6m": 0.37324865280985353,
+                "revenue_cagr_3y": 0.18203419083564842,
+                "revenue_growth_ttm": 0.3405518302737167,
+                "revenue_ttm": 12195000000.0,
+                "roic": 0.8029443892750745,
+                "sbc_to_revenue": 0.017466174661746617,
+                "survival": 1.0
+              },
+              "missing": [],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.06018518518518512,
+                    "exit_ev_to_sales": 10.060327759761378,
+                    "fcf_margin_end": 0.25461254612546125,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.3405518302737167,
+                      0.28044146421897337,
+                      0.2323531713751787,
+                      0.19388253710014294,
+                      0.16310602968011434
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.3405518302737167
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.07018518518518511,
+                    "exit_ev_to_sales": 6.706885173174252,
+                    "fcf_margin_end": 0.20461254612546126,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.12027591513685836,
+                      0.10422073210948668,
+                      0.09137658568758934,
+                      0.08110126855007148,
+                      0.07288101484005718
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.12027591513685836
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.05518518518518512,
+                    "exit_ev_to_sales": 13.413770346348503,
+                    "fcf_margin_end": 0.30461254612546124,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.4727173793558317,
+                      0.38617390348466535,
+                      0.3169391227877323,
+                      0.2615512982301858,
+                      0.21724103858414864
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.4727173793558317
+                  }
+                }
+              },
+              "ticker": "STX"
+            }
+          ]
+        },
+        "mid": {
+          "candidates": []
+        },
+        "multibagger": {
+          "candidates": [
+            {
+              "band": "multibagger",
+              "cik": 1496443,
+              "composite": 83.01,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-12)",
+                "last_results": "2026-08-05",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-11-11",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-06",
+                "last_form": "10-Q",
+                "quarters": [
+                  "2026-06-30",
+                  "2026-03-31",
+                  "2025-12-31",
+                  "2025-09-30",
+                  "2025-06-30",
+                  "2025-03-31",
+                  "2024-12-31",
+                  "2024-09-30"
+                ],
+                "revenue": [
+                  28252071.0,
+                  28038424.0,
+                  22755196.0,
+                  21596478.0,
+                  19078353.0,
+                  18598149.0,
+                  15606448.0,
+                  15256431.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.1866023644951942,
+                "current_ratio": 1.1391741595569271,
+                "dilution": 0.07090113445948365,
+                "enterprise_value": 684734918.96,
+                "ev_to_sales": 6.803658205736802,
+                "ev_to_sales_per_growth": 0.14525795141430428,
+                "excess_12m": 1.6611743521147482,
+                "excess_6m": 1.6064431646977655,
+                "fcf_growth_ttm": -1.0,
+                "fcf_margin": 0.730413461180472,
+                "fcf_margin_change": 0.8565531618001785,
+                "fcf_ttm": 73510395.0,
+                "fcf_yield": 0.08588001220566205,
+                "gross_margin": 0.6099523550610282,
+                "growth_acceleration": 0.14963537702966256,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": 0.18442677863927837,
+                "implied_revenue_cagr": 0.2839577840984564,
+                "log_market_cap": 8.932456658901229,
+                "market_cap": 855966284.96,
+                "net_debt": -171231366.0,
+                "net_debt_to_ebitda": 0.0,
+                "net_income_ttm": 15773207.0,
+                "operating_income_growth_ttm": 2.368569587486833,
+                "operating_income_ttm": 17115217.0,
+                "operating_margin": 0.1700600967771273,
+                "operating_margin_change": 0.09592963446670755,
+                "pe": 54.26710528556431,
+                "reported_quarters": 16.0,
+                "return_12_1": 1.2248628884826327,
+                "return_12m": 1.7714808043875685,
+                "return_6m": 1.613793103448276,
+                "revenue_cagr_3y": 0.3339601249264641,
+                "revenue_growth_ttm": 0.46838456273773477,
+                "revenue_ttm": 100642169.0,
+                "roic": null,
+                "sbc_to_revenue": 0.05138600500551613,
+                "survival": 1.0
+              },
+              "missing": [
+                "roic"
+              ],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.07090113445948365,
+                    "exit_ev_to_sales": 5.102743654302602,
+                    "fcf_margin_end": 0.730413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.46838456273773477,
+                      0.3827076501901878,
+                      0.31416612015215023,
+                      0.25933289612172017,
+                      0.21546631689737614,
+                      0.1803730535179009,
+                      0.1522984428143207,
+                      0.12983875425145655,
+                      0.11187100340116524,
+                      0.0974968027209322
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.46838456273773477
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.08090113445948365,
+                    "exit_ev_to_sales": 3.401829102868401,
+                    "fcf_margin_end": 0.680413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.1841922813688674,
+                      0.1553538250950939,
+                      0.13228306007607513,
+                      0.1138264480608601,
+                      0.09906115844868808,
+                      0.08724892675895046,
+                      0.07779914140716038,
+                      0.0702393131257283,
+                      0.06419145050058264,
+                      0.059353160400466114
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.1841922813688674
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.06590113445948365,
+                    "exit_ev_to_sales": 6.803658205736802,
+                    "fcf_margin_end": 0.7804134611804721,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.6388999315590552,
+                      0.5191199452472441,
+                      0.4232959561977953,
+                      0.34663676495823625,
+                      0.285309411966589,
+                      0.2362475295732712,
+                      0.19699802365861696,
+                      0.16559841892689356,
+                      0.14047873514151485,
+                      0.12038298811321188
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.6388999315590552
+                  }
+                }
+              },
+              "ticker": "PAYS"
+            }
+          ]
+        },
+        "small": {
+          "candidates": [
+            {
+              "band": "small",
+              "cik": 1496443,
+              "composite": 81.93,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-12)",
+                "last_results": "2026-08-05",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-11-11",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-06",
+                "last_form": "10-Q",
+                "quarters": [
+                  "2026-06-30",
+                  "2026-03-31",
+                  "2025-12-31",
+                  "2025-09-30",
+                  "2025-06-30",
+                  "2025-03-31",
+                  "2024-12-31",
+                  "2024-09-30"
+                ],
+                "revenue": [
+                  28252071.0,
+                  28038424.0,
+                  22755196.0,
+                  21596478.0,
+                  19078353.0,
+                  18598149.0,
+                  15606448.0,
+                  15256431.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.1866023644951942,
+                "current_ratio": 1.1391741595569271,
+                "dilution": 0.07090113445948365,
+                "enterprise_value": 684734918.96,
+                "ev_to_sales": 6.803658205736802,
+                "ev_to_sales_per_growth": 0.14525795141430428,
+                "excess_12m": 1.6611743521147482,
+                "excess_6m": 1.6064431646977655,
+                "fcf_growth_ttm": -1.0,
+                "fcf_margin": 0.730413461180472,
+                "fcf_margin_change": 0.8565531618001785,
+                "fcf_ttm": 73510395.0,
+                "fcf_yield": 0.08588001220566205,
+                "gross_margin": 0.6099523550610282,
+                "growth_acceleration": 0.14963537702966256,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": 0.18442677863927837,
+                "implied_revenue_cagr": 0.2839577840984564,
+                "log_market_cap": 8.932456658901229,
+                "market_cap": 855966284.96,
+                "net_debt": -171231366.0,
+                "net_debt_to_ebitda": 0.0,
+                "net_income_ttm": 15773207.0,
+                "operating_income_growth_ttm": 2.368569587486833,
+                "operating_income_ttm": 17115217.0,
+                "operating_margin": 0.1700600967771273,
+                "operating_margin_change": 0.09592963446670755,
+                "pe": 54.26710528556431,
+                "reported_quarters": 16.0,
+                "return_12_1": 1.2248628884826327,
+                "return_12m": 1.7714808043875685,
+                "return_6m": 1.613793103448276,
+                "revenue_cagr_3y": 0.3339601249264641,
+                "revenue_growth_ttm": 0.46838456273773477,
+                "revenue_ttm": 100642169.0,
+                "roic": null,
+                "sbc_to_revenue": 0.05138600500551613,
+                "survival": 1.0
+              },
+              "missing": [
+                "roic"
+              ],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.07090113445948365,
+                    "exit_ev_to_sales": 5.102743654302602,
+                    "fcf_margin_end": 0.730413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.46838456273773477,
+                      0.3827076501901878,
+                      0.31416612015215023,
+                      0.25933289612172017,
+                      0.21546631689737614
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.46838456273773477
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.08090113445948365,
+                    "exit_ev_to_sales": 3.401829102868401,
+                    "fcf_margin_end": 0.680413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.1841922813688674,
+                      0.1553538250950939,
+                      0.13228306007607513,
+                      0.1138264480608601,
+                      0.09906115844868808
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.1841922813688674
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.06590113445948365,
+                    "exit_ev_to_sales": 6.803658205736802,
+                    "fcf_margin_end": 0.7804134611804721,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.6388999315590552,
+                      0.5191199452472441,
+                      0.4232959561977953,
+                      0.34663676495823625,
+                      0.285309411966589
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.6388999315590552
+                  }
+                }
+              },
+              "ticker": "PAYS"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "as_of": "2026-10-15",
+      "spec_version": "2026-10-14.9",
+      "bands": {
+        "ai_large": {
+          "candidates": [
+            {
+              "band": "ai_large",
+              "cik": 1137789,
+              "composite": 80.85,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-27)",
+                "last_results": "2026-07-28",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-10-27",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-04",
+                "last_form": "10-K",
+                "quarters": [
+                  "2026-07-03",
+                  "2026-04-03",
+                  "2026-01-02",
+                  "2025-10-03",
+                  "2025-06-27",
+                  "2025-03-28",
+                  "2024-12-27",
+                  "2024-09-27"
+                ],
+                "revenue": [
+                  3629000000.0,
+                  3112000000.0,
+                  2825000000.0,
+                  2629000000.0,
+                  2444000000.0,
+                  2160000000.0,
+                  2325000000.0,
+                  2168000000.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.04913758523866827,
+                "current_ratio": 1.669651423089223,
+                "dilution": 0.06018518518518512,
+                "enterprise_value": 155511251310.33,
+                "ev_to_sales": 12.752050127948339,
+                "ev_to_sales_per_growth": 0.37445255007729505,
+                "excess_12m": 2.044736550715384,
+                "excess_6m": 0.18121960206434484,
+                "fcf_growth_ttm": 2.795843520782396,
+                "fcf_margin": 0.25461254612546125,
+                "fcf_margin_change": 0.1646927923604838,
+                "fcf_ttm": 3105000000.0,
+                "fcf_yield": 0.02020823248592532,
+                "gross_margin": 0.45576055760557604,
+                "growth_acceleration": 0.18968335332540587,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": -0.11530359514128263,
+                "implied_revenue_cagr": 0.45585542541499935,
+                "log_market_cap": 11.186533274924972,
+                "market_cap": 153650251310.33,
+                "net_debt": 1861000000.0,
+                "net_debt_to_ebitda": 0.425858123569794,
+                "net_income_ttm": 3184000000.0,
+                "operating_income_growth_ttm": 1.1661375661375661,
+                "operating_income_ttm": 4094000000.0,
+                "operating_margin": 0.33571135711357114,
+                "operating_margin_change": 0.1279505568497479,
+                "pe": 48.25698847686243,
+                "reported_quarters": 24.0,
+                "return_12_1": 2.700704058970845,
+                "return_12m": 2.203397438926428,
+                "return_6m": 0.2747691844831801,
+                "revenue_cagr_3y": 0.18203419083564842,
+                "revenue_growth_ttm": 0.3405518302737167,
+                "revenue_ttm": 12195000000.0,
+                "roic": 0.8029443892750745,
+                "sbc_to_revenue": 0.017466174661746617,
+                "survival": 1.0
+              },
+              "missing": [],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.06018518518518512,
+                    "exit_ev_to_sales": 9.564037595961254,
+                    "fcf_margin_end": 0.25461254612546125,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.3405518302737167,
+                      0.28044146421897337,
+                      0.2323531713751787,
+                      0.19388253710014294,
+                      0.16310602968011434,
+                      0.13848482374409146,
+                      0.11878785899527317,
+                      0.10303028719621854,
+                      0.09042422975697484,
+                      0.08033938380557987
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.3405518302737167
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.07018518518518511,
+                    "exit_ev_to_sales": 6.376025063974169,
+                    "fcf_margin_end": 0.20461254612546126,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.12027591513685836,
+                      0.10422073210948668,
+                      0.09137658568758934,
+                      0.08110126855007148,
+                      0.07288101484005718,
+                      0.06630481187204575,
+                      0.061043849497636596,
+                      0.056835079598109274,
+                      0.05346806367848742,
+                      0.050774450942789935
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.12027591513685836
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.05518518518518512,
+                    "exit_ev_to_sales": 12.752050127948339,
+                    "fcf_margin_end": 0.30461254612546124,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.4727173793558317,
+                      0.38617390348466535,
+                      0.3169391227877323,
+                      0.2615512982301858,
+                      0.21724103858414864,
+                      0.1817928308673189,
+                      0.15343426469385513,
+                      0.1307474117550841,
+                      0.11259792940406727,
+                      0.09807834352325381
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.4727173793558317
+                  }
+                }
+              },
+              "ticker": "STX"
+            }
+          ]
+        },
+        "ai_mid": {
+          "candidates": []
+        },
+        "large": {
+          "candidates": [
+            {
+              "band": "large",
+              "cik": 1137789,
+              "composite": 77.55,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-27)",
+                "last_results": "2026-07-28",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-10-27",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-04",
+                "last_form": "10-K",
+                "quarters": [
+                  "2026-07-03",
+                  "2026-04-03",
+                  "2026-01-02",
+                  "2025-10-03",
+                  "2025-06-27",
+                  "2025-03-28",
+                  "2024-12-27",
+                  "2024-09-27"
+                ],
+                "revenue": [
+                  3629000000.0,
+                  3112000000.0,
+                  2825000000.0,
+                  2629000000.0,
+                  2444000000.0,
+                  2160000000.0,
+                  2325000000.0,
+                  2168000000.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.04913758523866827,
+                "current_ratio": 1.669651423089223,
+                "dilution": 0.06018518518518512,
+                "enterprise_value": 155511251310.33,
+                "ev_to_sales": 12.752050127948339,
+                "ev_to_sales_per_growth": 0.37445255007729505,
+                "excess_12m": 2.044736550715384,
+                "excess_6m": 0.18121960206434484,
+                "fcf_growth_ttm": 2.795843520782396,
+                "fcf_margin": 0.25461254612546125,
+                "fcf_margin_change": 0.1646927923604838,
+                "fcf_ttm": 3105000000.0,
+                "fcf_yield": 0.02020823248592532,
+                "gross_margin": 0.45576055760557604,
+                "growth_acceleration": 0.18968335332540587,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": -0.11530359514128263,
+                "implied_revenue_cagr": 0.45585542541499935,
+                "log_market_cap": 11.186533274924972,
+                "market_cap": 153650251310.33,
+                "net_debt": 1861000000.0,
+                "net_debt_to_ebitda": 0.425858123569794,
+                "net_income_ttm": 3184000000.0,
+                "operating_income_growth_ttm": 1.1661375661375661,
+                "operating_income_ttm": 4094000000.0,
+                "operating_margin": 0.33571135711357114,
+                "operating_margin_change": 0.1279505568497479,
+                "pe": 48.25698847686243,
+                "reported_quarters": 24.0,
+                "return_12_1": 2.700704058970845,
+                "return_12m": 2.203397438926428,
+                "return_6m": 0.2747691844831801,
+                "revenue_cagr_3y": 0.18203419083564842,
+                "revenue_growth_ttm": 0.3405518302737167,
+                "revenue_ttm": 12195000000.0,
+                "roic": 0.8029443892750745,
+                "sbc_to_revenue": 0.017466174661746617,
+                "survival": 1.0
+              },
+              "missing": [],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.06018518518518512,
+                    "exit_ev_to_sales": 9.564037595961254,
+                    "fcf_margin_end": 0.25461254612546125,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.3405518302737167,
+                      0.28044146421897337,
+                      0.2323531713751787,
+                      0.19388253710014294,
+                      0.16310602968011434
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.3405518302737167
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.07018518518518511,
+                    "exit_ev_to_sales": 6.376025063974169,
+                    "fcf_margin_end": 0.20461254612546126,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.12027591513685836,
+                      0.10422073210948668,
+                      0.09137658568758934,
+                      0.08110126855007148,
+                      0.07288101484005718
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.12027591513685836
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.05518518518518512,
+                    "exit_ev_to_sales": 12.752050127948339,
+                    "fcf_margin_end": 0.30461254612546124,
+                    "fcf_margin_start": 0.25461254612546125,
+                    "growth_path": [
+                      0.4727173793558317,
+                      0.38617390348466535,
+                      0.3169391227877323,
+                      0.2615512982301858,
+                      0.21724103858414864
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": -1861000000.0,
+                    "starting_revenue_growth": 0.4727173793558317
+                  }
+                }
+              },
+              "ticker": "STX"
+            }
+          ]
+        },
+        "mid": {
+          "candidates": []
+        },
+        "multibagger": {
+          "candidates": [
+            {
+              "band": "multibagger",
+              "cik": 1496443,
+              "composite": 82.99,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-12)",
+                "last_results": "2026-08-05",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-11-11",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-06",
+                "last_form": "10-Q",
+                "quarters": [
+                  "2026-06-30",
+                  "2026-03-31",
+                  "2025-12-31",
+                  "2025-09-30",
+                  "2025-06-30",
+                  "2025-03-31",
+                  "2024-12-31",
+                  "2024-09-30"
+                ],
+                "revenue": [
+                  28252071.0,
+                  28038424.0,
+                  22755196.0,
+                  21596478.0,
+                  19078353.0,
+                  18598149.0,
+                  15606448.0,
+                  15256431.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.1866023644951942,
+                "current_ratio": 1.1391741595569271,
+                "dilution": 0.07090113445948365,
+                "enterprise_value": 690663445.34,
+                "ev_to_sales": 6.862565187163246,
+                "ev_to_sales_per_growth": 0.14651561415797218,
+                "excess_12m": 1.6154660715849436,
+                "excess_6m": 1.6030530450844527,
+                "fcf_growth_ttm": -1.0,
+                "fcf_margin": 0.730413461180472,
+                "fcf_margin_change": 0.8565531618001785,
+                "fcf_ttm": 73510395.0,
+                "fcf_yield": 0.085289288243553,
+                "gross_margin": 0.6099523550610282,
+                "growth_acceleration": 0.14963537702966256,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": 0.1822111032588476,
+                "implied_revenue_cagr": 0.28617345947888717,
+                "log_market_cap": 8.935454266239875,
+                "market_cap": 861894811.34,
+                "net_debt": -171231366.0,
+                "net_debt_to_ebitda": 0.0,
+                "net_income_ttm": 15773207.0,
+                "operating_income_growth_ttm": 2.368569587486833,
+                "operating_income_ttm": 17115217.0,
+                "operating_margin": 0.1700600967771273,
+                "operating_margin_change": 0.09592963446670755,
+                "pe": 54.642965843280955,
+                "reported_quarters": 24.0,
+                "return_12_1": 1.1032028469750892,
+                "return_12m": 1.7161921708185055,
+                "return_6m": 1.613869863013699,
+                "revenue_cagr_3y": 0.3339601249264641,
+                "revenue_growth_ttm": 0.46838456273773477,
+                "revenue_ttm": 100642169.0,
+                "roic": null,
+                "sbc_to_revenue": 0.05138600500551613,
+                "survival": 1.0
+              },
+              "missing": [
+                "roic"
+              ],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.07090113445948365,
+                    "exit_ev_to_sales": 5.146923890372435,
+                    "fcf_margin_end": 0.730413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.46838456273773477,
+                      0.3827076501901878,
+                      0.31416612015215023,
+                      0.25933289612172017,
+                      0.21546631689737614,
+                      0.1803730535179009,
+                      0.1522984428143207,
+                      0.12983875425145655,
+                      0.11187100340116524,
+                      0.0974968027209322
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.46838456273773477
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.08090113445948365,
+                    "exit_ev_to_sales": 3.431282593581623,
+                    "fcf_margin_end": 0.680413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.1841922813688674,
+                      0.1553538250950939,
+                      0.13228306007607513,
+                      0.1138264480608601,
+                      0.09906115844868808,
+                      0.08724892675895046,
+                      0.07779914140716038,
+                      0.0702393131257283,
+                      0.06419145050058264,
+                      0.059353160400466114
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.1841922813688674
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.06590113445948365,
+                    "exit_ev_to_sales": 6.862565187163246,
+                    "fcf_margin_end": 0.7804134611804721,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.6388999315590552,
+                      0.5191199452472441,
+                      0.4232959561977953,
+                      0.34663676495823625,
+                      0.285309411966589,
+                      0.2362475295732712,
+                      0.19699802365861696,
+                      0.16559841892689356,
+                      0.14047873514151485,
+                      0.12038298811321188
+                    ],
+                    "horizon_years": 10,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.6388999315590552
+                  }
+                }
+              },
+              "ticker": "PAYS"
+            }
+          ]
+        },
+        "small": {
+          "candidates": [
+            {
+              "band": "small",
+              "cik": 1496443,
+              "composite": 77.39,
+              "confidence_label": "high",
+              "earnings_check": {
+                "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-12)",
+                "last_results": "2026-08-05",
+                "last_results_status": "verified (8-K)",
+                "next_scheduled": "2026-11-11",
+                "next_status": "scheduled (Alpha Vantage, unverified)"
+              },
+              "fundamentals": {
+                "last_filed": "2026-08-06",
+                "last_form": "10-Q",
+                "quarters": [
+                  "2026-06-30",
+                  "2026-03-31",
+                  "2025-12-31",
+                  "2025-09-30",
+                  "2025-06-30",
+                  "2025-03-31",
+                  "2024-12-31",
+                  "2024-09-30"
+                ],
+                "revenue": [
+                  28252071.0,
+                  28038424.0,
+                  22755196.0,
+                  21596478.0,
+                  19078353.0,
+                  18598149.0,
+                  15606448.0,
+                  15256431.0
+                ]
+              },
+              "metrics": {
+                "accruals": -0.1866023644951942,
+                "current_ratio": 1.1391741595569271,
+                "dilution": 0.07090113445948365,
+                "enterprise_value": 690663445.34,
+                "ev_to_sales": 6.862565187163246,
+                "ev_to_sales_per_growth": 0.14651561415797218,
+                "excess_12m": 1.6154660715849436,
+                "excess_6m": 1.6030530450844527,
+                "fcf_growth_ttm": -1.0,
+                "fcf_margin": 0.730413461180472,
+                "fcf_margin_change": 0.8565531618001785,
+                "fcf_ttm": 73510395.0,
+                "fcf_yield": 0.085289288243553,
+                "gross_margin": 0.6099523550610282,
+                "growth_acceleration": 0.14963537702966256,
+                "growth_consistency": 1.0,
+                "implied_growth_gap": 0.1822111032588476,
+                "implied_revenue_cagr": 0.28617345947888717,
+                "log_market_cap": 8.935454266239875,
+                "market_cap": 861894811.34,
+                "net_debt": -171231366.0,
+                "net_debt_to_ebitda": 0.0,
+                "net_income_ttm": 15773207.0,
+                "operating_income_growth_ttm": 2.368569587486833,
+                "operating_income_ttm": 17115217.0,
+                "operating_margin": 0.1700600967771273,
+                "operating_margin_change": 0.09592963446670755,
+                "pe": 54.642965843280955,
+                "reported_quarters": 24.0,
+                "return_12_1": 1.1032028469750892,
+                "return_12m": 1.7161921708185055,
+                "return_6m": 1.613869863013699,
+                "revenue_cagr_3y": 0.3339601249264641,
+                "revenue_growth_ttm": 0.46838456273773477,
+                "revenue_ttm": 100642169.0,
+                "roic": null,
+                "sbc_to_revenue": 0.05138600500551613,
+                "survival": 1.0
+              },
+              "missing": [
+                "roic"
+              ],
+              "scenarios": {
+                "base": {
+                  "assumptions": {
+                    "annual_dilution": 0.07090113445948365,
+                    "exit_ev_to_sales": 5.146923890372435,
+                    "fcf_margin_end": 0.730413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.46838456273773477,
+                      0.3827076501901878,
+                      0.31416612015215023,
+                      0.25933289612172017,
+                      0.21546631689737614
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.46838456273773477
+                  }
+                },
+                "bear": {
+                  "assumptions": {
+                    "annual_dilution": 0.08090113445948365,
+                    "exit_ev_to_sales": 3.431282593581623,
+                    "fcf_margin_end": 0.680413461180472,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.1841922813688674,
+                      0.1553538250950939,
+                      0.13228306007607513,
+                      0.1138264480608601,
+                      0.09906115844868808
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.1841922813688674
+                  }
+                },
+                "bull": {
+                  "assumptions": {
+                    "annual_dilution": 0.06590113445948365,
+                    "exit_ev_to_sales": 6.862565187163246,
+                    "fcf_margin_end": 0.7804134611804721,
+                    "fcf_margin_start": 0.730413461180472,
+                    "growth_path": [
+                      0.6388999315590552,
+                      0.5191199452472441,
+                      0.4232959561977953,
+                      0.34663676495823625,
+                      0.285309411966589
+                    ],
+                    "horizon_years": 5,
+                    "net_cash_held": 171231366.0,
+                    "starting_revenue_growth": 0.6388999315590552
+                  }
+                }
+              },
+              "ticker": "PAYS"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

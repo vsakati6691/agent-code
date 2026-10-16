@@ -29,6 +29,20 @@ def preclose_fixture():
     return json.loads((FIXTURES / "preclose.json").read_text(encoding="utf-8"))
 
 
+def test_real_stx_and_pays_events_are_counted_once_across_lists():
+    from agent_trading.dashboard.changes import summary
+
+    previous, current = json.loads((FIXTURES / "changes.json").read_text(encoding="utf-8"))["snapshots"]
+    before = json.dumps(current, sort_keys=True)
+    result = summary(current, previous)
+    for ticker, bands in (("STX", {"large", "ai_large"}), ("PAYS", {"small", "multibagger"})):
+        rows = [r for r in result["rows"] if r["ticker"] == ticker and r["kind"] == "thesis"]
+        assert len(rows) == 1
+        assert set(rows[0]["bands"]) == bands
+    assert result["counts"]["thesis"] == 2
+    assert json.dumps(current, sort_keys=True) == before
+
+
 def test_real_earnings_cadence_labels_name_the_gap_and_tolerance():
     from agent_trading.dashboard.site_briefing import _last_results
     from agent_trading.dashboard.site_company import _earnings_check

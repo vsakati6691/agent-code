@@ -132,7 +132,8 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
     else:
         counts = " · ".join(f"{KIND_LABELS[k]}: {n}" for k, n in summ["counts"].items() if n) or "nothing listed"
         top = "".join(
-            f'<li><a href="stock/{E(r["band"])}-{E(r["ticker"])}.html">{E(r["ticker"])}</a>: {E(r["text"])}</li>'
+            f'<li><a href="stock/{E(r["band"])}-{E(r["ticker"])}.html">{E(r["ticker"])}</a>: {E(r["text"])}'
+            f' <span class="muted">({E(", ".join(band_title(k, bands[k]) for k in r["bands"]))})</span></li>'
             for r in [r for r in summ["rows"] if r["kind"] in ("thesis", "deterioration", "filing", "dilution")][:6]
         )
         what = (
