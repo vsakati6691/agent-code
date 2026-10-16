@@ -1,0 +1,110 @@
+import json
+import math
+import shutil
+import subprocess
+from datetime import date
+from html import unescape
+
+import pytest
+
+from agent_trading.dashboard import assets_goal, spec
+from agent_trading.dashboard.goal import ending_value, required_rate, stressed_ending, weighted_endings
+from agent_trading.dashboard.site_evidence import FINAL, ROOT, TOURNAMENT, evidence_page, read_evidence
+from agent_trading.dashboard.site_goal import goal_page, payload
+
+
+def test_required_rate_and_contribution_timing():
+    assert required_rate(10000, 20000, 0, 4) == pytest.approx(2**0.25 - 1)
+    years = (date(2030, 12, 31) - date(2026, 10, 15)).days / 365.25
+    rate = required_rate(10000, 20000, 100, years)
+    assert ending_value(10000, 100, years, rate) == pytest.approx(20000)
+    assert rate < required_rate(10000, 20000, 0, years)
+    assert ending_value(10000, 100, 1, 0) == 11200
+    assert ending_value(0, 100, 1, 0.12) == pytest.approx(sum(100 * 1.12 ** (1 - i / 12) for i in range(1, 13)))
+    assert ending_value(10000, 100, 1.04, 0) == 11200
+    assert required_rate(10000, 10000, 100, 1) < 0
+    assert required_rate(10000, 50, 100, 1) is None
+
+
+@pytest.mark.parametrize(
+    "args",
+    [(0, 100, 0, 4), (100, 0, 0, 4), (100, 200, -1, 4), (100, 200, 0, 0), (100, 200, 0, 101), (math.nan, 200, 0, 4)],
+)
+def test_invalid_required_inputs_fail_closed(args):
+    assert required_rate(*args) is None
+
+
+def test_weighted_endings_and_unavailable_propagation():
+    rates = {"AAA": {"bear": -0.1, "base": 0.1, "bull": 0.2}, "Cash": {k: 0 for k in ("bear", "base", "bull")}}
+    result = weighted_endings(10000, 100, 4, {"AAA": 0.5, "Cash": 0.5, "MISSING": 0}, rates)
+    assert not result["reason"]
+    assert result["values"]["base"] == pytest.approx(ending_value(5000, 50, 4, 0.1) + ending_value(5000, 50, 4, 0))
+    missing = weighted_endings(10000, 0, 4, {"AAA": 0.5, "MISSING": 0.5}, rates)
+    assert "MISSING" in missing["reason"] and all(v is None for v in missing["values"].values())
+    assert weighted_endings(10000, 0, 4, {"AAA": 0.4}, rates)["reason"] == "Weights must total 100%."
+    assert stressed_ending(10000, 100, 4, 0.05, 0.4) == pytest.approx(ending_value(11200 * 0.6, 100, 3, 0.05))
+    assert stressed_ending(10000, 100, 0.5, 0.05, 0.4) is None
+
+
+def test_javascript_arithmetic_matches_reference(tmp_path):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node not installed")
+    cases = [
+        [10000, 20000, 0, 4.2],
+        [10000, 20000, 100, 4.2],
+        [10000, 10000, 100, 1],
+        [10000, 50, 100, 1],
+        [0, 100, 0, 4],
+    ]
+    rates = {"AAA": {"bear": -0.1, "base": 0.1, "bull": 0.3}, "Cash": {k: 0 for k in ("bear", "base", "bull")}}
+    weights = {"AAA": 0.25, "Cash": 0.75, "MISSING": 0}
+    script = tmp_path / "goal.js"
+    script.write_text(
+        assets_goal.MATH_JS
+        + "\nconsole.log(JSON.stringify({required:"
+        + json.dumps(cases)
+        + ".map(a=>GoalMath.required(...a)),weighted:GoalMath.weighted(10000,100,4.2,"
+        + json.dumps(weights)
+        + ","
+        + json.dumps(rates)
+        + "),stress:GoalMath.stress(10000,100,4.2,.05,.4)}));",
+        encoding="utf-8",
+    )
+    result = json.loads(subprocess.check_output([node, str(script)]))
+    for actual, args in zip(result["required"], cases, strict=True):
+        expected = required_rate(*args)
+        assert actual == pytest.approx(expected) if expected is not None else actual is None
+    expected = weighted_endings(10000, 100, 4.2, weights, rates)
+    assert result["weighted"]["values"] == pytest.approx(expected["values"])
+    assert result["stress"] == pytest.approx(stressed_ending(10000, 100, 4.2, 0.05, 0.4))
+
+
+def test_goal_render_and_stress_defaults_use_stored_observations():
+    entry = {"ticker": "AAA", "asset_type": "ETF", "history": {"drawdowns": {"max_5y": {"value": -0.35}}}}
+    snap = {"as_of": "2026-10-09", "watchlist": {"entries": [entry]}}
+    data = payload(snap, date(2026, 10, 15))
+    assert data["classes"][0]["drawdown"] == 0.35
+    assert {a["ticker"] for a in data["assets"]} == {"AAA", "SPY", "QQQ", "Cash"}
+    assert next(a for a in data["assets"] if a["ticker"] == "SPY")["rates"] == {}
+    text = unescape(goal_page(snap, date(2026, 10, 15)))
+    assert 'value="10000"' in text and 'value="20000"' in text
+    assert 'href="evidence.html"' in text and 'id="goal-stress-ending"' in text
+    assert spec.PROBABILITY_STATEMENT in text and spec.DISCLAIMER in text
+    assert "fetch(" not in assets_goal.JS and "XMLHttpRequest" not in assets_goal.JS
+
+
+def test_evidence_reads_source_tables_and_omits_operational_columns(tmp_path):
+    for name in (FINAL, TOURNAMENT):
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        text = (ROOT / name).read_text(encoding="utf-8")
+        target.write_text(text.replace("+5.4%", "+5.7%"), encoding="utf-8")
+    data = read_evidence(tmp_path)
+    assert data["available"]
+    text = unescape(evidence_page(data))
+    assert "+5.7%" in text and "+5.4%" not in text
+    assert "No candidate passed" in text and "Acceptance rules (all must hold)" in text
+    assert "test period was not untouched" in text
+    assert "Account-limited" not in text and "$1,000" not in text
+    assert not read_evidence(tmp_path / "missing")["available"]

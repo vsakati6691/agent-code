@@ -23,6 +23,7 @@ from pathlib import Path
 from ..market_calendar import is_trading_day
 from . import (
     assets_bets,
+    assets_goal,
     assets_research,
     changes,
     compare,
@@ -32,6 +33,8 @@ from . import (
     research,
     site_basics,
     site_bets,
+    site_evidence,
+    site_goal,
     site_methodology,
     site_refresh,
     spec,
@@ -76,6 +79,8 @@ NAV = [
     ("options.html", "Options"),
     ("bets.html", "Small bets"),
     ("watchlist.html", "Watchlist 2030"),
+    ("goal.html", "Plan 2030"),
+    ("evidence.html", "Evidence"),
     ("compare.html", "Compare"),
     ("history.html", "History & tracking"),
     ("methodology.html", "Methodology"),
@@ -890,6 +895,7 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
                 + assets_research.LAB_JS
                 + assets_bets.CSS
                 + assets_bets.JS
+                + assets_goal.JS
             ).encode("utf-8")
         ).hexdigest()[:10]
     )
@@ -898,6 +904,7 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "assets" / "compare.js").write_text(assets_research.COMPARE_JS, encoding="utf-8")
     (out / "assets" / "lab.js").write_text(assets_research.LAB_JS, encoding="utf-8")
     (out / "assets" / "bets.js").write_text(assets_bets.JS, encoding="utf-8")
+    (out / "assets" / "goal.js").write_text(assets_goal.JS, encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
 
     def write_fallback():
@@ -939,10 +946,13 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
     history = [snap if d == dates[-1] else store.load(d) for d in dates]
     daily = site_refresh.load_context(data_dir, snap, out)
+    research_evidence = site_evidence.read_evidence()
     write(
         "index.html",
         "Overview",
-        overview(snap, status, dates, tracking, prev_snap, daily) + site_methodology.progress(history),
+        overview(snap, status, dates, tracking, prev_snap, daily)
+        + site_methodology.progress(history)
+        + site_evidence.summary(research_evidence),
         "index.html",
     )
     write("ai.html", "AI stocks", ai_page(snap), "ai.html")
@@ -953,6 +963,8 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         "bets.html", "Small-bet options research", site_bets.bets_page(snap, daily), "bets.html", js=("assets/bets.js",)
     )
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
+    write("goal.html", "Plan 2030", site_goal.goal_page(snap), "goal.html", js=("assets/goal.js",))
+    write("evidence.html", "Evidence", site_evidence.evidence_page(research_evidence), "evidence.html")
     write("history.html", "History", history_page(dates, tracking, history), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
     write("audit.html", "Audit trail", audit_page(store, snap, integrity), "audit.html")
