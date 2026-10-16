@@ -16,8 +16,6 @@ jobs:
     name: Tests, lint and fixture site
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      FIXTURE_ROOT: ${{ runner.temp }}/dashboard-ci
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -31,8 +29,8 @@ jobs:
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - name: Build offline fixture site
-        run: python -m tests.dashboard_ci build --root "$FIXTURE_ROOT"
+        run: python -m tests.dashboard_ci build --root "$RUNNER_TEMP/dashboard-ci"
       - name: Verify fixture snapshot integrity
-        run: python -m agent_trading.dashboard verify --data "$FIXTURE_ROOT/data"
+        run: python -m agent_trading.dashboard verify --data "$RUNNER_TEMP/dashboard-ci/data"
       - name: Check internal HTML links and assets
-        run: python -m tests.dashboard_ci check --site "$FIXTURE_ROOT/site"
+        run: python -m tests.dashboard_ci check --site "$RUNNER_TEMP/dashboard-ci/site"
