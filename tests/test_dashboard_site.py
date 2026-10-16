@@ -629,9 +629,9 @@ def test_verify_earnings_labels_cadence_and_respects_the_budget():
 
     ok = verify_earnings(Context(date(2026, 10, 9), _Prov(500, SUBS)), 1, "2026-10-29")
     assert ok["last_results"] == "2026-07-30" and ok["last_results_status"] == "verified (8-K)"
-    assert ok["next_status"] == "scheduled (Alpha Vantage, unverified)" and ok["cadence_check"].startswith("consistent")
+    assert ok["next_status"] == "scheduled (Alpha Vantage, unverified)" and "within the ±21" in ok["cadence_check"]
     far = verify_earnings(Context(date(2026, 10, 9), _Prov(500, SUBS)), 1, "2027-01-30")
-    assert far["cadence_check"].startswith("differs by")
+    assert "outside the ±21" in far["cadence_check"]
     prov = _Prov(5, SUBS)
     low = verify_earnings(Context(date(2026, 10, 9), prov), 1, "2026-10-29")
     assert prov.calls == 0 and "budget" in low["last_results_status"] and low["next_status"].endswith("unverified)")

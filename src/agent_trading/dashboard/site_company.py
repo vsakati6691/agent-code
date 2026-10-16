@@ -252,9 +252,11 @@ facts filed on or before {E(snap["as_of"])} only.</p>
 
 
 def _earnings_check(c: dict) -> str:
+    from .earnings_cadence import display as cadence_display
+
     ec = c.get("earnings_check") or {}
     if ec.get("last_results"):
-        tail = f" · {E(ec['cadence_check'])}" if ec.get("cadence_check") else ""
+        tail = f" · {E(cadence_display(ec))}" if ec.get("cadence_check") else ""
         return f'<div class="small">last results {E(ec["last_results"])}: <strong>verified (8-K)</strong>{tail}</div>'
     if ec.get("last_results_status"):
         return f'<div class="small muted">{E(ec["last_results_status"])}</div>'

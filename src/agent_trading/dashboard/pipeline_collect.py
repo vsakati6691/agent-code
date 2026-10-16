@@ -9,6 +9,7 @@ import pandas as pd
 
 from ..data.validation import DataQualityError, trim_bad_history, validate_bars
 from . import spec
+from .earnings_cadence import label as cadence_label
 from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
 from .http import BudgetExceeded, FetchError
@@ -215,11 +216,5 @@ def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -
         )
         gap = gaps[len(gaps) // 2]
         expected = date.fromisoformat(dates[0]) + timedelta(days=gap)
-        off = (date.fromisoformat(next_scheduled) - expected).days
-        out["cadence_check"] = (
-            f"consistent with the verified 8-K cadence (expected about {expected.isoformat()})"
-            if abs(off) <= 21
-            else f"differs by {abs(off)} days from the verified 8-K cadence (expected about "
-            f"{expected.isoformat()}); treat the scheduled date with care"
-        )
+        out["cadence_check"] = cadence_label(expected, date.fromisoformat(next_scheduled))
     return out

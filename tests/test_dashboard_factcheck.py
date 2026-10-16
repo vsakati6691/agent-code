@@ -29,6 +29,21 @@ def preclose_fixture():
     return json.loads((FIXTURES / "preclose.json").read_text(encoding="utf-8"))
 
 
+def test_real_earnings_cadence_labels_name_the_gap_and_tolerance():
+    from agent_trading.dashboard.site_briefing import _last_results
+    from agent_trading.dashboard.site_company import _earnings_check
+
+    events = json.loads((FIXTURES / "earnings.json").read_text(encoding="utf-8"))["events"]["items"]
+    for ticker, gap in (("WDC", "14 calendar days earlier"), ("COCO", "13 calendar days later")):
+        row = next(r for r in events if r["ticker"] == ticker)
+        original = dict(row)
+        for markup in (_last_results(row), _earnings_check({"earnings_check": {**row, "next_scheduled": row["date"]}})):
+            assert gap in markup
+            assert "21-calendar-day" in markup and "remains unverified" in markup
+            assert "consistent with" not in markup
+        assert row == original
+
+
 def test_weekly_run_rejects_real_preclose_collection_before_any_network():
     from agent_trading.dashboard.pipeline import RunFailed, run
 

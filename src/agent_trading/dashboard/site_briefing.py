@@ -5,6 +5,7 @@ from __future__ import annotations
 from . import changes as changes_mod
 from . import evidence, spec
 from .changes import KIND_LABELS
+from .earnings_cadence import display as cadence_display
 from .fmt import pct, tracking_schedule
 from .site_list_common import E, band_title, ordered
 from .site_research import datasets_line
@@ -70,7 +71,7 @@ def _last_results(i: dict) -> str:
     if i.get("last_results"):
         return (
             f'<br><span class="small">last results {E(i["last_results"])}, {E(i.get("last_results_status") or "")}'
-            f"{'; ' + E(i['cadence_check']) if i.get('cadence_check') else ''}</span>"
+            f"{'; ' + E(cadence_display(i)) if i.get('cadence_check') else ''}</span>"
         )
     if i.get("last_results_status"):
         return f'<br><span class="small muted">{E(i["last_results_status"])}</span>'
