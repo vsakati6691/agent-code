@@ -128,6 +128,9 @@ aria-label="{E(ticker)} price versus {E(bench)}, rebased to 100">{"".join(ticks)
 
 
 def detail(c: dict, snap: dict, history: list[dict] | None = None, prev_snap: dict | None = None) -> str:
+    from .price_integrity import SHORT_NOTE, preclose
+
+    price_basis = SHORT_NOTE if preclose(snap) else "close"
     from . import site_decisions
 
     m = c["metrics"]
@@ -201,7 +204,7 @@ def detail(c: dict, snap: dict, history: list[dict] | None = None, prev_snap: di
 <h1>{E(c["ticker"])} · {E(c["name"] or "")}</h1>
 <p class="lede">{E(c["sector"] or "Unknown")} · rank {c["rank"]} in the {E(band_title(c["band"], snap["bands"][c["band"]]))} list ·
 score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confidence_label"])}">{E(c["confidence_label"])}</span></p>
-<div class="grid"><div class="card stat"><div class="label">Price ({E(c["price_date"])} close)</div><div class="value">{money(c["price"])}</div>
+<div class="grid"><div class="card stat"><div class="label">Price ({E(c["price_date"])} · {price_basis})</div><div class="value">{money(c["price"])}</div>
 <div class="small muted">{E(c["sources"]["price"])}</div></div>
 <div class="card stat"><div class="label">Market cap</div><div class="value">{cap(c["market_cap"])}</div>
 <div class="small muted">{E(spec.MARKET_CAP_DEFINITION[:90])}…</div></div>

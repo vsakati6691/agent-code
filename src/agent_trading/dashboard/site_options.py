@@ -11,6 +11,7 @@ import html
 
 from . import evidence, spec
 from .fmt import money, num, pct, sval
+from .price_integrity import record_note
 
 E = html.escape
 HZ_SHORT = {"3m": "3M", "6m": "6M", "12m": "1Y"}
@@ -246,7 +247,10 @@ def _row(x: dict, kind: str, rid: str, o: dict, snap: dict, fragments: dict | No
         )
     missing = _missing_items(x, o)
     miss_html = "".join(f"<li>{E(m)}</li>" for m in missing) or '<li class="muted">none</li>'
-    flags = "".join(f'<span class="pill">{E(f)}</span>' for f in x.get("flags", []))
+    flags = "".join(
+        f'<span class="pill">{E(record_note(x) if record_note(x) and "end-of-session" in f else f)}</span>'
+        for f in x.get("flags", [])
+    )
     p = x.get("probability") or {}
     why = "; ".join(p.get("why") or ["no calibration record exists"])
     greeks = " · ".join(
@@ -272,10 +276,10 @@ def _row(x: dict, kind: str, rid: str, o: dict, snap: dict, fragments: dict | No
 <strong>{E(x["underlying"])}</strong></button><div class="small muted">{kind} · {E(x["option"])}</div></td>
 <td class="num" data-v="{E(x["expiration"])}">{E(x["expiration"])}<div class="small muted">{x["dte"]} days</div></td>
 <td class="num" data-v="{sval(x["strike"])}">{money(x["strike"])}</td>
-<td class="num hide-sm" data-v="{sval(x.get("spot"))}">{money(x.get("spot"))}</td>
+<td class="num hide-sm" data-v="{sval(x.get("spot"))}">{money(x.get("spot"))}<small>{E(record_note(x))}</small></td>
 <td class="num hide-sm">{money(x["bid"])} / {money(x["ask"])}</td>
 <td class="num" data-v="{sval(x["premium_per_contract_ask"])}">{money(x["premium_per_contract_ask"], 0)}<div class="small muted">{money(x["ask"])}/share</div></td>
-<td class="num" data-v="{sval(x["breakeven"])}">{money(x["breakeven"])}<div class="small muted dist">{E(distance_text(kind, signed))}</div></td>
+<td class="num" data-v="{sval(x["breakeven"])}">{money(x["breakeven"])}<div class="small muted dist">{E(distance_text(kind, signed))}</div><small>{E(record_note(x))}</small></td>
 <td class="num crit" data-v="{sval(maxloss)}">{money(maxloss, 0)}<div class="small muted">entire premium</div></td>
 <td class="num hide-sm" data-v="{sval(x["spread_pct"])}">{pct(x["spread_pct"], 1)}</td>
 <td class="num hide-sm" data-v="{sval(x.get("volume"))}">{num(x.get("volume"), 0)}</td>
@@ -293,7 +297,7 @@ lost if the stock is {side} {money(x["strike"])} at expiry. Before fees. Nothing
 <div class="facts">
 <div><h4>Observed (delayed quote)</h4><ul class="tight small">
 <li>Contract <strong>{E(x["option"])}</strong>: {E(x["underlying"])} {kind}, strike {money(x["strike"])}, expires {E(x["expiration"])} ({x["dte"]} calendar days){" · ADJUSTED contract" if x.get("adjusted") else ""}</li>
-<li>Underlying price {money(x.get("spot"))} ({E(x.get("underlying_price_source") or "as-of close")}); underlying last trade {E(str(under_lt))}</li>
+<li>Underlying price {money(x.get("spot"))} ({E(record_note(x) or x.get("underlying_price_source") or "as-of close")}); underlying last trade {E(str(under_lt))}</li>
 <li>Bid {money(x["bid"])} / ask {money(x["ask"])} per share · mid {money(x.get("mid"))} (reference only) · spread {pct(x["spread_pct"], 1)} of mid</li>
 <li>Quote: {E(x.get("quote_status") or "status not stored")}; snapshot time {q_time}; {E(x.get("quote_source") or "Cboe delayed quotes")}; {E(x.get("quote_delay") or "delayed")}</li>
 <li>Contract last trade: {E(str(c_lt))}{c_lp}. This is when it last traded, not when it was quoted.</li>

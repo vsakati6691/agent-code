@@ -97,6 +97,8 @@ def sessions_after(as_of: str, days: int = spec.FRESHNESS_CALENDAR_DAYS) -> list
 
 
 def freshness_banner(snap: dict, status: dict | None, now: datetime | None = None) -> str:
+    from .price_integrity import correction, preclose
+
     as_of = snap["as_of"]
     built = (now or datetime.now(ZoneInfo("America/New_York"))).astimezone(ZoneInfo("America/New_York"))
     # Match the browser's registered 16:00 ET completed-session convention.
@@ -105,12 +107,14 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
     age = sum(is_trading_day(start + timedelta(days=i)) for i in range(1, max(0, (end - start).days) + 1))
     age_text = "the latest completed session" if age == 0 else f"{age} trading session{'s' if age != 1 else ''} old"
     stale = age > spec.FRESHNESS_STALE_SESSIONS
+    price_basis = "session (stored intraday inputs)" if preclose(snap) else "close"
+    quote_note = correction(snap) or "Quotes are end-of-session and delayed, never live."
     parts = [
         f'<div class="banner info" id="freshness" data-asof="{E(as_of)}" '
         f'data-sessions="{E(",".join(sessions_after(as_of)))}" data-stale-after="{spec.FRESHNESS_STALE_SESSIONS}">'
-        f'<strong>Data as of the {E(as_of)} close (<span id="age">{age_text}'
+        f'<strong>Data as of the {E(as_of)} {price_basis} (<span id="age">{age_text}'
         f"</span>).</strong>Age checked at site build {built:%Y-%m-%d %H:%M} ET. Snapshot built {E(str(snap.get('run_finished', '')).replace('+00:00', ''))} UTC. "
-        f"Quotes are end-of-session and delayed, never live. Run status: {E(snap.get('status', '?'))}. "
+        f"{E(quote_note)} Run status: {E(snap.get('status', '?'))}. "
         f"Snapshot methodology: {E(str(snap.get('spec_version') or 'unavailable'))}.</div>"
     ]
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):

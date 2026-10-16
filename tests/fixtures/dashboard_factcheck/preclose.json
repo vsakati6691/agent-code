@@ -1,0 +1,39 @@
+{
+  "source": "research-data d8666d8095614a2a1a53c050ccede55d65d7769a; snapshot and daily refresh fields unchanged",
+  "snapshot": {
+    "as_of": "2026-10-15",
+    "run_started": "2026-10-15T14:37:46+00:00",
+    "run_finished": "2026-10-15T16:52:08+00:00",
+    "spec_version": "2026-10-14.9",
+    "spec_hash": "13c2a70787a83822",
+    "status": "ok"
+  },
+  "candidate": {
+    "ticker": "NVDA",
+    "price": 216.97,
+    "price_date": "2026-10-15",
+    "data_timestamp": "2026-10-15T14:37:46+00:00"
+  },
+  "option": {
+    "spot": 216.83,
+    "quote_time_utc": "2026-10-15T16:50:56+00:00",
+    "quote_date_ny": "2026-10-15",
+    "underlying": "NVDA",
+    "underlying_last_trade": "2026-10-15T12:35:55"
+  },
+  "daily": {
+    "as_of": "2026-10-15",
+    "weekly_as_of": "2026-10-15",
+    "collected_at": "2026-10-16T00:29:07+00:00",
+    "status": "partial",
+    "quotes": {
+      "NVDA": {
+        "close": 217.23,
+        "last_trade": "2026-10-15 15:59:59",
+        "reason": "session verified",
+        "source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "status": "available"
+      }
+    }
+  }
+}

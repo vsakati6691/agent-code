@@ -13,6 +13,7 @@ from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
 from .http import BudgetExceeded, FetchError
 from .pipeline_context import Context, RunFailed
+from .price_integrity import quote_close_reason
 from .providers import common_stock_reason
 
 
@@ -108,7 +109,10 @@ def watchlist_bars(ctx: Context, symbol: str) -> tuple[pd.DataFrame | None, str 
 
 def _quote(ctx: Context, symbol: str):
     if symbol not in ctx.quotes:
-        ctx.quotes[symbol] = _guard(ctx, "cboe", ctx.providers.quote, symbol)
+        quote, reason = _guard(ctx, "cboe", ctx.providers.quote, symbol)
+        if quote is not None:
+            reason = quote_close_reason(quote, ctx.as_of)
+        ctx.quotes[symbol] = (None, reason) if reason else (quote, None)
     return ctx.quotes[symbol]
 
 
