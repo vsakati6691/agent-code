@@ -17,8 +17,9 @@ import json
 import os
 import re
 import shutil
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from ..market_calendar import is_trading_day
 from . import (
@@ -36,6 +37,7 @@ from . import (
     site_evidence,
     site_goal,
     site_methodology,
+    site_performance,
     site_refresh,
     spec,
 )
@@ -162,13 +164,20 @@ def window_text(key: str, r: dict, as_of: str) -> str:
     return f"{n} trading sessions to {as_of}"
 
 
-def freshness_banner(snap: dict, status: dict | None) -> str:
+def freshness_banner(snap: dict, status: dict | None, now: datetime | None = None) -> str:
     as_of = snap["as_of"]
+    built = (now or datetime.now(ZoneInfo("America/New_York"))).astimezone(ZoneInfo("America/New_York"))
+    # Match the browser's registered 16:00 ET completed-session convention.
+    end = built.date() if built.hour >= 16 else built.date() - timedelta(days=1)
+    start = date.fromisoformat(as_of)
+    age = sum(is_trading_day(start + timedelta(days=i)) for i in range(1, max(0, (end - start).days) + 1))
+    age_text = "the latest completed session" if age == 0 else f"{age} trading session{'s' if age != 1 else ''} old"
+    stale = age > spec.FRESHNESS_STALE_SESSIONS
     parts = [
         f'<div class="banner info" id="freshness" data-asof="{E(as_of)}" '
         f'data-sessions="{E(",".join(sessions_after(as_of)))}" data-stale-after="{spec.FRESHNESS_STALE_SESSIONS}">'
-        f'<strong>Data as of the {E(as_of)} close (<span id="age">age counted in NYSE sessions when scripts run'
-        f"</span>).</strong>Snapshot built {E(str(snap.get('run_finished', '')).replace('+00:00', ''))} UTC. "
+        f'<strong>Data as of the {E(as_of)} close (<span id="age">{age_text}'
+        f"</span>).</strong>Age checked at site build {built:%Y-%m-%d %H:%M} ET. Snapshot built {E(str(snap.get('run_finished', '')).replace('+00:00', ''))} UTC. "
         f"Quotes are end-of-session and delayed, never live. Run status: {E(snap.get('status', '?'))}.</div>"
     ]
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):
@@ -183,7 +192,7 @@ def freshness_banner(snap: dict, status: dict | None) -> str:
             "they are listed as excluded with the reason. " + E("; ".join(snap.get("problems", [])[:3])) + "</div>"
         )
     parts.append(
-        '<div class="banner warn" id="stale-client" hidden><strong>This page may be out of date.</strong>'
+        f'<div class="banner warn" id="stale-client"{"" if stale else " hidden"}><strong>This page may be out of date.</strong>'
         f"More than {spec.FRESHNESS_STALE_SESSIONS} NYSE sessions have passed since the as-of close, so at "
         "least one weekly update did not publish.</div>"
     )
@@ -939,8 +948,18 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     if hits:
         raise RuntimeError(f"refusing to publish: private-looking fields {hits[:5]}")
     fresh = freshness_banner(snap, status)
+    browser_files: dict[str, str] = {}
+    option_fragments: dict[str, str] = {}
     write = lambda rel, title, body, cur, depth=0, fr=fresh, js=(): (out / rel).write_text(  # noqa: E731
-        page(title, body, cur, depth, fr, js), encoding="utf-8"
+        page(
+            title,
+            site_performance.external_json(body, Path(rel).stem, browser_files) if depth == 0 else body,
+            cur,
+            depth,
+            fr,
+            js,
+        ),
+        encoding="utf-8",
     )
     tracking = store.read_json("tracking.json")
     prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
@@ -958,7 +977,16 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     write("ai.html", "AI stocks", ai_page(snap), "ai.html")
     write("growth.html", "Growth Stocks", growth_page(snap, daily), "growth.html")
     write("multibaggers.html", "Multibaggers", multibaggers_page(snap), "multibaggers.html")
-    write("options.html", "Options research", options_page(snap, daily), "options.html")
+    option_body = options_page(snap, daily, option_fragments)
+    if (
+        len(page("Options research", option_body, "options.html", freshness=fresh).encode("utf-8"))
+        > site_performance.HTML_BUDGET
+    ):
+        for h in spec.HORIZONS:
+            body = options_page(snap, daily, option_fragments, horizon=h.key)
+            write(f"options-{h.key}.html", f"Options research · {h.title}", body, "options.html")
+        option_body = options_page(snap, daily, option_fragments, horizon=spec.HORIZONS[0].key)
+    write("options.html", "Options research", option_body, "options.html")
     write(
         "bets.html", "Small-bet options research", site_bets.bets_page(snap, daily), "bets.html", js=("assets/bets.js",)
     )
@@ -982,6 +1010,16 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "data").mkdir(exist_ok=True)
     (out / "symbol").mkdir()
     (out / "fragments").mkdir()
+    (out / "option").mkdir()
+    for rel, text in browser_files.items():
+        (out / rel).write_text(text, encoding="utf-8")
+    for rid, markup in option_fragments.items():
+        (out / "fragments" / f"{rid}.json").write_text(json.dumps({"html": column_headers(markup)}), encoding="utf-8")
+        body = (
+            '<h1>Contract research</h1><p><a href="../options.html">Back to the options watchlist</a></p>'
+            + markup.replace('href="methodology.html', 'href="../methodology.html')
+        )
+        write(f"option/{rid}.html", "Contract research", body, "options.html", 1)
     for rel, text in evidence_fragments(snap["bands"]).items():  # evidence rows load on demand (see assets.JS)
         (out / rel).write_text(text, encoding="utf-8")
     for t in _SYMBOLS:
@@ -1023,4 +1061,6 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     if leaks:
         shutil.rmtree(out)
         raise RuntimeError(f"refusing to publish: secret values found in {len(leaks)} file(s)")
+    if problems := site_performance.budget_problems(out):
+        raise RuntimeError("HTML page budget exceeded: " + "; ".join(problems))
     return {"pages": len(list(out.rglob("*.html"))), "snapshot": dates[-1], "integrity_problems": integrity}

@@ -450,7 +450,8 @@ def test_site_has_compare_page_research_panels_and_data_status(demo):
     assert 'href="compare.html"' in idx and "What changed since the previous snapshot?" in idx
     cmp_page = (out / "compare.html").read_text(encoding="utf-8")
     assert 'id="cmp-data"' in cmp_page and "assets/compare.js" in cmp_page and (out / "assets" / "compare.js").exists()
-    data = json.loads(re.search(r'<script type="application/json" id="cmp-data">(.*?)</script>', cmp_page, re.S)[1])
+    path = re.search(r'<script type="application/json" id="cmp-data" data-src="([^"]+)"', cmp_page)[1]
+    data = json.loads((out / path).read_text(encoding="utf-8"))
     assert data["rules"]["max_names"] == 4 and data["date_sets"]
     # A newly ranked first name may not have a previous record. Test comparison on a common name.
     common = set.intersection(*({c["ticker"] for c in s["bands"]["large"]["candidates"]} for s in demo["snaps"]))

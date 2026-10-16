@@ -28,10 +28,22 @@ CSS = r"""
 """
 
 JS = r"""
-(function(){
+(async function(){
   var table=document.getElementById('t-scan'), raw=document.getElementById('decision-data');
   if(!table || !raw) return;
-  var payload=JSON.parse(raw.textContent),data=payload.rows, field=document.getElementById('research-field');
+  var payload;
+  try {
+    if(raw.dataset.src){
+      var response=await fetch(raw.dataset.src,{credentials:'same-origin'});
+      if(!response.ok)throw new Error('Unavailable');
+      payload=await response.json();
+    }else payload=JSON.parse(raw.textContent);
+  }catch(error){
+    document.getElementById('research-units').textContent='Research fields could not be loaded. Reload to retry, or open a company page for its stored evidence.';
+    document.querySelectorAll('.decision-controls input,.decision-controls select').forEach(function(el){el.disabled=true;});
+    return;
+  }
+  var data=payload.rows, field=document.getElementById('research-field');
   var min=document.getElementById('research-min'), max=document.getElementById('research-max');
   var text=document.getElementById('research-text'), coverage=document.getElementById('research-coverage');
   var rows=Array.from(table.tBodies[0].rows), heading=table.querySelector('[data-research-heading]');
