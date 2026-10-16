@@ -32,6 +32,7 @@ from . import (
     research,
     site_basics,
     site_bets,
+    site_methodology,
     site_refresh,
     spec,
 )
@@ -387,7 +388,7 @@ facts filed on or before {E(snap["as_of"])} only.</p>
 # --- history, methodology, audit ------------------------------------------------------------------------
 
 
-def history_page(dates: list[str], tracking: dict | None) -> str:
+def history_page(dates: list[str], tracking: dict | None, snapshots: list[dict] | None = None) -> str:
     items = "".join(f'<li><a href="reports/{d}.html">Week ending {d}</a></li>' for d in reversed(dates))
     if not tracking:
         trk = f'<p class="small">{E(tracking_schedule(dates))}</p>'
@@ -424,6 +425,7 @@ def history_page(dates: list[str], tracking: dict | None) -> str:
         hh = "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS)
         trk = f"""<div class="banner warn"><strong>Evidence status</strong>{E(tracking["evidence_note"])}</div>
 <p class="small">{E(tracking_schedule(dates))}</p>
+<p class="small">Legacy category aggregates below can span methodology versions; they are not evidence for any single version. Use the per-snapshot version column and continuity table when interpreting them.</p>
 <h3>Average excess return net of friction, by category</h3><div class="table-wrap"><table aria-label="Average excess return by list"><thead><tr><th>Category</th>{hh}
 <th class="num">Weekly turnover</th></tr></thead><tbody>{summ}</tbody></table></div>
 <h3>Weekly one-week chain</h3><ul class="small">{chain or '<li class="muted">Appears once a weekly list has been held for 5 trading sessions with prices for every name.</li>'}</ul>
@@ -433,7 +435,7 @@ def history_page(dates: list[str], tracking: dict | None) -> str:
 <p class="small">Assumed trading friction per side: {E(", ".join(f"{k} {v:g} bps" for k, v in tracking["friction"].items()))}
 (bps = hundredths of a percent).</p>"""
     return f"""<h1>History and performance tracking</h1><p class="lede">Every weekly snapshot is stored unchanged. Later prices
-measure each list as it was published.</p><h2>Weekly reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
+measure each list as it was published.</p>{site_methodology.history_table(snapshots or [])}<h2>Weekly reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
 
 
 _R = spec.OPTION_RULES
@@ -935,8 +937,14 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     )
     tracking = store.read_json("tracking.json")
     prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
+    history = [snap if d == dates[-1] else store.load(d) for d in dates]
     daily = site_refresh.load_context(data_dir, snap, out)
-    write("index.html", "Overview", overview(snap, status, dates, tracking, prev_snap, daily), "index.html")
+    write(
+        "index.html",
+        "Overview",
+        overview(snap, status, dates, tracking, prev_snap, daily) + site_methodology.progress(history),
+        "index.html",
+    )
     write("ai.html", "AI stocks", ai_page(snap), "ai.html")
     write("growth.html", "Growth Stocks", growth_page(snap, daily), "growth.html")
     write("multibaggers.html", "Multibaggers", multibaggers_page(snap), "multibaggers.html")
@@ -945,7 +953,7 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         "bets.html", "Small-bet options research", site_bets.bets_page(snap, daily), "bets.html", js=("assets/bets.js",)
     )
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
-    write("history.html", "History", history_page(dates, tracking), "history.html")
+    write("history.html", "History", history_page(dates, tracking, history), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
     write("audit.html", "Audit trail", audit_page(store, snap, integrity), "audit.html")
     profiles = {k: b.get("profile", "standard") for k, b in snap["bands"].items()}
@@ -964,7 +972,6 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     (out / "fragments").mkdir()
     for rel, text in evidence_fragments(snap["bands"]).items():  # evidence rows load on demand (see assets.JS)
         (out / rel).write_text(text, encoding="utf-8")
-    history = [snap if d == dates[-1] else store.load(d) for d in dates]
     for t in _SYMBOLS:
         write(f"symbol/{t}.html", f"{t} · symbol", symbol_page(t, snap, history), "", 1)
     for key, band in snap["bands"].items():
