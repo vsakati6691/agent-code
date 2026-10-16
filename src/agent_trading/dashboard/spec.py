@@ -19,8 +19,8 @@ import json
 from dataclasses import asdict, dataclass, field
 
 SPEC_VERSION = "2026-10-15.1"
-# Administrative metadata, excluded from spec_dict(): awaiting the owner's date.
-SPEC_FREEZE_DATE: str | None = None
+# Owner-approved administrative metadata, excluded from spec_dict().
+SPEC_FREEZE_DATE: str | None = "2026-10-15"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial rules registered before any dashboard results."),

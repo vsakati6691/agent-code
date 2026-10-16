@@ -61,7 +61,8 @@ Older snapshots retain their original methodology and missing fields.
 Plan 2030 shows the return required for the goal beside the stored scenarios and
 research evidence. Inputs stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
-the current methodology; the freeze date still awaits the owner's choice.
+the current methodology, frozen as of **2026-10-15**. The administrative freeze
+date does not change methodology version **2026-10-15.1** or its pinned hash.
 
 Every built HTML page has a 150 KB budget. Detail panels, scanner/comparison data
 and sparklines use separate assets; older larger options lists are split by
@@ -244,3 +245,10 @@ process environment. The shipped configuration leaves the account suffix
 empty and fails closed while `live.enabled` is true until it is supplied.
 Process environment values take precedence over `.env`; leading zeros are
 preserved. Never commit an account identifier to configuration or documentation.
+
+## License
+
+Original project code is available under the [MIT License](LICENSE).
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and its linked license texts
+govern the adapted third-party pieces. Software licensing does not grant
+market-data redistribution rights.

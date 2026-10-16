@@ -32,8 +32,7 @@ chat or worktree needs it. The new review PRs use separate `codex/` branches.
 
 ## License
 
-The project license awaits the owner's explicit choice. This change does not
-grant a new license. [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) and the
-license texts it links govern the adapted third-party pieces regardless of the
-project license. Software licensing does not grant market-data redistribution
-rights.
+The owner selected the [MIT License](../LICENSE) for original project code.
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) and the license texts it
+links govern the adapted third-party pieces. Software licensing does not grant
+market-data redistribution rights.

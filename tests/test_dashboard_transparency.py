@@ -16,6 +16,7 @@ def test_counts_are_per_version_and_distinct_week():
     assert counts[spec.SPEC_VERSION]["weeks"] == 2
     assert counts[spec.SPEC_VERSION]["estimate"] == "2027-10-02"
     assert "2 of 52 snapshots under the current version" in progress(records)
+    assert "Freeze date: 2026-10-15." in progress(records)
     assert "2027-10-02" in history_table(records)
     assert "0 of 52" in progress([])
     assert "Unavailable until first snapshot" in history_table([])
