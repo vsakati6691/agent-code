@@ -19,7 +19,8 @@ def partial_details(data: dict) -> str:
         return ""
     missing = []
     for key, title in (("quotes", "Quote"), ("chain_status", "Options chain")):
-        for symbol, item in sorted(data.get(key, {}).items()):
+        for symbol, item in sorted((data.get(key) or {}).items()):
+            item = item or {}
             if item.get("status") != "available":
                 missing.append(f"{title} {symbol}: {item.get('reason') or 'reason not recorded'}")
     options = data.get("options") or {}
@@ -34,7 +35,7 @@ def partial_details(data: dict) -> str:
         for provider in sorted(set(request_counts) | set(budgets))
     ]
     return (
-        '<div class="refresh-missing"><strong>Not refreshed</strong><ul>'
+        f'<details class="refresh-missing"><summary>Not refreshed ({len(missing)})</summary><ul>'
         + "".join(f"<li>{E(str(reason))}</li>" for reason in missing)
         + "</ul>"
         + (
@@ -42,7 +43,7 @@ def partial_details(data: dict) -> str:
             if counts
             else ""
         )
-        + "</div>"
+        + "</details>"
     )
 
 
@@ -84,8 +85,9 @@ def banner(snap: dict, context: dict | None) -> str:
             f"weekly snapshot {E(weekly_date)}.</p>"
         )
     stamp = str(data["collected_at"]).replace("T", " ").replace("+00:00", "").removesuffix("Z")
+    state_class = "warn" if data.get("status") == "partial" else "info"
     return (
-        f'<div class="banner info small daily-status"><strong>Daily refresh, {E(stamp)} UTC, delayed, not live</strong>'
+        f'<div class="banner {state_class} small daily-status" role="note" aria-label="Daily data status"><strong>Daily refresh, {E(stamp)} UTC, delayed, not live</strong>'
         f"Session {E(data['as_of'])} · weekly snapshot {E(weekly_date)} · "
         f"refresh status: {E(data['status'])}. Scores, ranks and trailing returns remain weekly. "
         "Change since weekly is an unadjusted price comparison; splits and dividends can affect it."

@@ -4,32 +4,6 @@ from .assets_scan import CSS as SCAN_CSS
 from .assets_scan import JS as SCAN_JS
 
 CSS = r"""
-:root {
-  color-scheme: light;
-  --bg: #f7f7f5; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #dddcd7;
-  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #686762;
-  --series-1: #2a78d6; --reference: #6d6c67; --link: #1c5cab;
-  --good: #0f7a3d; --warn-bg: #fff4d6; --warn-border: #c98500; --bad-bg: #fde8e8; --bad-border: #c23b3a;
-  --info-bg: #e8f1fc; --info-border: #2a78d6;
-}
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
-    color-scheme: dark;
-    --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #383835;
-    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #a3a29b;
-    --series-1: #3987e5; --reference: #a3a29b; --link: #86b6ef;
-    --good: #4cc27a; --warn-bg: #3a2f10; --warn-border: #c98500; --bad-bg: #3d1a1a; --bad-border: #e66767;
-    --info-bg: #14263d; --info-border: #3987e5;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #383835;
-  --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #a3a29b;
-  --series-1: #3987e5; --reference: #a3a29b; --link: #86b6ef;
-  --good: #4cc27a; --warn-bg: #3a2f10; --warn-border: #c98500; --bad-bg: #3d1a1a; --bad-border: #e66767;
-  --info-bg: #14263d; --info-border: #3987e5;
-}
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text-primary);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -195,19 +169,6 @@ JS = r"""
   window.addEventListener('beforeprint', function () {
     document.querySelectorAll('details').forEach(function (d) { d.setAttribute('open', ''); });
   });
-  // header search: open the symbol page when the input matches a ticker in the inline datalist
-  var sf = document.querySelector('.symsearch');
-  if (sf) {
-    var q = sf.querySelector('input');
-    var known = {};
-    sf.querySelectorAll('datalist option').forEach(function (o) { known[o.value.toUpperCase()] = o.value; });
-    function go() {
-      var t = known[q.value.trim().toUpperCase()];
-      if (t) location.href = sf.dataset.base + encodeURIComponent(t) + '.html';
-    }
-    q.addEventListener('change', go);
-    q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
-  }
   // phone header: keep the current page's link in view inside the scrolling nav
   var cur = document.querySelector('nav a[aria-current]');
   if (cur && cur.parentNode.scrollWidth > cur.parentNode.clientWidth) {
@@ -265,7 +226,7 @@ JS = r"""
     tablistKeys(group, function (b) { show(b.dataset.tab, true); });
     var hash = location.hash.replace('#', '');
     var first = buttons[0] && buttons[0].dataset.tab;
-    var want = [hash, first].filter(function (k) { return k && group.querySelector('button[data-tab="' + k + '"]'); })[0];
+    var want = [hash, first].find(function (k) { return Array.from(buttons).some(function (b) { return b.dataset.tab === k; }); });
     if (want) show(want, false);
   });
   // evidence blocks on the list pages are separate small files, fetched the first time their row opens
@@ -273,21 +234,37 @@ JS = r"""
     if (!box || box.dataset.state === 'loading' || box.dataset.state === 'loaded') return;
     box.dataset.state = 'loading';
     box.setAttribute('aria-busy', 'true');
-    fetch(box.dataset.src, {credentials: 'same-origin'}).then(function (r) {
+    var retryFocused = box.contains(document.activeElement), controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 15000);
+    var oldRetry = box.querySelector('.load-error button');
+    if (oldRetry) { oldRetry.disabled = true; oldRetry.textContent = 'Retrying…'; }
+    fetch(box.dataset.src, {credentials: 'same-origin', signal: controller.signal}).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(function (j) {
+      if (!j || typeof j.html !== 'string' || !j.html.trim()) throw new Error('Invalid evidence fragment');
       box.innerHTML = j.html;
       box.dataset.state = 'loaded';
+      if (retryFocused && !box.closest('[hidden]')) { box.tabIndex = -1; box.focus({preventScroll: true}); }
     }).catch(function () {
       box.dataset.state = '';
-      box.textContent = 'The evidence could not be loaded. ';
+      box.replaceChildren();
+      var notice = document.createElement('div'), message = document.createElement('p');
+      notice.className = 'load-error';
+      notice.setAttribute('role', 'status');
+      message.textContent = 'The evidence could not be loaded. The stored research page is still available.';
+      notice.appendChild(message);
       var a = document.createElement('a');
       a.href = box.dataset.page;
       a.textContent = 'Open the full research page';
-      box.appendChild(a);
-      box.appendChild(document.createTextNode(', or select the ticker again to retry.'));
-    }).then(function () { box.removeAttribute('aria-busy'); });
+      notice.appendChild(a);
+      var retry = document.createElement('button');
+      retry.type = 'button'; retry.className = 'action'; retry.textContent = 'Retry loading evidence';
+      retry.addEventListener('click', function () { lazyLoad(box); });
+      notice.appendChild(retry);
+      box.appendChild(notice);
+      if (retryFocused && !box.closest('[hidden]')) retry.focus({preventScroll: true});
+    }).then(function () { clearTimeout(timeout); box.removeAttribute('aria-busy'); });
   }
   // expandable rows (evidence, assumptions, payoffs)
   document.querySelectorAll('.rowtoggle').forEach(function (b) {
@@ -305,7 +282,9 @@ JS = r"""
   // Calls / 3 months on every load unless the URL hash names a tab (#put-6m); the hash follows each click
   document.querySelectorAll('[data-matrix]').forEach(function (box) {
     var state = {};
-    function valid(d, v) { return v && box.querySelector('button[data-dim="' + d + '"][data-val="' + v + '"]'); }
+    function valid(d, v) { return Array.from(box.querySelectorAll('button[data-dim]')).some(function (b) {
+      return b.dataset.dim === d && b.dataset.val === v;
+    }); }
     function render(push) {
       box.querySelectorAll('button[data-dim]').forEach(function (b) {
         b.setAttribute('aria-selected', state[b.dataset.dim] === b.dataset.val ? 'true' : 'false');
@@ -421,11 +400,14 @@ JS = r"""
       return col;
     }
     ths.forEach(function (th) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'sortbtn';
-      while (th.firstChild) btn.appendChild(th.firstChild);
-      th.appendChild(btn);
+      var btn = th.querySelector('.sortbtn');
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sortbtn';
+        while (th.firstChild) btn.appendChild(th.firstChild);
+        th.appendChild(btn);
+      }
       th.setAttribute('aria-sort', 'none');
       btn.addEventListener('click', function () {
         var dir = th.getAttribute('aria-sort') === 'ascending' ? -1 : 1;
@@ -555,3 +537,7 @@ main, .grid > *, .facts > *, .mb-grid > * { min-width: 0; }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 """
+
+from .assets_terminal import CSS as TERMINAL_CSS  # noqa: E402 - shared theme overrides legacy page styles.
+
+CSS += TERMINAL_CSS

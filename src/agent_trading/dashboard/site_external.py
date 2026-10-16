@@ -8,6 +8,7 @@ from .pipeline_external import OLD
 from .sec_insiders import CLASSIFICATION, LABEL
 from .short_interest import LABEL as SHORT_LABEL
 from .site_layout import E
+from .site_status import notice
 
 
 def source(url: str | None, label: str = "Source") -> str:
@@ -83,8 +84,8 @@ def company(c: dict) -> str:
 
 
 def macro_context(snap: dict) -> str:
-    series = (snap.get("macro") or {}).get("series", {})
-    items = []
+    series = (snap.get("macro") or {}).get("series") or {}
+    items, gaps = [], []
     for key, label in (
         ("DGS1MO", "1M Treasury"),
         ("DGS2", "2Y Treasury"),
@@ -93,26 +94,44 @@ def macro_context(snap: dict) -> str:
         ("CPIAUCSL", "CPI YoY"),
         ("UNRATE", "Unemployment"),
     ):
-        r = series.get(key, {})
+        r = series.get(key) or {}
         value = r.get("yoy") if key == "CPIAUCSL" else r.get("value")
-        value_text = pct(value, 2) if key == "CPIAUCSL" else num(value, 2) + "%" if value is not None else "Unavailable"
+        value_text = "Unavailable" if value is None else pct(value, 2) if key == "CPIAUCSL" else num(value, 2) + "%"
         reason = (r.get("yoy_reason") if key == "CPIAUCSL" else r.get("reason")) or OLD
+        if value is None:
+            gaps.append(f"{label}: {reason}")
         items.append(
-            f'<div class="card"><strong>{source(f"https://fred.stlouisfed.org/series/{key}", label)}</strong><div>{value_text}</div>'
-            f"<small>{E(r.get('observation_date') or 'n/a')}{' · ' + E(reason) if value is None else ''}</small></div>"
+            f'<div class="card macro-card"><strong>{source(f"https://fred.stlouisfed.org/series/{key}", label)}</strong><div>{value_text}</div>'
+            f"<small>{E(r.get('observation_date') or 'No observation stored')}</small></div>"
         )
-    return f'<section><h2>Macro context</h2><div class="grid">{"".join(items)}</div><p class="small"><a href="downloads/{E(str(snap["as_of"]))}_macro.csv">Macro CSV</a></p></section>'
+    warning = (
+        notice(
+            "Macro inputs unavailable",
+            f"{len(gaps)} of {len(items)} displayed series lack a usable observation. Available values retain their recorded dates.",
+            gaps,
+        )
+        if gaps
+        else ""
+    )
+    return f'<section><h2>Macro context</h2>{warning}<div class="grid">{"".join(items)}</div><p class="small"><a href="downloads/{E(str(snap["as_of"]))}_macro.csv">Macro CSV</a></p></section>'
 
 
 def rate_note(snap: dict) -> str:
-    rate = (snap.get("options") or {}).get("rate_input") or rate_input(snap.get("macro"))
+    try:
+        rate = (snap.get("options") or {}).get("rate_input") or rate_input(snap.get("macro"))
+    except (AttributeError, KeyError, TypeError):
+        rate = {"value": None, "reason": "Stored Treasury observation is incomplete; dated rate unavailable."}
     value = rate.get("value")
     text = (
-        f"DGS1MO {value:.3%}, observation {rate['date']}"
+        f"DGS1MO {value:.3%}, observation {rate.get('date') or 'date unavailable'}"
         if value is not None
-        else "Unavailable · " + rate.get("reason", OLD)
+        else "Unavailable · " + (rate.get("reason") or OLD)
     )
-    return f'<p class="small">Dated Black-Scholes rate input: {E(text)}. {source(rate.get("source"), "FRED DGS1MO")}. Previously stored estimates retain their recorded assumptions.</p>'
+    warning = notice("Treasury rate unavailable", rate.get("reason") or OLD) if value is None else ""
+    return (
+        warning
+        + f'<p class="small">Dated Black-Scholes rate input: {E(text)}. {source(rate.get("source"), "FRED DGS1MO")}. Previously stored estimates retain their recorded assumptions.</p>'
+    )
 
 
 def csv_fields(c: dict) -> dict:

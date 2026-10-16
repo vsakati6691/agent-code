@@ -768,7 +768,7 @@ def test_tikasa_brand_and_options_link_stay_consistent_when_options_are_disabled
     for name in ("index.html", "watchlist.html", "methodology.html"):
         page = (off_out / name).read_text(encoding="utf-8")
         assert "Tikasa Stock Research" in page and "Growth Research" not in page, name
-        assert re.search(r'<nav>.*href="options\.html"', page), name
+        assert re.search(r'<nav\b[^>]*>.*href="options\.html"', page), name
     index = (off_out / "index.html").read_text(encoding="utf-8")
     assert 'id="options-watchlist"' in index and "not collected" in index
     assert "<title>Tikasa Stock Research: weekly reports</title>" in (off_out / "feed.xml").read_text(encoding="utf-8")
@@ -798,7 +798,7 @@ def test_overview_and_research_lists_have_separate_pages(site):
 )
 def test_primary_research_navigation_marks_only_the_active_page(site, name, label):
     page = (site / name).read_text(encoding="utf-8")
-    nav = re.search(r"<nav>(.*?)</nav>", page, re.S)[1]
+    nav = re.search(r"<nav\b[^>]*>(.*?)</nav>", page, re.S)[1]
     assert nav.count("aria-current=page") == 1
     assert f'<a href="{name}" aria-current=page>{label}</a>' in nav
     for route in ("index.html", "growth.html", "multibaggers.html"):

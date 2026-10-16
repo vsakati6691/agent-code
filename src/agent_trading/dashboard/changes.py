@@ -222,12 +222,24 @@ KIND_LABELS = {
 
 
 def summary(snap: dict, prev_snap: dict | None) -> dict:
-    """Counts and items across every listed name, for the overview."""
-    rows = []
+    """Unique company events, retaining list context; score changes remain list-specific."""
+    events = {}
     for key, band in (snap.get("bands") or {}).items():
         for c in band.get("candidates", []):
             r = compare(c, snap, prev_snap)
             for it in r["items"]:
-                rows.append({**it, "ticker": c["ticker"], "band": key})
+                identity = (
+                    c["ticker"],
+                    it["kind"],
+                    it["text"],
+                    it.get("date"),
+                    it.get("source"),
+                    key if it["kind"] == "score" else None,
+                )
+                if identity not in events:
+                    events[identity] = {**it, "ticker": c["ticker"], "band": key, "bands": []}
+                if key not in events[identity]["bands"]:
+                    events[identity]["bands"].append(key)
+    rows = list(events.values())
     counts = {k: sum(1 for r in rows if r["kind"] == k) for k in KIND_LABELS}
     return {"previous": str(prev_snap["as_of"]) if prev_snap else None, "rows": rows, "counts": counts}

@@ -374,7 +374,10 @@ def test_options_page_is_linked_and_explains_every_unavailable_state(tmp_path):
         assert "Snapshot methodology" in page and "page renderer" in page and "data-hz=" not in page
         assert evidence.options_state(dict(snap, options=options))[0] == state
         for name in ("index.html", "watchlist.html", "methodology.html", "history.html", "audit.html"):
-            assert re.search(r'<nav>.*href="options\.html"', (o / name).read_text(encoding="utf-8")), (state, name)
+            assert re.search(r'<nav\b[^>]*>.*href="options\.html"', (o / name).read_text(encoding="utf-8")), (
+                state,
+                name,
+            )
         index = (o / "index.html").read_text(encoding="utf-8")
         assert 'id="options-watchlist"' in index and f'data-state="{state}"' in index
     assert "DASHBOARD_OPTIONS" in (tmp_path / "s-missing" / "options.html").read_text(encoding="utf-8")

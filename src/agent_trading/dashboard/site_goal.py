@@ -104,7 +104,7 @@ Distributions, taxes, inflation and transaction costs are excluded. Cash earns 0
 <p id="goal-error" role="status"></p><section id="required-rate"><h2>Required compound annual return</h2>
 <p>With contributions: <strong id="goal-required">{pct(required, 2)}/yr</strong>.
 Without contributions: <strong id="goal-no-contributions">{pct(required, 2)}/yr</strong>.</p>
-<p id="goal-horizon"></p><p>Contributions arrive at the end of each completed month. A fractional final month adds growth, but no extra contribution.</p>
+<p id="goal-horizon">{years:.2f} years; {int(years * 12 + 1e-9)} end-of-month contributions.</p><p>Contributions arrive at the end of each completed month. A fractional final month adds growth, but no extra contribution.</p>
 <p><a href="evidence.html">Compare this required rate with what the evidence says</a>.</p></section>
 <h2>Stored scenarios beside the requirement</h2><p>Original watchlist order. The flag compares only the stored base price rate
 with the requirement including contributions; it does not establish feasibility or recommend a holding.</p>

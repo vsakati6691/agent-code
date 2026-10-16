@@ -446,7 +446,9 @@ COMPARE_JS = r"""
       drawChart(sel.map(function (t) { return byT[t]; }));
     });
   });
-  decodeURIComponent(location.hash.slice(1)).split(',').forEach(function (t) {
+  var hash = '';
+  try { hash = decodeURIComponent(location.hash.slice(1)); } catch (_) {}
+  hash.split(',').forEach(function (t) {
     t = t.trim().toUpperCase();
     if (byT[t] && sel.indexOf(t) < 0 && sel.length < rules.max_names) sel.push(t);
   });
