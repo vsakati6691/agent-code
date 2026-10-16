@@ -1,109 +1,210 @@
-# agent-code
+# agent-code · Tikasa Stock Research
 
-**📊 Live research dashboard:** https://vsakati6691.github.io/agent-code/
+[Open the research dashboard](https://vsakati6691.github.io/agent-code/index.html) ·
+[GitHub repository](https://github.com/vsakati6691/agent-code) ·
+[Dashboard methodology](docs/RESEARCH_DASHBOARD.md) ·
+[Daily runbook](docs/DAILY_ROUTINE.md)
 
-AI-assisted **research, paper-trading and live-ticket** system for US stocks and ETFs.
-Scheduled AI sessions collect data through read-only market connectors; the Python
-engine does the analysis.
+A public stock and options research dashboard, plus a local Python system for
+stock/ETF research, paper trading and manual live-order tickets. The dashboard
+compares companies using dated evidence and rules fixed in advance. The local
+desk analyzes data imported through read-only market and account connectors.
 
-> **The system never places orders.** Strategies B and C write **order tickets** for the
-> real Robinhood "Agent-trading" account ($1,000 cap) and the owner places each one by
-> hand. The code cannot place, modify or cancel orders, move money, use margin, short,
-> or trade options or crypto. The config loader refuses to start if any of that is
-> enabled, and a test fails if a broker order call appears in the source.
-> Nothing here is investment advice.
+> **The system never places orders.** Strategies B and C can write manual tickets
+> for the owner's Robinhood Agent-trading account, sized on at most $1,000. The
+> owner reviews and places each order by hand. Brokerage tools are read-only;
+> the code cannot place, modify or cancel orders, move money, use margin, short,
+> or trade options or crypto. Dashboard options are research comparisons only
+> and do not change those restrictions. Nothing here is investment advice.
 
-## Strategies
+## Research dashboard
 
-| Strategy | What it does | Evidence (backtests, costs included) |
-|---|---|---|
-| **A: S&P 500 scanner** · paper only | Ranks current constituents on strength, volume, quality, valuation and low volatility; up to 3 paper entries | ❌ No edge: did not beat SPY 2019–2025, rank IC ≈ 0, no better than plain 12-1 momentum |
-| **B: Desk** · paper + live tickets | Daily signals for TQQQ, SQQQ (paper only), IBIT and NVDA with pre-registered trend rules | ⚠️ Weak: edge near zero per instrument |
-| **C: GTAA** · paper + live tickets | Faber trend: hold each of SPY, EFA, IEF, DBC, VNQ, TLT, GLD while above its 10-month average; monthly rebalance | ✅ Modest: validation +6.8%/yr, Sharpe 0.96, −6.9% max drawdown (SPY +11.1%, −34%) |
+The [GitHub Pages site](https://vsakati6691.github.io/agent-code/index.html) uses
+public market data only. Account snapshots, positions, orders, manual tickets
+and journals stay out of the dashboard. Sources include SEC EDGAR, Nasdaq
+Trader, Cboe delayed quotes and Alpha Vantage; coverage and timestamps appear
+on the site.
 
-The 2026-10-12 tournament ran 12 pre-registered candidates through one engine: **none passed
-the acceptance rules**. See [research/TOURNAMENT_2026-10-12.md](research/TOURNAMENT_2026-10-12.md).
-Backtests are evidence with limits, not proof.
-
-## Risk limits (enforced in code)
-
-| Limit | Value on $1,000 |
+| Page | What you can explore |
 |---|---|
-| Per position / aggregate / correlated | $5 (TQQQ/SQQQ $2.50) / $15 / $10 shared |
-| Max position | $250, cash only; stops at 2.5 × ATR(14) |
-| Daily loss / drawdown | $10 stops new entries; 5% engages the kill switch until the owner releases it |
-| Real account order gate | $100/order; $200 and 3 entries/day; $800 exposure; $200 cash reserve; settled cash; no leveraged or inverse ETFs; fresh reconciled snapshot |
-| Costs | 10 bps slippage + 5 bps half-spread per side |
+| [Overview](https://vsakati6691.github.io/agent-code/index.html) | SPY/IJH/IWM market context, snapshot changes, scheduled earnings, concentration and downside flags, benchmark tracking and data coverage. |
+| [Growth Stocks](https://vsakati6691.github.io/agent-code/growth.html) | Large-, mid- and small-cap research lists with search, field filters, sorting, CSV downloads and device-local pins. Large-cap candidates come from the S&P 500. |
+| [Multibaggers](https://vsakati6691.github.io/agent-code/multibaggers.html) | Up to five speculative companies with a 5–10 year research horizon, conditional scenarios, failure risks and thesis invalidation conditions. |
+| [AI stocks](https://vsakati6691.github.io/agent-code/ai.html) | Up to five large-cap and five mid-cap AI candidates, their roles in the AI supply chain, conditional market-cap comparisons and sourced private-company context. |
+| [Compare](https://vsakati6691.github.io/agent-code/compare.html) | Two to four companies side by side: financial trends, valuation, returns, drawdowns, evidence quality and SEC sources, with warnings for incompatible periods or scoring profiles. |
+| [Options](https://vsakati6691.github.io/agent-code/options.html) | Separate weekly and daily call/put comparisons across 3M/6M/1Y expiry windows, plus speculative 30–90 days-to-expiry research and a hypothetical risk-budget calculator when options are enabled. |
+| [Small bets](https://vsakati6691.github.io/agent-code/bets.html) | A separate options explorer with Core/Long-shot tiers, premium filters, whole-contract budget arithmetic and a device-local research slip. |
+| [Watchlist 2030](https://vsakati6691.github.io/agent-code/watchlist.html) | A saved ticker list with verified symbol information, dated prices and conditional year-end-2030 bear/base/bull price scenarios. |
+| [History & tracking](https://vsakati6691.github.io/agent-code/history.html) | Stored research reports and forward list returns versus benchmarks at 1, 3, 6 and 12 months, when enough observations exist. |
+| [Methodology](https://vsakati6691.github.io/agent-code/methodology.html) / [Audit trail](https://vsakati6691.github.io/agent-code/audit.html) | Versioned rules, exclusions, source coverage, timestamps, snapshot hashes, downloadable data and the append-only event log. |
 
-Stops never guarantee the loss limit: gaps can fill worse. At most about three positions are
-open at once, so most of the $1,000 stays in cash by design.
+Company detail pages bring together financial trends, thesis and bear case,
+valuation, filing links, changes since the previous snapshot, and scenario
+calculators. A ticker lookup connects each symbol to its research and history.
 
-## How it runs
+### Latest research features
 
-The Python code cannot call MCP tools, so each run is an AI session that collects data,
-saves JSON, imports it and runs the analysis ([docs/DAILY_ROUTINE.md](docs/DAILY_ROUTINE.md)).
+Methodology **2026-10-14.9** adds dated growth-decision fields: fiscal-year revenue
+and EPS growth, margins, debt and cash, valuation, ownership-data coverage and
+issuer business/risk excerpts. Growth lists separate **fundamental quality from
+momentum**; scores should be compared within their original list and profile.
+Older snapshots retain their original methodology and missing fields.
 
-| Weekdays (ET) | Run | Output |
+The Options page also supports speculative 30–90 DTE comparisons for up to the
+top three names in each large/mid/small growth list. Its browser calculator
+shows hypothetical premium exposure and cap warnings. Small bets uses a
+separate universe and longer expiry windows. These tools do not change the
+local trading desk's risk limits or submit orders.
+
+Quotes are **delayed, never live**. Missing, stale or unsupported fields retain
+their reasons; missing earnings data means unknown. Insider net buying/selling
+stays unavailable without unambiguous transaction classifications. IV rank
+requires 252 comparable stored sessions. Scenarios are conditional calculations,
+and **probability is not established** without out-of-sample calibration. Any
+option contract can lose its entire premium.
+
+### Refreshes and publication
+
+| Workflow | Schedule | What changes |
 |---|---|---|
-| 08:30 | Pre-market | Account, calendar, quotes; repeats open tickets |
-| 12:30 | Midday | Stop breaches and changed decisions, no trades |
-| 16:30 | Post-close | Paper fills, loss checks, **live tickets**, full report |
-| Fri 17:30 | Weekly review | Paper P&L vs SPY, missed runs |
+| [Weekly research](.github/workflows/research-dashboard.yml) | Saturday 14:17 UTC (10:17 EDT / 09:17 EST); Sunday retry at the same time | Collects fundamentals and prices, ranks candidates, stores an immutable snapshot, updates tracking and builds the site. |
+| [Daily light refresh](.github/workflows/research-dashboard-daily.yml) | Weekdays 22:17 UTC (18:17 EDT / 17:17 EST), when enabled | Adds delayed closing prices and optional options research. Weekly stock scores, ranks, trailing returns and tracking remain unchanged. |
 
-Runs happen only while the laptop and the app are open. A missed run means no tickets, which
-is safe. Reports go to `reports/` (git-ignored). Dashboards:
-[Agent-trading desk](https://claude.ai/artifact/A3dcSc1pWfKjykdjFxHnNo) (owner's snapshot of the
-last run) and the weekly public-data [research dashboard](https://vsakati6691.github.io/agent-code/)
-(live on GitHub Pages, [how it is built](docs/RESEARCH_DASHBOARD.md)) built by GitHub Actions.
+GitHub Actions runs independently of the owner's laptop. Scheduled jobs can be
+late or skipped; holidays, provider failures and incomplete coverage are
+reported. Weekly snapshots and daily records live on the `research-data` branch
+with integrity manifests; existing records are never backfilled or overwritten.
 
-Data comes from Robinhood (account, prices, quotes, fundamentals), Financial Datasets
-(S&P 500 list, news, filings), Bigdata.com (economic calendar) and Alpha Vantage (rates,
-backup prices). All read-only.
+Repository variables control `DASHBOARD_DAILY` (weekday collection),
+`DASHBOARD_OPTIONS` (option collection/display) and `DASHBOARD_PUBLISH` (Pages
+deployment). These are opt-in gates. SEC access requires `SEC_USER_AGENT`;
+`ALPHAVANTAGE_API_KEY` supports earnings and optional enrichment. Local secrets
+belong in the ignored `.env`; workflow credentials belong in GitHub Actions
+secrets. Review the [data-source terms and setup](docs/RESEARCH_DASHBOARD.md#owner-actions-required-before-the-first-deployment)
+before enabling collection or publication. Cboe redistribution requires consent.
 
-## Quick start (Windows, Python 3.12)
+## Local research and manual-ticket desk
+
+The desk is separate from the public dashboard. An AI session collects data
+through read-only connectors, saves payloads in its scratchpad, imports them
+and runs the Python engine. Follow [the daily runbook](docs/DAILY_ROUTINE.md).
+
+| Strategy | What it does | Backtest evidence, including costs |
+|---|---|---|
+| **A: S&P 500 scanner** · paper only | Ranks constituents on strength, volume, quality, valuation and low volatility; up to three paper entries. | No demonstrated edge: did not beat SPY in 2019–2025, rank IC approximately zero, no better than plain 12-1 momentum. |
+| **B: Desk** · paper + manual tickets | Trend rules for TQQQ, SQQQ, IBIT and NVDA. Only IBIT and NVDA are eligible for real-account tickets. | Weak: edge near zero per instrument. |
+| **C: GTAA** · paper + manual tickets | Monthly rebalance across SPY, EFA, IEF, DBC, VNQ, TLT and GLD; hold an asset while above its 10-month average. | Modest returns and lower drawdowns, but rejected by the tournament: train + validation (2008–2021) CAGR +4.4%, Sharpe 0.65, maximum drawdown −8.4%. |
+
+The [2026-10-12 tournament](research/TOURNAMENT_2026-10-12.md) compared eight
+pre-registered candidates and four benchmarks: **no candidate passed the
+acceptance rules**. These desk
+backtests do not establish an edge for the newer dashboard lists. Use
+`tournament --no-test` for further research; the tournament test period has
+already been evaluated. Signals at day *t* close fill at day *t+1* open in the
+simulator, and the research registry is append-only.
+
+### Enforced risk limits
+
+| Control | Current configuration on $1,000 |
+|---|---|
+| Planned risk per position / aggregate / correlated | $5 ($2.50 for paper TQQQ/SQQQ) / $15 / $10 shared. |
+| Position size and stops | 25% maximum position; cash only; initial stop at 2.5 × ATR(14), with a 20% stop-distance risk buffer. Real buy tickets also face the stricter $100/order gate. |
+| Leveraged ETFs | TQQQ/SQQQ are paper only, have a five-day maximum hold and cannot be held together. |
+| Daily loss / drawdown | 1% stops new entries; 5% drawdown engages the kill switch. Only the owner may release it. |
+| Real-account order gate | $100 per buy; $200 and three new entries/day; $800 exposure; $200 cash reserve; settled cash; one position per ticker; an allowed-symbol list and a fresh, reconciled same-day snapshot. |
+| Simulator cost settings | 10 bps slippage plus half the configured 5 bps spread per side; zero commission. |
+
+Stops cannot guarantee a loss ceiling because gaps can fill worse. The
+configuration rejects shorting, margin, options and crypto trading, and safety
+tests guard against broker order calls. See [architecture and full rules](docs/ARCHITECTURE.md)
+and [current settings](config/settings.yaml).
+
+### Local operating routine
+
+| Time (New York) | Run | Output |
+|---|---|---|
+| Weekdays 08:30 | Pre-market | Account, calendar and quote checks; repeats open tickets. |
+| Weekdays 12:30 | Midday | Stop breaches and changed decisions. |
+| Weekdays 16:30 | Post-close | Paper fills, loss checks, manual live tickets and the full report. |
+| Friday 17:30 | Weekly review | Paper P&L versus SPY and missed runs. |
+
+These local sessions require the laptop and app to be open and the automation
+to be configured. Reports go to ignored `reports/`. The public dashboard's
+GitHub Actions schedule above is independent.
+
+## Quick start
+
+Use **Windows, PowerShell and Python 3.12**, the version used in CI. Run commands
+from the repository root. `pyproject.toml` declares Python 3.11 or newer.
 
 ```powershell
+git clone https://github.com/vsakati6691/agent-code.git
+cd agent-code
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-copy .env.example .env                     # add your Alpha Vantage key; never commit .env
-.\.venv\Scripts\python.exe -m pytest       # all tests must pass
+Copy-Item .env.example .env   # first setup only; add local keys, never commit this file
+.\.venv\Scripts\python.exe -m pytest
 ```
+
+After importing the required data using the [runbook](docs/DAILY_ROUTINE.md):
 
 ```powershell
 $py = ".\.venv\Scripts\python.exe"
-& $py -m agent_trading daily [--no-paper] [--label premarket|intraday|postclose]
-& $py -m agent_trading paper status | account show | kill-switch status
-& $py -m agent_trading import-robinhood <files> | snapshot <kind> <files> | universe import <file> | account import <file>
-& $py -m agent_trading evaluate-scanner | evaluate-desk | evaluate-gtaa | tournament --no-test
+& $py -m agent_trading daily --no-paper --label premarket
+& $py -m agent_trading paper status
+& $py -m agent_trading account show
+& $py -m agent_trading kill-switch status
 ```
 
-## Layout
+The post-close cycle advances the paper simulator and writes eligible manual
+tickets. Research evaluations use the available local history:
 
+```powershell
+& $py -m agent_trading daily --label postclose
+& $py -m agent_trading evaluate-scanner
+& $py -m agent_trading evaluate-desk
+& $py -m agent_trading evaluate-gtaa
+& $py -m agent_trading tournament --no-test
 ```
-config/settings.yaml          limits, costs, strategy and data settings
+
+To build a local dashboard from the existing public data branch without
+collecting new data, first check out that branch into the ignored folder:
+
+```powershell
+git fetch origin research-data
+git worktree add --detach research-data origin/research-data
+& $py -m agent_trading.dashboard verify --data research-data
+& $py -m agent_trading.dashboard build --data research-data --out site
+& $py -m http.server 8000 --directory site
+```
+
+Open [localhost:8000](http://localhost:8000). The build reads stored snapshots
+without network requests. If `research-data/` already exists, reuse its checkout
+instead of adding it again. See [dashboard commands](docs/RESEARCH_DASHBOARD.md#commands)
+for collection, refresh and tradability-import options.
+
+## Repository layout
+
+```text
+config/                       strategy/risk settings, watchlist and research inputs
 src/agent_trading/
+  dashboard/                  collectors, scoring, daily refresh, static site and browser tools
   strategies/                 scanner.py (A), desk.py (B), gtaa.py (C)
-  risk.py, paper.py, live.py  risk engine, paper broker, live tickets (never sends orders)
-  daily.py, cli.py            daily cycle, report, commands
-  data/, backtest/            imports and validation; backtest engines and stats
-  dashboard/                  weekly research dashboard (public data only)
-docs/                         DAILY_ROUTINE, ARCHITECTURE (diagrams, full rule tables), audits
-tests/                        unit, integration (mocked) and safety tests
+  risk.py, paper.py, live.py   risk engine, paper broker and manual live tickets
+  order_gate.py, killswitch.py real-account ticket limits and persistent shutdown
+  daily.py, cli.py            local daily cycle, reports and commands
+  data/, backtest/            imports, validation, backtest engines and statistics
+.github/workflows/            weekly research and optional weekday refresh
+docs/                         methodology, architecture, daily runbook and audits
+research/                     pre-registered experiments, results and append-only registry
+tests/                        unit, integration, dashboard and safety tests
 ```
 
-## More
+Runtime `data/`, `logs/`, `reports/`, generated `site/` and the local
+`research-data/` checkout are git-ignored.
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): diagrams, Strategy B rules, live-ticket settings, data sources, known limitations.
-- [docs/FINAL_REPORT_2026-10-12.md](docs/FINAL_REPORT_2026-10-12.md): research findings.
-- **AI assistants:** rules live in [CLAUDE.md](CLAUDE.md); [AGENTS.md](AGENTS.md) points Codex and other tools there.
-
-
-Growth decision research (methodology 2026-10-14.9) adds dated valuation,
-fiscal-year growth, margin/balance-sheet, ownership and timing fields to the
-Growth Stocks scanner and company pages. Fundamental quality and momentum are
-separate. `options.html` includes speculative 30–90 DTE comparisons and a local
-hypothetical risk-budget calculator when `DASHBOARD_OPTIONS` is enabled.
-Missing data stays n/a with its reason, including unclassified insider trades
-and IV rank until 252 comparable sessions exist. See
-[the research dashboard methodology](docs/RESEARCH_DASHBOARD.md) for formulas,
-source coverage, request budgets and the unchanged full-loss disclaimer.
+For historical findings, see the [research report](docs/FINAL_REPORT_2026-10-12.md).
+**AI assistants and contributors:** read [CLAUDE.md](CLAUDE.md) in full;
+[AGENTS.md](AGENTS.md) points to the same rules. Work on `feature/research-system`,
+run the full test suite and scan the staged diff for secrets before committing.
+Changes reach `main` through a PR on the owner's instruction.
