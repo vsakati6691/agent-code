@@ -6,10 +6,11 @@ the grid is only for sensitivity tests and walk-forward selection, never for
 picking the best point. Weight functions use data up to each decision day's
 close only.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -24,7 +25,7 @@ CASH = "BIL"
 class Market:
     opens: pd.DataFrame
     closes: pd.DataFrame
-    total_return: set[str]                     # symbols adjusted for dividends; the rest are price-only
+    total_return: set[str]  # symbols adjusted for dividends; the rest are price-only
 
     @property
     def month_end(self) -> pd.Series:
@@ -73,10 +74,12 @@ def _frame(mkt: Market, cols: list[str], rows: dict) -> pd.DataFrame:
 
 # ---------------------------------------------------------------- benchmarks
 
+
 def buy_hold(symbol: str) -> WeightFn:
     def fn(mkt: Market, _):
         first = mkt.closes[symbol].first_valid_index()
         return _frame(mkt, [symbol], {first: {symbol: 1.0}})
+
     return fn
 
 
@@ -84,17 +87,19 @@ def fixed_mix(mix: dict[str, float]) -> WeightFn:
     def fn(mkt: Market, _):
         cols = list(mix)
         return _frame(mkt, cols, {d: mix for d in mkt.monthly(cols).index})
+
     return fn
 
 
 # ---------------------------------------------------------------- candidates
+
 
 def gtaa(mkt: Market, months: int) -> pd.DataFrame:
     """Faber: each asset 1/n while its month-end close is above its N-month SMA, else T-bills (BIL)."""
     m = mkt.monthly(GTAA7 + [CASH])
     sma = m[GTAA7].rolling(months).mean()
     rows = {}
-    for d in m.index[months - 1:]:
+    for d in m.index[months - 1 :]:
         above = (m.loc[d, GTAA7] > sma.loc[d]).fillna(False)
         w = {a: 1 / len(GTAA7) for a in GTAA7 if above[a]}
         w[CASH] = 1 - sum(w.values())
@@ -106,7 +111,7 @@ def spy_trend(mkt: Market, months: int) -> pd.DataFrame:
     """SPY while its month-end close is above its N-month SMA, else BIL."""
     m = mkt.monthly(["SPY", CASH])
     sma = m["SPY"].rolling(months).mean()
-    rows = {d: ({"SPY": 1.0} if m.loc[d, "SPY"] > sma.loc[d] else {CASH: 1.0}) for d in m.index[months - 1:]}
+    rows = {d: ({"SPY": 1.0} if m.loc[d, "SPY"] > sma.loc[d] else {CASH: 1.0}) for d in m.index[months - 1 :]}
     return _frame(mkt, ["SPY", CASH], rows)
 
 
@@ -135,6 +140,7 @@ def relative_strength(universe: list[str], top: int) -> WeightFn:
             w[CASH] = 1 - sum(w.values())
             rows[d] = w
         return _frame(mkt, cols + [CASH], rows)
+
     return fn
 
 
@@ -188,47 +194,126 @@ def combo(mkt: Market, months: int) -> pd.DataFrame:
 
 def candidates() -> list[Candidate]:
     return [
-        Candidate("BENCH_SPY", "benchmark", "Broad US equity buy-and-hold.", "Buy SPY once; hold.",
-                  buy_hold("SPY"), None, benchmark=True, assets=("SPY",)),
-        Candidate("BENCH_CASH", "benchmark", "T-bill ETF buy-and-hold (investable cash).", "Buy BIL once; hold.",
-                  buy_hold(CASH), None, benchmark=True, assets=(CASH,)),
-        Candidate("BENCH_6040", "benchmark", "Classic balanced portfolio.", "60% SPY / 40% IEF, rebalanced monthly.",
-                  fixed_mix({"SPY": 0.6, "IEF": 0.4}), None, benchmark=True, assets=("SPY", "IEF")),
-        Candidate("BENCH_EW7", "benchmark", "The GTAA assets without timing (isolates the value of the trend rule).",
-                  "1/7 each of the 7 GTAA ETFs, rebalanced monthly.",
-                  fixed_mix({a: 1 / 7 for a in GTAA7}), None, benchmark=True, assets=tuple(GTAA7)),
-        Candidate("GTAA", "trend (multi-asset)",
-                  "Asset-class trend timing cuts drawdowns with a modest return cost (Faber 2007).",
-                  "Month-end: hold each of SPY, EFA, IEF, DBC, VNQ, TLT, GLD at 1/7 while above its N-month SMA; rest in BIL.",
-                  gtaa, 10, (6, 8, 10, 12), tuple(GTAA7 + [CASH])),
-        Candidate("SPY_TREND", "trend (single index)",
-                  "A 10-month SMA filter on US equities avoids the worst of bear markets.",
-                  "Month-end: SPY if above its N-month SMA, else BIL.",
-                  spy_trend, 10, (6, 8, 10, 12), ("SPY", CASH)),
-        Candidate("DUAL_MOM", "momentum (absolute + relative)",
-                  "Global equity momentum: own the stronger of US/international equities only when it beats T-bills (Antonacci).",
-                  "Month-end: best of SPY/EFA by N-month return if it beats BIL, else IEF.",
-                  dual_momentum, 12, (6, 9, 12), ("SPY", "EFA", "IEF", CASH)),
-        Candidate("RS_TOP3", "momentum (cross-asset relative strength)",
-                  "Assets with the strongest recent returns keep outperforming over the next month (time-series + cross-sectional momentum).",
-                  "Month-end: top 3 of 10 ETFs by N-month return, each 1/3 if it beats BIL; empty slots in BIL.",
-                  relative_strength(RS_UNIVERSE, 3), 6, (3, 6, 9, 12), tuple(RS_UNIVERSE + [CASH]),
-                  notes="QQQ, IWM, EEM, VNQ, DBC, GLD, IEF, TLT, SPY, EFA. EEM, DBC and GLD price-only where no dividends are on file."),
-        Candidate("SECTOR_RS", "momentum (sector rotation)",
-                  "Sector momentum: the strongest sectors keep leading for a month.",
-                  "Month-end: top 3 of 9 sector SPDRs by N-month return, each 1/3 if it beats BIL; empty slots in BIL.",
-                  relative_strength(SECTORS, 3), 6, (3, 6, 9, 12), tuple(SECTORS + [CASH]),
-                  notes="PRICE-ONLY sector data (no dividends on file): understates returns by roughly 1.5-2.5%/yr."),
-        Candidate("VOL_TREND", "trend + volatility targeting",
-                  "Scaling equity exposure to a volatility target improves risk-adjusted returns (Moreira-Muir; disputed by Cederburg et al.).",
-                  "Weekly: SPY weight = min(1, target / 20-day realised vol) while SPY is above its 10-month SMA, else 0; rest in BIL.",
-                  vol_target_trend, 0.10, (0.08, 0.10, 0.12, 0.15), ("SPY", CASH)),
-        Candidate("RSI2_MR", "mean reversion",
-                  "Short-term oversold pullbacks in an uptrend revert within days (Connors RSI-2).",
-                  "Daily: buy SPY when RSI(2) < threshold and close > 200-day SMA; sell when close > 5-day SMA; otherwise BIL.",
-                  rsi2_reversion, 10.0, (5.0, 10.0, 15.0, 20.0), ("SPY", CASH)),
-        Candidate("COMBO_GTAA_TREND", "combination",
-                  "Two independently tested trend signals combined diversify each other's whipsaws.",
-                  "50% GTAA(N) + 50% SPY_TREND(N), rebalanced at month-end.",
-                  combo, 10, (8, 10, 12), tuple(GTAA7 + [CASH])),
+        Candidate(
+            "BENCH_SPY",
+            "benchmark",
+            "Broad US equity buy-and-hold.",
+            "Buy SPY once; hold.",
+            buy_hold("SPY"),
+            None,
+            benchmark=True,
+            assets=("SPY",),
+        ),
+        Candidate(
+            "BENCH_CASH",
+            "benchmark",
+            "T-bill ETF buy-and-hold (investable cash).",
+            "Buy BIL once; hold.",
+            buy_hold(CASH),
+            None,
+            benchmark=True,
+            assets=(CASH,),
+        ),
+        Candidate(
+            "BENCH_6040",
+            "benchmark",
+            "Classic balanced portfolio.",
+            "60% SPY / 40% IEF, rebalanced monthly.",
+            fixed_mix({"SPY": 0.6, "IEF": 0.4}),
+            None,
+            benchmark=True,
+            assets=("SPY", "IEF"),
+        ),
+        Candidate(
+            "BENCH_EW7",
+            "benchmark",
+            "The GTAA assets without timing (isolates the value of the trend rule).",
+            "1/7 each of the 7 GTAA ETFs, rebalanced monthly.",
+            fixed_mix({a: 1 / 7 for a in GTAA7}),
+            None,
+            benchmark=True,
+            assets=tuple(GTAA7),
+        ),
+        Candidate(
+            "GTAA",
+            "trend (multi-asset)",
+            "Asset-class trend timing cuts drawdowns with a modest return cost (Faber 2007).",
+            "Month-end: hold each of SPY, EFA, IEF, DBC, VNQ, TLT, GLD at 1/7 while above its N-month SMA; rest in BIL.",
+            gtaa,
+            10,
+            (6, 8, 10, 12),
+            tuple(GTAA7 + [CASH]),
+        ),
+        Candidate(
+            "SPY_TREND",
+            "trend (single index)",
+            "A 10-month SMA filter on US equities avoids the worst of bear markets.",
+            "Month-end: SPY if above its N-month SMA, else BIL.",
+            spy_trend,
+            10,
+            (6, 8, 10, 12),
+            ("SPY", CASH),
+        ),
+        Candidate(
+            "DUAL_MOM",
+            "momentum (absolute + relative)",
+            "Global equity momentum: own the stronger of US/international equities only when it beats T-bills (Antonacci).",
+            "Month-end: best of SPY/EFA by N-month return if it beats BIL, else IEF.",
+            dual_momentum,
+            12,
+            (6, 9, 12),
+            ("SPY", "EFA", "IEF", CASH),
+        ),
+        Candidate(
+            "RS_TOP3",
+            "momentum (cross-asset relative strength)",
+            "Assets with the strongest recent returns keep outperforming over the next month (time-series + cross-sectional momentum).",
+            "Month-end: top 3 of 10 ETFs by N-month return, each 1/3 if it beats BIL; empty slots in BIL.",
+            relative_strength(RS_UNIVERSE, 3),
+            6,
+            (3, 6, 9, 12),
+            tuple(RS_UNIVERSE + [CASH]),
+            notes="QQQ, IWM, EEM, VNQ, DBC, GLD, IEF, TLT, SPY, EFA. EEM, DBC and GLD price-only where no dividends are on file.",
+        ),
+        Candidate(
+            "SECTOR_RS",
+            "momentum (sector rotation)",
+            "Sector momentum: the strongest sectors keep leading for a month.",
+            "Month-end: top 3 of 9 sector SPDRs by N-month return, each 1/3 if it beats BIL; empty slots in BIL.",
+            relative_strength(SECTORS, 3),
+            6,
+            (3, 6, 9, 12),
+            tuple(SECTORS + [CASH]),
+            notes="PRICE-ONLY sector data (no dividends on file): understates returns by roughly 1.5-2.5%/yr.",
+        ),
+        Candidate(
+            "VOL_TREND",
+            "trend + volatility targeting",
+            "Scaling equity exposure to a volatility target improves risk-adjusted returns (Moreira-Muir; disputed by Cederburg et al.).",
+            "Weekly: SPY weight = min(1, target / 20-day realised vol) while SPY is above its 10-month SMA, else 0; rest in BIL.",
+            vol_target_trend,
+            0.10,
+            (0.08, 0.10, 0.12, 0.15),
+            ("SPY", CASH),
+        ),
+        Candidate(
+            "RSI2_MR",
+            "mean reversion",
+            "Short-term oversold pullbacks in an uptrend revert within days (Connors RSI-2).",
+            "Daily: buy SPY when RSI(2) < threshold and close > 200-day SMA; sell when close > 5-day SMA; otherwise BIL.",
+            rsi2_reversion,
+            10.0,
+            (5.0, 10.0, 15.0, 20.0),
+            ("SPY", CASH),
+        ),
+        Candidate(
+            "COMBO_GTAA_TREND",
+            "combination",
+            "Two independently tested trend signals combined diversify each other's whipsaws.",
+            "50% GTAA(N) + 50% SPY_TREND(N), rebalanced at month-end.",
+            combo,
+            10,
+            (8, 10, 12),
+            tuple(GTAA7 + [CASH]),
+        ),
     ]

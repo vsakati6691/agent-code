@@ -11,6 +11,7 @@ Timing model (no look-ahead):
     the open, otherwise at the stop, both less costs.
 Entries are approved and sized by the same RiskEngine as paper trading.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -120,7 +121,7 @@ def run_backtest(
         # correlations only use returns known at yesterday's close
         known_returns = None
         if prev_day is not None and pending_entries:  # positions can open earlier in this same loop
-            known_returns = returns.loc[:prev_day].iloc[-risk_cfg.correlation_lookback:]
+            known_returns = returns.loc[:prev_day].iloc[-risk_cfg.correlation_lookback :]
         for sym, atr_value, _ in sorted(pending_entries, key=lambda x: -x[2]):
             bar = rows[sym].get(d)
             if bar is None or sym in positions:
@@ -130,7 +131,8 @@ def run_backtest(
             if stop <= 0:
                 continue
             state = PortfolioState(
-                equity_est, cash - commission,
+                equity_est,
+                cash - commission,
                 tuple(Holding(s, t.quantity, t.entry_price, t.stop) for s, t in positions.items()),
             )
             decision = engine.evaluate_entry(sym, fill, stop, state, known_returns)
@@ -138,7 +140,11 @@ def run_backtest(
                 continue
             cash -= decision.quantity * fill + commission
             positions[sym] = Trade(
-                sym, d.date(), fill, decision.quantity, stop,
+                sym,
+                d.date(),
+                fill,
+                decision.quantity,
+                stop,
                 commission=commission,
                 slippage_cost=decision.quantity * bar["open"] * slip,
             )
@@ -187,7 +193,11 @@ def run_backtest(
     equity = pd.Series(curve, dtype=float).sort_index()
     exposure = days_exposed / len(dates) if dates else 0.0
     metrics = compute_metrics(
-        equity, [t.pnl for t in closed], initial, exposure, sum(t.costs for t in closed),
+        equity,
+        [t.pnl for t in closed],
+        initial,
+        exposure,
+        sum(t.costs for t in closed),
         traded_notional=sum(t.quantity * (t.entry_price + t.exit_price) for t in closed),
         holding_days=[(t.exit_date - t.entry_date).days for t in closed],
     )

@@ -1,8 +1,9 @@
 """Performance statistics for an equity curve and a list of closed trades."""
+
 from __future__ import annotations
 
 import math
-from typing import Iterable
+from collections.abc import Iterable
 
 import pandas as pd
 

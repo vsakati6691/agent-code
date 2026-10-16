@@ -18,6 +18,7 @@ the date they were imported; it is not synchronised with any account). Each run:
 The watchlist never feeds the ranked growth lists. Scenarios are conditional,
 not predictions; no probability is assigned.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,7 +36,7 @@ from .providers import canonical, common_stock_reason
 
 CONFIG_FILE = Path(__file__).resolve().parents[3] / "config" / "research_watchlist.json"
 TARGET = date.fromisoformat(spec.WATCHLIST_TARGET_DATE)
-FUND_NAME = re.compile(r"\bfund\b|beneficial interest", re.I)   # closed-end / interval funds listed as shares
+FUND_NAME = re.compile(r"\bfund\b|beneficial interest", re.I)  # closed-end / interval funds listed as shares
 
 
 @dataclass(frozen=True)
@@ -45,12 +46,21 @@ class WatchlistConfig:
     source: str
 
     @classmethod
-    def load(cls, path: Path = CONFIG_FILE) -> "WatchlistConfig | None":
+    def load(cls, path: Path = CONFIG_FILE) -> WatchlistConfig | None:
         if not Path(path).exists():
             return None
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
-        forbidden = {"account_number", "quantity", "shares", "cost_basis", "average_buy_price", "balance",
-                     "positions", "equity", "market_value"}
+        forbidden = {
+            "account_number",
+            "quantity",
+            "shares",
+            "cost_basis",
+            "average_buy_price",
+            "balance",
+            "positions",
+            "equity",
+            "market_value",
+        }
         if forbidden & {k.lower() for k in raw}:
             raise ValueError("watchlist config may contain tickers only (no account or position fields)")
         tickers = tuple(dict.fromkeys(canonical(t) for t in raw["tickers"] if str(t).strip()))
@@ -68,6 +78,7 @@ def annualized(multiple: float, years: float) -> float | None:
 
 
 # --- classification -----------------------------------------------------------------------
+
 
 def _has(name: str, kw: str) -> bool:
     kw = kw.strip().lower()
@@ -116,30 +127,50 @@ def resolve(ticker: str, dirs: pd.DataFrame, sec: pd.DataFrame) -> dict:
             out["status"] = "listed"
         else:
             why = common_stock_reason(out["name"], False, False, str(d.get("financial_status", "")))
-            out["asset_type"] = ("operating company (common stock)" if why is None else
-                                 "fund or trust (not an operating company)" if FUND_NAME.search(out["name"] or "") else
-                                 f"other security: {why}")
+            out["asset_type"] = (
+                "operating company (common stock)"
+                if why is None
+                else "fund or trust (not an operating company)"
+                if FUND_NAME.search(out["name"] or "")
+                else f"other security: {why}"
+            )
             out["status"] = "listed"
     elif out["cik"] is not None:
         ex = str(sec.loc[ticker, "exchange"] or "")
         out["exchange"] = ex or None
         out["asset_type"] = "SEC registrant"
-        out["status"] = "OTC or not exchange-listed" if ex in ("OTC", "") else f"listed on {ex} (not in the directories)"
+        out["status"] = (
+            "OTC or not exchange-listed" if ex in ("OTC", "") else f"listed on {ex} (not in the directories)"
+        )
     else:
-        out["status"] = ("unresolved: not in current exchange listings or the SEC ticker file (possibly delisted, "
-                         "renamed or mistyped); no substitute is assumed")
+        out["status"] = (
+            "unresolved: not in current exchange listings or the SEC ticker file (possibly delisted, "
+            "renamed or mistyped); no substitute is assumed"
+        )
     return out
 
 
 # --- scenario models --------------------------------------------------------------------
 
-def company_scenarios(price: float, shares: float, revenue_ttm: float, revenue_growth: float, ev_to_sales: float,
-                      net_cash: float, dilution: float | None, years: float, margin: float | None = None,
-                      margin_source: str = "FCF") -> dict:
+
+def company_scenarios(
+    price: float,
+    shares: float,
+    revenue_ttm: float,
+    revenue_growth: float,
+    ev_to_sales: float,
+    net_cash: float,
+    dilution: float | None,
+    years: float,
+    margin: float | None = None,
+    margin_source: str = "FCF",
+) -> dict:
     """Revenue x EV/Sales path to the target date (fractional years), per spec.WATCHLIST_COMPANY_METHOD.
 
     `margin`: today's TTM FCF margin (or operating margin) for the margin cross-check; None = not available."""
-    if not all(isinstance(x, (int, float)) and math.isfinite(x) and x > 0 for x in (price, shares, revenue_ttm, ev_to_sales)):
+    if not all(
+        isinstance(x, (int, float)) and math.isfinite(x) and x > 0 for x in (price, shares, revenue_ttm, ev_to_sales)
+    ):
         raise ValueError("price, shares, revenue and EV/Sales must be positive")
     base_g = min(spec.SCENARIO_GROWTH_CAP, max(spec.SCENARIO_GROWTH_FLOOR, revenue_growth))
     dil = dilution if dilution is not None and math.isfinite(dilution) else 0.0
@@ -158,76 +189,119 @@ def company_scenarios(price: float, shares: float, revenue_ttm: float, revenue_g
         sh = shares * (1 + d) ** years
         ev_2030 = rev * exit_mult
         value = max(0.0, (ev_2030 + net_cash) / sh)
-        a = {"starting_revenue_growth": g0, "growth_path": path, "revenue_2030": rev, "exit_ev_to_sales": exit_mult,
-             "annual_dilution": d, "shares_2030": sh, "net_cash_held": net_cash, "ev_2030": ev_2030,
-             "margin_source": margin_source if margin is not None else None}
+        a = {
+            "starting_revenue_growth": g0,
+            "growth_path": path,
+            "revenue_2030": rev,
+            "exit_ev_to_sales": exit_mult,
+            "annual_dilution": d,
+            "shares_2030": sh,
+            "net_cash_held": net_cash,
+            "ev_2030": ev_2030,
+            "margin_source": margin_source if margin is not None else None,
+        }
         if margin is not None and math.isfinite(margin):
             m30 = margin + rule.margin_shift
             fcf = rev * m30
-            a.update(margin_today=margin, margin_2030=m30, fcf_2030=fcf,
-                     implied_ev_to_fcf=ev_2030 / fcf if fcf > 0 else None,
-                     cash_support=("not supported: 2030 free cash flow would be negative" if fcf <= 0 else
-                                   f"stretched: implies {ev_2030 / fcf:.0f}x EV/FCF in 2030"
-                                   if ev_2030 / fcf > spec.WATCHLIST_MAX_SUPPORTED_EV_FCF else
-                                   f"consistent: implies {ev_2030 / fcf:.0f}x EV/FCF in 2030"))
+            a.update(
+                margin_today=margin,
+                margin_2030=m30,
+                fcf_2030=fcf,
+                implied_ev_to_fcf=ev_2030 / fcf if fcf > 0 else None,
+                cash_support=(
+                    "not supported: 2030 free cash flow would be negative"
+                    if fcf <= 0
+                    else f"stretched: implies {ev_2030 / fcf:.0f}x EV/FCF in 2030"
+                    if ev_2030 / fcf > spec.WATCHLIST_MAX_SUPPORTED_EV_FCF
+                    else f"consistent: implies {ev_2030 / fcf:.0f}x EV/FCF in 2030"
+                ),
+            )
         else:
-            a.update(margin_today=None, margin_2030=None, fcf_2030=None, implied_ev_to_fcf=None,
-                     cash_support="not checked: no margin data")
-        out[rule.key] = {"price": value, "change": value / price - 1, "annualized": annualized(value / price, years),
-                         "assumptions": a}
+            a.update(
+                margin_today=None,
+                margin_2030=None,
+                fcf_2030=None,
+                implied_ev_to_fcf=None,
+                cash_support="not checked: no margin data",
+            )
+        out[rule.key] = {
+            "price": value,
+            "change": value / price - 1,
+            "annualized": annualized(value / price, years),
+            "assumptions": a,
+        }
     return out
 
 
 def etf_scenarios(price: float, rule, years: float) -> dict:
     cls, title, _, rets, fee, yld = rule
     out = {}
-    for key, r_total in zip(("bear", "base", "bull"), rets):
+    for key, r_total in zip(("bear", "base", "bull"), rets, strict=False):
         r_price = (1 + r_total) / (1 + fee) / (1 + yld) - 1
         value = price * (1 + r_price) ** years
-        out[key] = {"price": value, "change": value / price - 1, "annualized": r_price,
-                    "assumptions": {"exposure": title, "total_return_assumption": r_total, "assumed_fee": fee,
-                                    "assumed_distribution_yield": yld, "price_return": r_price}}
+        out[key] = {
+            "price": value,
+            "change": value / price - 1,
+            "annualized": r_price,
+            "assumptions": {
+                "exposure": title,
+                "total_return_assumption": r_total,
+                "assumed_fee": fee,
+                "assumed_distribution_yield": yld,
+                "price_return": r_price,
+            },
+        }
     return out
 
 
 def realized_vol(close: pd.Series, bars: int = 756) -> float | None:
-    r = np.log(close.iloc[-bars - 1:]).diff().dropna()
+    r = np.log(close.iloc[-bars - 1 :]).diff().dropna()
     return float(r.std() * math.sqrt(252)) if len(r) >= 250 else None
 
 
 def leveraged_scenarios(price: float, lev: int, underlying_rule, sigma: float, years: float) -> dict:
     """Daily-reset model (spec.LEVERAGED_METHOD): g = L mu - L^2 sigma^2 / 2 - (L - 1) r - fee."""
     out = {}
-    for key, r_total in zip(("bear", "base", "bull"), underlying_rule[3]):
+    for key, r_total in zip(("bear", "base", "bull"), underlying_rule[3], strict=False):
         s = sigma * spec.LEVERAGED_VOL_FACTORS[key]
-        mu = math.log1p(r_total) + s * s / 2          # arithmetic drift of the index for this scenario
+        mu = math.log1p(r_total) + s * s / 2  # arithmetic drift of the index for this scenario
         g = lev * mu - lev * lev * s * s / 2 - (lev - 1) * spec.LEVERAGED_FINANCING_RATE - spec.LEVERAGED_ASSUMED_FEE
         value = price * math.exp(g * years)
-        out[key] = {"price": value, "change": value / price - 1, "annualized": math.exp(g) - 1,
-                    "assumptions": {"leverage": lev, "index_total_return": r_total, "index_volatility": s,
-                                    "volatility_drag": lev * lev * s * s / 2,
-                                    "financing_cost": (lev - 1) * spec.LEVERAGED_FINANCING_RATE,
-                                    "assumed_fee": spec.LEVERAGED_ASSUMED_FEE, "log_growth_rate": g}}
+        out[key] = {
+            "price": value,
+            "change": value / price - 1,
+            "annualized": math.exp(g) - 1,
+            "assumptions": {
+                "leverage": lev,
+                "index_total_return": r_total,
+                "index_volatility": s,
+                "volatility_drag": lev * lev * s * s / 2,
+                "financing_cost": (lev - 1) * spec.LEVERAGED_FINANCING_RATE,
+                "assumed_fee": spec.LEVERAGED_ASSUMED_FEE,
+                "log_growth_rate": g,
+            },
+        }
     return out
 
 
 # --- what would unlock an unavailable scenario --------------------------------------------
 
+
 def next_filing_estimate(subs: dict | None, last_filed: str | None, as_of: date) -> tuple[date | None, str]:
     """(expected date of the next 10-Q/10-K, how it was estimated) from the company's filing dates."""
     dates = []
     recent = ((subs or {}).get("filings") or {}).get("recent") or {}
-    for form, d in zip(recent.get("form") or [], recent.get("filingDate") or []):
+    for form, d in zip(recent.get("form") or [], recent.get("filingDate") or [], strict=False):
         if form in ("10-Q", "10-K"):
             try:
                 filed = date.fromisoformat(d)
             except ValueError:
                 continue
-            if filed <= as_of:                  # point in time: the submissions file is a current view
+            if filed <= as_of:  # point in time: the submissions file is a current view
                 dates.append(filed)
     dates = sorted(set(dates), reverse=True)[:5]
     if len(dates) >= 2:
-        gaps = sorted((a - b).days for a, b in zip(dates, dates[1:]))
+        gaps = sorted((a - b).days for a, b in zip(dates, dates[1:], strict=False))
         gap = gaps[len(gaps) // 2]
         basis = f"the median gap of {gap} days between its last {len(dates)} quarterly and annual reports"
         last = dates[0]
@@ -248,39 +322,55 @@ def unlock_steps(reason_key: str, **kw) -> list[str]:
     when = f"next 10-Q/10-K expected around {nxt.isoformat()} based on {basis}" if nxt else basis
     if reason_key == "quarters":
         n = kw["quarters"]
-        return [f"{n} of 4 required quarters reported; {when}.",
-                f"Year-over-year revenue growth also needs 8 quarters ({max(0, 8 - n)} more reports)."]
+        return [
+            f"{n} of 4 required quarters reported; {when}.",
+            f"Year-over-year revenue growth also needs 8 quarters ({max(0, 8 - n)} more reports).",
+        ]
     if reason_key == "growth":
         n = kw["quarters"]
         return [f"{n} of 8 quarters needed for year-over-year revenue growth ({8 - n} more report(s)); {when}."]
     if reason_key == "revenue":
-        return [f"Trailing-twelve-month revenue is {kw['revenue']}; the company method needs positive revenue.",
-                f"Unlocks once reported revenue turns positive; {when}."]
+        return [
+            f"Trailing-twelve-month revenue is {kw['revenue']}; the company method needs positive revenue.",
+            f"Unlocks once reported revenue turns positive; {when}.",
+        ]
     if reason_key == "ev":
-        return [f"Enterprise value is {kw['ev']}: net cash of {kw['net_cash']} exceeds the market cap of {kw['cap']}.",
-                "EV/Sales cannot anchor a value until the market cap exceeds net cash."]
+        return [
+            f"Enterprise value is {kw['ev']}: net cash of {kw['net_cash']} exceeds the market cap of {kw['cap']}.",
+            "EV/Sales cannot anchor a value until the market cap exceeds net cash.",
+        ]
     if reason_key == "stale":
         return [kw["why"] + ".", f"Unlocks with the next report; {when}."]
     if reason_key == "no_cik":
-        return ["No SEC registrant matches this symbol, so there are no reported fundamentals.",
-                "The spec defines no company method without SEC filings."]
+        return [
+            "No SEC registrant matches this symbol, so there are no reported fundamentals.",
+            "The spec defines no company method without SEC filings.",
+        ]
     if reason_key == "unresolved":
-        return ["Not in today's exchange listings or the SEC ticker file.",
-                "Check whether the symbol was renamed, delisted or mistyped, then edit config/research_watchlist.json."]
+        return [
+            "Not in today's exchange listings or the SEC ticker file.",
+            "Check whether the symbol was renamed, delisted or mistyped, then edit config/research_watchlist.json.",
+        ]
     if reason_key == "price":
         return ["No verified close for the as-of session; unlocks when one is available (next weekly run)."]
     if reason_key == "etf_class":
         classes = ", ".join(r[1] for r in spec.ETF_EXPOSURE_RULES)
-        return [f"The fund name matches none of the defined exposure classes ({classes}).",
-                "The spec defines no other ETF method, so no number is shown."]
+        return [
+            f"The fund name matches none of the defined exposure classes ({classes}).",
+            "The spec defines no other ETF method, so no number is shown.",
+        ]
     if reason_key == "inverse":
         return ["Inverse funds are not covered by the spec's leveraged model, and no other method is defined."]
     if reason_key == "lev_index":
         known = ", ".join(sorted(set(spec.LEVERAGED_UNDERLYING_HINTS.values())))
-        return [f"The tracked index could not be identified from the fund name (identifiable: {known}).",
-                "No other leveraged-fund method is defined."]
+        return [
+            f"The tracked index could not be identified from the fund name (identifiable: {known}).",
+            "No other leveraged-fund method is defined.",
+        ]
     if reason_key == "lev_history":
-        return [f"Needs about 3 years of daily prices for the tracked index fund {kw['index']} to measure its volatility."]
+        return [
+            f"Needs about 3 years of daily prices for the tracked index fund {kw['index']} to measure its volatility."
+        ]
     if reason_key == "type":
         return ["The spec defines scenario methods only for operating companies and ETFs."]
     return []
@@ -288,17 +378,24 @@ def unlock_steps(reason_key: str, **kw) -> list[str]:
 
 # --- narrative ----------------------------------------------------------------------------
 
+
 def company_narrative(m: dict, earnings: str | None) -> dict:
     g, om, fcf = m.get("revenue_growth_ttm"), m.get("operating_margin"), m.get("fcf_ttm")
-    catalysts = [f"Next scheduled earnings: {earnings} (Alpha Vantage, unverified)"] if earnings else \
-        ["No scheduled earnings date from the data source"]
+    catalysts = (
+        [f"Next scheduled earnings: {earnings} (Alpha Vantage, unverified)"]
+        if earnings
+        else ["No scheduled earnings date from the data source"]
+    )
     if g is not None:
         catalysts.append(f"Sustaining revenue growth near the trailing {g:.0%}")
     bear = []
     if m.get("implied_growth_gap") is not None and m["implied_growth_gap"] < 0:
         from .scenarios import implied_growth_text
-        bear.append(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")) +
-                    ": more than recent results.")
+
+        bear.append(
+            implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm"))
+            + ": more than recent results."
+        )
     if fcf is not None and fcf < 0:
         bear.append("Free cash flow is negative, so growth depends on funding (dilution or debt).")
     if m.get("dilution") is not None and m["dilution"] > 0.05:
@@ -320,21 +417,34 @@ def company_narrative(m: dict, earnings: str | None) -> dict:
 
 def etf_narrative(rule, lev: int | None) -> dict:
     if lev:
-        return {"catalysts": ["Direction AND volatility of the tracked index; low-volatility uptrends help, choppy "
-                              "markets hurt"],
-                "bear_case": (f"A {lev}x daily-reset fund loses value in volatile, sideways markets even when the "
-                              "index ends flat, and a large index decline can cut it by far more than "
-                              f"{lev} times the index loss over multi-year periods."),
-                "invalidation": ["Index volatility stays well above its trailing level",
-                                 "Financing rates or fund costs rise materially",
-                                 "The fund changes its objective, leverage or is closed"]}
+        return {
+            "catalysts": [
+                "Direction AND volatility of the tracked index; low-volatility uptrends help, choppy markets hurt"
+            ],
+            "bear_case": (
+                f"A {lev}x daily-reset fund loses value in volatile, sideways markets even when the "
+                "index ends flat, and a large index decline can cut it by far more than "
+                f"{lev} times the index loss over multi-year periods."
+            ),
+            "invalidation": [
+                "Index volatility stays well above its trailing level",
+                "Financing rates or fund costs rise materially",
+                "The fund changes its objective, leverage or is closed",
+            ],
+        }
     title = rule[1] if rule else "its exposure"
-    return {"catalysts": [f"Returns of {title.lower()}; fund-level catalysts are not tracked"],
-            "bear_case": ("Concentrated exposure: the whole theme can de-rate together." if rule and
-                          rule[0] in ("semis", "thematic") else
-                          "Index valuation compresses toward historical averages."),
-            "invalidation": ["The fund changes its index, strategy or fee materially",
-                             "The fund closes or delists (thematic funds close more often)"]}
+    return {
+        "catalysts": [f"Returns of {title.lower()}; fund-level catalysts are not tracked"],
+        "bear_case": (
+            "Concentrated exposure: the whole theme can de-rate together."
+            if rule and rule[0] in ("semis", "thematic")
+            else "Index valuation compresses toward historical averages."
+        ),
+        "invalidation": [
+            "The fund changes its index, strategy or fee materially",
+            "The fund closes or delists (thematic funds close more often)",
+        ],
+    }
 
 
 def evidence_quality(kind: str, f=None, bars: int = 0) -> str:

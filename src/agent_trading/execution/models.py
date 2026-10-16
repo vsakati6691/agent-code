@@ -3,33 +3,41 @@
 Quantities are whole shares: fractional orders are market-only at Robinhood,
 and this service sends limit orders only.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
 
 # Ledger states. Terminal states never change again.
-PENDING = "pending"            # persisted, not yet handed to the broker
-SUBMITTED = "submitted"        # broker accepted the request; status not yet read back
-UNKNOWN = "unknown"            # outcome ambiguous (timeout etc.): NEVER resubmit, only look it up
+PENDING = "pending"  # persisted, not yet handed to the broker
+SUBMITTED = "submitted"  # broker accepted the request; status not yet read back
+UNKNOWN = "unknown"  # outcome ambiguous (timeout etc.): NEVER resubmit, only look it up
 OPEN = "open"
 PARTIALLY_FILLED = "partially_filled"
 FILLED = "filled"
 CANCELLED = "cancelled"
 REJECTED = "rejected"
-NOT_SENT = "not_sent"          # broker provably never received it (e.g. connection refused)
-BLOCKED = "blocked"            # the validator refused it; never sent
-DRY_RUN = "dry_run"            # dry-run mode: validated and recorded, never sent
+NOT_SENT = "not_sent"  # broker provably never received it (e.g. connection refused)
+BLOCKED = "blocked"  # the validator refused it; never sent
+DRY_RUN = "dry_run"  # dry-run mode: validated and recorded, never sent
 
 UNRESOLVED = frozenset({PENDING, SUBMITTED, UNKNOWN, OPEN, PARTIALLY_FILLED})
 TERMINAL = frozenset({FILLED, CANCELLED, REJECTED, NOT_SENT, BLOCKED, DRY_RUN})
 
 # Robinhood order states -> ledger states.
 BROKER_STATES = {
-    "new": OPEN, "queued": OPEN, "confirmed": OPEN, "unconfirmed": OPEN,
-    "partially_filled": PARTIALLY_FILLED, "filled": FILLED,
-    "cancelled": CANCELLED, "canceled": CANCELLED, "rejected": REJECTED,
-    "failed": REJECTED, "voided": CANCELLED,
+    "new": OPEN,
+    "queued": OPEN,
+    "confirmed": OPEN,
+    "unconfirmed": OPEN,
+    "partially_filled": PARTIALLY_FILLED,
+    "filled": FILLED,
+    "cancelled": CANCELLED,
+    "canceled": CANCELLED,
+    "rejected": REJECTED,
+    "failed": REJECTED,
+    "voided": CANCELLED,
 }
 
 
@@ -51,11 +59,11 @@ class BrokerRejected(BrokerError):
 
 @dataclass(frozen=True)
 class OrderRequest:
-    decision_id: str        # one strategy decision -> at most one order, ever
+    decision_id: str  # one strategy decision -> at most one order, ever
     strategy: str
     symbol: str
-    side: str               # "buy" | "sell"
-    quantity: int           # whole shares
+    side: str  # "buy" | "sell"
+    quantity: int  # whole shares
     limit_price: float
     time_in_force: str = "gfd"
 
@@ -82,7 +90,7 @@ class BrokerOrder:
     quantity: float
     filled_quantity: float
     average_price: float | None
-    state: str              # broker's own state string
+    state: str  # broker's own state string
 
     @property
     def ledger_state(self) -> str:

@@ -18,16 +18,17 @@ and keeps a contract's last trade separate from its quote time; earnings status
 is 'unknown' when the calendar was not collected; every contract carries the
 probability gate's verdict (not established) and plain-language risk notes.
 """
+
 from __future__ import annotations
 
 import math
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 import numpy as np
 
-from . import probability, spec
 from ..market_calendar import is_trading_day
+from . import probability, spec
 
 MULT = spec.OPTION_RULES["standard_multiplier"]
 NY = ZoneInfo("America/New_York")
@@ -37,6 +38,7 @@ UNDERLYING_PRICE_SOURCE = "underlying close reported in the Cboe chain for the a
 
 
 # --- pricing model (sensitivity only) ----------------------------------------------------
+
 
 def _ncdf(x: float) -> float:
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
@@ -89,6 +91,7 @@ def horizon_for(dte: int) -> str | None:
 
 # --- quote freshness (spec.OPTION_QUOTE_RULE) ----------------------------------------------------
 
+
 def business_days_between(a: date, b: date) -> int:
     return int(np.busday_count(a, b))
 
@@ -102,25 +105,33 @@ def parse_quote_time(stamp) -> tuple[str | None, date | None]:
     except ValueError:
         return None, None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat(timespec="seconds"), dt.astimezone(NY).date()
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat(timespec="seconds"), dt.astimezone(NY).date()
 
 
 def quote_info(under: dict, as_of: date) -> dict:
     """Freshness facts for one chain: the snapshot (quote) time and the underlying's last trade, kept apart."""
     utc, ny = parse_quote_time(under.get("timestamp"))
     if utc is None:
-        status = ("unknown: the chain carries no snapshot timestamp, so freshness is judged from the underlying's "
-                  "last trade only")
+        status = (
+            "unknown: the chain carries no snapshot timestamp, so freshness is judged from the underlying's "
+            "last trade only"
+        )
     elif ny < as_of:
         status = f"stale: the snapshot was taken {ny} (New York date), before the as-of session {as_of}"
     elif ny == as_of:
         status = "snapshot taken in the as-of session (end-of-session values)"
     else:
         status = f"snapshot taken {ny} (New York date), after the as-of session closed (end-of-session values)"
-    return {"quote_time_utc": utc, "quote_date_ny": ny.isoformat() if ny else None, "quote_status": status,
-            "quote_stale": utc is not None and ny < as_of, "underlying_last_trade": under.get("last_trade_time"),
-            "quote_source": QUOTE_SOURCE, "quote_delay": QUOTE_DELAY}
+    return {
+        "quote_time_utc": utc,
+        "quote_date_ny": ny.isoformat() if ny else None,
+        "quote_status": status,
+        "quote_stale": utc is not None and ny < as_of,
+        "underlying_last_trade": under.get("last_trade_time"),
+        "quote_source": QUOTE_SOURCE,
+        "quote_delay": QUOTE_DELAY,
+    }
 
 
 def chain_status(under: dict, as_of: date) -> str | None:
@@ -140,13 +151,16 @@ def chain_status(under: dict, as_of: date) -> str | None:
         return f"stale chain: underlying last traded {last}, as-of session is {as_of}"
     q = quote_info(under, as_of)
     if q["quote_stale"]:
-        return f"stale chain: quote snapshot taken {q['quote_date_ny']} (New York date), before the as-of session {as_of}"
+        return (
+            f"stale chain: quote snapshot taken {q['quote_date_ny']} (New York date), before the as-of session {as_of}"
+        )
     if not under.get("close") and not under.get("price"):
         return "chain has no underlying price"
     return None
 
 
 # --- per-contract research row ------------------------------------------------------------
+
 
 def theta_available(row: dict) -> bool:
     """spec.OPTION_THETA_RULE: a missing theta, or one reported as exactly zero, is 'unavailable'."""
@@ -177,8 +191,9 @@ def contract_flags(row: dict, underlying: str, as_of: date) -> list[str]:
         try:
             last = datetime.fromisoformat(lt).date()
             if last < as_of:
-                flags.append(f"contract last traded {last}, before the as-of session (its bid/ask is still the "
-                             "snapshot quote)")
+                flags.append(
+                    f"contract last traded {last}, before the as-of session (its bid/ask is still the snapshot quote)"
+                )
         except ValueError:
             flags.append("contract last trade time unreadable")
     if row.get("iv") is None or not row.get("iv"):
@@ -204,8 +219,12 @@ def eligible(row: dict, underlying: str, as_of: date, kind: str = "call") -> tup
     if (row.get("volume") or 0) < r["min_volume"]:
         return False, "volume too low"
     d = row.get("delta")
-    if d is None or (kind == "call" and d < 0) or (kind == "put" and d > 0) \
-            or not (r["min_delta"] <= abs(d) <= r["max_delta"]):
+    if (
+        d is None
+        or (kind == "call" and d < 0)
+        or (kind == "put" and d > 0)
+        or not (r["min_delta"] <= abs(d) <= r["max_delta"])
+    ):
         return False, "delta outside 0.30-0.70" if kind == "call" else "delta outside -0.70 to -0.30"
     if not row.get("iv") or row["iv"] <= 0:
         return False, "no implied volatility"
@@ -223,8 +242,10 @@ def risk_notes(r: dict) -> dict:
     t = spec.OPTION_RISK_THRESHOLDS
     kind, strike = r["type"], r["strike"]
     sp, oi, th, iv = r.get("spread_pct"), r.get("open_interest") or 0, r.get("theta_share_per_day"), r.get("iv")
-    liq = [f"The bid-ask spread is {sp:.1%} of the mid price" +
-           (", so entering and exiting costs that much before the stock moves at all" if sp > t["spread_wide"] else "")]
+    liq = [
+        f"The bid-ask spread is {sp:.1%} of the mid price"
+        + (", so entering and exiting costs that much before the stock moves at all" if sp > t["spread_wide"] else "")
+    ]
     if oi < t["open_interest_thin"]:
         liq.append(f"only {oi:,.0f} contracts are outstanding, so exiting at a fair price may be harder")
     else:
@@ -233,38 +254,63 @@ def risk_notes(r: dict) -> dict:
         decay = "Time decay cannot be measured: theta is unavailable."
     else:
         pace = "quickly" if th > t["decay_fast"] else "at a moderate pace"
-        decay = (f"With the stock standing still, the option loses about {th:.2%} of its mid value per day "
-                 f"({_money(abs(r.get('theta') or 0), 3)} per share), {pace}; the loss accelerates as expiry nears.")
+        decay = (
+            f"With the stock standing still, the option loses about {th:.2%} of its mid value per day "
+            f"({_money(abs(r.get('theta') or 0), 3)} per share), {pace}; the loss accelerates as expiry nears."
+        )
     move = r.get("implied_move_1sd")
-    vol = (f"Implied volatility of {iv:.0%} a year means the option market itself expects roughly a {move:.0%} move "
-           f"by expiry (one standard deviation). " +
-           ("That is high. " if iv > t["iv_high"] else "") +
-           "A fall in implied volatility lowers the option's price even if the stock does not move.")
+    vol = (
+        f"Implied volatility of {iv:.0%} a year means the option market itself expects roughly a {move:.0%} move "
+        f"by expiry (one standard deviation). "
+        + ("That is high. " if iv > t["iv_high"] else "")
+        + "A fall in implied volatility lowers the option's price even if the stock does not move."
+    )
     st = r.get("events_status")
     if st == "scheduled":
         dates = ", ".join(str(e["date"]) for e in r.get("events_before_expiry", []))
-        ev = (f"An earnings report is scheduled before expiry ({dates}; unverified): the stock can gap either way, "
-              "and implied volatility usually drops after the report.")
+        ev = (
+            f"An earnings report is scheduled before expiry ({dates}; unverified): the stock can gap either way, "
+            "and implied volatility usually drops after the report."
+        )
     elif st == "none scheduled":
-        ev = ("No earnings report is scheduled before expiry in the collected calendar (unverified; dividends and "
-              "other events are not checked).")
+        ev = (
+            "No earnings report is scheduled before expiry in the collected calendar (unverified; dividends and "
+            "other events are not checked)."
+        )
     else:
-        ev = ("Unknown: the earnings calendar was not collected for this snapshot, so an earnings report before "
-              "expiry cannot be ruled out.")
+        ev = (
+            "Unknown: the earnings calendar was not collected for this snapshot, so an earnings report before "
+            "expiry cannot be ruled out."
+        )
     side = "at or below" if kind == "call" else "at or above"
-    max_loss = (f"A long {kind} can lose the entire premium, {_money(r['max_loss_per_contract'], 0)} for one contract, "
-                f"if the stock is {side} {_money(strike)} at expiry. Figures are before fees.")
-    return {"liquidity": "; ".join(liq) + ".", "time_decay": decay, "volatility": vol, "event": ev, "max_loss": max_loss}
+    max_loss = (
+        f"A long {kind} can lose the entire premium, {_money(r['max_loss_per_contract'], 0)} for one contract, "
+        f"if the stock is {side} {_money(strike)} at expiry. Figures are before fees."
+    )
+    return {
+        "liquidity": "; ".join(liq) + ".",
+        "time_decay": decay,
+        "volatility": vol,
+        "event": ev,
+        "max_loss": max_loss,
+    }
 
 
-def research_row(row: dict, spot: float, as_of: date, underlying: str, events: list[dict],
-                 events_known: bool = True, quote: dict | None = None) -> dict:
+def research_row(
+    row: dict,
+    spot: float,
+    as_of: date,
+    underlying: str,
+    events: list[dict],
+    events_known: bool = True,
+    quote: dict | None = None,
+) -> dict:
     kind = row["type"]
     bid, ask = row["bid"], row["ask"]
     mid = (bid + ask) / 2
     dte = (row["expiration"] - as_of).days
     t = dte / 365.0
-    premium = ask                         # spec.PREMIUM_ASSUMPTION: cost to open at the delayed ask
+    premium = ask  # spec.PREMIUM_ASSUMPTION: cost to open at the delayed ask
     be = breakeven(kind, row["strike"], premium)
     signed, needed = required_move(kind, spot, be)
     iv = row["iv"]
@@ -283,30 +329,64 @@ def research_row(row: dict, spot: float, as_of: date, underlying: str, events: l
     elif before:
         ev_status, ev_note = "scheduled", "scheduled earnings before expiry (Alpha Vantage, unverified)"
     else:
-        ev_status, ev_note = "none scheduled", "no scheduled earnings before expiry in the collected calendar (unverified)"
+        ev_status, ev_note = (
+            "none scheduled",
+            "no scheduled earnings before expiry in the collected calendar (unverified)",
+        )
     hz = horizon_for(dte)
     q = quote or {}
     out = {
-        "type": kind, "underlying": underlying, "option": row["option"], "strike": row["strike"],
-        "expiration": row["expiration"].isoformat(), "dte": dte, "horizon": hz, "bid": bid, "ask": ask, "mid": mid,
-        "spread_pct": (ask - bid) / mid, "volume": row.get("volume"), "open_interest": row.get("open_interest"),
-        "iv": iv, "delta": row.get("delta"), "gamma": row.get("gamma"), "theta": theta,
-        "vega": row.get("vega"), "rho": row.get("rho"), "multiplier": MULT,
-        "adjusted": row["root"] != underlying.replace(".", ""), "premium_basis": "ask",
-        "premium_per_share_ask": premium, "premium_per_share_mid": mid,
-        "premium_per_contract_ask": premium * MULT, "premium_per_contract_mid": mid * MULT,
-        "breakeven": be, "breakeven_move": signed, "required_move": needed,
+        "type": kind,
+        "underlying": underlying,
+        "option": row["option"],
+        "strike": row["strike"],
+        "expiration": row["expiration"].isoformat(),
+        "dte": dte,
+        "horizon": hz,
+        "bid": bid,
+        "ask": ask,
+        "mid": mid,
+        "spread_pct": (ask - bid) / mid,
+        "volume": row.get("volume"),
+        "open_interest": row.get("open_interest"),
+        "iv": iv,
+        "delta": row.get("delta"),
+        "gamma": row.get("gamma"),
+        "theta": theta,
+        "vega": row.get("vega"),
+        "rho": row.get("rho"),
+        "multiplier": MULT,
+        "adjusted": row["root"] != underlying.replace(".", ""),
+        "premium_basis": "ask",
+        "premium_per_share_ask": premium,
+        "premium_per_share_mid": mid,
+        "premium_per_contract_ask": premium * MULT,
+        "premium_per_contract_mid": mid * MULT,
+        "breakeven": be,
+        "breakeven_move": signed,
+        "required_move": needed,
         "max_loss_per_contract": premium * MULT,
-        "implied_move_1sd": implied_move, "theta_share_per_day": theta_share, "theta_available": theta is not None,
-        "payoffs": payoffs, "payoff_note": "exact arithmetic at expiration on the ask premium, before fees",
-        "fees": spec.FEE_TREATMENT, "sensitivity": sens,
-        "events_before_expiry": before, "events_status": ev_status, "events_note": ev_note,
-        "flags": contract_flags(row, underlying, as_of), "spot": spot,
+        "implied_move_1sd": implied_move,
+        "theta_share_per_day": theta_share,
+        "theta_available": theta is not None,
+        "payoffs": payoffs,
+        "payoff_note": "exact arithmetic at expiration on the ask premium, before fees",
+        "fees": spec.FEE_TREATMENT,
+        "sensitivity": sens,
+        "events_before_expiry": before,
+        "events_status": ev_status,
+        "events_note": ev_note,
+        "flags": contract_flags(row, underlying, as_of),
+        "spot": spot,
         "underlying_price_source": UNDERLYING_PRICE_SOURCE,
-        "contract_last_trade": row.get("last_trade_time") or None, "contract_last_price": row.get("last_price"),
-        "quote_time_utc": q.get("quote_time_utc"), "quote_date_ny": q.get("quote_date_ny"),
-        "quote_status": q.get("quote_status") or "unknown", "quote_source": q.get("quote_source") or QUOTE_SOURCE,
-        "quote_delay": q.get("quote_delay") or QUOTE_DELAY, "underlying_last_trade": q.get("underlying_last_trade"),
+        "contract_last_trade": row.get("last_trade_time") or None,
+        "contract_last_price": row.get("last_price"),
+        "quote_time_utc": q.get("quote_time_utc"),
+        "quote_date_ny": q.get("quote_date_ny"),
+        "quote_status": q.get("quote_status") or "unknown",
+        "quote_source": q.get("quote_source") or QUOTE_SOURCE,
+        "quote_delay": q.get("quote_delay") or QUOTE_DELAY,
+        "underlying_last_trade": q.get("underlying_last_trade"),
         "probability": probability.display(kind, hz),
     }
     out["risks"] = risk_notes(out)
@@ -322,13 +402,22 @@ def sensitivity(spot: float, strike: float, t: float, iv: float, mid: float, kin
         row = []
         for dv in p["iv_shifts"]:
             v = bs_value(kind, spot * (1 + mv), strike, t2, max(0.01, iv + dv))
-            row.append({"price_move": mv, "iv_shift": dv, "model_value": v, "change_vs_mid": v / mid - 1 if mid else None})
+            row.append(
+                {"price_move": mv, "iv_shift": dv, "model_value": v, "change_vs_mid": v / mid - 1 if mid else None}
+            )
         grid.append(row)
     model_now = bs_value(kind, spot, strike, t, iv)
-    return {"days_forward": p["days_forward"], "grid": grid, "model_value_now": model_now,
-            "model_vs_mid_now": model_now / mid - 1 if mid else None, "note": spec.RISK_FREE_RATE_NOTE,
-            "assumptions": ("European exercise, no dividends, constant volatility equal to the chain's implied "
-                            "volatility, 4% risk-free rate, value compared with today's mid; before fees")}
+    return {
+        "days_forward": p["days_forward"],
+        "grid": grid,
+        "model_value_now": model_now,
+        "model_vs_mid_now": model_now / mid - 1 if mid else None,
+        "note": spec.RISK_FREE_RATE_NOTE,
+        "assumptions": (
+            "European exercise, no dividends, constant volatility equal to the chain's implied "
+            "volatility, 4% risk-free rate, value compared with today's mid; before fees"
+        ),
+    }
 
 
 def rank_score(r: dict) -> dict:
@@ -345,8 +434,13 @@ def rank_score(r: dict) -> dict:
     decay = None if th is None else max(0.0, min(1.0, 1 - th / 0.01))
     w = {k: v[0] for k, v in spec.OPTION_RANKING.items()}
     total = w["liquidity"] * liquidity + w["breakeven"] * be + w["time_decay"] * (decay or 0.0)
-    return {"liquidity": liquidity, "breakeven": be, "time_decay": decay, "time_decay_missing": decay is None,
-            "total": round(100 * total, 2)}
+    return {
+        "liquidity": liquidity,
+        "breakeven": be,
+        "time_decay": decay,
+        "time_decay_missing": decay is None,
+        "total": round(100 * total, 2),
+    }
 
 
 def _shortfall(kind: str, h: spec.Horizon, rows: list, considered: int, rejections: dict, usable: dict) -> str | None:
@@ -358,14 +452,25 @@ def _shortfall(kind: str, h: spec.Horizon, rows: list, considered: int, rejectio
         return "No option chain passed the freshness checks, so no contract could be evaluated."
     if considered == 0:
         return f"No {kind} on any usable chain expires {h.min_dte}-{h.max_dte} days after the as-of date."
-    parts = [f"{v} left out by the per-underlying limit" if k == "per-underlying limit" else f"{v} failed: {k}"
-             for k, v in sorted(rejections.items(), key=lambda kv: -kv[1])]
-    return (f"Only {len(rows)} of up to {limit} {kind}s met every rule. {considered} {kind}s in the {h.min_dte}-{h.max_dte} "
-            f"day window were checked; {'; '.join(parts) or 'none failed'}. The list is not padded and no rule is relaxed.")
+    parts = [
+        f"{v} left out by the per-underlying limit" if k == "per-underlying limit" else f"{v} failed: {k}"
+        for k, v in sorted(rejections.items(), key=lambda kv: -kv[1])
+    ]
+    return (
+        f"Only {len(rows)} of up to {limit} {kind}s met every rule. {considered} {kind}s in the {h.min_dte}-{h.max_dte} "
+        f"day window were checked; {'; '.join(parts) or 'none failed'}. The list is not padded and no rule is relaxed."
+    )
 
 
-def _rank_list(usable: dict, h: spec.Horizon, kind: str, as_of: date, events: dict, events_known: bool = True,
-               quotes: dict | None = None) -> dict:
+def _rank_list(
+    usable: dict,
+    h: spec.Horizon,
+    kind: str,
+    as_of: date,
+    events: dict,
+    events_known: bool = True,
+    quotes: dict | None = None,
+) -> dict:
     r = spec.OPTION_RULES
     rows, rejections, considered = [], {}, 0
     for sym, (under, opts) in usable.items():
@@ -394,15 +499,28 @@ def _rank_list(usable: dict, h: spec.Horizon, kind: str, as_of: date, events: di
     rows = rows[: r["max_per_type_per_horizon"]]
     for i, x in enumerate(rows, 1):
         x["rank"] = i
-    status = "ok" if rows else ("unavailable: no valid option chains" if not usable else
-                                f"no {kind} met the liquidity and delta rules")
-    return {"rows": rows, "count": len(rows), "limit": r["max_per_type_per_horizon"], "considered": considered,
-            "rejections": rejections, "status": status,
-            "shortfall": _shortfall(kind, h, rows, considered, rejections, usable)}
+    status = (
+        "ok"
+        if rows
+        else ("unavailable: no valid option chains" if not usable else f"no {kind} met the liquidity and delta rules")
+    )
+    return {
+        "rows": rows,
+        "count": len(rows),
+        "limit": r["max_per_type_per_horizon"],
+        "considered": considered,
+        "rejections": rejections,
+        "status": status,
+        "shortfall": _shortfall(kind, h, rows, considered, rejections, usable),
+    }
 
 
-def build_horizons(chains: dict[str, tuple[dict, list[dict]] | str], as_of: date,
-                   events: dict[str, list[dict]], events_known: bool = True) -> dict:
+def build_horizons(
+    chains: dict[str, tuple[dict, list[dict]] | str],
+    as_of: date,
+    events: dict[str, list[dict]],
+    events_known: bool = True,
+) -> dict:
     """{horizon: {"calls": {...}, "puts": {...}}}, each list ranked separately.
 
     `chains`: underlying -> (underlying info, option rows) or an error string.
@@ -421,8 +539,11 @@ def build_horizons(chains: dict[str, tuple[dict, list[dict]] | str], as_of: date
             usable[sym] = ch
             quotes[sym] = quote_info(ch[0], as_of)
     for h in spec.HORIZONS:
-        out[h.key] = {"title": h.title, "window": [h.min_dte, h.max_dte],
-                      **{f"{k}s": _rank_list(usable, h, k, as_of, events, events_known, quotes) for k in spec.OPTION_TYPES}}
+        out[h.key] = {
+            "title": h.title,
+            "window": [h.min_dte, h.max_dte],
+            **{f"{k}s": _rank_list(usable, h, k, as_of, events, events_known, quotes) for k in spec.OPTION_TYPES},
+        }
     out["chain_problems"] = chain_problems
     out["underlyings"] = sorted(usable)
     out["underlying_prices"] = {s: (u.get("close") or u.get("price")) for s, (u, _) in usable.items()}

@@ -1,4 +1,5 @@
 """Backtest engine mechanics: timing, costs, risk sizing, accounting."""
+
 from dataclasses import replace
 
 import pandas as pd
@@ -17,7 +18,9 @@ def test_backtest_runs_and_accounts_consistently(settings, bars):
     res = bt(bars, settings)
     assert res.metrics["trades"] > 0
     # equity change must equal the sum of closed-trade P&L (everything is closed at the end)
-    assert res.equity.iloc[-1] - settings.paper_starting_equity == pytest.approx(sum(t.pnl for t in res.trades), abs=1e-6)
+    assert res.equity.iloc[-1] - settings.paper_starting_equity == pytest.approx(
+        sum(t.pnl for t in res.trades), abs=1e-6
+    )
     assert all(t.exit_date >= t.entry_date for t in res.trades)
 
 

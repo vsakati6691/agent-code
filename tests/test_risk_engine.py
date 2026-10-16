@@ -20,11 +20,14 @@ CFG = RiskConfig(stop_risk_buffer=0.2)
 def corr_returns(n=80, seed=0):
     rng = np.random.default_rng(seed)
     base = rng.standard_normal(n) * 0.01
-    return pd.DataFrame({
-        "A": base,
-        "A2": base + rng.standard_normal(n) * 0.001,   # ~0.99 correlated with A
-        "B": rng.standard_normal(n) * 0.01,            # independent
-    }, index=pd.bdate_range("2026-01-01", periods=n))
+    return pd.DataFrame(
+        {
+            "A": base,
+            "A2": base + rng.standard_normal(n) * 0.001,  # ~0.99 correlated with A
+            "B": rng.standard_normal(n) * 0.01,  # independent
+        },
+        index=pd.bdate_range("2026-01-01", periods=n),
+    )
 
 
 def test_stop_buffer_shrinks_size():
@@ -78,8 +81,9 @@ def test_engine_never_exceeds_aggregate_limit(settings):
         d = engine.evaluate_entry(sym, 100, 95, state, rets)
         if d.approved:
             total += d.risk_amount
-            state = replace(state, cash=state.cash - d.notional,
-                            holdings=state.holdings + (Holding(sym, d.quantity, 100, 95),))
+            state = replace(
+                state, cash=state.cash - d.notional, holdings=state.holdings + (Holding(sym, d.quantity, 100, 95),)
+            )
     assert total <= 1000 * settings.risk.max_open_risk_pct + 1e-6
 
 

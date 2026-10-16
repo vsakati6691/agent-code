@@ -1,6 +1,7 @@
 """Static CSS and JavaScript for the dashboard site (no external scripts, fonts or trackers)."""
 
-from .assets_scan import CSS as SCAN_CSS, JS as SCAN_JS
+from .assets_scan import CSS as SCAN_CSS
+from .assets_scan import JS as SCAN_JS
 
 CSS = r"""
 :root {
@@ -516,10 +517,14 @@ JS = r"""
 CSS += SCAN_CSS
 JS += SCAN_JS
 
-from .assets_decisions import CSS as DECISION_CSS, JS as DECISION_JS
+from .assets_decisions import CSS as DECISION_CSS  # noqa: E402 - assemble in stylesheet order.
+from .assets_decisions import JS as DECISION_JS  # noqa: E402
+
 CSS += DECISION_CSS
 JS += DECISION_JS
 
-from .assets_speculative import CSS as SPECULATIVE_CSS, JS as SPECULATIVE_JS
+from .assets_speculative import CSS as SPECULATIVE_CSS  # noqa: E402 - assemble in stylesheet order.
+from .assets_speculative import JS as SPECULATIVE_JS  # noqa: E402
+
 CSS += SPECULATIVE_CSS
 JS += SPECULATIVE_JS

@@ -5,6 +5,7 @@ quote, independently of the strategy and sizing code, and fails closed: any
 missing input is a rejection. The limits come from `account_limits` in the
 config, which the loader already forces to be no looser than HARD_LIMITS.
 """
+
 from __future__ import annotations
 
 import math
@@ -27,21 +28,35 @@ class ExecutionLimits:
     capital: float
     allowed_symbols: frozenset[str]
     max_quote_age_seconds: float = 60.0
-    max_limit_deviation_pct: float = 0.01    # limit at most 1% through the quote
-    max_spread_pct: float = 0.005            # skip symbols quoting wider than 0.5%
+    max_limit_deviation_pct: float = 0.01  # limit at most 1% through the quote
+    max_spread_pct: float = 0.005  # skip symbols quoting wider than 0.5%
     max_account_age_seconds: float = 120.0
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> "ExecutionLimits":
+    def from_settings(cls, settings: Settings) -> ExecutionLimits:
         al = settings.account_limits
-        return cls(al.max_order_notional, al.max_total_exposure, al.min_cash_reserve, al.max_daily_purchases,
-                   al.max_daily_entries, settings.live.capital,
-                   frozenset(s.upper() for s in al.live_allowed_symbols) - LEVERAGED_INVERSE_ETFS)
+        return cls(
+            al.max_order_notional,
+            al.max_total_exposure,
+            al.min_cash_reserve,
+            al.max_daily_purchases,
+            al.max_daily_entries,
+            settings.live.capital,
+            frozenset(s.upper() for s in al.live_allowed_symbols) - LEVERAGED_INVERSE_ETFS,
+        )
 
 
-def validate(req: OrderRequest, settings: Settings, limits: ExecutionLimits, account: AccountState | None,
-             quote: Quote | None, ledger_unresolved: list[dict], buys_today: tuple[int, float],
-             now: datetime, buys_halted: str = "") -> list[str]:
+def validate(
+    req: OrderRequest,
+    settings: Settings,
+    limits: ExecutionLimits,
+    account: AccountState | None,
+    quote: Quote | None,
+    ledger_unresolved: list[dict],
+    buys_today: tuple[int, float],
+    now: datetime,
+    buys_halted: str = "",
+) -> list[str]:
     """Reasons to refuse `req`. An empty list means the order may be sent."""
     out: list[str] = []
     ks = kill_switch_status(settings)
@@ -106,7 +121,7 @@ def validate(req: OrderRequest, settings: Settings, limits: ExecutionLimits, acc
     if held > 0:
         out.append(f"{sym} is already held (one position per ticker)")
     entries, bought = buys_today
-    invested = max(0.0, account.total_value - account.cash)   # broker market value of positions
+    invested = max(0.0, account.total_value - account.cash)  # broker market value of positions
     notional = req.notional
     if notional > limits.max_order_notional + 1e-9:
         out.append(f"order ${notional:,.2f} exceeds ${limits.max_order_notional:,.0f} per order")
@@ -115,9 +130,13 @@ def validate(req: OrderRequest, settings: Settings, limits: ExecutionLimits, acc
     if bought + notional > limits.max_daily_purchases + 1e-9:
         out.append(f"daily purchases would be ${bought + notional:,.2f} (max ${limits.max_daily_purchases:,.0f})")
     if invested + notional > min(limits.max_total_exposure, limits.capital) + 1e-9:
-        out.append(f"exposure would be ${invested + notional:,.2f} (max ${min(limits.max_total_exposure, limits.capital):,.0f})")
+        out.append(
+            f"exposure would be ${invested + notional:,.2f} (max ${min(limits.max_total_exposure, limits.capital):,.0f})"
+        )
     spendable = min(account.settled_cash, account.cash, account.buying_power)
     if spendable - notional < limits.min_cash_reserve - 1e-9:
-        out.append(f"settled cash ${spendable:,.2f} minus ${notional:,.2f} would breach the "
-                   f"${limits.min_cash_reserve:,.0f} reserve")
+        out.append(
+            f"settled cash ${spendable:,.2f} minus ${notional:,.2f} would breach the "
+            f"${limits.min_cash_reserve:,.0f} reserve"
+        )
     return out

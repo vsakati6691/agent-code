@@ -3,6 +3,7 @@
 Alpha Vantage publishes a monthly average yield. To avoid look-ahead, the
 value for month M is only used from the first trading day of month M+1.
 """
+
 from __future__ import annotations
 
 import logging

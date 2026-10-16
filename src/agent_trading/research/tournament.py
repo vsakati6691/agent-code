@@ -14,13 +14,14 @@ so repeated peeking is visible.
 
 Acceptance rules (ACCEPTANCE) are fixed in code before running.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import NormalDist
 
@@ -32,7 +33,8 @@ from ..config import Settings
 from ..data.cache import read_cache
 from ..data.dividends import load_dividends, total_return_bars
 from ..manifest import code_version
-from .candidates import CASH, Candidate, Market, candidates
+from .candidates import CASH as CASH
+from .candidates import Candidate, Market, candidates
 from .engine import ACCOUNT_CONSTRAINTS, Constraints, max_drawdown, metrics, simulate
 
 PERIODS = {
@@ -54,23 +56,46 @@ COST_MULTIPLES = (1, 2, 3)
 WF_YEARS = range(2011, 2022)
 
 ACCEPTANCE = {
-    "min_excess_cagr_vs_cash": 0.01,     # CAGR above BIL by >= 1%/yr, in train AND validation
-    "min_sharpe_each": 0.30,             # Sharpe (excess of BIL) in train AND validation
-    "max_drawdown_floor": -0.25,         # no worse than -25% in train or validation
-    "min_bootstrap_sharpe_lo": 0.0,      # 95% CI lower bound on train+validation Sharpe
-    "min_deflated_sharpe_prob": 0.90,    # probability true Sharpe > 0 after N trials
-    "max_grid_sharpe_range": 0.50,       # sensitivity: grid Sharpe range (all grid points must be > 0)
-    "min_cost_retention_3x": 0.70,       # Sharpe at 3x costs / Sharpe at 1x
+    "min_excess_cagr_vs_cash": 0.01,  # CAGR above BIL by >= 1%/yr, in train AND validation
+    "min_sharpe_each": 0.30,  # Sharpe (excess of BIL) in train AND validation
+    "max_drawdown_floor": -0.25,  # no worse than -25% in train or validation
+    "min_bootstrap_sharpe_lo": 0.0,  # 95% CI lower bound on train+validation Sharpe
+    "min_deflated_sharpe_prob": 0.90,  # probability true Sharpe > 0 after N trials
+    "max_grid_sharpe_range": 0.50,  # sensitivity: grid Sharpe range (all grid points must be > 0)
+    "min_cost_retention_3x": 0.70,  # Sharpe at 3x costs / Sharpe at 1x
     "max_sharpe_shortfall_vs_bench": 0.10,  # Sharpe not below the best simple benchmark by more than this
 }
 TEST_PASS = {"min_sharpe": 0.0, "max_drawdown_floor": -0.25}
 
-DATA_SYMBOLS = sorted({"SPY", "QQQ", "IWM", "EFA", "EEM", "VNQ", "DBC", "GLD", "IEF", "TLT", "BIL",
-                       "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU", "XLB"})
+DATA_SYMBOLS = sorted(
+    {
+        "SPY",
+        "QQQ",
+        "IWM",
+        "EFA",
+        "EEM",
+        "VNQ",
+        "DBC",
+        "GLD",
+        "IEF",
+        "TLT",
+        "BIL",
+        "XLK",
+        "XLF",
+        "XLE",
+        "XLV",
+        "XLI",
+        "XLY",
+        "XLP",
+        "XLU",
+        "XLB",
+    }
+)
 KNOWN_FIXES = {"EEM": "2008-01-18"}  # unadjusted 3:1 split and zero-volume bars before this date
 
 
 # ---------------------------------------------------------------- data
+
 
 @dataclass
 class DataReport:
@@ -95,7 +120,7 @@ def load_market(settings: Settings, symbols: list[str] = DATA_SYMBOLS) -> tuple[
             rep.problems.append(f"{sym}: not in the cache (candidates using it are affected)")
             continue
         if sym in KNOWN_FIXES:
-            df = df.loc[KNOWN_FIXES[sym]:]
+            df = df.loc[KNOWN_FIXES[sym] :]
         bad = df[(df[["open", "high", "low", "close"]] <= 0).any(axis=1) | df[["open", "close"]].isna().any(axis=1)]
         if len(bad):
             rep.problems.append(f"{sym}: {len(bad)} bars with missing or non-positive prices dropped")
@@ -109,12 +134,22 @@ def load_market(settings: Settings, symbols: list[str] = DATA_SYMBOLS) -> tuple[
         jump = df["close"].pct_change().abs()
         big = jump[jump > 0.25]
         missing = int(len(cal[(cal >= df.index[0]) & (cal <= df.index[-1])].difference(df.index)))
-        rep.rows.append({"symbol": sym, "first": str(df.index[0].date()), "last": str(df.index[-1].date()),
-                         "bars": len(df), "missing_vs_spy": missing, "max_abs_daily_move": float(jump.max()),
-                         "total_return": sym in tr})
+        rep.rows.append(
+            {
+                "symbol": sym,
+                "first": str(df.index[0].date()),
+                "last": str(df.index[-1].date()),
+                "bars": len(df),
+                "missing_vs_spy": missing,
+                "max_abs_daily_move": float(jump.max()),
+                "total_return": sym in tr,
+            }
+        )
         if len(big):
-            rep.problems.append(f"{sym}: {len(big)} daily moves above 25% (largest {big.max():.0%} on "
-                                f"{big.idxmax().date()}); check for an unadjusted split")
+            rep.problems.append(
+                f"{sym}: {len(big)} daily moves above 25% (largest {big.max():.0%} on "
+                f"{big.idxmax().date()}); check for an unadjusted split"
+            )
         if missing > 5:
             rep.problems.append(f"{sym}: {missing} SPY trading days missing")
         opens[sym] = df["open"].reindex(cal)
@@ -126,6 +161,7 @@ def load_market(settings: Settings, symbols: list[str] = DATA_SYMBOLS) -> tuple[
 
 
 # ---------------------------------------------------------------- statistics
+
 
 def deflated_sharpe(returns: pd.Series, trial_sharpes: list[float]) -> float:
     """Bailey & Lopez de Prado (2014): P(true Sharpe > 0 | the best of N trials), daily units."""
@@ -145,7 +181,9 @@ def deflated_sharpe(returns: pd.Series, trial_sharpes: list[float]) -> float:
     return float(nd.cdf((sr - sr0) * math.sqrt(n - 1) / denom))
 
 
-def sharpe_diff_ci(a: pd.Series, b: pd.Series, n: int = 1000, block: int = 20, seed: int = 0) -> tuple[float, float, float]:
+def sharpe_diff_ci(
+    a: pd.Series, b: pd.Series, n: int = 1000, block: int = 20, seed: int = 0
+) -> tuple[float, float, float]:
     """Paired circular block bootstrap of Sharpe(a) - Sharpe(b) (both excess of the same cash series)."""
     df = pd.concat([a, b], axis=1).dropna().to_numpy()
     m = len(df)
@@ -167,20 +205,21 @@ def sharpe_diff_ci(a: pd.Series, b: pd.Series, n: int = 1000, block: int = 20, s
 
 
 def _slice(s: pd.Series, period: tuple[str, str | None]) -> pd.Series:
-    return s.loc[period[0]:period[1]] if period[1] else s.loc[period[0]:]
+    return s.loc[period[0] : period[1]] if period[1] else s.loc[period[0] :]
 
 
 # ---------------------------------------------------------------- tournament
 
+
 @dataclass
 class Entry:
     cand: Candidate
-    sims: dict = field(default_factory=dict)         # (param, cost multiple, constraints label) -> SimResult
-    periods: dict = field(default_factory=dict)      # period -> metrics (default param, 1x costs)
-    selection: dict = field(default_factory=dict)    # train+validation metrics
-    grid: dict = field(default_factory=dict)         # param -> selection Sharpe
-    costs: dict = field(default_factory=dict)        # multiple -> selection Sharpe
-    account: dict = field(default_factory=dict)      # period -> metrics under the account constraints
+    sims: dict = field(default_factory=dict)  # (param, cost multiple, constraints label) -> SimResult
+    periods: dict = field(default_factory=dict)  # period -> metrics (default param, 1x costs)
+    selection: dict = field(default_factory=dict)  # train+validation metrics
+    grid: dict = field(default_factory=dict)  # param -> selection Sharpe
+    costs: dict = field(default_factory=dict)  # multiple -> selection Sharpe
+    account: dict = field(default_factory=dict)  # period -> metrics under the account constraints
     walk_forward: dict = field(default_factory=dict)
     regimes: dict = field(default_factory=dict)
     bootstrap: dict = field(default_factory=dict)
@@ -228,7 +267,7 @@ class Tournament:
             for name, rng in REGIMES.items():
                 if "(test)" in name:
                     continue
-                r = base.returns.loc[rng[0]:rng[1]]
+                r = base.returns.loc[rng[0] : rng[1]]
                 e.regimes[name] = {"return": float((1 + r).prod() - 1), "max_drawdown": max_drawdown(r)}
             acct = self._sim(e, c.default, 1, ACCOUNT_CONSTRAINTS)
             for p in ("train", "validation"):
@@ -272,15 +311,19 @@ class Tournament:
         chosen, pieces = {}, []
         for y in WF_YEARS:
             hist = (SELECTION[0], f"{y - 1}-12-31")
-            best = max(e.cand.grid, key=lambda p: metrics(_slice(sims[p].returns, hist), _slice(self.cash, hist))["sharpe"])
+            best = max(
+                e.cand.grid, key=lambda p: metrics(_slice(sims[p].returns, hist), _slice(self.cash, hist))["sharpe"]
+            )
             chosen[y] = best
-            pieces.append(sims[best].returns.loc[f"{y}-01-01":f"{y}-12-31"])
+            pieces.append(sims[best].returns.loc[f"{y}-01-01" : f"{y}-12-31"])
         wf = pd.concat(pieces)
         span = (f"{WF_YEARS[0]}-01-01", f"{WF_YEARS[-1]}-12-31")
         fixed = _slice(self._sim(e, e.cand.default).returns, span)
-        return {"chosen": chosen,
-                "wf": metrics(wf, _slice(self.cash, span)),
-                "default": metrics(fixed, _slice(self.cash, span))}
+        return {
+            "chosen": chosen,
+            "wf": metrics(wf, _slice(self.cash, span)),
+            "default": metrics(fixed, _slice(self.cash, span)),
+        }
 
     def _decide(self, e: Entry) -> None:
         a = ACCEPTANCE
@@ -290,15 +333,18 @@ class Tournament:
         tr, va = e.periods["train"], e.periods["validation"]
         grid = list(e.grid.values())
         c = {
-            "beats_cash_train_and_validation": all(e.periods[p]["cagr"] >= cash[p] + a["min_excess_cagr_vs_cash"] for p in cash),
+            "beats_cash_train_and_validation": all(
+                e.periods[p]["cagr"] >= cash[p] + a["min_excess_cagr_vs_cash"] for p in cash
+            ),
             "sharpe_train_and_validation": min(tr["sharpe"], va["sharpe"]) >= a["min_sharpe_each"],
             "drawdown_train_and_validation": min(tr["max_drawdown"], va["max_drawdown"]) >= a["max_drawdown_floor"],
-            "bootstrap_sharpe_ci_above_zero": (not e.bootstrap.get("insufficient")) and e.bootstrap["sharpe_ci"][0] > a["min_bootstrap_sharpe_lo"],
+            "bootstrap_sharpe_ci_above_zero": (not e.bootstrap.get("insufficient"))
+            and e.bootstrap["sharpe_ci"][0] > a["min_bootstrap_sharpe_lo"],
             "deflated_sharpe": e.dsr >= a["min_deflated_sharpe_prob"],
             "parameter_robust": bool(grid) and min(grid) > 0 and max(grid) - min(grid) <= a["max_grid_sharpe_range"],
             "cost_robust": e.costs[1] > 0 and e.costs[3] >= a["min_cost_retention_3x"] * e.costs[1],
             "not_worse_than_simple_benchmarks": e.selection["sharpe"] >= bench - a["max_sharpe_shortfall_vs_bench"]
-                                                and e.selection["max_drawdown"] > spy_mdd,
+            and e.selection["max_drawdown"] > spy_mdd,
         }
         e.checks = c
         e.reasons = [k for k, ok in c.items() if not ok]
@@ -316,14 +362,18 @@ class Tournament:
             e.test_vs_spy = sharpe_diff_ci(self._excess(s.returns, PERIODS["test"]), spy)
             for name, rng in REGIMES.items():
                 if "(test)" in name:
-                    r = s.returns.loc[rng[0]:rng[1]]
+                    r = s.returns.loc[rng[0] : rng[1]]
                     e.regimes[name] = {"return": float((1 + r).prod() - 1), "max_drawdown": max_drawdown(r)}
             if not e.cand.benchmark and e.decision.startswith("ACCEPTED"):
-                ok = e.test["sharpe"] > TEST_PASS["min_sharpe"] and e.test["max_drawdown"] >= TEST_PASS["max_drawdown_floor"]
+                ok = (
+                    e.test["sharpe"] > TEST_PASS["min_sharpe"]
+                    and e.test["max_drawdown"] >= TEST_PASS["max_drawdown_floor"]
+                )
                 e.decision = "ACCEPTED for paper trading (passed test)" if ok else "REJECTED at test"
 
 
 # ---------------------------------------------------------------- registry
+
 
 def _clean(x):
     if isinstance(x, dict):
@@ -341,23 +391,52 @@ def registry_records(t: Tournament, run_id: str, when: str, code: dict, tested: 
     out = []
     for e in t.entries.values():
         c = e.cand
-        out.append(_clean({
-            "run_id": run_id, "recorded_at": when, "strategy": c.name, "version": c.version, "family": c.family,
-            "benchmark": c.benchmark, "hypothesis": c.hypothesis, "rules": c.rules, "default_param": c.default,
-            "grid": list(c.grid), "assets": list(c.assets), "notes": c.notes,
-            "code_commit": code.get("commit"), "code_dirty": code.get("dirty"),
-            "data_fingerprint": t.data.fingerprint, "data_problems": t.data.problems,
-            "price_only_assets": sorted(set(c.assets) - t.mkt.total_return),
-            "periods": PERIODS, "cost_per_side": t.cost, "cost_multiples": list(COST_MULTIPLES),
-            "metrics": e.periods, "selection": e.selection, "account_constrained": e.account,
-            "grid_sharpe": e.grid, "cost_sharpe": e.costs, "walk_forward": e.walk_forward,
-            "bootstrap": e.bootstrap, "sharpe_vs_spy_ci": e.vs_spy, "deflated_sharpe_prob": e.dsr,
-            "n_trials": t.n_trials, "regimes": e.regimes, "checks": e.checks,
-            "test_evaluated": c.name in tested, "test": e.test, "test_account_constrained": e.test_account,
-            "test_sharpe_vs_spy_ci": e.test_vs_spy,
-            "decision": e.decision or ("benchmark" if c.benchmark else ""), "failed_checks": e.reasons,
-            "acceptance_rules": ACCEPTANCE, "test_pass_rules": TEST_PASS,
-        }))
+        out.append(
+            _clean(
+                {
+                    "run_id": run_id,
+                    "recorded_at": when,
+                    "strategy": c.name,
+                    "version": c.version,
+                    "family": c.family,
+                    "benchmark": c.benchmark,
+                    "hypothesis": c.hypothesis,
+                    "rules": c.rules,
+                    "default_param": c.default,
+                    "grid": list(c.grid),
+                    "assets": list(c.assets),
+                    "notes": c.notes,
+                    "code_commit": code.get("commit"),
+                    "code_dirty": code.get("dirty"),
+                    "data_fingerprint": t.data.fingerprint,
+                    "data_problems": t.data.problems,
+                    "price_only_assets": sorted(set(c.assets) - t.mkt.total_return),
+                    "periods": PERIODS,
+                    "cost_per_side": t.cost,
+                    "cost_multiples": list(COST_MULTIPLES),
+                    "metrics": e.periods,
+                    "selection": e.selection,
+                    "account_constrained": e.account,
+                    "grid_sharpe": e.grid,
+                    "cost_sharpe": e.costs,
+                    "walk_forward": e.walk_forward,
+                    "bootstrap": e.bootstrap,
+                    "sharpe_vs_spy_ci": e.vs_spy,
+                    "deflated_sharpe_prob": e.dsr,
+                    "n_trials": t.n_trials,
+                    "regimes": e.regimes,
+                    "checks": e.checks,
+                    "test_evaluated": c.name in tested,
+                    "test": e.test,
+                    "test_account_constrained": e.test_account,
+                    "test_sharpe_vs_spy_ci": e.test_vs_spy,
+                    "decision": e.decision or ("benchmark" if c.benchmark else ""),
+                    "failed_checks": e.reasons,
+                    "acceptance_rules": ACCEPTANCE,
+                    "test_pass_rules": TEST_PASS,
+                }
+            )
+        )
     return out
 
 
@@ -393,7 +472,7 @@ def run(settings: Settings, registry: Path, run_test: bool = True) -> tuple[Tour
         tested = ["BENCH_SPY", "BENCH_CASH", "BENCH_6040", "BENCH_EW7", "GTAA", *[p for p in passed if p != "GTAA"]]
         t.run_test(tested)
     prior = prior_test_evaluations(registry)
-    when = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    when = datetime.now(UTC).isoformat(timespec="seconds")
     code = code_version(settings.base_dir)
     run_id = hashlib.sha256(f"{when}{code}".encode()).hexdigest()[:10]
     append_registry(registry, registry_records(t, run_id, when, code, tested))

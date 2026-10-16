@@ -1,11 +1,10 @@
 """Daily collection is bounded, immutable and separate from weekly research. No network."""
+
 from __future__ import annotations
 
-import copy
 import hashlib
-import json
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -13,8 +12,8 @@ import pytest
 import yaml
 
 from agent_trading.dashboard import options, spec
-from agent_trading.dashboard.http import BudgetExceeded, HttpClient
-from agent_trading.dashboard.refresh import CBOE_BUDGET, collect, constrain, run
+from agent_trading.dashboard.http import BudgetExceeded, FetchError, HttpClient
+from agent_trading.dashboard.refresh import CBOE_BUDGET, constrain, run
 from agent_trading.dashboard.refresh_store import MAX_DAY_BYTES, RefreshStore
 from agent_trading.dashboard.site import build_site
 from agent_trading.dashboard.site_refresh import load_context, price
@@ -22,7 +21,7 @@ from agent_trading.dashboard.store import Store
 from tests.dashboard_fixtures import AS_OF, FakeProviders, benchmarks, demo_site, option_row
 from tests.test_dashboard_site import visible_text
 
-NOW = datetime(2026, 10, 9, 22, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 9, 22, 30, tzinfo=UTC)
 
 
 class RefreshProviders(FakeProviders):
@@ -32,9 +31,15 @@ class RefreshProviders(FakeProviders):
         benchmarks(self)
         for i, symbol in enumerate(("AAA", "AIA", "AIM")):
             self.add(symbol, i + 1)
-            self.chains[symbol] = ({"symbol": symbol, "close": 100, "last_trade_time": f"{AS_OF}T16:00:00",
-                                    "timestamp": f"{AS_OF} 22:00:00"},
-                                   [option_row(symbol, AS_OF + timedelta(days=90), 100, 4.9, 5.1)])
+            self.chains[symbol] = (
+                {
+                    "symbol": symbol,
+                    "close": 100,
+                    "last_trade_time": f"{AS_OF}T16:00:00",
+                    "timestamp": f"{AS_OF} 22:00:00",
+                },
+                [option_row(symbol, AS_OF + timedelta(days=90), 100, 4.9, 5.1)],
+            )
 
     def _check(self, what):
         provider = "alphavantage" if what == "earnings" else "cboe"
@@ -45,9 +50,14 @@ class RefreshProviders(FakeProviders):
 
 
 def weekly(data):
-    snap = {"as_of": str(AS_OF), "spec_version": spec.SPEC_VERSION, "status": "ok",
-            "bands": {k: {"candidates": [{"ticker": t}]} for k, t in
-                      (("large", "AAA"), ("ai_large", "AIA"), ("ai_mid", "AIM"))}}
+    snap = {
+        "as_of": str(AS_OF),
+        "spec_version": spec.SPEC_VERSION,
+        "status": "ok",
+        "bands": {
+            k: {"candidates": [{"ticker": t}]} for k, t in (("large", "AAA"), ("ai_large", "AIA"), ("ai_mid", "AIM"))
+        },
+    }
     store = Store(data)
     store.write_snapshot(snap, "test")
     store.write_json("tracking.json", {"sentinel": "weekly only"})
@@ -55,8 +65,11 @@ def weekly(data):
 
 
 def file_hashes(data):
-    return {p.relative_to(data).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in data.rglob("*") if p.is_file() and p.name != "audit.jsonl"}
+    return {
+        p.relative_to(data).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in data.rglob("*")
+        if p.is_file() and p.name != "audit.jsonl"
+    }
 
 
 def test_refresh_writes_only_daily_preserves_weekly_and_tracking_and_appends_audit(tmp_path):
@@ -96,8 +109,14 @@ def test_same_session_keeps_first_without_any_network(tmp_path):
     assert Store(tmp_path).audit_log()[-1]["event"] == "refresh_skipped"
 
 
-@pytest.mark.parametrize("session,now", [(date(2026, 12, 25), datetime(2026, 12, 25, 23, tzinfo=timezone.utc)),
-                                          (date(2026, 10, 10), NOW), (AS_OF, NOW.replace(hour=19))])
+@pytest.mark.parametrize(
+    "session,now",
+    [
+        (date(2026, 12, 25), datetime(2026, 12, 25, 23, tzinfo=UTC)),
+        (date(2026, 10, 10), NOW),
+        (AS_OF, NOW.replace(hour=19)),
+    ],
+)
 def test_holidays_weekends_and_unfinished_session_skip(tmp_path, session, now):
     weekly(tmp_path)
     p = RefreshProviders()
@@ -110,7 +129,9 @@ def test_stale_failed_quotes_and_missing_calendar_are_unavailable(tmp_path):
     weekly(tmp_path)
     p = RefreshProviders()
     original = p.quote
-    p.quote = lambda symbol: replace(original(symbol), last_trade=datetime(2026, 10, 8, 16)) if symbol == "AAA" else original(symbol)
+    p.quote = lambda symbol: (
+        replace(original(symbol), last_trade=datetime(2026, 10, 8, 16)) if symbol == "AAA" else original(symbol)
+    )
     p.fail.update({"quote:SPY", "chain:AAA", "earnings"})
     out = run(tmp_path, p, AS_OF, now=NOW)
     assert out["status"] == "partial"
@@ -120,8 +141,15 @@ def test_stale_failed_quotes_and_missing_calendar_are_unavailable(tmp_path):
     assert out["options"]["events_known"] is False and out["chain_status"]["AAA"]["status"] == "unavailable"
 
 
-@pytest.mark.parametrize("change", [{"timestamp": "2026-10-08 21:00:00"}, {"symbol": "OTHER"},
-                                    {"last_trade_time": "2026-10-08T16:00:00"}, {"close": float("nan")}])
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"timestamp": "2026-10-08 21:00:00"},
+        {"symbol": "OTHER"},
+        {"last_trade_time": "2026-10-08T16:00:00"},
+        {"close": float("nan")},
+    ],
+)
 def test_invalid_chain_rejected_without_contracts(tmp_path, change):
     weekly(tmp_path)
     p = RefreshProviders()
@@ -143,6 +171,7 @@ def test_budget_exhaustion_records_every_unavailable_item(tmp_path):
 
 def test_scheduled_calendar_dates_serialize_and_retain_scheduled_status(tmp_path):
     import pandas as pd
+
     weekly(tmp_path)
     p = RefreshProviders()
     p.earnings = pd.DataFrame({"symbol": ["AAA"], "reportDate": [AS_OF + timedelta(days=20)]})
@@ -155,7 +184,9 @@ def test_scheduled_calendar_dates_serialize_and_retain_scheduled_status(tmp_path
 def test_http_refresh_limits_fresh_cache_and_deadline(tmp_path):
     now = [0.0]
     response = Mock(status_code=200, content=b'{"fresh":true}')
-    client = HttpClient(tmp_path, "offline", session=Mock(), clock=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s))
+    client = HttpClient(
+        tmp_path, "offline", session=Mock(), clock=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s)
+    )
     client.session.get.return_value = response
     url = "https://cdn-api.cboe.com/test"
     client._write_cache(client._key(url, None, ""), b'{"stale":true}')
@@ -182,7 +213,7 @@ def test_actual_http_counts_retries_in_80_and_one_av_budgets():
         except Exception:
             pass
     assert client.used["cboe"] == 80
-    with pytest.raises(Exception):
+    with pytest.raises(FetchError):
         client.get_text("https://www.alphavantage.co/test")
     assert client.used["alphavantage"] == 1
 

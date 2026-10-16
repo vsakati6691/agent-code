@@ -1,4 +1,5 @@
 """Presentation and output guards for the built site (review of 2026-10-14)."""
+
 from __future__ import annotations
 
 import pytest
@@ -6,8 +7,8 @@ import pytest
 from agent_trading.dashboard import scoring
 from agent_trading.dashboard.scenarios import implied_growth_text
 
-
 # --- item 1: implied growth wording -----------------------------------------------------------
+
 
 def test_implied_growth_reads_in_one_pass():
     assert implied_growth_text(1.35, 0.49) == "Price implies about 135%/yr revenue growth for 5 years vs 49% trailing"
@@ -28,6 +29,7 @@ def test_counterargument_uses_the_plain_wording():
 
 def test_bear_case_does_not_repeat_the_implied_growth_sentence():
     from agent_trading.dashboard.scenarios import bear_case
+
     m = {"implied_revenue_cagr": 1.35, "revenue_growth_ttm": 0.49, "implied_growth_gap": -0.86}
     counter = "Weakest evidence: " + implied_growth_text(1.35, 0.49) + "."
     assert bear_case(m, counter).count("Price implies") == 1
@@ -40,8 +42,14 @@ import re  # noqa: E402
 
 from tests.dashboard_fixtures import demo_site  # noqa: E402
 
-FORBIDDEN = [(r"\d[eE][-+]\d", "scientific notation"), (r"\bnan\b", "nan"), (r"\bNaN\b", "NaN"), (r"\bNone\b", "None"),
-             (r"(?<![\w-])-?inf\b", "inf"), (r"\{", "brace")]
+FORBIDDEN = [
+    (r"\d[eE][-+]\d", "scientific notation"),
+    (r"\bnan\b", "nan"),
+    (r"\bNaN\b", "NaN"),
+    (r"\bNone\b", "None"),
+    (r"(?<![\w-])-?inf\b", "inf"),
+    (r"\{", "brace"),
+]
 
 
 def visible_text(html: str) -> str:
@@ -63,12 +71,13 @@ def test_no_raw_numbers_or_python_values_leak_into_pages_or_csv(site):
         for pattern, label in FORBIDDEN:
             m = re.search(pattern, body)
             if m:
-                problems.append(f"{p.relative_to(site)}: {label}: ...{body[max(0, m.start() - 40):m.end() + 40]!r}")
+                problems.append(f"{p.relative_to(site)}: {label}: ...{body[max(0, m.start() - 40) : m.end() + 40]!r}")
     assert not problems, "\n".join(problems[:15])
 
 
 def test_detail_page_inputs_are_rounded_percentages():
     from agent_trading.dashboard.fmt import metric
+
     assert metric("fcf_margin_change", 8.33e-17) == "+0.0%"
     assert metric("gross_margin", 0.53212) == "53.2%"
     assert metric("net_debt_to_ebitda", 0.123456) == "0.1235x"
@@ -78,6 +87,7 @@ def test_detail_page_inputs_are_rounded_percentages():
 
 def test_net_debt_or_net_cash_never_both():
     from agent_trading.dashboard.fmt import net_position
+
     assert net_position(1.5e9) == "Net debt $1.5B" and net_position(-1.5e9) == "Net cash $1.5B"
     assert net_position(-2e8, False) == "net cash $200M" and net_position(None) == "Net debt n/a"
 
@@ -95,6 +105,7 @@ def test_detail_page_keeps_list_title_casing(site):
 
 def test_chart_ticks_are_round_numbers():
     from agent_trading.dashboard.site import nice_ticks
+
     assert nice_ticks(22, 1040) == [0, 250, 500, 750, 1000, 1250]
     assert nice_ticks(95, 140) == [90, 100, 110, 120, 130, 140]
     assert nice_ticks(70, 180) == [50, 75, 100, 125, 150, 175, 200]
@@ -104,19 +115,25 @@ def test_chart_ticks_are_round_numbers():
 
 def test_price_chart_axis_labels_are_round(site):
     page = (site / "stock" / "large-S11.html").read_text(encoding="utf-8")
-    labels = [int(x) for x in re.findall(r'text-anchor="end" font-size="11" fill="var\(--text-muted\)">(-?\d+)</text>', page)]
+    labels = [
+        int(x) for x in re.findall(r'text-anchor="end" font-size="11" fill="var\(--text-muted\)">(-?\d+)</text>', page)
+    ]
     assert labels and all(v % 10 == 0 for v in labels)
 
 
-@pytest.mark.parametrize("kind, signed, text", [
-    ("call", 0.052, "+5.2% (stock must rise)"),
-    ("call", -0.031, "already past breakeven (breakeven 3.1% below the stock)"),
-    ("put", -0.052, "-5.2% (stock must fall)"),
-    ("put", 0.020, "already past breakeven (breakeven 2.0% above the stock)"),
-    ("put", 0.0, "already past breakeven (breakeven 0.0% above the stock)"),
-])
+@pytest.mark.parametrize(
+    "kind, signed, text",
+    [
+        ("call", 0.052, "+5.2% (stock must rise)"),
+        ("call", -0.031, "already past breakeven (breakeven 3.1% below the stock)"),
+        ("put", -0.052, "-5.2% (stock must fall)"),
+        ("put", 0.020, "already past breakeven (breakeven 2.0% above the stock)"),
+        ("put", 0.0, "already past breakeven (breakeven 0.0% above the stock)"),
+    ],
+)
 def test_distance_to_breakeven_wording(kind, signed, text):
     from agent_trading.dashboard.site_options import distance_text
+
     assert distance_text(kind, signed) == text
 
 
@@ -127,11 +144,12 @@ def test_options_page_never_says_zero_move(site):
 
 def test_no_backslash_escapes_inside_html_attributes(site):
     for p in site.rglob("*.html"):
-        assert "\\'" not in p.read_text(encoding="utf-8"), p.name     # a backslash before a quote
+        assert "\\'" not in p.read_text(encoding="utf-8"), p.name  # a backslash before a quote
 
 
 def test_tabs_are_not_silently_restored_and_follow_the_hash():
     from agent_trading.dashboard.assets import CSS, JS
+
     assert "localStorage.getItem('matrix'" not in JS and "localStorage.getItem('tab:" not in JS
     assert "history.replaceState(null, '', '#' + state.type + '-' + state.hz)" in JS
     assert 'aria-selected="true"] { background: var(--series-1)' in CSS and "underline" in CSS
@@ -160,12 +178,23 @@ def test_phone_width_keeps_only_the_named_columns(site):
     opt = _header_classes((site / "options.html").read_text(encoding="utf-8"), "o-3m-call")
     kept = [label for label, cls in opt if "hide-sm" not in cls]
     # 2026-10-14.6: maximum loss stays visible on phones; bid/ask moves to the expandable facts
-    assert kept == ["#", "Underlying", "Expiry", "Strike", "Premium*", "Breakeven at expiry", "Max loss", "Research score"]
+    assert kept == [
+        "#",
+        "Underlying",
+        "Expiry",
+        "Strike",
+        "Premium*",
+        "Breakeven at expiry",
+        "Max loss",
+        "Research score",
+    ]
 
 
 def test_ticker_column_is_sticky_in_every_wide_table(site):
     for page, tid in (("growth.html", "t-large"), ("options.html", "o-3m-call"), ("watchlist.html", "t-watch")):
-        assert any("tk" in cls.split() for _, cls in _header_classes((site / page).read_text(encoding="utf-8"), tid)), page
+        assert any("tk" in cls.split() for _, cls in _header_classes((site / page).read_text(encoding="utf-8"), tid)), (
+            page
+        )
 
 
 def _outside_details(html: str) -> str:
@@ -174,8 +203,11 @@ def _outside_details(html: str) -> str:
 
 def test_long_paragraphs_are_folded_except_on_methodology(site):
     from agent_trading.dashboard import spec
+
     full = [spec.MULTIBAGGER_DEFINITION[:80], spec.PROBABILITY_STATEMENT[:80], spec.SCENARIO_METHOD[:80]]
-    pages = [site / "index.html", site / "growth.html", site / "multibaggers.html"] + list((site / "stock").glob("*.html"))
+    pages = [site / "index.html", site / "growth.html", site / "multibaggers.html"] + list(
+        (site / "stock").glob("*.html")
+    )
     for p in pages:
         text = p.read_text(encoding="utf-8").replace("&#x27;", "'")
         for f in full:
@@ -186,6 +218,7 @@ def test_long_paragraphs_are_folded_except_on_methodology(site):
 
 def test_empty_states_say_what_appears_and_when(tmp_path):
     from agent_trading.dashboard.fmt import tracking_schedule
+
     text = tracking_schedule(["2026-10-09"])
     assert "21 trading sessions after the first snapshot (2026-10-09)" in text and "2026-11-09" in text
     assert "52 weekly snapshots" in text and "1 stored" in text
@@ -203,12 +236,14 @@ def test_history_overview_and_audit_explain_empty_states(site):
 
 def test_phone_nav_is_one_scrolling_row():
     from agent_trading.dashboard.assets import CSS, JS
-    phone = CSS[CSS.index("@media (max-width: 700px)"):]
+
+    phone = CSS[CSS.index("@media (max-width: 700px)") :]
     assert "nav { display: flex; flex-wrap: nowrap; overflow-x: auto;" in phone and "min-width: 0" in phone
     assert "nav a[aria-current]" in JS
 
 
 # --- item 12: structural output guards ----------------------------------------------------------
+
 
 def _pages(site):
     return sorted(site.rglob("*.html"))
@@ -236,14 +271,15 @@ def test_every_table_has_a_caption_or_label(site):
     for p in _pages(site):
         text = p.read_text(encoding="utf-8")
         for m in re.finditer(r"<table\b[^>]*>", text):
-            if "aria-label=" not in m.group(0) and not text[m.end():m.end() + 40].lstrip().startswith("<caption"):
+            if "aria-label=" not in m.group(0) and not text[m.end() : m.end() + 40].lstrip().startswith("<caption"):
                 missing.append(f"{p.relative_to(site)}: {m.group(0)[:60]}")
     assert not missing, missing[:10]
 
 
 def test_every_page_has_exactly_one_h1(site):
-    wrong = [(p.relative_to(site).as_posix(), len(re.findall(r"<h1\b", p.read_text(encoding="utf-8"))))
-             for p in _pages(site)]
+    wrong = [
+        (p.relative_to(site).as_posix(), len(re.findall(r"<h1\b", p.read_text(encoding="utf-8")))) for p in _pages(site)
+    ]
     assert all(n == 1 for _, n in wrong), [w for w in wrong if w[1] != 1]
 
 
@@ -256,8 +292,10 @@ def test_excluded_lists_live_on_their_own_compact_pages(site):
 
 # --- item 13: per-symbol pages and header search --------------------------------------------
 
+
 def test_symbol_pages_cover_lists_options_and_watchlist(site):
     import json as _json
+
     snap = _json.loads((site / "data" / "latest.json").read_text())
     expected = {c["ticker"] for b in snap["bands"].values() for c in b["candidates"]}
     expected |= set(snap["options"]["underlyings"]) | {e["ticker"] for e in snap["watchlist"]["entries"]}
@@ -266,7 +304,7 @@ def test_symbol_pages_cover_lists_options_and_watchlist(site):
     page = (site / "symbol" / "S04.html").read_text(encoding="utf-8")
     for heading in ("This week's lists", "Option contracts", "Watchlist 2030", "History across snapshots"):
         assert heading in page
-    assert page.count("2026-10-02") >= 1 and page.count("2026-10-09") >= 1          # both snapshots in history
+    assert page.count("2026-10-02") >= 1 and page.count("2026-10-09") >= 1  # both snapshots in history
     nope = (site / "symbol" / "NOPE.html").read_text(encoding="utf-8")
     assert "Scenario unavailable" in nope and "Not in any of this week" in nope
 
@@ -279,6 +317,7 @@ def test_every_page_has_the_inline_symbol_search(site):
 
 # --- item 15: sparklines and distribution strips ------------------------------------------------
 
+
 def test_list_rows_have_a_one_year_sparkline_vs_benchmark(site):
     page = (site / "growth.html").read_text(encoding="utf-8")
     sparks = re.findall(r'<svg class="spark"[^>]*aria-label="1-year price: ([^"]+)"', page)
@@ -290,17 +329,31 @@ def test_lists_show_sector_and_market_cap_mix(site):
     page = (site / "growth.html").read_text(encoding="utf-8")
     assert page.count('aria-label="Sector mix"') >= 3 and page.count('aria-label="Market-cap mix"') >= 3
     from agent_trading.dashboard.site_overview import distribution_strip
+
     strip = distribution_strip([{"sector": "Energy", "market_cap": 5e9}, {"sector": "Energy", "market_cap": 3e11}])
-    assert "Energy <strong>2</strong>" in strip and "$2B-$10B <strong>1</strong>" in strip and "$200B+ <strong>1</strong>" in strip
+    assert (
+        "Energy <strong>2</strong>" in strip
+        and "$2B-$10B <strong>1</strong>" in strip
+        and "$200B+ <strong>1</strong>" in strip
+    )
 
 
 # --- item 14: why a watchlist scenario is unavailable --------------------------------------------
 
+
 def test_next_filing_estimate_from_cadence_and_fallback():
     from datetime import date
+
     from agent_trading.dashboard.watchlist import next_filing_estimate
-    subs = {"filings": {"recent": {"form": ["10-Q", "8-K", "10-Q", "10-K", "10-Q"],
-                                   "filingDate": ["2026-08-07", "2026-08-01", "2026-05-08", "2026-02-20", "2025-11-06"]}}}
+
+    subs = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q", "8-K", "10-Q", "10-K", "10-Q"],
+                "filingDate": ["2026-08-07", "2026-08-01", "2026-05-08", "2026-02-20", "2025-11-06"],
+            }
+        }
+    }
     nxt, basis = next_filing_estimate(subs, None, date(2026, 10, 9))
     assert nxt == date(2026, 8, 7) + (date(2026, 8, 7) - date(2026, 5, 8)) and "median gap" in basis
     nxt, basis = next_filing_estimate({"sic": "1"}, "2026-08-10", date(2026, 10, 9))
@@ -311,15 +364,21 @@ def test_next_filing_estimate_from_cadence_and_fallback():
 
 def test_unlock_steps_name_exact_inputs_and_never_invent_methods():
     from datetime import date
+
     from agent_trading.dashboard.watchlist import unlock_steps
+
     q = unlock_steps("quarters", quarters=2, next_filing=(date(2026, 11, 15), "the last filing cadence"))
-    assert q[0] == "2 of 4 required quarters reported; next 10-Q/10-K expected around 2026-11-15 based on the last filing cadence."
+    assert (
+        q[0]
+        == "2 of 4 required quarters reported; next 10-Q/10-K expected around 2026-11-15 based on the last filing cadence."
+    )
     assert "The spec defines no other ETF method" in " ".join(unlock_steps("etf_class"))
     assert "edit config/research_watchlist.json" in " ".join(unlock_steps("unresolved"))
 
 
 def test_watchlist_page_lists_what_unlocks_each_unavailable_scenario(site):
     import json as _json
+
     snap = _json.loads((site / "data" / "latest.json").read_text())
     w = {e["ticker"]: e for e in snap["watchlist"]["entries"]}
     assert w["NEWQ"]["scenarios"] is None and w["NEWQ"]["unlock"][0].startswith("2 of 4 required quarters reported")
@@ -332,10 +391,21 @@ def test_watchlist_page_lists_what_unlocks_each_unavailable_scenario(site):
 
 # --- item 16: week-over-week change causes ------------------------------------------------------
 
+
 def test_rank_changes_carry_score_and_component_moves():
     from agent_trading.dashboard.pipeline import rank_changes
-    prev = [{"ticker": "A", "rank": 3, "composite": 60.0, "components": {"growth": 0.5, "valuation": 0.4, "quality": 0.6}}]
-    cur = [{"ticker": "A", "rank": 1, "composite": 65.3, "components": {"growth": 0.62, "valuation": 0.385, "quality": 0.6}}]
+
+    prev = [
+        {"ticker": "A", "rank": 3, "composite": 60.0, "components": {"growth": 0.5, "valuation": 0.4, "quality": 0.6}}
+    ]
+    cur = [
+        {
+            "ticker": "A",
+            "rank": 1,
+            "composite": 65.3,
+            "components": {"growth": 0.62, "valuation": 0.385, "quality": 0.6},
+        }
+    ]
     (ch,) = rank_changes(cur, prev)
     assert ch["change"] == 2 and ch["score_change"] == pytest.approx(5.3)
     assert ch["component_changes"] == {"growth": 12.0, "valuation": -1.5}
@@ -343,25 +413,41 @@ def test_rank_changes_carry_score_and_component_moves():
 
 def test_changes_panel_names_the_causes(site):
     from agent_trading.dashboard.site_overview import move_cause
-    text = move_cause({"ticker": "S04", "change": 4, "to": 1, "score_change": 5.3,
-                       "component_changes": {"growth": 12.0, "valuation": -1.5}}, "Large cap")
+
+    text = move_cause(
+        {
+            "ticker": "S04",
+            "change": 4,
+            "to": 1,
+            "score_change": 5.3,
+            "component_changes": {"growth": 12.0, "valuation": -1.5},
+        },
+        "Large cap",
+    )
     assert text == "S04 up 4 to #1 (Large cap): score +5.3; growth +12.0, valuation -1.5"
-    old = move_cause({"ticker": "X", "change": -2, "to": 5, "explanation": "component score changes: growth -3.0"}, "Mid")
+    old = move_cause(
+        {"ticker": "X", "change": -2, "to": 5, "explanation": "component score changes: growth -3.0"}, "Mid"
+    )
     assert old == "X down 2 to #5 (Mid): component score changes: growth -3.0"
     page = (site / "index.html").read_text(encoding="utf-8")
-    assert "Biggest moves and why" in page and re.search(r"(up|down) \d+ to #\d+ \(Large cap \(S&amp;P 500 members\)\): score [+-]", page)
+    assert "Biggest moves and why" in page and re.search(
+        r"(up|down) \d+ to #\d+ \(Large cap \(S&amp;P 500 members\)\): score [+-]", page
+    )
 
 
 def test_move_with_unchanged_own_score_says_others_moved():
     from agent_trading.dashboard.site_overview import move_cause
+
     t = move_cause({"ticker": "S11", "change": -2, "to": 3, "score_change": 0.0, "component_changes": {}}, "Large cap")
     assert t == "S11 down 2 to #3 (Large cap): its own score was unchanged; other stocks scored higher this week"
 
 
 # --- item 17: Atom feed -----------------------------------------------------------------------------
 
+
 def test_atom_feed_lists_every_weekly_report(site):
     import xml.etree.ElementTree as ET
+
     ns = {"a": "http://www.w3.org/2005/Atom"}
     root = ET.fromstring((site / "feed.xml").read_bytes())
     entries = root.findall("a:entry", ns)
@@ -370,18 +456,23 @@ def test_atom_feed_lists_every_weekly_report(site):
     for e in entries:
         href = e.find("a:link", ns).get("href")
         assert (site / href).exists() and e.find("a:updated", ns).text and "not advice" in e.find("a:summary", ns).text
-    assert entries[0].find("a:title", ns).text == f"Week ending {reports[-1]}"          # newest first
+    assert entries[0].find("a:title", ns).text == f"Week ending {reports[-1]}"  # newest first
     assert 'type="application/atom+xml"' in (site / "index.html").read_text(encoding="utf-8")
 
 
 # --- item 18: documented JSON ----------------------------------------------------------------
 
+
 def test_per_snapshot_json_schema_and_audit_links(site):
     import json as _json
+
     from agent_trading.dashboard.store import Store
+
     store = Store(site.parent / "data")
     for d in store.dates():
-        assert _json.loads((site / "data" / f"{d}.json").read_text()) == _json.loads(_json.dumps(store.load(d), default=str))
+        assert _json.loads((site / "data" / f"{d}.json").read_text()) == _json.loads(
+            _json.dumps(store.load(d), default=str)
+        )
     schema = _json.loads((site / "data" / "schema.json").read_text())
     latest = _json.loads((site / "data" / "latest.json").read_text())
     assert set(latest) <= set(schema["properties"]), set(latest) - set(schema["properties"])
@@ -393,10 +484,12 @@ def test_per_snapshot_json_schema_and_audit_links(site):
 
 # --- item 19: theme toggle and print stylesheet ------------------------------------------------
 
+
 def test_theme_toggle_overrides_system_and_is_applied_before_paint(site):
     from agent_trading.dashboard.assets import CSS, JS
+
     page = (site / "index.html").read_text(encoding="utf-8")
-    head = page[:page.index("</head>")]
+    head = page[: page.index("</head>")]
     assert 'localStorage.getItem("theme")' in head and head.index("<script>") < head.index("style.css")
     assert 'class="themebtn"' in page
     assert "var order = ['auto', 'light', 'dark'];" in JS
@@ -405,20 +498,28 @@ def test_theme_toggle_overrides_system_and_is_applied_before_paint(site):
 
 def test_print_stylesheet_hides_controls_and_expands_details():
     from agent_trading.dashboard.assets import CSS, JS
-    pr = CSS[CSS.index("@media print"):]
+
+    pr = CSS[CSS.index("@media print") :]
     assert "header.site" in pr and ".tabs" in pr and "display: none" in pr and "background: #fff" in pr
     assert "beforeprint" in JS and "setAttribute('open'" in JS
 
 
 # --- item 20: verified earnings dates (SEC 8-K item 2.02) ---------------------------------------
 
-SUBS = {"filings": {"recent": {"form": ["8-K", "10-Q", "8-K", "8-K", "8-K/A", "8-K"],
-                                "filingDate": ["2026-07-30", "2026-07-31", "2026-06-02", "2026-04-29", "2026-02-01", "2026-01-28"],
-                                "items": ["2.02,9.01", "", "5.07", "2.02", "2.02", "9.01"]}}}
+SUBS = {
+    "filings": {
+        "recent": {
+            "form": ["8-K", "10-Q", "8-K", "8-K", "8-K/A", "8-K"],
+            "filingDate": ["2026-07-30", "2026-07-31", "2026-06-02", "2026-04-29", "2026-02-01", "2026-01-28"],
+            "items": ["2.02,9.01", "", "5.07", "2.02", "2.02", "9.01"],
+        }
+    }
+}
 
 
 def test_parse_earnings_8k_keeps_only_item_2_02():
     from agent_trading.dashboard.providers import parse_earnings_8k
+
     assert parse_earnings_8k(SUBS) == ["2026-07-30", "2026-04-29", "2026-02-01"]
     assert parse_earnings_8k({"sic": "1"}) == [] and parse_earnings_8k(None) == []
 
@@ -442,7 +543,9 @@ class _Prov:
 
 def test_verify_earnings_labels_cadence_and_respects_the_budget():
     from datetime import date
+
     from agent_trading.dashboard.pipeline import Context, verify_earnings
+
     ok = verify_earnings(Context(date(2026, 10, 9), _Prov(500, SUBS)), 1, "2026-10-29")
     assert ok["last_results"] == "2026-07-30" and ok["last_results_status"] == "verified (8-K)"
     assert ok["next_status"] == "scheduled (Alpha Vantage, unverified)" and ok["cadence_check"].startswith("consistent")
@@ -459,19 +562,27 @@ def test_8k_results_and_filing_cadence_are_point_in_time():
     """The SEC submissions file is a current view: filings after the as-of date must not become 'last results'
     (a rerun for an earlier week, or a Saturday run after a holiday Friday when EDGAR was open)."""
     from datetime import date
+
     from agent_trading.dashboard.pipeline import Context, verify_earnings
     from agent_trading.dashboard.providers import parse_earnings_8k
     from agent_trading.dashboard.watchlist import next_filing_estimate
+
     assert parse_earnings_8k(SUBS, date(2026, 7, 1)) == ["2026-04-29", "2026-02-01"]
-    assert parse_earnings_8k(SUBS, date(2026, 7, 30)) == ["2026-07-30", "2026-04-29", "2026-02-01"]   # same day counts
+    assert parse_earnings_8k(SUBS, date(2026, 7, 30)) == ["2026-07-30", "2026-04-29", "2026-02-01"]  # same day counts
     assert parse_earnings_8k(SUBS, date(2026, 1, 1)) == []
     earlier = verify_earnings(Context(date(2026, 7, 1), _Prov(500, SUBS)), 1, "2026-07-29")
     assert earlier["last_results"] == "2026-04-29" and earlier["last_results_status"] == "verified (8-K)"
     assert "2026-07-30" not in str(earlier)
-    subs = {"filings": {"recent": {"form": ["10-Q", "10-Q", "10-K", "10-Q"],
-                                   "filingDate": ["2026-11-06", "2026-08-07", "2026-02-20", "2025-11-06"]}}}
+    subs = {
+        "filings": {
+            "recent": {
+                "form": ["10-Q", "10-Q", "10-K", "10-Q"],
+                "filingDate": ["2026-11-06", "2026-08-07", "2026-02-20", "2025-11-06"],
+            }
+        }
+    }
     nxt, basis = next_filing_estimate(subs, None, date(2026, 10, 9))
-    assert nxt == date(2026, 8, 7) + (date(2026, 8, 7) - date(2026, 2, 20)) and "last 3" in basis   # 2026-11-06 ignored
+    assert nxt == date(2026, 8, 7) + (date(2026, 8, 7) - date(2026, 2, 20)) and "last 3" in basis  # 2026-11-06 ignored
 
 
 def test_site_shows_verified_8k_dates(site):
@@ -483,28 +594,45 @@ def test_site_shows_verified_8k_dates(site):
 
 # --- review of the live site (2026-10-14): readable reasons, options-off naming, phone order -----------
 
+
 def test_exclusion_groups_keep_the_rule_and_drop_each_stocks_value():
     from agent_trading.dashboard.site_overview import NOT_CHECKED, group_exclusions, reason_group
-    assert reason_group("gate failed: TTM revenue growth 6% (needs >= 15%)") == \
-        ("gate failed: TTM revenue growth below 15%", "6%")
+
+    assert reason_group("gate failed: TTM revenue growth 6% (needs >= 15%)") == (
+        "gate failed: TTM revenue growth below 15%",
+        "6%",
+    )
     assert reason_group("gate failed: dilution 9% (needs <= 8%)") == ("gate failed: dilution above 8%", "9%")
-    assert reason_group("illiquid: 20-day median dollar volume $1.5M < $5M") == \
-        ("illiquid: 20-day median dollar volume below $5M", "$1.5M")
+    assert reason_group("illiquid: 20-day median dollar volume $1.5M < $5M") == (
+        "illiquid: 20-day median dollar volume below $5M",
+        "$1.5M",
+    )
     assert reason_group("market cap $0.83B outside the band") == ("market cap outside the band", "$0.83B")
-    assert reason_group("too little evidence: 5 of 21 sub-metrics missing") == \
-        ("too little evidence (too many sub-metrics missing)", "5 of 21")
+    assert reason_group("too little evidence: 5 of 21 sub-metrics missing") == (
+        "too little evidence (too many sub-metrics missing)",
+        "5 of 21",
+    )
     assert reason_group("price 1.20 below 2") == ("price below $2", "$1.20")
     assert reason_group("Robinhood tradability not yet verified") == (NOT_CHECKED, "")
     assert reason_group("no CIK for this S&P 500 member") == ("no CIK for this S&P 500 member", "")
-    assert reason_group("gate input unavailable: 3-year revenue growth")[0] == "gate input unavailable: 3-year revenue growth"
-    assert reason_group("price data rejected: ADIG: only 41 bars, need 60") == \
-        ("price data rejected: too little price history (needs 60 daily bars)", "41 bars")
-    assert reason_group("price data rejected: KOD: recent data anomaly (unadjusted split on 2026-09-30); "
-                        "feed unreliable") == \
-        ("price data rejected: recent data anomaly (unadjusted split); feed unreliable", "2026-09-30")
+    assert (
+        reason_group("gate input unavailable: 3-year revenue growth")[0]
+        == "gate input unavailable: 3-year revenue growth"
+    )
+    assert reason_group("price data rejected: ADIG: only 41 bars, need 60") == (
+        "price data rejected: too little price history (needs 60 daily bars)",
+        "41 bars",
+    )
+    assert reason_group(
+        "price data rejected: KOD: recent data anomaly (unadjusted split on 2026-09-30); feed unreliable"
+    ) == ("price data rejected: recent data anomaly (unadjusted split); feed unreliable", "2026-09-30")
     assert reason_group("price data rejected: PPIH: negative volume") == ("price data rejected: negative volume", "")
-    groups = group_exclusions([{"ticker": "A", "reason": "gate failed: TTM revenue growth 6% (needs >= 15%)"},
-                               {"ticker": "B", "reason": "gate failed: TTM revenue growth 4% (needs >= 15%)"}])
+    groups = group_exclusions(
+        [
+            {"ticker": "A", "reason": "gate failed: TTM revenue growth 6% (needs >= 15%)"},
+            {"ticker": "B", "reason": "gate failed: TTM revenue growth 4% (needs >= 15%)"},
+        ]
+    )
     assert groups == [("gate failed: TTM revenue growth below 15%", [("A", "6%"), ("B", "4%")])]
 
 
@@ -516,8 +644,17 @@ def test_excluded_summaries_on_the_site_have_no_placeholder_dots(site):
 
 def test_missing_earnings_calendar_is_not_reported_as_no_earnings():
     from agent_trading.dashboard.site_overview import panels
-    snap = {"bands": {}, "as_of": "2026-10-13", "universe": {}, "events": {
-        "window_days": 45, "items": [], "note": "Earnings dates unavailable: data unavailable (key not configured)"}}
+
+    snap = {
+        "bands": {},
+        "as_of": "2026-10-13",
+        "universe": {},
+        "events": {
+            "window_days": 45,
+            "items": [],
+            "note": "Earnings dates unavailable: data unavailable (key not configured)",
+        },
+    }
     html = panels(snap, None, ["2026-10-13"])
     assert "No earnings scheduled" not in html and "could not be collected" in html
     snap["events"]["note"] = "Scheduled earnings dates from Alpha Vantage's calendar."
@@ -526,6 +663,7 @@ def test_missing_earnings_calendar_is_not_reported_as_no_earnings():
 
 def test_flags_shared_by_most_names_collapse_to_a_count():
     from agent_trading.dashboard.site_overview import FLAG_LIST_MAX, _flag_item
+
     short = _flag_item("Negative free cash flow", ["A", "B"], 35)
     assert "<details>" not in short and "A, B" in short
     many = [f"T{i}" for i in range(FLAG_LIST_MAX + 1)]
@@ -537,6 +675,7 @@ def test_tikasa_brand_and_options_link_stay_consistent_when_options_are_disabled
     """Dataset availability does not change the brand or hide the explanatory options page."""
     from agent_trading.dashboard.site import build_site
     from agent_trading.dashboard.store import Store
+
     data, out = demo_site(tmp_path / "a", two_weeks=False)
     on = (out / "index.html").read_text(encoding="utf-8")
     assert "Tikasa Stock Research" in on and 'href="options.html"' in on
@@ -558,7 +697,7 @@ def test_every_page_uses_the_tikasa_name_in_header_and_title(site):
     for p in _pages(site):
         page = p.read_text(encoding="utf-8")
         assert re.search(r'<a class="brand"[^>]+>Tikasa Stock Research</a>', page), p.name
-        assert re.search(r'<title>[^<]*Tikasa Stock Research</title>', page), p.name
+        assert re.search(r"<title>[^<]*Tikasa Stock Research</title>", page), p.name
 
 
 def test_overview_and_research_lists_have_separate_pages(site):
@@ -573,8 +712,9 @@ def test_overview_and_research_lists_have_separate_pages(site):
     assert "What must happen for a multibagger outcome" in multibaggers
 
 
-@pytest.mark.parametrize("name,label", [("index.html", "Overview"), ("growth.html", "Growth Stocks"),
-                                       ("multibaggers.html", "Multibaggers")])
+@pytest.mark.parametrize(
+    "name,label", [("index.html", "Overview"), ("growth.html", "Growth Stocks"), ("multibaggers.html", "Multibaggers")]
+)
 def test_primary_research_navigation_marks_only_the_active_page(site, name, label):
     page = (site / name).read_text(encoding="utf-8")
     nav = re.search(r"<nav>(.*?)</nav>", page, re.S)[1]
@@ -587,32 +727,57 @@ def test_primary_research_navigation_marks_only_the_active_page(site, name, labe
 def test_research_backlinks_return_to_the_matching_list_page(site):
     for p in (site / "stock").glob("*.html"):
         band = p.stem.split("-", 1)[0]
-        target = "ai.html" if band.startswith("ai_") else "multibaggers.html" if band == "multibagger" else "growth.html"
+        target = (
+            "ai.html" if band.startswith("ai_") else "multibaggers.html" if band == "multibagger" else "growth.html"
+        )
         page = p.read_text(encoding="utf-8")
         assert f'href="../{target}#{band}"' in page
         assert f'href="../{target}" aria-current=page' in page
     for p in site.glob("excluded-*.html"):
         band = p.stem.removeprefix("excluded-")
-        target = "ai.html" if band.startswith("ai_") else "multibaggers.html" if band == "multibagger" else "growth.html"
+        target = (
+            "ai.html" if band.startswith("ai_") else "multibaggers.html" if band == "multibagger" else "growth.html"
+        )
         assert f'href="{target}#{band}"' in p.read_text(encoding="utf-8")
 
 
 def test_watchlist_fund_type_label_is_plain():
     from agent_trading.dashboard.site_watchlist import tidy
+
     old = "other security (not common stock (warrant, right, unit, preferred, note, fund or blank-check))"
     assert tidy(old) == "other security (not common stock)"
-    assert tidy(f"no scenario method for this security type ({old})") == \
-        "no scenario method for this security type (other security (not common stock))"
+    assert (
+        tidy(f"no scenario method for this security type ({old})")
+        == "no scenario method for this security type (other security (not common stock))"
+    )
     assert tidy(None) == ""
 
 
 def test_listed_fund_shares_resolve_as_a_fund_not_a_nested_label():
     import pandas as pd
+
     from agent_trading.dashboard.watchlist import resolve
-    dirs = pd.DataFrame([{"ticker": "RVX", "name": "Example Ventures Fund I Common Shares of Beneficial Interest",
-                          "exchange": "NYSE", "test_issue": False, "etf": False, "financial_status": ""},
-                         {"ticker": "WTX", "name": "Example Corp Warrants", "exchange": "Nasdaq", "test_issue": False,
-                          "etf": False, "financial_status": ""}]).set_index("ticker")
+
+    dirs = pd.DataFrame(
+        [
+            {
+                "ticker": "RVX",
+                "name": "Example Ventures Fund I Common Shares of Beneficial Interest",
+                "exchange": "NYSE",
+                "test_issue": False,
+                "etf": False,
+                "financial_status": "",
+            },
+            {
+                "ticker": "WTX",
+                "name": "Example Corp Warrants",
+                "exchange": "Nasdaq",
+                "test_issue": False,
+                "etf": False,
+                "financial_status": "",
+            },
+        ]
+    ).set_index("ticker")
     sec = pd.DataFrame(columns=["cik", "name", "exchange"])
     assert resolve("RVX", dirs, sec)["asset_type"] == "fund or trust (not an operating company)"
     assert resolve("WTX", dirs, sec)["asset_type"].startswith("other security: ")
@@ -620,8 +785,14 @@ def test_listed_fund_shares_resolve_as_a_fund_not_a_nested_label():
 
 def test_earnings_panel_shows_five_dates_and_folds_the_rest():
     from agent_trading.dashboard.site_overview import EARNINGS_SHOWN, panels
+
     items = [{"ticker": f"T{i}", "date": f"2026-10-{15 + i}", "list": "large"} for i in range(9)]
-    snap = {"bands": {}, "as_of": "2026-10-13", "universe": {}, "events": {"window_days": 45, "items": items, "note": ""}}
+    snap = {
+        "bands": {},
+        "as_of": "2026-10-13",
+        "universe": {},
+        "events": {"window_days": 45, "items": items, "note": ""},
+    }
     html = panels(snap, None, ["2026-10-13"])
     shown, folded = html.split("<details", 1)
     assert all(f"<strong>T{i}</strong>" in shown for i in range(EARNINGS_SHOWN))
@@ -629,6 +800,7 @@ def test_earnings_panel_shows_five_dates_and_folds_the_rest():
 
 
 # --- accessibility (2026-10-14 cycle): column headers, tab wiring, skip link ----------------------------------
+
 
 def test_every_column_header_declares_its_scope(site):
     missing = []
@@ -638,10 +810,15 @@ def test_every_column_header_declares_its_scope(site):
                 missing.append(f"{p.relative_to(site)}: {m.group(0)[:60]}")
     assert not missing, missing[:10]
     from agent_trading.dashboard.site import column_headers
-    assert column_headers("<thead><tr><th class='num'>A</th><th>B</th></tr></thead>") ==         "<thead><tr><th scope=\"col\" class='num'>A</th><th scope=\"col\">B</th></tr></thead>"
-    assert column_headers('<th scope="row">x</th>') == '<th scope="row">x</th>'           # an explicit scope is kept
+
+    assert (
+        column_headers("<thead><tr><th class='num'>A</th><th>B</th></tr></thead>")
+        == '<thead><tr><th scope="col" class=\'num\'>A</th><th scope="col">B</th></tr></thead>'
+    )
+    assert column_headers('<th scope="row">x</th>') == '<th scope="row">x</th>'  # an explicit scope is kept
     from agent_trading.dashboard.assets_research import COMPARE_JS
-    assert COMPARE_JS.count("scope = 'col'") == 2                                        # the browser-built table too
+
+    assert COMPARE_JS.count("scope = 'col'") == 2  # the browser-built table too
 
 
 def _ids(page: str) -> set[str]:
@@ -661,18 +838,24 @@ def test_tab_lists_name_their_panels_and_panels_name_their_tabs(site):
             for pid in controls.group(1).split():
                 assert pid in ids, (name, pid)
                 panel = re.search(r'<section[^>]*\bid="' + re.escape(pid) + r'"[^>]*>', page).group(0)
-                assert 'role="tabpanel"' in panel and tid.group(1) in re.search(r'aria-labelledby="([^"]+)"', panel).group(1).split()
+                assert (
+                    'role="tabpanel"' in panel
+                    and tid.group(1) in re.search(r'aria-labelledby="([^"]+)"', panel).group(1).split()
+                )
     options = (site / "options.html").read_text(encoding="utf-8")
     assert options.count('role="tabpanel"') == 6
     assert 'id="opanel-put-6m" role="tabpanel" aria-labelledby="otab-type-put otab-hz-6m"' in options
-    assert 'aria-controls="opanel-put-3m opanel-put-6m opanel-put-12m"' in options     # the Puts tab controls three panels
-    assert not re.search(r'\bid="(call|put)-(3m|6m|12m)"', options)                   # view hashes stay free of elements
+    assert 'aria-controls="opanel-put-3m opanel-put-6m opanel-put-12m"' in options  # the Puts tab controls three panels
+    assert not re.search(r'\bid="(call|put)-(3m|6m|12m)"', options)  # view hashes stay free of elements
 
 
 def test_every_page_has_a_skip_link_to_a_focusable_main(site):
     from agent_trading.dashboard.assets import CSS
+
     for p in _pages(site):
         text = p.read_text(encoding="utf-8")
-        assert '<a class="skip" href="#main">Skip to content</a>' in text and '<main id="main" tabindex="-1">' in text, p.name
-        assert text.index('class="skip"') < text.index("<header"), p.name              # first in the Tab order
+        assert (
+            '<a class="skip" href="#main">Skip to content</a>' in text and '<main id="main" tabindex="-1">' in text
+        ), p.name
+        assert text.index('class="skip"') < text.index("<header"), p.name  # first in the Tab order
     assert ".skip:focus { left: 16px; }" in CSS

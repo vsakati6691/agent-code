@@ -8,11 +8,12 @@ with an explicit confirmation from the owner. A file that cannot be read
 counts as engaged (fail closed). Every change is appended to a log file next
 to it.
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import Settings
@@ -55,7 +56,7 @@ def engage(settings: Settings, reason: str, by: str = "system", now: datetime | 
     current = status(settings)
     if current.engaged:
         return current
-    when = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    when = (now or datetime.now(UTC)).isoformat(timespec="seconds")
     path = _path(settings)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"reason": reason, "engaged_at": when, "by": by}, indent=2), encoding="utf-8")
@@ -70,6 +71,6 @@ def release(settings: Settings, confirmation: str, now: datetime | None = None) 
     if not current.engaged:
         return current
     _path(settings).unlink()
-    when = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    when = (now or datetime.now(UTC)).isoformat(timespec="seconds")
     _log(settings, {"event": "released", "at": when, "by": "owner", "previous_reason": current.reason})
     return status(settings)

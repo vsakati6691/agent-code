@@ -4,6 +4,7 @@ All baselines use the same cost model (fills worse by `cost` per side). They
 return whatever the input bars hold: pass total-return bars (data/dividends.py)
 for a total-return comparison.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -38,5 +39,3 @@ def equal_weight(bars: dict[str, pd.DataFrame], start, end, initial: float, cost
     per = initial / len(members)
     values = pd.concat([(per / (w["open"].iloc[0] * (1 + cost))) * w["close"] for w in members], axis=1)
     return values.sort_index().ffill().sum(axis=1).rename("equity")
-
-

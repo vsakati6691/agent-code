@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff==0.17.1"]
 
 [project.scripts]
 agent-trading = "agent_trading.cli:main"
@@ -28,3 +28,16 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# Keep long HTML/JS strings and registered prose intact; the formatter wraps code.
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Constraints is a frozen dataclass, safe as a shared default.
+extend-immutable-calls = ["Constraints", "agent_trading.research.engine.Constraints"]

@@ -1,12 +1,13 @@
 """Spec 2026-10-14.5: data states, research panel, 'what changed', comparison, scenario calculator, freshness.
 
 All external services are mocked (tests/dashboard_fixtures.FakeProviders); nothing touches the network."""
+
 from __future__ import annotations
 
 import copy
 import json
 import re
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 
@@ -31,8 +32,9 @@ def a_candidate(demo, band="large"):
 
 # --- rules are registered before use ---------------------------------------------------------------------------
 
+
 def test_display_rules_are_registered_and_hashed():
-    assert spec.SPEC_VERSION >= "2026-10-14.5"          # later versions keep these display rules
+    assert spec.SPEC_VERSION >= "2026-10-14.5"  # later versions keep these display rules
     assert any(v == "2026-10-14.5" for v, _ in spec.SPEC_CHANGELOG)
     rules = spec.spec_dict()["display_rules"]
     for key in ("watchlist_price", "freshness", "dataset_states", "forensics", "changes", "compare", "scenario_lab"):
@@ -42,14 +44,21 @@ def test_display_rules_are_registered_and_hashed():
 
 # --- dataset states (adapted from ticker-dossier coverage records) -------------------------------------------
 
+
 def _snap_with(events=None, tradability=None, options=None, universe=None):
-    return {"as_of": "2026-10-09", "run_finished": "2026-10-10T15:00:00+00:00", "sources": {}, "problems": [],
-            "universe": universe or {"sp500_count": 500, "sp500_price_coverage": 1.0, "broad_eligible": 100,
-                                     "broad_exclusion_counts": {}},
-            "events": events if events is not None else {"window_days": 45, "items": [], "status": "ok"},
-            "tradability": tradability or {"verdicts_stored": 10, "to_check": 0, "oldest_check": "2026-10-01T00:00:00+00:00",
-                                           "max_age_days": 35},
-            "options": options or {"enabled": False, "status": "disabled in configuration"}, "bands": {}}
+    return {
+        "as_of": "2026-10-09",
+        "run_finished": "2026-10-10T15:00:00+00:00",
+        "sources": {},
+        "problems": [],
+        "universe": universe
+        or {"sp500_count": 500, "sp500_price_coverage": 1.0, "broad_eligible": 100, "broad_exclusion_counts": {}},
+        "events": events if events is not None else {"window_days": 45, "items": [], "status": "ok"},
+        "tradability": tradability
+        or {"verdicts_stored": 10, "to_check": 0, "oldest_check": "2026-10-01T00:00:00+00:00", "max_age_days": 35},
+        "options": options or {"enabled": False, "status": "disabled in configuration"},
+        "bands": {},
+    }
 
 
 def _state(snap, name):
@@ -60,31 +69,63 @@ def test_earnings_unavailable_is_never_reported_as_no_events():
     ok_none = _snap_with()
     assert evidence.earnings_state(ok_none)[0] == "available"
     assert "no listed name has a scheduled report" in evidence.earnings_state(ok_none)[1]
-    missing = _snap_with(events={"window_days": 45, "items": [], "status": "unavailable", "state": "missing",
-                                 "reason": "data unavailable (Alpha Vantage key not configured (ALPHAVANTAGE_API_KEY))"})
+    missing = _snap_with(
+        events={
+            "window_days": 45,
+            "items": [],
+            "status": "unavailable",
+            "state": "missing",
+            "reason": "data unavailable (Alpha Vantage key not configured (ALPHAVANTAGE_API_KEY))",
+        }
+    )
     assert _state(missing, "Earnings calendar")["state"] == "missing"
-    failed = _snap_with(events={"window_days": 45, "items": [], "status": "unavailable", "state": "provider_error",
-                                "reason": "data unavailable (earnings: HTTP 503 after 3 attempts)"})
+    failed = _snap_with(
+        events={
+            "window_days": 45,
+            "items": [],
+            "status": "unavailable",
+            "state": "provider_error",
+            "reason": "data unavailable (earnings: HTTP 503 after 3 attempts)",
+        }
+    )
     assert _state(failed, "Earnings calendar")["state"] == "provider_error"
     # a snapshot from before 2026-10-14.5 only has the note
-    old = _snap_with(events={"window_days": 45, "items": [],
-                             "note": "Earnings dates unavailable: data unavailable (Alpha Vantage key not configured (X))"})
+    old = _snap_with(
+        events={
+            "window_days": 45,
+            "items": [],
+            "note": "Earnings dates unavailable: data unavailable (Alpha Vantage key not configured (X))",
+        }
+    )
     assert evidence.earnings_state(old)[0] == "missing"
 
 
 def test_dataset_states_cover_partial_stale_missing_and_errors():
-    snap = _snap_with(universe={"sp500_count": 500, "sp500_price_coverage": 0.95, "broad_eligible": 100,
-                                "broad_exclusion_counts": {"no quote": 100}},
-                      tradability={"verdicts_stored": 10, "to_check": 0, "oldest_check": "2026-08-01T00:00:00+00:00",
-                                   "max_age_days": 35})
+    snap = _snap_with(
+        universe={
+            "sp500_count": 500,
+            "sp500_price_coverage": 0.95,
+            "broad_eligible": 100,
+            "broad_exclusion_counts": {"no quote": 100},
+        },
+        tradability={
+            "verdicts_stored": 10,
+            "to_check": 0,
+            "oldest_check": "2026-08-01T00:00:00+00:00",
+            "max_age_days": 35,
+        },
+    )
     assert _state(snap, "S&P 500 daily prices")["state"] == "partial"
     assert _state(snap, "Broad-universe quotes")["state"] == "provider_error"
     assert _state(snap, "Robinhood tradability verdicts")["state"] == "stale"
     assert _state(snap, "Option chains")["state"] == "missing"
     assert _state(_snap_with(), "S&P 500 daily prices")["state"] == "available"
-    assert _state(_snap_with(tradability={"verdicts_stored": 0, "to_check": 3}), "Robinhood tradability verdicts")["state"] == "missing"
+    assert (
+        _state(_snap_with(tradability={"verdicts_stored": 0, "to_check": 3}), "Robinhood tradability verdicts")["state"]
+        == "missing"
+    )
     with pytest.raises(ValueError):
-        evidence.record("x", "y", "sample", "")      # no sample/fallback state exists
+        evidence.record("x", "y", "sample", "")  # no sample/fallback state exists
 
 
 def test_pipeline_records_why_the_earnings_lookup_failed():
@@ -101,6 +142,7 @@ def test_pipeline_records_why_the_earnings_lookup_failed():
             p.add(f"S{i:02d}", 100 + i, growth=0.2 + 0.05 * i)
         t = Tradability.all_tradable(list(p.listed), (AS_OF - timedelta(days=1)).isoformat())
         return run(p, AS_OF, None, options_enabled=False, tradability=t)
+
     s = snap_for(NoKey())
     assert s["events"]["status"] == "unavailable" and s["events"]["state"] == "missing"
     p = FakeProviders()
@@ -113,10 +155,12 @@ def test_pipeline_records_why_the_earnings_lookup_failed():
 
 # --- watchlist: price verified independently of history length -----------------------------------------------
 
+
 def test_short_history_keeps_a_verified_price_and_names_what_is_missing():
     from agent_trading.dashboard.pipeline import run
     from agent_trading.dashboard.tradability import Tradability
     from agent_trading.dashboard.watchlist import WatchlistConfig
+
     p = FakeProviders()
     benchmarks(p)
     p.add("S00", 100, growth=0.3)
@@ -124,21 +168,28 @@ def test_short_history_keeps_a_verified_price_and_names_what_is_missing():
     p.bars["NEWF"] = make_bars(n=40, start=50, drift=0.001, seed=7, end=AS_OF.isoformat())
     p.listed["BADF"] = ("Broken Example Fund ETF", "Nasdaq", True)
     bad = make_bars(n=40, start=50, drift=0.001, seed=8, end=AS_OF.isoformat())
-    bad.iloc[-5:, bad.columns.get_loc("close")] = -1.0                  # an invalid price is still rejected
+    bad.iloc[-5:, bad.columns.get_loc("close")] = -1.0  # an invalid price is still rejected
     p.bars["BADF"] = bad
     t = Tradability.all_tradable(list(p.listed), (AS_OF - timedelta(days=1)).isoformat())
-    s = run(p, AS_OF, None, options_enabled=False, tradability=t,
-            watchlist=WatchlistConfig(("NEWF", "BADF"), "2026-10-14", "test"))
+    s = run(
+        p,
+        AS_OF,
+        None,
+        options_enabled=False,
+        tradability=t,
+        watchlist=WatchlistConfig(("NEWF", "BADF"), "2026-10-14", "test"),
+    )
     new = next(e for e in s["watchlist"]["entries"] if e["ticker"] == "NEWF")
     assert new["price"] is not None and new["price_date"] == AS_OF.isoformat()
     assert new["history_bars"] == 40 and "only 40 daily bars" in new["history_note"]
     assert any("only 40 daily bars" in m for m in new["missing"])
-    assert new["returns"]["1m"] is not None and new["returns"]["1y"] is None     # each window needs its own history
+    assert new["returns"]["1m"] is not None and new["returns"]["1y"] is None  # each window needs its own history
     bad_e = next(e for e in s["watchlist"]["entries"] if e["ticker"] == "BADF")
     assert bad_e["price"] is None and "no verified as-of price" in bad_e["unavailable_reason"]
 
 
 # --- return windows and sparkline labels -------------------------------------------------------------------------
+
 
 def test_return_windows_store_dates_and_the_chart_includes_their_start():
     close = make_bars(n=1400, start=100, drift=0.001, seed=3, end="2026-10-09")["close"]
@@ -150,13 +201,14 @@ def test_return_windows_store_dates_and_the_chart_includes_their_start():
         assert h["returns"][k]["start"] in ch["dates"], k
     assert ch["dates"] == sorted(ch["dates"])
     i = ch["dates"].index(one["start"])
-    assert ch["stock"][-1] / ch["stock"][i] - 1 == pytest.approx(one["stock"], abs=0.002)   # chart values are rounded
+    assert ch["stock"][-1] / ch["stock"][i] - 1 == pytest.approx(one["stock"], abs=0.002)  # chart values are rounded
 
 
 def test_sparkline_label_uses_the_return_tables_figures(demo):
     from agent_trading.dashboard.site_overview import row_spark
+
     c = a_candidate(demo)
-    c["history"]["returns"]["1y"]["stock"] = 4.25           # what the table shows
+    c["history"]["returns"]["1y"]["stock"] = 4.25  # what the table shows
     c["history"]["returns"]["1y"]["benchmark"] = 0.19
     html = row_spark(c, "SPY")
     assert "+425%" in html and "SPY +19%" in html
@@ -164,15 +216,18 @@ def test_sparkline_label_uses_the_return_tables_figures(demo):
 
 # --- freshness in NYSE sessions ----------------------------------------------------------------------------------
 
+
 def test_freshness_counts_nyse_sessions_not_calendar_days():
     from agent_trading.dashboard.assets import JS
     from agent_trading.dashboard.site import sessions_after
-    s = sessions_after("2026-11-25", 10)          # Thanksgiving 2026-11-26 is closed; weekend skipped
+
+    s = sessions_after("2026-11-25", 10)  # Thanksgiving 2026-11-26 is closed; weekend skipped
     assert s[0] == "2026-11-27" and "2026-11-26" not in s and "2026-11-28" not in s
     assert "America/New_York" in JS and "hour >= 16" in JS and "T21:00:00Z" not in JS
 
 
 # --- company research panel (adapted from cc-equity-research templates) ------------------------------------------
+
 
 def test_forensic_checks_follow_the_registered_thresholds(demo):
     c = a_candidate(demo)
@@ -228,6 +283,7 @@ def test_panel_lists_events_missing_information_and_sources(demo):
     snap = demo["snaps"][-1]
     c = a_candidate(demo)
     from agent_trading.dashboard.site import profile_of
+
     p = research.panel(c, snap, demo["snaps"], profile_of(snap["bands"]["large"]))
     statuses = {e["status"] for e in p["events"]}
     assert statuses <= {"verified", "unverified", "estimated", "unknown"} and "estimated" in statuses
@@ -237,6 +293,7 @@ def test_panel_lists_events_missing_information_and_sources(demo):
 
 
 # --- what changed since the previous snapshot --------------------------------------------------------------------
+
 
 def test_what_changed_explains_missing_comparisons(demo):
     snap = demo["snaps"][-1]
@@ -273,16 +330,24 @@ def test_what_changed_finds_filings_deterioration_dilution_breaches_and_data_gap
 
 # --- comparison (adapted from filingcopilot comparison.py) ---------------------------------------------------------
 
+
 def _entry(t, q="2026-06-30", profile="standard", bench="SPY", kind="listed", dates=None, values=None):
-    return {"ticker": t, "kind": kind, "price_date": "2026-10-09", "profile": profile, "benchmark": bench,
-            "period": {"latest_quarter": q}, "chart": {"dates": dates or [], "values": values or []},
-            "returns": {"1y": {"start": "2025-10-08"}}}
+    return {
+        "ticker": t,
+        "kind": kind,
+        "price_date": "2026-10-09",
+        "profile": profile,
+        "benchmark": bench,
+        "period": {"latest_quarter": q},
+        "chart": {"dates": dates or [], "values": values or []},
+        "returns": {"1y": {"start": "2025-10-08"}},
+    }
 
 
 def test_comparability_flags_mismatched_periods_profiles_and_benchmarks():
     assert compare.comparability([_entry("A")])[0].startswith("Choose 2 to 4")
     assert compare.comparability([_entry(t) for t in "ABCDE"])[0].startswith("Choose 2 to 4")
-    assert compare.comparability([_entry("A"), _entry("B", q="2026-07-15")]) == []      # 15 days apart: same period
+    assert compare.comparability([_entry("A"), _entry("B", q="2026-07-15")]) == []  # 15 days apart: same period
     flags = compare.comparability([_entry("A"), _entry("B", q="2026-09-03", profile="long_horizon", bench="IWM")])
     assert any("different periods" in f for f in flags)
     assert any("different scoring profiles" in f for f in flags)
@@ -323,6 +388,7 @@ def test_comparison_payload_is_one_entry_per_ticker_with_matching_basis(demo):
 
 # --- interactive scenarios (published formula on the visitor's inputs) ----------------------------------------------
 
+
 def test_calculator_reset_reproduces_the_published_base_case(demo):
     n = 0
     for band in demo["snaps"][-1]["bands"].values():
@@ -333,8 +399,9 @@ def test_calculator_reset_reproduces_the_published_base_case(demo):
             n += 1
             out = lab.run(inp, inp["published"])
             for y in inp["years"]:
-                assert out[y]["value_per_share"] == pytest.approx(c["scenarios"]["base"]["years"][str(y)]["value_per_share"],
-                                                                rel=1e-12)
+                assert out[y]["value_per_share"] == pytest.approx(
+                    c["scenarios"]["base"]["years"][str(y)]["value_per_share"], rel=1e-12
+                )
     assert n >= 3
 
 
@@ -343,7 +410,9 @@ def test_calculator_responds_to_inputs_and_keeps_them_in_bounds(demo):
     inp = lab.inputs(c)
     base = lab.run(inp, inp["published"])
     y = inp["years"][-1]
-    up = lab.run(inp, dict(inp["published"], starting_revenue_growth=inp["published"]["starting_revenue_growth"] + 0.10))
+    up = lab.run(
+        inp, dict(inp["published"], starting_revenue_growth=inp["published"]["starting_revenue_growth"] + 0.10)
+    )
     assert up[y]["value_per_share"] > base[y]["value_per_share"]
     more_shares = lab.run(inp, dict(inp["published"], annual_dilution=0.05))
     assert more_shares[y]["value_per_share"] < base[y]["value_per_share"] or inp["published"]["annual_dilution"] >= 0.05
@@ -352,21 +421,28 @@ def test_calculator_responds_to_inputs_and_keeps_them_in_bounds(demo):
     assert wild[y]["value_per_share"] == capped[y]["value_per_share"]
     for k, (lo, hi) in inp["bounds"].items():
         v = inp["published"].get(k)
-        assert v is None or lo <= v <= hi           # bounds always contain the published value
+        assert v is None or lo <= v <= hi  # bounds always contain the published value
     m = lab.run(inp, dict(inp["published"], fcf_margin=0.2))
     assert m[y]["ev_to_fcf"] == pytest.approx(m[y]["revenue"] * m[y]["ev_to_sales"] / (m[y]["revenue"] * 0.2))
-    assert m[y]["value_per_share"] == base[y]["value_per_share"]        # margins never change the EV/Sales value
+    assert m[y]["value_per_share"] == base[y]["value_per_share"]  # margins never change the EV/Sales value
 
 
 def test_calculator_script_mirrors_the_reference():
     from agent_trading.dashboard.assets_research import LAB_JS
-    for token in ("inp.fade * (inp.terminal - g)", "Math.pow(1 + d, y)", "(rev * mult + inp.net_cash) / sh",
-                  "data-shown", "Reset to the published base-case assumptions."):
+
+    for token in (
+        "inp.fade * (inp.terminal - g)",
+        "Math.pow(1 + d, y)",
+        "(rev * mult + inp.net_cash) / sh",
+        "data-shown",
+        "Reset to the published base-case assumptions.",
+    ):
         assert token in LAB_JS, token
     assert "localStorage" not in LAB_JS and "fetch(" not in LAB_JS and "XMLHttpRequest" not in LAB_JS
 
 
 # --- the built site ---------------------------------------------------------------------------------------------
+
 
 def test_site_has_compare_page_research_panels_and_data_status(demo):
     out = demo["out"]
@@ -380,9 +456,19 @@ def test_site_has_compare_page_research_panels_and_data_status(demo):
     common = set.intersection(*({c["ticker"] for c in s["bands"]["large"]["candidates"]} for s in demo["snaps"]))
     assert common
     stock = (out / "stock" / f"large-{sorted(common)[0]}.html").read_text(encoding="utf-8")
-    for text in ("Company research panel", "Earnings-quality checks", "Thesis conditions", "Missing information",
-                 "Sources and dates", "Evidence quality", "Try your own assumptions", "Your experiment",
-                 "What changed since the previous snapshot?", "Compared with the snapshot of", "assets/lab.js"):
+    for text in (
+        "Company research panel",
+        "Earnings-quality checks",
+        "Thesis conditions",
+        "Missing information",
+        "Sources and dates",
+        "Evidence quality",
+        "Try your own assumptions",
+        "Your experiment",
+        "What changed since the previous snapshot?",
+        "Compared with the snapshot of",
+        "assets/lab.js",
+    ):
         assert text in stock, text
     audit = (out / "audit.html").read_text(encoding="utf-8")
     assert 'id="data-status"' in audit and "Earnings calendar" in audit and "Option chains" in audit
@@ -404,21 +490,44 @@ def test_events_say_whether_the_calendar_lookup_worked(demo):
     snap = demo["snaps"][-1]
     ok_note = research.events(c, str(snap["as_of"]), snap)[0]["note"]
     assert "lookup succeeded but lists no date" in ok_note
-    failed = dict(snap, events={"window_days": 45, "items": [], "status": "unavailable", "state": "provider_error",
-                                "reason": "HTTP 503"})
+    failed = dict(
+        snap,
+        events={
+            "window_days": 45,
+            "items": [],
+            "status": "unavailable",
+            "state": "provider_error",
+            "reason": "HTTP 503",
+        },
+    )
     assert "lookup was unavailable" in research.events(c, str(snap["as_of"]), failed)[0]["note"]
 
 
 def test_empty_and_unavailable_states_render_honestly():
     from agent_trading.dashboard.site_compare import compare_page
     from agent_trading.dashboard.site_research import lab_section
-    page = compare_page({"as_of": "2026-10-09", "entries": [], "groups": [], "returns": [], "rules": spec.COMPARE_RULES})
+
+    page = compare_page(
+        {"as_of": "2026-10-09", "entries": [], "groups": [], "returns": [], "rules": spec.COMPARE_RULES}
+    )
     assert "Not enough companies" in page and 'id="cmp-pick"' not in page
     assert "Not available: no published scenario" in lab_section(None)
     from agent_trading.dashboard.site_overview import panels
-    snap = {"bands": {}, "as_of": "2026-10-13", "universe": {}, "sources": {}, "events": {
-        "window_days": 45, "items": [], "status": "unavailable", "state": "missing", "reason": "key not configured",
-        "note": "Earnings dates unavailable: key not configured"}}
+
+    snap = {
+        "bands": {},
+        "as_of": "2026-10-13",
+        "universe": {},
+        "sources": {},
+        "events": {
+            "window_days": 45,
+            "items": [],
+            "status": "unavailable",
+            "state": "missing",
+            "reason": "key not configured",
+            "note": "Earnings dates unavailable: key not configured",
+        },
+    }
     html = panels(snap, None, ["2026-10-13"])
     assert "could not be collected" in html and "No earnings scheduled" not in html
     assert "No earlier snapshot is stored" in html

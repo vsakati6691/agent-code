@@ -3,6 +3,7 @@
 The API key is sent as a query parameter, so request URLs are never logged and
 HTTP errors are re-raised without the URL.
 """
+
 from __future__ import annotations
 
 import io

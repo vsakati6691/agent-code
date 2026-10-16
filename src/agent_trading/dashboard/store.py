@@ -11,15 +11,29 @@ Layout under the data directory (the `research-data` branch in CI):
 A second run for an as-of date that already has a snapshot keeps the existing
 one (and says so in the audit trail); it never overwrites it.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-PRIVATE_KEYS = {"account_number", "account_last4", "positions", "orders", "cash", "buying_power",
-                "total_value", "unsettled_funds", "tickets", "journal", "api_key", "apikey", "token"}
+PRIVATE_KEYS = {
+    "account_number",
+    "account_last4",
+    "positions",
+    "orders",
+    "cash",
+    "buying_power",
+    "total_value",
+    "unsettled_funds",
+    "tickets",
+    "journal",
+    "api_key",
+    "apikey",
+    "token",
+}
 
 
 class SnapshotExists(RuntimeError):
@@ -31,7 +45,7 @@ class IntegrityError(RuntimeError):
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _sha(path: Path) -> str:
@@ -71,9 +85,12 @@ class Store:
         return [json.loads(ln) for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
     def write_status(self, status: str, message: str, as_of: str | None = None, **extra) -> None:
-        (self.root / "status.json").write_text(json.dumps(
-            {"status": status, "message": message, "as_of": as_of, "at": _now(), **extra}, indent=1, default=str),
-            encoding="utf-8")
+        (self.root / "status.json").write_text(
+            json.dumps(
+                {"status": status, "message": message, "as_of": as_of, "at": _now(), **extra}, indent=1, default=str
+            ),
+            encoding="utf-8",
+        )
 
     def status(self) -> dict | None:
         p = self.root / "status.json"
@@ -81,8 +98,11 @@ class Store:
 
     # --- snapshots ----------------------------------------------------------------------------
     def dates(self) -> list[str]:
-        return sorted(p.name for p in (self.root / "snapshots").iterdir()
-                      if (p / "snapshot.json").exists() and (p / "manifest.json").exists())
+        return sorted(
+            p.name
+            for p in (self.root / "snapshots").iterdir()
+            if (p / "snapshot.json").exists() and (p / "manifest.json").exists()
+        )
 
     def write_snapshot(self, payload: dict, code_commit: str = "") -> Path:
         hits = find_private_keys(payload)
@@ -97,12 +117,24 @@ class Store:
         tmp = d / "snapshot.json.tmp"
         tmp.write_text(json.dumps(payload, indent=1, sort_keys=True, default=str), encoding="utf-8")
         tmp.replace(snap)
-        manifest = {"as_of": as_of, "sha256": _sha(snap), "bytes": snap.stat().st_size,
-                    "spec_version": payload.get("spec_version"), "spec_hash": payload.get("spec_hash"),
-                    "code_commit": code_commit, "created_at": _now(), "status": payload.get("status")}
+        manifest = {
+            "as_of": as_of,
+            "sha256": _sha(snap),
+            "bytes": snap.stat().st_size,
+            "spec_version": payload.get("spec_version"),
+            "spec_hash": payload.get("spec_hash"),
+            "code_commit": code_commit,
+            "created_at": _now(),
+            "status": payload.get("status"),
+        }
         (d / "manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
-        self.audit("snapshot_written", as_of=as_of, sha256=manifest["sha256"], spec_version=manifest["spec_version"],
-                   code_commit=code_commit)
+        self.audit(
+            "snapshot_written",
+            as_of=as_of,
+            sha256=manifest["sha256"],
+            spec_version=manifest["spec_version"],
+            code_commit=code_commit,
+        )
         return snap
 
     def load(self, as_of: str, verify: bool = True) -> dict:

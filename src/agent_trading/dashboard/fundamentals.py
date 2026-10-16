@@ -8,6 +8,7 @@ company reports only year-to-date figures (cash flows) or only the fiscal year
 (the fourth quarter), the discrete quarter is derived by subtracting cumulative
 facts that share a start date; such quarters are flagged as derived.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,26 +17,43 @@ from datetime import date
 FORMS = ("10-Q", "10-K", "10-Q/A", "10-K/A", "10-KT")
 
 FLOW_TAGS = {
-    "revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
-                "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet", "SalesRevenueGoodsNet",
-                "RevenuesNetOfInterestExpense", "RegulatedAndUnregulatedOperatingRevenue"],
+    "revenue": [
+        "Revenues",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "SalesRevenueNet",
+        "SalesRevenueGoodsNet",
+        "RevenuesNetOfInterestExpense",
+        "RegulatedAndUnregulatedOperatingRevenue",
+    ],
     "gross_profit": ["GrossProfit"],
     "cost_of_revenue": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss", "ProfitLoss", "NetIncomeLossAvailableToCommonStockholdersBasic"],
-    "ocf": ["NetCashProvidedByUsedInOperatingActivities",
-            "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
+    "ocf": [
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+    ],
     "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
     "sbc": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
-    "dna": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization",
-            "DepreciationAmortizationAndAccretionNet"],
+    "dna": [
+        "DepreciationDepletionAndAmortization",
+        "DepreciationAndAmortization",
+        "DepreciationAmortizationAndAccretionNet",
+    ],
     "interest_expense": ["InterestExpense", "InterestAndDebtExpense", "InterestExpenseDebt"],
 }
 SHARE_TAGS = ["WeightedAverageNumberOfDilutedSharesOutstanding"]
 INSTANT_TAGS = {
-    "cash_equivalents": ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
-    "short_investments": ["ShortTermInvestments", "MarketableSecuritiesCurrent",
-                          "AvailableForSaleSecuritiesDebtSecuritiesCurrent"],
+    "cash_equivalents": [
+        "CashAndCashEquivalentsAtCarryingValue",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+    ],
+    "short_investments": [
+        "ShortTermInvestments",
+        "MarketableSecuritiesCurrent",
+        "AvailableForSaleSecuritiesDebtSecuritiesCurrent",
+    ],
     "debt_long": ["LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "LongTermDebt"],
     "debt_current": ["LongTermDebtCurrent", "DebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent"],
     "short_borrowings": ["ShortTermBorrowings", "CommercialPaper"],
@@ -56,12 +74,12 @@ def _d(s: str) -> date:
 class Fundamentals:
     cik: int
     entity: str
-    quarters: list[str]                                  # quarter end dates, newest first
-    flows: dict[str, list[float | None]]                 # discrete quarterly values aligned to `quarters`
-    derived: dict[str, list[bool]]                       # True where a quarter was derived by subtraction
+    quarters: list[str]  # quarter end dates, newest first
+    flows: dict[str, list[float | None]]  # discrete quarterly values aligned to `quarters`
+    derived: dict[str, list[bool]]  # True where a quarter was derived by subtraction
     diluted_shares: list[float | None]
-    instants: dict[str, float | None]                    # latest balance sheet (at quarters[0] when available)
-    cover_shares: float | None                           # latest dei cover-page shares outstanding
+    instants: dict[str, float | None]  # latest balance sheet (at quarters[0] when available)
+    cover_shares: float | None  # latest dei cover-page shares outstanding
     cover_shares_date: str | None
     last_filed: str | None
     last_form: str | None
@@ -87,8 +105,13 @@ def _facts(group: dict, tag: str, unit_ok, as_of: date) -> list[dict]:
         if not unit_ok(unit):
             continue
         for f in arr:
-            if (f.get("form") in FORMS and f.get("filed") and _d(f["filed"]) <= as_of
-                    and f.get("end") and _d(f["end"]) <= as_of):
+            if (
+                f.get("form") in FORMS
+                and f.get("filed")
+                and _d(f["filed"]) <= as_of
+                and f.get("end")
+                and _d(f["end"]) <= as_of
+            ):
                 out.append(f)
     return out
 
@@ -121,7 +144,7 @@ def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: boo
                 by_start.setdefault(s, []).append((e, float(f["val"])))
             for lst in by_start.values():
                 lst.sort()
-                for (e0, v0), (e1, v1) in zip(lst, lst[1:]):
+                for (e0, v0), (e1, v1) in zip(lst, lst[1:], strict=False):
                     if 80 <= (_d(e1) - _d(e0)).days <= 100 and e1 not in q:
                         q[e1] = (v1 - v0, True)
         if not q:
@@ -156,14 +179,14 @@ def _near(series: dict, end: str, days: int = 20):
 def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
     gaap = (facts.get("facts") or {}).get("us-gaap") or {}
     dei = (facts.get("facts") or {}).get("dei") or {}
-    usd = lambda u: u == "USD"   # noqa: E731
+    usd = lambda u: u == "USD"  # noqa: E731
     series = {k: _quarterly(gaap, tags, usd, as_of) for k, tags in FLOW_TAGS.items()}
     shares = _quarterly(gaap, SHARE_TAGS, lambda u: u == "shares", as_of, additive=False)
     eps = _quarterly(gaap, ["EarningsPerShareDiluted"], lambda u: u == "USD/shares", as_of, additive=False)
 
     anchor = series["revenue"] or series["net_income"]
     ends: list[str] = []
-    for e in sorted(anchor, reverse=True):          # one entry per quarter (52/53-week calendars drift)
+    for e in sorted(anchor, reverse=True):  # one entry per quarter (52/53-week calendars drift)
         if all(abs((_d(e) - _d(c)).days) > 20 for c in ends):
             ends.append(e)
     ends = ends[:max_quarters]
@@ -174,8 +197,10 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
         flows[k] = [None if v is None else v[0] for v in vals]
         derived[k] = [bool(v and v[1]) for v in vals]
     # fill gross profit from revenue - cost of revenue where only the cost is tagged
-    flows["gross_profit"] = [gp if gp is not None else (r - c if r is not None and c is not None else None)
-                             for gp, r, c in zip(flows["gross_profit"], flows["revenue"], flows["cost_of_revenue"])]
+    flows["gross_profit"] = [
+        gp if gp is not None else (r - c if r is not None and c is not None else None)
+        for gp, r, c in zip(flows["gross_profit"], flows["revenue"], flows["cost_of_revenue"], strict=False)
+    ]
     dil = [_near(shares, e) for e in ends]
 
     instants = {}
@@ -194,8 +219,7 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
         cover_date = max(by_end)
         cover = by_end[cover_date][0]
 
-    filings = [f for k in ("revenue", "net_income") for tag in FLOW_TAGS[k]
-               for f in _facts(gaap, tag, usd, as_of)]
+    filings = [f for k in ("revenue", "net_income") for tag in FLOW_TAGS[k] for f in _facts(gaap, tag, usd, as_of)]
     last = max(filings, key=lambda f: f["filed"]) if filings else None
 
     conc = None
@@ -204,13 +228,22 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
             conc = (float(f["val"]), f["filed"])
 
     return Fundamentals(
-        cik=int(facts.get("cik") or 0), entity=str(facts.get("entityName", "")), quarters=ends,
-        flows=flows, derived=derived, diluted_shares=[None if v is None else v[0] for v in dil],
-        instants=instants, cover_shares=cover, cover_shares_date=cover_date,
-        last_filed=last["filed"] if last else None, last_form=last["form"] if last else None,
+        cik=int(facts.get("cik") or 0),
+        entity=str(facts.get("entityName", "")),
+        quarters=ends,
+        flows=flows,
+        derived=derived,
+        diluted_shares=[None if v is None else v[0] for v in dil],
+        instants=instants,
+        cover_shares=cover,
+        cover_shares_date=cover_date,
+        last_filed=last["filed"] if last else None,
+        last_form=last["form"] if last else None,
         concentration=conc[0] if conc else None,
-        annual={"revenue": annual_series(gaap, FLOW_TAGS["revenue"], "USD", as_of),
-                "eps": annual_series(gaap, ["EarningsPerShareDiluted"], "USD/shares", as_of)},
+        annual={
+            "revenue": annual_series(gaap, FLOW_TAGS["revenue"], "USD", as_of),
+            "eps": annual_series(gaap, ["EarningsPerShareDiluted"], "USD/shares", as_of),
+        },
         quarterly_eps=[v[0] if v else None for v in (_near(eps, e) for e in ends)],
     )
 
@@ -234,7 +267,7 @@ def annual_series(group: dict, tags: list[str], unit: str, as_of: date) -> dict[
 
 def ttm(values: list[float | None], offset: int = 0) -> float | None:
     """Sum of 4 consecutive quarters starting `offset` quarters back; None if any is missing."""
-    window = values[offset:offset + 4]
+    window = values[offset : offset + 4]
     if len(window) < 4 or any(v is None for v in window):
         return None
     return float(sum(window))

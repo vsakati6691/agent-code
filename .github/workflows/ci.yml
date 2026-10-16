@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tests, lint and fixture site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIXTURE_ROOT: ${{ runner.temp }}/dashboard-ci
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+      - name: Build offline fixture site
+        run: python -m tests.dashboard_ci build --root "$FIXTURE_ROOT"
+      - name: Verify fixture snapshot integrity
+        run: python -m agent_trading.dashboard verify --data "$FIXTURE_ROOT/data"
+      - name: Check internal HTML links and assets
+        run: python -m tests.dashboard_ci check --site "$FIXTURE_ROOT/site"

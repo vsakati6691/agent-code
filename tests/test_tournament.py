@@ -1,4 +1,5 @@
 """Tournament engine and validation: timing, costs, constraints, no look-ahead, registry."""
+
 import json
 
 import numpy as np
@@ -26,8 +27,8 @@ def test_decision_at_close_fills_next_open():
     opens, closes = flat()
     opens.iloc[3:] = 110.0
     closes.iloc[3:] = 110.0
-    early = simulate(weights_on(closes.index, 1, A=1.0), opens, closes, 0.0)   # bought day 2 at 100
-    late = simulate(weights_on(closes.index, 2, A=1.0), opens, closes, 0.0)    # bought day 3 at 110
+    early = simulate(weights_on(closes.index, 1, A=1.0), opens, closes, 0.0)  # bought day 2 at 100
+    late = simulate(weights_on(closes.index, 2, A=1.0), opens, closes, 0.0)  # bought day 3 at 110
     assert (1 + early.returns).prod() == pytest.approx(1.10)
     assert (1 + late.returns).prod() == pytest.approx(1.0)
 
@@ -35,12 +36,12 @@ def test_decision_at_close_fills_next_open():
 def test_costs_charged_per_side_and_no_leverage():
     opens, closes = flat(cols=("A", "B"))
     sim = simulate(weights_on(closes.index, 0, A=1.5, B=1.5), opens, closes, 0.01)
-    assert sim.exposure.max() <= 1.0 + 1e-12                                     # capped at 100% invested
-    assert (1 + sim.returns).prod() == pytest.approx(1 / 1.01)                   # one buy at 1% cost
+    assert sim.exposure.max() <= 1.0 + 1e-12  # capped at 100% invested
+    assert (1 + sim.returns).prod() == pytest.approx(1 / 1.01)  # one buy at 1% cost
     w = weights_on(closes.index, 0, A=1.0, B=0.0)
     w.loc[closes.index[4]] = [0.0, 0.0]
     sim = simulate(w, opens, closes, 0.01)
-    assert (1 + sim.returns).prod() == pytest.approx(0.99 / 1.01)                # round trip
+    assert (1 + sim.returns).prod() == pytest.approx(0.99 / 1.01)  # round trip
     assert sim.activity["entries"].sum() == 1 and sim.activity["exits"].sum() == 1
 
 
@@ -51,8 +52,8 @@ def test_account_constraints_cap_position_gross_and_daily_buys():
     sim = simulate(weights_on(closes.index, 0, **{k: 1 / 9 for k in cols}), opens, closes, 0.0, c)
     assert sim.exposure.max() <= 0.80 + 1e-9
     assert (sim.activity["entries"] <= 3).all()
-    assert sim.exposure.iloc[1] == pytest.approx(0.20)                           # first day: $200 of $1,000
-    assert sim.exposure.iloc[-1] == pytest.approx(0.80)                          # reached over several days
+    assert sim.exposure.iloc[1] == pytest.approx(0.20)  # first day: $200 of $1,000
+    assert sim.exposure.iloc[-1] == pytest.approx(0.80)  # reached over several days
 
 
 @pytest.mark.parametrize("cand", [c for c in candidates()], ids=lambda c: c.name)
@@ -60,7 +61,9 @@ def test_candidates_have_no_look_ahead(cand):
     rng = np.random.default_rng(0)
     idx = pd.bdate_range("2006-01-02", "2010-12-31")
     syms = sorted({*cand.assets, "SPY", "BIL"})
-    closes = pd.DataFrame({s: 100 * np.exp(np.cumsum(0.0003 + 0.01 * rng.standard_normal(len(idx)))) for s in syms}, index=idx)
+    closes = pd.DataFrame(
+        {s: 100 * np.exp(np.cumsum(0.0003 + 0.01 * rng.standard_normal(len(idx)))) for s in syms}, index=idx
+    )
     mkt = Market(closes.copy(), closes.copy(), set(syms))
     cut = idx[int(len(idx) * 0.7)]
     base = cand.weights(mkt).loc[:cut]

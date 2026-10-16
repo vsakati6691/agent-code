@@ -11,6 +11,7 @@ previous snapshot must stay up (status.json says why), 1 on a usage error.
 Environment: SEC_USER_AGENT (required, e.g. "agent-code research you@example.com"),
 ALPHAVANTAGE_API_KEY (optional; earnings dates). Values are never printed.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -18,19 +19,18 @@ import json
 import logging
 import os
 import sys
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
+from ..logging_setup import register_secret
 from . import spec, tracking
-from .http import HttpClient
-from .http import FetchError
+from .http import FetchError, HttpClient
 from .pipeline import RunFailed, as_of_for, run
 from .providers import Providers
 from .site import build_site
 from .store import SnapshotExists, Store
 from .tradability import Tradability, TradabilityError, parse_results, read_todo, write_todo
 from .watchlist import WatchlistConfig
-from ..logging_setup import register_secret
 
 log = logging.getLogger("agent_trading.dashboard")
 SECRET_ENV = ("ALPHAVANTAGE_API_KEY", "SEC_USER_AGENT")
@@ -49,7 +49,7 @@ def _providers(cache: Path | None) -> Providers:
 
 def cmd_run(args) -> int:
     store = Store(Path(args.data))
-    as_of = date.fromisoformat(args.as_of) if args.as_of else as_of_for(datetime.now(timezone.utc))
+    as_of = date.fromisoformat(args.as_of) if args.as_of else as_of_for(datetime.now(UTC))
     if str(as_of) in store.dates():
         store.audit("run_skipped", as_of=as_of, reason="snapshot already exists (immutable)")
         store.write_status("ok", f"snapshot for {as_of} already exists; kept unchanged", str(as_of))
@@ -64,13 +64,23 @@ def cmd_run(args) -> int:
     todo: list[dict] = []
     try:
         try:
-            from .speculative import stored_history
             from .refresh_store import RefreshStore
+            from .speculative import stored_history
+
             iv_history = stored_history(RefreshStore(store.root), as_of) if not args.no_options else {}
-            payload = run(providers, as_of, previous, options_enabled=not args.no_options, limit=args.limit,
-                          tradability=trad, todo_out=todo, watchlist=WatchlistConfig.load(), iv_history=iv_history)
+            payload = run(
+                providers,
+                as_of,
+                previous,
+                options_enabled=not args.no_options,
+                limit=args.limit,
+                tradability=trad,
+                todo_out=todo,
+                watchlist=WatchlistConfig.load(),
+                iv_history=iv_history,
+            )
         finally:
-            write_todo(store.root, todo, as_of)      # symbols the next Claude session should check on Robinhood
+            write_todo(store.root, todo, as_of)  # symbols the next Claude session should check on Robinhood
     except RunFailed as exc:
         store.audit("run_failed", as_of=as_of, reason=str(exc), usage=providers.http.usage())
         store.write_status("failed", str(exc), str(as_of))
@@ -96,10 +106,16 @@ def cmd_run(args) -> int:
         store.audit("tracking_failed", as_of=as_of, error=err)
         log.exception("tracking update failed; the %s snapshot is kept and tracking.json is unchanged", as_of)
         status = "partial"
-        problems.append(f"tracking not updated ({type(exc).__name__}); the snapshot is stored and tracking is "
-                        "recomputed on the next run")
-    store.write_status(status, "weekly update completed" if status == "ok" else
-                       "weekly update completed with partial data", str(as_of), problems=problems[:10])
+        problems.append(
+            f"tracking not updated ({type(exc).__name__}); the snapshot is stored and tracking is "
+            "recomputed on the next run"
+        )
+    store.write_status(
+        status,
+        "weekly update completed" if status == "ok" else "weekly update completed with partial data",
+        str(as_of),
+        problems=problems[:10],
+    )
     store.audit("run_finished", as_of=as_of, status=status, usage=providers.http.usage())
     print(f"snapshot {as_of}: status {status}; requests {providers.http.usage()['requests']}")
     return 0
@@ -113,7 +129,7 @@ def update_tracking(store: Store, providers: Providers, as_of: date) -> None:
     for t in sorted(tickers):
         try:
             df = providers.history(t)
-        except FetchError:          # reported by tracking as unavailable, never dropped silently
+        except FetchError:  # reported by tracking as unavailable, never dropped silently
             continue
         prices[t] = df["close"][df.index <= str(as_of)]
     store.write_json("tracking.json", tracking.track(snaps, prices, as_of))
@@ -123,12 +139,12 @@ def cmd_tradability(args) -> int:
     data = Path(args.data)
     if args.action == "todo":
         todo = read_todo(data)
-        for i in range(0, len(todo), 10):          # get_equity_tradability takes at most 10 symbols
-            print(" ".join(todo[i:i + 10]))
+        for i in range(0, len(todo), 10):  # get_equity_tradability takes at most 10 symbols
+            print(" ".join(todo[i : i + 10]))
         print(f"{len(todo)} symbol(s) to check", file=sys.stderr)
         return 0
     trad = Tradability.load(data)
-    checked_at = args.checked_at or datetime.now(timezone.utc).date().isoformat()
+    checked_at = args.checked_at or datetime.now(UTC).date().isoformat()
     changed = 0
     for f in args.files:
         try:
@@ -150,6 +166,7 @@ def cmd_build(args) -> int:
 
 def cmd_verify(args) -> int:
     from .refresh_store import RefreshStore
+
     problems = Store(Path(args.data)).verify_all() + RefreshStore(Path(args.data)).verify_all()
     for p in problems:
         print(p)
@@ -158,6 +175,7 @@ def cmd_verify(args) -> int:
 
 def cmd_refresh(args) -> int:
     from .refresh import run as refresh_run
+
     # No SEC calls are made; reuse the optional existing User-Agent secret without requiring it.
     ua = os.environ.get("SEC_USER_AGENT", "agent-code public research dashboard")
     key = os.environ.get("ALPHAVANTAGE_API_KEY") or None
@@ -165,8 +183,13 @@ def cmd_refresh(args) -> int:
     if key:
         register_secret(key)
     providers = Providers(HttpClient(Path(args.cache) if args.cache else None, ua), key)
-    result = refresh_run(Path(args.data), providers, date.fromisoformat(args.as_of) if args.as_of else None,
-                         options_enabled=not args.no_options, commit=args.commit)
+    result = refresh_run(
+        Path(args.data),
+        providers,
+        date.fromisoformat(args.as_of) if args.as_of else None,
+        options_enabled=not args.no_options,
+        commit=args.commit,
+    )
     print(f"daily refresh: {result['status']}")
     return 2 if result["status"] == "failed" else 0
 

@@ -3,6 +3,7 @@
 The MCP tool is only callable from a Claude session, so history is exported to
 a JSON file there and imported here. Robinhood bars are split-adjusted.
 """
+
 from __future__ import annotations
 
 import json

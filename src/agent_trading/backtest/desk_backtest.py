@@ -7,6 +7,7 @@ signals at day t's close, fills at day t+1's open. Not modelled historically
 blackout. Results therefore overstate how often the live desk would trade
 and include event-day risk the live rules avoid.
 """
+
 from __future__ import annotations
 
 import math
@@ -67,8 +68,14 @@ def desk_rows(bars: dict[str, pd.DataFrame], settings: Settings, symbols: list[s
     return rows
 
 
-def run_desk_backtest(bars: dict[str, pd.DataFrame], settings: Settings, symbols: list[str] | None = None,
-                      start=None, end=None, cash_rate: pd.Series | None = None) -> BacktestResult:
+def run_desk_backtest(
+    bars: dict[str, pd.DataFrame],
+    settings: Settings,
+    symbols: list[str] | None = None,
+    start=None,
+    end=None,
+    cash_rate: pd.Series | None = None,
+) -> BacktestResult:
     rows = desk_rows(bars, settings, symbols)
     traded = {s: bars[s] for s in rows}
     return run_backtest(traded, settings, start, end, prepared=rows, cash_rate=cash_rate)
@@ -86,11 +93,17 @@ def run_unlevered_baseline(bars: dict[str, pd.DataFrame], settings: Settings, st
     entry = (c > s50) & (s50 > s200) & above & (vol <= d.max_vol_long)
     rows = {d.underlying: _frame(qqq, entry, ~above).to_dict("index")}
     r = settings.risk
-    same_limits = replace(settings, risk=replace(
-        r,
-        symbol_risk_pct={**r.symbol_risk_pct, d.underlying: r.symbol_risk_pct.get(d.leveraged_long, r.risk_per_trade_pct)},
-        max_holding_days={**r.max_holding_days, d.underlying: r.max_holding_days.get(d.leveraged_long, 5)},
-    ))
+    same_limits = replace(
+        settings,
+        risk=replace(
+            r,
+            symbol_risk_pct={
+                **r.symbol_risk_pct,
+                d.underlying: r.symbol_risk_pct.get(d.leveraged_long, r.risk_per_trade_pct),
+            },
+            max_holding_days={**r.max_holding_days, d.underlying: r.max_holding_days.get(d.leveraged_long, 5)},
+        ),
+    )
     return run_backtest({d.underlying: qqq}, same_limits, start, end, prepared=rows)
 
 

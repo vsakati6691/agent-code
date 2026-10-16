@@ -18,10 +18,11 @@ Modes: `dry_run` validates and records but never calls submit(); `paper`
 sends to a simulated broker. There is no live mode in this build: the service
 refuses `live` and refuses any broker that reports `is_live`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from ..config import Settings
@@ -29,8 +30,23 @@ from ..killswitch import engage as engage_kill_switch
 from ..killswitch import status as kill_switch_status
 from .broker import Broker
 from .ledger import OrderLedger
-from .models import (BLOCKED, DRY_RUN, NOT_SENT, OPEN, PARTIALLY_FILLED, PENDING, REJECTED, SUBMITTED, TERMINAL,
-                     UNKNOWN, AccountState, BrokerError, BrokerNotSent, BrokerRejected, OrderRequest)
+from .models import (
+    BLOCKED,
+    DRY_RUN,
+    NOT_SENT,
+    OPEN,
+    PARTIALLY_FILLED,
+    PENDING,
+    REJECTED,
+    SUBMITTED,
+    TERMINAL,
+    UNKNOWN,
+    AccountState,
+    BrokerError,
+    BrokerNotSent,
+    BrokerRejected,
+    OrderRequest,
+)
 from .validator import ExecutionLimits, validate
 
 ET = ZoneInfo("America/New_York")
@@ -71,24 +87,36 @@ class HealthReport:
 
 
 class ExecutionService:
-    def __init__(self, settings: Settings, broker: Broker, ledger: OrderLedger, mode: str,
-                 limits: ExecutionLimits | None = None, clock=None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        broker: Broker,
+        ledger: OrderLedger,
+        mode: str,
+        limits: ExecutionLimits | None = None,
+        clock=None,
+    ) -> None:
         verify_mode(mode, broker)
         self.settings = settings
         self.broker = broker
         self.ledger = ledger
         self.mode = mode
         self.limits = limits or ExecutionLimits.from_settings(settings)
-        self.clock = clock or (lambda: datetime.now(timezone.utc))
-        ledger.clock = self.clock               # one clock for decisions and ledger timestamps
+        self.clock = clock or (lambda: datetime.now(UTC))
+        ledger.clock = self.clock  # one clock for decisions and ledger timestamps
 
     # --- orders ------------------------------------------------------------
     def execute(self, req: OrderRequest) -> ExecutionResult:
         prior = self.ledger.by_decision(req.decision_id)
         if prior is not None:
-            return ExecutionResult(req.decision_id, prior["state"], prior["ref_id"],
-                                   ["duplicate decision: already handled, not sent again"], prior["broker_id"],
-                                   prior["filled_quantity"])
+            return ExecutionResult(
+                req.decision_id,
+                prior["state"],
+                prior["ref_id"],
+                ["duplicate decision: already handled, not sent again"],
+                prior["broker_id"],
+                prior["filled_quantity"],
+            )
         self.resolve_unresolved()
         now = self.clock()
         account, quote, problems = None, None, []
@@ -98,8 +126,17 @@ class ExecutionService:
         except BrokerError as exc:
             problems.append(f"broker unavailable: {exc}")
         halted = self._loss_controls(account, now) if account else ""
-        reasons = problems + validate(req, self.settings, self.limits, account, quote, self.ledger.unresolved(),
-                                      self.ledger.buys_on(now.astimezone(ET).date(), self.mode), now, halted)
+        reasons = problems + validate(
+            req,
+            self.settings,
+            self.limits,
+            account,
+            quote,
+            self.ledger.unresolved(),
+            self.ledger.buys_on(now.astimezone(ET).date(), self.mode),
+            now,
+            halted,
+        )
         if reasons:
             ref = self.ledger.create(req, self.mode, BLOCKED, "; ".join(reasons))
             return ExecutionResult(req.decision_id, BLOCKED, ref, reasons)
@@ -118,14 +155,22 @@ class ExecutionService:
         except Exception as exc:  # noqa: BLE001 - any other outcome is ambiguous by definition
             self.ledger.update(ref, UNKNOWN, f"{type(exc).__name__}: {exc}")
         row = self._refresh(self.ledger.get(ref))
-        return ExecutionResult(req.decision_id, row["state"], ref, [row["reason"]] if row["reason"] else [],
-                               row["broker_id"], row["filled_quantity"])
+        return ExecutionResult(
+            req.decision_id,
+            row["state"],
+            ref,
+            [row["reason"]] if row["reason"] else [],
+            row["broker_id"],
+            row["filled_quantity"],
+        )
 
     def resolve_unresolved(self) -> list[str]:
         """Look up every unresolved order at the broker. Never resubmits."""
-        return [f"{r['symbol']} {r['side']} {r['ref_id'][:8]}: {r['state']} -> {n['state']}"
-                for r in self.ledger.unresolved()
-                if (n := self._refresh(r))["state"] != r["state"]]
+        return [
+            f"{r['symbol']} {r['side']} {r['ref_id'][:8]}: {r['state']} -> {n['state']}"
+            for r in self.ledger.unresolved()
+            if (n := self._refresh(r))["state"] != r["state"]
+        ]
 
     def _refresh(self, row: dict) -> dict:
         if row["state"] in TERMINAL:
@@ -163,8 +208,12 @@ class ExecutionService:
         hwm = max(self.ledger.get_meta(f"high_water:{self.mode}", 0.0), account.total_value)
         self.ledger.set_meta(f"high_water:{self.mode}", hwm)
         if hwm > 0 and account.total_value < hwm * (1 - al.drawdown_review_pct):
-            engage_kill_switch(self.settings, f"drawdown {1 - account.total_value / hwm:.1%} from high-water "
-                                              f"${hwm:,.2f} (limit {al.drawdown_review_pct:.0%})", by="execution")
+            engage_kill_switch(
+                self.settings,
+                f"drawdown {1 - account.total_value / hwm:.1%} from high-water "
+                f"${hwm:,.2f} (limit {al.drawdown_review_pct:.0%})",
+                by="execution",
+            )
         if start > 0 and account.total_value < start * (1 - al.daily_loss_limit_pct):
             return f"daily loss {1 - account.total_value / start:.2%} exceeds {al.daily_loss_limit_pct:.0%}"
         return ""
@@ -177,10 +226,15 @@ class ExecutionService:
         inside the baseline positions and must not be added a second time."""
         baseline = self.ledger.get_meta(f"baseline:{self.mode}")
         if baseline is None:
-            fills = {r["ref_id"]: r["filled_quantity"] for r in self.ledger.orders()
-                     if r["mode"] == self.mode and r["filled_quantity"]}
-            self.ledger.set_meta(f"baseline:{self.mode}", {"positions": account.positions, "fills": fills,
-                                                           "at": account.fetched_at.isoformat()})
+            fills = {
+                r["ref_id"]: r["filled_quantity"]
+                for r in self.ledger.orders()
+                if r["mode"] == self.mode and r["filled_quantity"]
+            }
+            self.ledger.set_meta(
+                f"baseline:{self.mode}",
+                {"positions": account.positions, "fills": fills, "at": account.fetched_at.isoformat()},
+            )
             self.ledger.log("baseline", {"mode": self.mode, "positions": account.positions, "fills": fills})
             return []
         expected = dict(baseline["positions"])
@@ -204,7 +258,8 @@ class ExecutionService:
         now = self.clock()
         for r in self.ledger.unresolved():
             if r["state"] == UNKNOWN or now - datetime.fromisoformat(r["updated_at"]) > timedelta(
-                    minutes=STALE_UNRESOLVED_MINUTES):
+                minutes=STALE_UNRESOLVED_MINUTES
+            ):
                 report.stale_unresolved.append(f"{r['symbol']} {r['side']} {r['ref_id'][:8]} is {r['state']}")
         try:
             account = self.broker.account()

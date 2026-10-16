@@ -1,4 +1,5 @@
 """GTAA (Strategy C), point-in-time universe history, and the scanner backtest."""
+
 from datetime import date
 
 import numpy as np
@@ -43,7 +44,7 @@ def test_rebalance_day_detection():
     days = list(pd.bdate_range("2026-09-24", "2026-10-02"))
     assert gtaa.is_rebalance_day(days, date(2026, 9, 30))
     assert not gtaa.is_rebalance_day(days, date(2026, 9, 29))
-    assert gtaa.is_rebalance_day([], date(2026, 10, 30))   # Friday before a new month
+    assert gtaa.is_rebalance_day([], date(2026, 10, 30))  # Friday before a new month
     assert not gtaa.is_rebalance_day([], date(2026, 10, 12))
 
 
@@ -51,9 +52,17 @@ def test_gtaa_allocation_without_stops_reaches_target_weights(settings):
     from dataclasses import replace
 
     up = {f"A{c}": make_bars(n=400, drift=0.001, vol=0.006, seed=i, start=50) for i, c in enumerate("BC")}
-    relaxed = replace(settings, risk=replace(settings.risk, risk_per_trade_pct=1.0, max_open_risk_pct=1.0,
-                                             max_correlated_risk_pct=1.0, max_position_pct=0.5 + 1e-9,
-                                             stop_risk_buffer=0.0))
+    relaxed = replace(
+        settings,
+        risk=replace(
+            settings.risk,
+            risk_per_trade_pct=1.0,
+            max_open_risk_pct=1.0,
+            max_correlated_risk_pct=1.0,
+            max_position_pct=0.5 + 1e-9,
+            stop_risk_buffer=0.0,
+        ),
+    )
     res = run_allocation(up, relaxed, lambda d, h: gtaa.weights(h, d, list(up), 10), use_stops=False)
     assert res.trades and max(t.quantity * t.entry_price for t in res.trades) > 300  # ~1/2 of equity each
     assert all(t.exit_reason != "stop" for t in res.trades)
@@ -63,10 +72,14 @@ def test_name_resolution_for_filings_without_tickers(settings):
     from dataclasses import replace
 
     s = replace(settings, scanner=replace(settings.scanner, min_constituents=2))
-    raw = {"fund": {"as_of": "2021-06-30"}, "holdings": [
-        {"ticker": None, "name": "Accenture PLC", "weight": 1, "asset_class": "equity"},
-        {"ticker": "BRK/B", "name": "Berkshire Hathaway Inc", "weight": 1, "asset_class": "equity"},
-        {"ticker": "MSFT", "name": "Microsoft Corp", "weight": 1, "asset_class": "equity"}]}
+    raw = {
+        "fund": {"as_of": "2021-06-30"},
+        "holdings": [
+            {"ticker": None, "name": "Accenture PLC", "weight": 1, "asset_class": "equity"},
+            {"ticker": "BRK/B", "name": "Berkshire Hathaway Inc", "weight": 1, "asset_class": "equity"},
+            {"ticker": "MSFT", "name": "Microsoft Corp", "weight": 1, "asset_class": "equity"},
+        ],
+    }
     u = parse_index_fund(raw, s, name_map={normalize_name("ACCENTURE PLC-CL A"): "ACN"})
     assert set(u.tickers) == {"ACN", "BRK.B", "MSFT"}
     assert normalize_name("Accenture PLC") == normalize_name("ACCENTURE PLC CLASS A")
@@ -84,8 +97,10 @@ def test_scanner_backtest_uses_point_in_time_members(settings):
 
     s = replace(settings, scanner=replace(settings.scanner, min_avg_dollar_volume=1e6))
     end = "2026-09-30"
-    bars = {f"S{c}": make_bars(n=420, seed=i, drift=0.0008 * (i % 3), vol=0.012, volume=4e6, start=40 + i, end=end)
-            for i, c in enumerate("ABCDEFGHIJKL")}
+    bars = {
+        f"S{c}": make_bars(n=420, seed=i, drift=0.0008 * (i % 3), vol=0.012, volume=4e6, start=40 + i, end=end)
+        for i, c in enumerate("ABCDEFGHIJKL")
+    }
     spy = make_bars(n=420, seed=99, drift=0.0004, vol=0.008, volume=8e7, start=300, end=end)
     early = list(bars)[:6]
     late = list(bars)[6:]
@@ -108,16 +123,20 @@ def test_ablation_variants_share_months_and_full_matches_production(settings):
 
     s = replace(settings, scanner=replace(settings.scanner, min_avg_dollar_volume=1e6))
     end = "2026-09-30"
-    bars = {f"S{c}": make_bars(n=420, seed=i, drift=0.0008 * (i % 3), vol=0.012, volume=4e6, start=40 + i, end=end)
-            for i, c in enumerate("ABCDEFGH")}
+    bars = {
+        f"S{c}": make_bars(n=420, seed=i, drift=0.0008 * (i % 3), vol=0.012, volume=4e6, start=40 + i, end=end)
+        for i, c in enumerate("ABCDEFGH")
+    }
     spy = make_bars(n=420, seed=99, drift=0.0004, vol=0.008, volume=8e7, start=300, end=end)
     hist = {spy.index[280].date(): list(bars)}
     ab = run_ablation(bars, spy, hist, s, top_n=3)
     assert set(ab) == set(VARIANTS)
     dates = [m.signal_date for m in ab["full"].months]
     assert all([m.signal_date for m in ab[v].months] == dates for v in ab)
-    assert [m.picks for m in run_signal_backtest(bars, spy, hist, s, top_n=3).months] == [m.picks for m in ab["full"].months]
-    for m in ab["momentum"].months:   # momentum baseline picks are the top 12-1 momentum names
+    assert [m.picks for m in run_signal_backtest(bars, spy, hist, s, top_n=3).months] == [
+        m.picks for m in ab["full"].months
+    ]
+    for m in ab["momentum"].months:  # momentum baseline picks are the top 12-1 momentum names
         assert len(m.picks) <= 3
     f = ab["momentum"].frame()
     cost = s.costs.per_side
@@ -129,19 +148,28 @@ def test_ablation_variants_share_months_and_full_matches_production(settings):
 def test_variant_scores_add_one_factor_at_a_time(settings):
     from agent_trading.backtest.scanner_backtest import variant_scores
 
-    t = pd.DataFrame({"close": [50.0] * 4, "avg_dollar_volume": [1e9] * 4,
-                      "mom_12_1": [0.4, 0.3, 0.2, 0.1], "dist_200": [0.1, -0.05, 0.1, 0.1],
-                      "updown_volume": [0.5, 1.0, 3.0, 2.0], "vol_63": [0.6, 0.2, 0.2, 0.1],
-                      "composite": [0.9, 0.8, 0.7, 0.6], "setup": ["bullish"] * 4, "rsi": [50.0] * 4},
-                     index=["A", "B", "C", "D"])
+    t = pd.DataFrame(
+        {
+            "close": [50.0] * 4,
+            "avg_dollar_volume": [1e9] * 4,
+            "mom_12_1": [0.4, 0.3, 0.2, 0.1],
+            "dist_200": [0.1, -0.05, 0.1, 0.1],
+            "updown_volume": [0.5, 1.0, 3.0, 2.0],
+            "vol_63": [0.6, 0.2, 0.2, 0.1],
+            "composite": [0.9, 0.8, 0.7, 0.6],
+            "setup": ["bullish"] * 4,
+            "rsi": [50.0] * 4,
+        },
+        index=["A", "B", "C", "D"],
+    )
     _, mom = variant_scores(t, "momentum", settings)
     assert list(mom.index) == ["A", "B", "C", "D"]
     _, trend = variant_scores(t, "momentum+trend", settings)
     assert "B" not in trend.index and list(trend.index) == ["A", "C", "D"]
     _, vol = variant_scores(t, "momentum+trend+volume", settings)
-    assert vol["C"] > trend["C"] and vol["A"] < trend["A"]   # best up/down volume lifts C, weak A falls
+    assert vol["C"] > trend["C"] and vol["A"] < trend["A"]  # best up/down volume lifts C, weak A falls
     _, low = variant_scores(t, "momentum+trend+lowvol", settings)
-    assert low["A"] < trend["A"] and low["D"] > trend["D"]   # high-vol A penalised, low-vol D rewarded
+    assert low["A"] < trend["A"] and low["D"] > trend["D"]  # high-vol A penalised, low-vol D rewarded
     with pytest.raises(ValueError):
         variant_scores(t, "made-up", settings)
 
@@ -153,11 +181,11 @@ def test_total_return_adjustment_scales_history_before_ex_date():
     df = pd.DataFrame({"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000}, index=idx)
     divs = pd.Series([2.0], index=pd.DatetimeIndex([idx[3]], name="ex_date"), name="amount")
     out = total_return_bars(df, divs)
-    assert out["close"].iloc[:3].tolist() == pytest.approx([98.0] * 3)   # x (1 - 2/100)
+    assert out["close"].iloc[:3].tolist() == pytest.approx([98.0] * 3)  # x (1 - 2/100)
     assert out["close"].iloc[3:].tolist() == [100.0, 100.0]
     assert out["volume"].tolist() == df["volume"].tolist()
     assert total_return_bars(df, None).equals(df)
-    huge = pd.Series([80.0], index=pd.DatetimeIndex([idx[3]]))            # implausible: skipped
+    huge = pd.Series([80.0], index=pd.DatetimeIndex([idx[3]]))  # implausible: skipped
     assert total_return_bars(df, huge).equals(df)
 
 
@@ -192,7 +220,7 @@ def test_vol_managed_weights_scale_down_never_up():
     wild = make_bars(n=400, drift=0.004, vol=0.04, start=100, seed=5)
     day = calm.index[-1]
     base_calm = gtaa.weights({"C": calm}, day, ["C"], 10)
-    assert gtaa.vol_managed_weights({"C": calm}, day, ["C"], 10, 0.10) == base_calm   # capped at 1x
+    assert gtaa.vol_managed_weights({"C": calm}, day, ["C"], 10, 0.10) == base_calm  # capped at 1x
     if gtaa.weights({"W": wild}, day, ["W"], 10):
         w = gtaa.vol_managed_weights({"W": wild}, day, ["W"], 10, 0.10)["W"]
         assert 0 < w < 1.0

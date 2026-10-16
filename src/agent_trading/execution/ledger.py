@@ -6,13 +6,14 @@ unique, so one strategy decision can never produce two orders, even across
 restarts. Every state change is also appended to an event log that is never
 rewritten.
 """
+
 from __future__ import annotations
 
 import json
 import sqlite3
 import uuid
 from contextlib import closing
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -56,14 +57,14 @@ class DuplicateDecision(Exception):
 
 class OrderLedger:
     def __init__(self, path: Path, clock=None) -> None:
-        self.clock = clock or (lambda: datetime.now(timezone.utc))
+        self.clock = clock or (lambda: datetime.now(UTC))
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as con, con:
             con.executescript(SCHEMA)
 
     def _now(self) -> str:
-        return self.clock().astimezone(timezone.utc).isoformat(timespec="seconds")
+        return self.clock().astimezone(UTC).isoformat(timespec="seconds")
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=30)
@@ -80,8 +81,21 @@ class OrderLedger:
                 con.execute(
                     "INSERT INTO orders (ref_id, decision_id, mode, strategy, symbol, side, quantity, limit_price,"
                     " state, reason, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (ref_id, req.decision_id, mode, req.strategy, req.symbol, req.side, req.quantity,
-                     req.limit_price, state, reason, now, now))
+                    (
+                        ref_id,
+                        req.decision_id,
+                        mode,
+                        req.strategy,
+                        req.symbol,
+                        req.side,
+                        req.quantity,
+                        req.limit_price,
+                        state,
+                        reason,
+                        now,
+                        now,
+                    ),
+                )
                 self._event(con, ref_id, "created", {"state": state, "reason": reason, "decision_id": req.decision_id})
         except sqlite3.IntegrityError:
             raise DuplicateDecision(f"decision {req.decision_id} already has an order") from None
@@ -98,12 +112,19 @@ class OrderLedger:
             if reason:
                 fields["reason"] = reason
             if broker is not None:
-                fields.update(broker_id=broker.broker_id, filled_quantity=broker.filled_quantity,
-                              average_price=broker.average_price)
+                fields.update(
+                    broker_id=broker.broker_id,
+                    filled_quantity=broker.filled_quantity,
+                    average_price=broker.average_price,
+                )
             sets = ", ".join(f"{k} = ?" for k in fields)
             con.execute(f"UPDATE orders SET {sets} WHERE ref_id = ?", (*fields.values(), ref_id))
-            self._event(con, ref_id, "state", {"from": row["state"], "to": state, "reason": reason,
-                                                "broker_state": broker.state if broker else None})
+            self._event(
+                con,
+                ref_id,
+                "state",
+                {"from": row["state"], "to": state, "reason": reason, "broker_state": broker.state if broker else None},
+            )
 
     def log(self, event: str, detail: dict, ref_id: str | None = None) -> None:
         with closing(self._connect()) as con, con:
@@ -114,8 +135,10 @@ class OrderLedger:
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, json.dumps(value)))
 
     def _event(self, con: sqlite3.Connection, ref_id: str | None, event: str, detail: dict) -> None:
-        con.execute("INSERT INTO events (at, ref_id, event, detail) VALUES (?,?,?,?)",
-                    (self._now(), ref_id, event, json.dumps(detail, default=str)))
+        con.execute(
+            "INSERT INTO events (at, ref_id, event, detail) VALUES (?,?,?,?)",
+            (self._now(), ref_id, event, json.dumps(detail, default=str)),
+        )
 
     # --- reads -------------------------------------------------------------
     def get(self, ref_id: str) -> dict | None:
@@ -153,8 +176,12 @@ class OrderLedger:
         """(entries, notional) of buys sent or being sent on New York calendar day `day`."""
         n, total = 0, 0.0
         for r in self.orders():
-            if (r["mode"] == mode and r["side"] == "buy" and datetime.fromisoformat(r["created_at"]).astimezone(ET).date() == day
-                    and r["state"] not in {"blocked", "rejected", "not_sent", "dry_run"}):
+            if (
+                r["mode"] == mode
+                and r["side"] == "buy"
+                and datetime.fromisoformat(r["created_at"]).astimezone(ET).date() == day
+                and r["state"] not in {"blocked", "rejected", "not_sent", "dry_run"}
+            ):
                 n += 1
                 total += r["quantity"] * r["limit_price"]
         return n, total

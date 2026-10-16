@@ -1,4 +1,5 @@
 """Write-once light-refresh files. Weekly snapshots and tracking are never written here."""
+
 from __future__ import annotations
 
 import hashlib
@@ -32,10 +33,18 @@ class RefreshStore:
         if find_private_keys(payload):
             raise ValueError("private-looking fields in refresh")
         raw = json.dumps(payload, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")
-        manifest = json.dumps({"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw),
-                               "as_of": payload["as_of"], "weekly_as_of": payload["weekly_as_of"],
-                               "spec_version": payload["spec_version"], "code_commit": commit},
-                              separators=(",", ":"), sort_keys=True).encode("utf-8")
+        manifest = json.dumps(
+            {
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "bytes": len(raw),
+                "as_of": payload["as_of"],
+                "weekly_as_of": payload["weekly_as_of"],
+                "spec_version": payload["spec_version"],
+                "code_commit": commit,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
         if len(raw) + len(manifest) >= MAX_DAY_BYTES:
             raise ValueError("refresh exceeds the 400 KB storage limit")
         self.root.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,5 @@
 """Metrics, benchmarks, regimes, bootstrap intervals and chronological splits."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -69,5 +70,3 @@ def test_splits_are_chronological_and_disjoint():
     assert s.train[0] == dates[100]
     with pytest.raises(ValueError):
         make_splits(dates[:150], 100, 0.6, 0.2)
-
-

@@ -5,6 +5,7 @@ and before the close. NYSE early closes (1 PM) are modelled for the recurring
 cases: the day after Thanksgiving, Christmas Eve and July 3. An unlisted early
 close is the residual risk; the close buffer and day-only orders limit it.
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta

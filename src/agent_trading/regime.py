@@ -7,6 +7,7 @@ Volatility: high when annualised realised volatility over `vol_lookback` days
             exceeds `high_vol_threshold`, else normal.
 Labels on day t use data up to and including day t's close.
 """
+
 from __future__ import annotations
 
 import math
@@ -30,8 +31,16 @@ def classify(bench: pd.DataFrame, cfg: RegimeConfig) -> pd.DataFrame:
     trend[slow.isna()] = None
     volatility = pd.Series(np.where(vol > cfg.high_vol_threshold, "high", "normal"), index=close.index, dtype=object)
     volatility[vol.isna()] = None
-    return pd.DataFrame({"trend": trend, "volatility": volatility, "realized_vol": vol,
-                         "close": close, "fast_ma": fast, "slow_ma": slow})
+    return pd.DataFrame(
+        {
+            "trend": trend,
+            "volatility": volatility,
+            "realized_vol": vol,
+            "close": close,
+            "fast_ma": fast,
+            "slow_ma": slow,
+        }
+    )
 
 
 def current(bench: pd.DataFrame, cfg: RegimeConfig) -> dict:
@@ -43,5 +52,3 @@ def current(bench: pd.DataFrame, cfg: RegimeConfig) -> dict:
         "realized_vol": float(r["realized_vol"]) if pd.notna(r["realized_vol"]) else None,
         "close_vs_slow_ma": float(r["close"] / r["slow_ma"] - 1) if pd.notna(r["slow_ma"]) else None,
     }
-
-

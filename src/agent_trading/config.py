@@ -3,6 +3,7 @@
 The loader is the first line of defence: it refuses to produce a Settings
 object unless the configuration is paper-only, long-only, cash-only equities.
 """
+
 from __future__ import annotations
 
 import os
@@ -92,6 +93,7 @@ class RegimeConfig:
 @dataclass(frozen=True)
 class BrokerConfig:
     """Read-only account snapshot settings. Never used to place orders."""
+
     account_last4: str = ""
     account_nickname: str = ""
     snapshot_max_age_hours: float = 24.0
@@ -105,6 +107,7 @@ class PaperConfig:
 @dataclass(frozen=True)
 class ScannerConfig:
     """Strategy A: S&P 500 scanner."""
+
     index_fund: str = "SPY"
     min_constituents: int = 495
     max_constituents: int = 510
@@ -121,13 +124,21 @@ class ScannerConfig:
     # Actionable candidates may have at most this many missing factors (0 = all
     # factors required). Research ranking requires the price factors.
     max_missing_factors_actionable: int = 0
-    weights: dict[str, float] = field(default_factory=lambda: {
-        "price_strength": 0.35, "volume": 0.10, "quality": 0.20, "valuation": 0.10, "risk": 0.25})
+    weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "price_strength": 0.35,
+            "volume": 0.10,
+            "quality": 0.20,
+            "valuation": 0.10,
+            "risk": 0.25,
+        }
+    )
 
 
 @dataclass(frozen=True)
 class DeskConfig:
     """Strategy B: focused daily desk."""
+
     symbols: list[str] = field(default_factory=lambda: ["TQQQ", "SQQQ", "IBIT", "NVDA"])
     underlying: str = "QQQ"
     leveraged_long: str = "TQQQ"
@@ -138,13 +149,15 @@ class DeskConfig:
     max_vol_inverse: float = 0.30
     event_blackout_days: int = 1
     earnings_blackout_days: int = 5
-    nasdaq_leaders: list[str] = field(default_factory=lambda: [
-        "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "AVGO", "TSLA"])
+    nasdaq_leaders: list[str] = field(
+        default_factory=lambda: ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "AVGO", "TSLA"]
+    )
 
 
 @dataclass(frozen=True)
 class GTAAConfig:
     """Strategy C: Faber multi-asset trend, rebalanced at month-end."""
+
     enabled: bool = True
     assets: list[str] = field(default_factory=lambda: ["SPY", "EFA", "IEF", "DBC", "VNQ", "TLT", "GLD"])
     sma_months: int = 10
@@ -157,45 +170,142 @@ LIVE_STRATEGIES = ("A-scanner", "B-desk", "C-gtaa")
 class LiveConfig:
     """Manual live tickets. This code never sends orders: it writes order
     tickets that the account owner enters in the Robinhood app themselves."""
+
     enabled: bool = False
-    capital: float = 1000.0           # sizing never uses more than this, whatever the account holds
+    capital: float = 1000.0  # sizing never uses more than this, whatever the account holds
     strategies: list[str] = field(default_factory=lambda: ["B-desk", "C-gtaa"])
-    limit_buffer_pct: float = 0.005   # buy limit = close x (1 + buffer); sell limit = close x (1 - buffer)
+    limit_buffer_pct: float = 0.005  # buy limit = close x (1 + buffer); sell limit = close x (1 - buffer)
 
 
 # Hard ceilings for the real $1,000 account (master prompt, 2026-10-12). The
 # config may only be stricter than these; loosening one needs a code change
 # that tests/test_order_gate.py will flag.
 HARD_LIMITS = {
-    "max_order_notional": 100.0,     # $ per buy ticket
-    "max_total_exposure": 800.0,     # $ market value of all positions after the buys
-    "min_cash_reserve": 200.0,       # $ cash left after the buys
-    "max_daily_purchases": 200.0,    # $ of new buys per ticket day
-    "max_daily_entries": 3,          # new positions per ticket day
-    "daily_loss_limit_pct": 0.01,    # of start-of-day account value
-    "drawdown_review_pct": 0.05,     # from the high-water mark: suspend entries, engage the kill switch
+    "max_order_notional": 100.0,  # $ per buy ticket
+    "max_total_exposure": 800.0,  # $ market value of all positions after the buys
+    "min_cash_reserve": 200.0,  # $ cash left after the buys
+    "max_daily_purchases": 200.0,  # $ of new buys per ticket day
+    "max_daily_entries": 3,  # new positions per ticket day
+    "daily_loss_limit_pct": 0.01,  # of start-of-day account value
+    "drawdown_review_pct": 0.05,  # from the high-water mark: suspend entries, engage the kill switch
     "ticket_snapshot_max_age_hours": 6.0,
     "reconcile_tolerance_pct": 0.02,
 }
 
 # Leveraged and inverse ETFs: never ticketed for the real account, whatever
 # the strategy says. Defence in depth: `live_allowed_symbols` is checked too.
-LEVERAGED_INVERSE_ETFS = frozenset({
-    "TQQQ", "SQQQ", "QLD", "QID", "SSO", "SDS", "UPRO", "SPXU", "SPXL", "SPXS", "SH", "PSQ", "DOG", "DXD",
-    "SDOW", "UDOW", "TNA", "TZA", "SOXL", "SOXS", "TECL", "TECS", "FAS", "FAZ", "LABU", "LABD",
-    "TMF", "TMV", "TBT", "TBF", "UBT", "UVXY", "SVXY", "VXX", "VIXY", "UVIX", "SVIX", "NUGT", "DUST",
-    "JNUG", "JDST", "ERX", "ERY", "GUSH", "DRIP", "YINN", "YANG", "BITX", "BITI", "SBIT", "BITU",
-    "NVDL", "NVDU", "NVDD", "NVDQ", "TSLL", "TSLQ", "TSLZ", "CONL", "MSTU", "MSTX", "AAPU", "AMZU",
-    "MSFU", "GGLL", "METU", "FNGU", "FNGD", "BULZ", "WEBL", "DPST", "NAIL", "CURE", "DFEN", "UCO",
-    "SCO", "BOIL", "KOLD", "AGQ", "ZSL", "UGL", "GLL", "USD", "SSG", "ROM", "REW", "UYG", "SKF",
-    "EUO", "YCS", "ULE", "EFZ", "EUM", "MYY", "SBB", "RWM", "TWM", "UWM", "SAA", "MVV", "MZZ",
-})
+LEVERAGED_INVERSE_ETFS = frozenset(
+    {
+        "TQQQ",
+        "SQQQ",
+        "QLD",
+        "QID",
+        "SSO",
+        "SDS",
+        "UPRO",
+        "SPXU",
+        "SPXL",
+        "SPXS",
+        "SH",
+        "PSQ",
+        "DOG",
+        "DXD",
+        "SDOW",
+        "UDOW",
+        "TNA",
+        "TZA",
+        "SOXL",
+        "SOXS",
+        "TECL",
+        "TECS",
+        "FAS",
+        "FAZ",
+        "LABU",
+        "LABD",
+        "TMF",
+        "TMV",
+        "TBT",
+        "TBF",
+        "UBT",
+        "UVXY",
+        "SVXY",
+        "VXX",
+        "VIXY",
+        "UVIX",
+        "SVIX",
+        "NUGT",
+        "DUST",
+        "JNUG",
+        "JDST",
+        "ERX",
+        "ERY",
+        "GUSH",
+        "DRIP",
+        "YINN",
+        "YANG",
+        "BITX",
+        "BITI",
+        "SBIT",
+        "BITU",
+        "NVDL",
+        "NVDU",
+        "NVDD",
+        "NVDQ",
+        "TSLL",
+        "TSLQ",
+        "TSLZ",
+        "CONL",
+        "MSTU",
+        "MSTX",
+        "AAPU",
+        "AMZU",
+        "MSFU",
+        "GGLL",
+        "METU",
+        "FNGU",
+        "FNGD",
+        "BULZ",
+        "WEBL",
+        "DPST",
+        "NAIL",
+        "CURE",
+        "DFEN",
+        "UCO",
+        "SCO",
+        "BOIL",
+        "KOLD",
+        "AGQ",
+        "ZSL",
+        "UGL",
+        "GLL",
+        "USD",
+        "SSG",
+        "ROM",
+        "REW",
+        "UYG",
+        "SKF",
+        "EUO",
+        "YCS",
+        "ULE",
+        "EFZ",
+        "EUM",
+        "MYY",
+        "SBB",
+        "RWM",
+        "TWM",
+        "UWM",
+        "SAA",
+        "MVV",
+        "MZZ",
+    }
+)
 
 
 @dataclass(frozen=True)
 class AccountLimitsConfig:
     """Hard limits for tickets on the real account, checked by order_gate.py
     immediately before a ticket is written. Fail closed."""
+
     max_order_notional: float = 100.0
     max_total_exposure: float = 800.0
     min_cash_reserve: float = 200.0
@@ -205,8 +315,9 @@ class AccountLimitsConfig:
     drawdown_review_pct: float = 0.05
     ticket_snapshot_max_age_hours: float = 6.0
     reconcile_tolerance_pct: float = 0.02
-    live_allowed_symbols: list[str] = field(default_factory=lambda: [
-        "SPY", "EFA", "IEF", "DBC", "VNQ", "TLT", "GLD", "NVDA", "IBIT"])
+    live_allowed_symbols: list[str] = field(
+        default_factory=lambda: ["SPY", "EFA", "IEF", "DBC", "VNQ", "TLT", "GLD", "NVDA", "IBIT"]
+    )
     kill_switch_file: str = "data/KILL_SWITCH.json"
 
 
@@ -261,9 +372,7 @@ def _build(cls, raw: dict[str, Any] | None, section: str):
 
 def validate(settings: Settings) -> Settings:
     if settings.mode != "paper":
-        raise ConfigError(
-            f"mode={settings.mode!r} is not allowed; only 'paper' is supported in this version"
-        )
+        raise ConfigError(f"mode={settings.mode!r} is not allowed; only 'paper' is supported in this version")
     r = settings.risk
     for flag in ("allow_short", "allow_margin", "allow_options", "allow_crypto"):
         if getattr(r, flag):
@@ -327,8 +436,16 @@ def validate(settings: Settings) -> Settings:
 def _validate_account_limits(al: AccountLimitsConfig) -> None:
     """Account limits may only be stricter than HARD_LIMITS."""
     h = HARD_LIMITS
-    upper = ("max_order_notional", "max_total_exposure", "max_daily_purchases", "max_daily_entries",
-             "daily_loss_limit_pct", "drawdown_review_pct", "ticket_snapshot_max_age_hours", "reconcile_tolerance_pct")
+    upper = (
+        "max_order_notional",
+        "max_total_exposure",
+        "max_daily_purchases",
+        "max_daily_entries",
+        "daily_loss_limit_pct",
+        "drawdown_review_pct",
+        "ticket_snapshot_max_age_hours",
+        "reconcile_tolerance_pct",
+    )
     for name in upper:
         value = getattr(al, name)
         if not 0 < value <= h[name]:
@@ -388,7 +505,5 @@ def get_api_key() -> str:
     load_dotenv(find_dotenv(usecwd=True))
     key = os.environ.get(API_KEY_ENV, "").strip()
     if not key or key == "replace-me":
-        raise ConfigError(
-            f"{API_KEY_ENV} is not set. Copy .env.example to .env and add your key."
-        )
+        raise ConfigError(f"{API_KEY_ENV} is not set. Copy .env.example to .env and add your key.")
     return key

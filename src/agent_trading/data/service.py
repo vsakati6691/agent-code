@@ -1,10 +1,11 @@
 """Refresh the local cache within the daily request budget, then load validated data."""
+
 from __future__ import annotations
 
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -115,7 +116,7 @@ class MarketDataService:
             json.dumps(
                 {
                     "source": f"{SOURCE_NAME} EARNINGS_CALENDAR",
-                    "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
                     "fetched_date": as_of.isoformat(),
                 }
             ),
@@ -133,7 +134,9 @@ class MarketDataService:
             return EarningsData(None, None, None, "earnings calendar not available")
         fetched = date.fromisoformat(meta["fetched_date"])
         if (as_of - fetched).days > max_age_days:
-            return EarningsData(None, meta["source"], meta["fetched_at"], f"earnings calendar is stale (fetched {fetched})")
+            return EarningsData(
+                None, meta["source"], meta["fetched_at"], f"earnings calendar is stale (fetched {fetched})"
+            )
         table = pd.read_csv(path)
         table["reportDate"] = pd.to_datetime(table["reportDate"]).dt.date
         return EarningsData(table, meta["source"], meta["fetched_at"])

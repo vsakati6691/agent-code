@@ -18,11 +18,12 @@ day's bars, independently of the sizing code, and fails closed:
 
 Nothing here talks to a broker; the owner still places every ticket by hand.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -41,9 +42,9 @@ LIMIT_SANITY_PCT = 0.02  # a limit more than 2% from the day's close is treated 
 class GateResult:
     approved: list = field(default_factory=list)
     rejected: list[tuple[object, str]] = field(default_factory=list)
-    blockers: list[str] = field(default_factory=list)       # reasons every ticket was rejected
-    buy_blockers: list[str] = field(default_factory=list)   # reasons every buy was rejected
-    engage_kill_switch: str | None = None                   # set when the drawdown review limit is reached
+    blockers: list[str] = field(default_factory=list)  # reasons every ticket was rejected
+    buy_blockers: list[str] = field(default_factory=list)  # reasons every buy was rejected
+    engage_kill_switch: str | None = None  # set when the drawdown review limit is reached
 
 
 def close_on(bars: dict[str, pd.DataFrame], symbol: str, as_of: date) -> float | None:
@@ -84,24 +85,30 @@ def buy_headroom(limits: AccountLimitsConfig, cash: float, invested: float, boug
     """Largest notional the next buy may have under every hard account limit."""
     if entries >= limits.max_daily_entries:
         return 0.0
-    return max(0.0, min(
-        limits.max_order_notional,
-        limits.max_daily_purchases - bought,
-        limits.max_total_exposure - invested - bought,
-        cash - limits.min_cash_reserve - bought,
-    ))
+    return max(
+        0.0,
+        min(
+            limits.max_order_notional,
+            limits.max_daily_purchases - bought,
+            limits.max_total_exposure - invested - bought,
+            cash - limits.min_cash_reserve - bought,
+        ),
+    )
 
 
-def _global_blockers(settings: Settings, snap: AccountSnapshot | None, as_of: date, now: datetime,
-                     bars: dict[str, pd.DataFrame]) -> list[str]:
+def _global_blockers(
+    settings: Settings, snap: AccountSnapshot | None, as_of: date, now: datetime, bars: dict[str, pd.DataFrame]
+) -> list[str]:
     al = settings.account_limits
     out = []
     if not settings.live.enabled:
         out.append("live tickets are disabled (live.enabled: false)")
     ks = kill_switch_status(settings)
     if ks.engaged:
-        out.append(f"KILL SWITCH engaged ({ks.reason or 'no reason recorded'}, {ks.engaged_at or 'time unknown'}); "
-                   "release it with `kill-switch release` after reviewing the account")
+        out.append(
+            f"KILL SWITCH engaged ({ks.reason or 'no reason recorded'}, {ks.engaged_at or 'time unknown'}); "
+            "release it with `kill-switch release` after reviewing the account"
+        )
     if not is_trading_day(as_of):
         out.append(f"{as_of} is not an NYSE trading day")
     if snap is None:
@@ -120,19 +127,28 @@ def _global_blockers(settings: Settings, snap: AccountSnapshot | None, as_of: da
         expected = snap.cash + invested
         tol = max(1.0, snap.total_value * al.reconcile_tolerance_pct)
         if abs(expected - snap.total_value) > tol:
-            out.append(f"account does not reconcile: cash ${snap.cash:,.2f} + positions ${invested:,.2f} = "
-                       f"${expected:,.2f} vs account value ${snap.total_value:,.2f}")
+            out.append(
+                f"account does not reconcile: cash ${snap.cash:,.2f} + positions ${invested:,.2f} = "
+                f"${expected:,.2f} vs account value ${snap.total_value:,.2f}"
+            )
     return out
 
 
-def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | None, as_of: date,
-                  bars: dict[str, pd.DataFrame], status: TradingStatus | None,
-                  now: datetime | None = None, issued_today: list | tuple = ()) -> GateResult:
+def check_tickets(
+    settings: Settings,
+    tickets: list,
+    snap: AccountSnapshot | None,
+    as_of: date,
+    bars: dict[str, pd.DataFrame],
+    status: TradingStatus | None,
+    now: datetime | None = None,
+    issued_today: list | tuple = (),
+) -> GateResult:
     """Approve or reject each ticket. Sells are checked before buys.
 
     `issued_today`: tickets already issued for `as_of` by earlier runs. Their buys count against the
     daily purchase and entry limits, and no symbol is ticketed twice on the same side in one day."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     al = settings.account_limits
     res = GateResult()
     res.blockers = _global_blockers(settings, snap, as_of, now, bars)
@@ -148,13 +164,17 @@ def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | Non
         if not status.new_entries_allowed:
             res.buy_blockers.append(status.reason)
         if status.peak_equity > 0 and status.drawdown >= status.peak_equity * al.drawdown_review_pct - 1e-9:
-            reason = (f"drawdown ${status.drawdown:.2f} from the high-water mark ${status.peak_equity:.2f} reached the "
-                      f"{al.drawdown_review_pct:.0%} review limit")
+            reason = (
+                f"drawdown ${status.drawdown:.2f} from the high-water mark ${status.peak_equity:.2f} reached the "
+                f"{al.drawdown_review_pct:.0%} review limit"
+            )
             res.buy_blockers.append(reason)
             res.engage_kill_switch = reason
         start_of_day = status.peak_equity - status.drawdown - status.day_pnl
         if start_of_day > 0 and -status.day_pnl >= start_of_day * al.daily_loss_limit_pct - 1e-9:
-            res.buy_blockers.append(f"daily loss ${-status.day_pnl:.2f} reached the {al.daily_loss_limit_pct:.0%} limit")
+            res.buy_blockers.append(
+                f"daily loss ${-status.day_pnl:.2f} reached the {al.daily_loss_limit_pct:.0%} limit"
+            )
     cash = spendable_cash(snap, settings.live.capital, invested)
     if cash is None:
         res.buy_blockers.append("settled cash unknown (snapshot has no unsettled_funds; add it from get_accounts)")
@@ -195,10 +215,12 @@ def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | Non
         if reason is None:
             room = buy_headroom(al, cash, invested, bought, entries)
             if t.notional > room + 0.005:
-                reason = (f"notional ${t.notional:,.2f} exceeds the remaining room ${room:,.2f} "
-                          f"(max ${al.max_order_notional:g}/order, ${al.max_daily_purchases:g}/day, "
-                          f"{al.max_daily_entries} entries/day, ${al.max_total_exposure:g} exposure, "
-                          f"${al.min_cash_reserve:g} cash reserve)")
+                reason = (
+                    f"notional ${t.notional:,.2f} exceeds the remaining room ${room:,.2f} "
+                    f"(max ${al.max_order_notional:g}/order, ${al.max_daily_purchases:g}/day, "
+                    f"{al.max_daily_entries} entries/day, ${al.max_total_exposure:g} exposure, "
+                    f"${al.min_cash_reserve:g} cash reserve)"
+                )
         if reason:
             res.rejected.append((t, reason))
             continue
@@ -209,8 +231,15 @@ def check_tickets(settings: Settings, tickets: list, snap: AccountSnapshot | Non
     return res
 
 
-def _buy_reason(t, al: AccountLimitsConfig, allowed: set[str], held: dict, seen: set[str],
-                bars: dict[str, pd.DataFrame], as_of: date) -> str | None:
+def _buy_reason(
+    t,
+    al: AccountLimitsConfig,
+    allowed: set[str],
+    held: dict,
+    seen: set[str],
+    bars: dict[str, pd.DataFrame],
+    as_of: date,
+) -> str | None:
     sym = t.symbol.upper()
     if sym in LEVERAGED_INVERSE_ETFS:
         return "leveraged/inverse ETF: prohibited for the real account"

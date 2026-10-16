@@ -12,6 +12,7 @@
   week does not refetch everything.
 * Query strings are never logged (API keys travel there); errors carry the host only.
 """
+
 from __future__ import annotations
 
 import gzip
@@ -38,8 +39,8 @@ ALLOWED_HOSTS = {
 }
 RETRY_STATUS = {429, 500, 502, 503, 504}
 RATE_LIMIT_ATTEMPTS = 5
-MAX_INTERVAL = 3.0           # slowest pacing adaptive throttling will go to (seconds between requests)
-RECOVER_AFTER = 300          # successful requests in a row before a throttled provider speeds up 10%
+MAX_INTERVAL = 3.0  # slowest pacing adaptive throttling will go to (seconds between requests)
+RECOVER_AFTER = 300  # successful requests in a row before a throttled provider speeds up 10%
 
 
 class FetchError(RuntimeError):
@@ -52,16 +53,16 @@ class BudgetExceeded(FetchError):
 
 @dataclass
 class ProviderLimits:
-    min_interval: float          # seconds between requests to the same provider
-    budget: int                  # maximum network requests per run
+    min_interval: float  # seconds between requests to the same provider
+    budget: int  # maximum network requests per run
 
 
 DEFAULT_LIMITS = {
-    "sec": ProviderLimits(0.15, 4000),          # ~6.7 requests/s, under the SEC's 10/s
-    "cboe": ProviderLimits(0.5, 7000),         # undocumented limit; HTTP 429 seen at 4 requests/s
+    "sec": ProviderLimits(0.15, 4000),  # ~6.7 requests/s, under the SEC's 10/s
+    "cboe": ProviderLimits(0.5, 7000),  # undocumented limit; HTTP 429 seen at 4 requests/s
     "nasdaqtrader": ProviderLimits(1.0, 10),
     "wikipedia": ProviderLimits(1.0, 10),
-    "alphavantage": ProviderLimits(13.0, 3),    # free key: 25/day; the dashboard needs 1
+    "alphavantage": ProviderLimits(13.0, 3),  # free key: 25/day; the dashboard needs 1
 }
 
 
@@ -69,8 +70,9 @@ DEFAULT_LIMITS = {
 class HttpClient:
     cache_dir: Path | None
     user_agent: str
-    limits: dict[str, ProviderLimits] = field(   # copied: throttling changes a client's own pacing only
-        default_factory=lambda: {k: ProviderLimits(v.min_interval, v.budget) for k, v in DEFAULT_LIMITS.items()})
+    limits: dict[str, ProviderLimits] = field(  # copied: throttling changes a client's own pacing only
+        default_factory=lambda: {k: ProviderLimits(v.min_interval, v.budget) for k, v in DEFAULT_LIMITS.items()}
+    )
     timeout: float = 30.0
     attempts: int = 3
     backoff: float = 2.0
@@ -82,8 +84,8 @@ class HttpClient:
     _streak: dict[str, int] = field(default_factory=dict)
     cache_hits: int = 0
     _last: dict[str, float] = field(default_factory=dict)
-    deadline: float | None = None          # optional monotonic deadline, used by the light refresh only
-    fresh_only: bool = False              # bypass a pre-close cache on a post-close refresh
+    deadline: float | None = None  # optional monotonic deadline, used by the light refresh only
+    fresh_only: bool = False  # bypass a pre-close cache on a post-close refresh
 
     def __post_init__(self) -> None:
         self.session = self.session or requests.Session()
@@ -92,8 +94,9 @@ class HttpClient:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     # --- public -----------------------------------------------------------------------
-    def get_bytes(self, url: str, params: dict | None = None, max_age_hours: float = 0.0,
-                  cache_key_extra: str = "") -> bytes:
+    def get_bytes(
+        self, url: str, params: dict | None = None, max_age_hours: float = 0.0, cache_key_extra: str = ""
+    ) -> bytes:
         provider = self._provider(url)
         key = self._key(url, params, cache_key_extra)
         self._remaining()
@@ -105,8 +108,9 @@ class HttpClient:
         self._write_cache(key, body)
         return body
 
-    def get_json(self, url: str, params: dict | None = None, max_age_hours: float = 0.0,
-                 cache_key_extra: str = "") -> dict | list:
+    def get_json(
+        self, url: str, params: dict | None = None, max_age_hours: float = 0.0, cache_key_extra: str = ""
+    ) -> dict | list:
         body = self.get_bytes(url, params, max_age_hours, cache_key_extra)
         try:
             return json.loads(body.decode("utf-8"))
@@ -120,9 +124,13 @@ class HttpClient:
         return self.limits[provider].budget - self.used.get(provider, 0)
 
     def usage(self) -> dict:
-        return {"requests": dict(self.used), "cache_hits": self.cache_hits, "rate_limited": dict(self.throttled),
-                "budgets": {k: v.budget for k, v in self.limits.items()},
-                "final_interval_s": {k: round(v.min_interval, 2) for k, v in self.limits.items()}}
+        return {
+            "requests": dict(self.used),
+            "cache_hits": self.cache_hits,
+            "rate_limited": dict(self.throttled),
+            "budgets": {k: v.budget for k, v in self.limits.items()},
+            "final_interval_s": {k: round(v.min_interval, 2) for k, v in self.limits.items()},
+        }
 
     # --- internals ---------------------------------------------------------------------
     def _remaining(self) -> float:
@@ -154,8 +162,13 @@ class HttpClient:
             self._pace(provider)
             self.used[provider] = self.used.get(provider, 0) + 1
             try:
-                resp = self.session.get(url, params=params, timeout=min(self.timeout, self._remaining() / 2), allow_redirects=False,
-                                        headers={"User-Agent": self.user_agent, "Accept-Encoding": "gzip, deflate"})
+                resp = self.session.get(
+                    url,
+                    params=params,
+                    timeout=min(self.timeout, self._remaining() / 2),
+                    allow_redirects=False,
+                    headers={"User-Agent": self.user_agent, "Accept-Encoding": "gzip, deflate"},
+                )
             except (requests.Timeout, requests.ConnectionError) as exc:
                 last_error = type(exc).__name__
             except requests.RequestException as exc:

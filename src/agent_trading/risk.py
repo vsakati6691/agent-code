@@ -9,6 +9,7 @@ same rules here:
 * cap position notional, and never exceed available cash (no margin);
 * long-only, paper-only, stocks/ETFs only.
 """
+
 from __future__ import annotations
 
 import math
@@ -90,6 +91,7 @@ def size_position(
 
 # ---------------------------------------------------------------- engine
 
+
 @dataclass(frozen=True)
 class Holding:
     symbol: str
@@ -121,9 +123,7 @@ class EntryDecision:
     reason: str
 
 
-def correlated_risk(
-    symbol: str, state: PortfolioState, returns: pd.DataFrame | None, cfg: RiskConfig
-) -> float:
+def correlated_risk(symbol: str, state: PortfolioState, returns: pd.DataFrame | None, cfg: RiskConfig) -> float:
     """Planned risk of holdings correlated with `symbol`.
 
     Fail-safe: when correlation cannot be measured (missing or short history),
@@ -134,7 +134,7 @@ def correlated_risk(
     x = None
     cols: dict[str, int] = {}
     if returns is not None and symbol in returns.columns:
-        window = returns.iloc[-cfg.correlation_lookback:]
+        window = returns.iloc[-cfg.correlation_lookback :]
         arr = window.to_numpy(dtype=float)
         cols = {c: i for i, c in enumerate(window.columns)}
         x = arr[:, cols[symbol]]
@@ -195,8 +195,13 @@ class RiskEngine:
                     symbol, state, returns, cfg
                 )
             d = size_position(
-                state.equity, state.cash, entry_price, stop_price,
-                state.open_risk(cfg.stop_risk_buffer), cfg, corr_remaining,
+                state.equity,
+                state.cash,
+                entry_price,
+                stop_price,
+                state.open_risk(cfg.stop_risk_buffer),
+                cfg,
+                corr_remaining,
             )
         except RiskViolation as exc:
             return reject(str(exc))
@@ -207,6 +212,7 @@ class RiskEngine:
 
 # ---------------------------------------------------------------- circuit breakers
 
+
 @dataclass(frozen=True)
 class TradingStatus:
     new_entries_allowed: bool
@@ -216,8 +222,9 @@ class TradingStatus:
     peak_equity: float
 
 
-def trading_status(equity_history: pd.Series, current_equity: float, cfg: RiskConfig,
-                   today: pd.Timestamp | None = None) -> TradingStatus:
+def trading_status(
+    equity_history: pd.Series, current_equity: float, cfg: RiskConfig, today: pd.Timestamp | None = None
+) -> TradingStatus:
     """Daily-loss and max-drawdown circuit breakers.
 
     `equity_history`: end-of-day paper equity by date (earlier days only, or
@@ -233,16 +240,27 @@ def trading_status(equity_history: pd.Series, current_equity: float, cfg: RiskCo
     day_pnl = current_equity - base
     drawdown = peak - current_equity
     if drawdown >= peak * cfg.max_drawdown_pct - 1e-9:
-        return TradingStatus(False, f"SHUTDOWN: drawdown ${drawdown:.2f} from peak ${peak:.2f} "
-                                    f"reached the {cfg.max_drawdown_pct:.0%} limit; review before resuming",
-                             day_pnl, drawdown, peak)
+        return TradingStatus(
+            False,
+            f"SHUTDOWN: drawdown ${drawdown:.2f} from peak ${peak:.2f} "
+            f"reached the {cfg.max_drawdown_pct:.0%} limit; review before resuming",
+            day_pnl,
+            drawdown,
+            peak,
+        )
     if -day_pnl >= base * cfg.daily_loss_limit_pct - 1e-9:
-        return TradingStatus(False, f"daily loss ${-day_pnl:.2f} reached the {cfg.daily_loss_limit_pct:.0%} limit; "
-                                    "no new entries today", day_pnl, drawdown, peak)
+        return TradingStatus(
+            False,
+            f"daily loss ${-day_pnl:.2f} reached the {cfg.daily_loss_limit_pct:.0%} limit; no new entries today",
+            day_pnl,
+            drawdown,
+            peak,
+        )
     return TradingStatus(True, "ok", day_pnl, drawdown, peak)
 
 
 # ---------------------------------------------------------------- order checks
+
 
 @dataclass(frozen=True)
 class ProposedOrder:

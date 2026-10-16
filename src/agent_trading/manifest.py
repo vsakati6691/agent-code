@@ -10,6 +10,7 @@ The paper-trading evaluation is only meaningful if the rules don't change
 mid-test: the first paper run stores the configuration hash as the frozen
 spec; any later run with a different hash is flagged in the report.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +18,7 @@ import json
 import shutil
 import subprocess
 from dataclasses import asdict, is_dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from .config import Settings
@@ -45,6 +46,7 @@ def code_version(base_dir: Path) -> dict:
             return r.stdout.strip() if r.returncode == 0 else None
         except (OSError, subprocess.SubprocessError):
             return None
+
     commit = git("rev-parse", "--short", "HEAD")
     status = git("status", "--porcelain", "--untracked-files=no")
     return {"commit": commit or "unknown", "dirty": None if status is None else bool(status)}
@@ -79,8 +81,9 @@ def missed_postclose(settings: Settings, as_of: date) -> date | None:
 def write_manifest(settings: Settings, as_of: date, label: str, payload: dict) -> Path:
     d = runs_dir(settings)
     d.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     path = d / f"{as_of.isoformat()}_{label or 'run'}_{now:%H%M%S}.json"
-    path.write_text(json.dumps(_plain({"written_at": now.isoformat(timespec="seconds"), **payload}), indent=2),
-                    encoding="utf-8")
+    path.write_text(
+        json.dumps(_plain({"written_at": now.isoformat(timespec="seconds"), **payload}), indent=2), encoding="utf-8"
+    )
     return path

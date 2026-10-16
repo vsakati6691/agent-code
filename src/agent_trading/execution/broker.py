@@ -4,6 +4,7 @@ Only `SimulatedBroker` implements it in this repository. A live adapter must
 set `is_live = True`; the service refuses to pair a live broker with any mode
 but `live`, and refuses a simulated broker in `live` mode.
 """
+
 from __future__ import annotations
 
 from typing import Protocol

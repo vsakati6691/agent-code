@@ -6,15 +6,15 @@ fills, rejections, cancellation and settlement of sale proceeds (T+1). Faults
 can be queued to rehearse timeouts and outages. Nothing here can reach a real
 broker.
 """
+
 from __future__ import annotations
 
 import itertools
 from collections import deque
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from .models import (AccountState, BrokerNotSent, BrokerOrder, BrokerRejected, BrokerTimeout,
-                     OrderRequest, Quote)
+from .models import AccountState, BrokerNotSent, BrokerOrder, BrokerRejected, BrokerTimeout, OrderRequest, Quote
 
 # Faults, consumed one per submit() call:
 #   "timeout_after_accept"  - the order is created, but the caller sees a timeout
@@ -29,22 +29,28 @@ class SimulatedBroker:
     name = "simulated"
     is_live = False
 
-    def __init__(self, cash: float, positions: dict[str, float] | None = None,
-                 quotes: dict[str, Quote] | None = None, account_last4: str = "SIM0",
-                 slippage_bps: float = 0.0, clock=None) -> None:
-        self.clock = clock or (lambda: datetime.now(timezone.utc))
+    def __init__(
+        self,
+        cash: float,
+        positions: dict[str, float] | None = None,
+        quotes: dict[str, Quote] | None = None,
+        account_last4: str = "SIM0",
+        slippage_bps: float = 0.0,
+        clock=None,
+    ) -> None:
+        self.clock = clock or (lambda: datetime.now(UTC))
         self.cash = cash
         self.unsettled = 0.0
         self.positions = dict(positions or {})
         self._quotes = dict(quotes or {})
         self.account_last4 = account_last4
         self.slippage_bps = slippage_bps
-        self.orders: dict[str, BrokerOrder] = {}      # by ref_id
-        self._limit_prices: dict[str, float] = {}     # by ref_id
+        self.orders: dict[str, BrokerOrder] = {}  # by ref_id
+        self._limit_prices: dict[str, float] = {}  # by ref_id
         self.faults: deque[str] = deque()
         self.submit_calls = 0
         self._ids = itertools.count(1)
-        self.down = False                              # account()/quotes() raise while True
+        self.down = False  # account()/quotes() raise while True
 
     # --- test controls -------------------------------------------------
     def inject(self, *faults: str) -> None:
@@ -72,9 +78,16 @@ class SimulatedBroker:
             raise BrokerTimeout("simulated outage")
         value = self.cash + sum(q * self._quotes[s].last for s, q in self.positions.items() if s in self._quotes)
         open_orders = [o for o in self.orders.values() if o.state in ("confirmed", "partially_filled")]
-        return AccountState(self.account_last4, self.clock(), value, self.cash,
-                            max(0.0, self.cash - self.unsettled), self.cash,
-                            {s: q for s, q in self.positions.items() if q > 0}, open_orders)
+        return AccountState(
+            self.account_last4,
+            self.clock(),
+            value,
+            self.cash,
+            max(0.0, self.cash - self.unsettled),
+            self.cash,
+            {s: q for s, q in self.positions.items() if q > 0},
+            open_orders,
+        )
 
     def quotes(self, symbols: list[str]) -> dict[str, Quote]:
         if self.down:
@@ -83,7 +96,7 @@ class SimulatedBroker:
 
     def submit(self, req: OrderRequest, ref_id: str) -> BrokerOrder:
         self.submit_calls += 1
-        if ref_id in self.orders:                     # idempotent: same ref_id, same order
+        if ref_id in self.orders:  # idempotent: same ref_id, same order
             return self.orders[ref_id]
         fault = self.faults.popleft() if self.faults else None
         if fault == "not_sent":
@@ -131,7 +144,7 @@ class SimulatedBroker:
         limit = self._limit_prices[ref_id]
         slip = self.slippage_bps / 10_000
         px = q.ask * (1 + slip) if o.side == "buy" else q.bid * (1 - slip)
-        if ((o.side == "buy" and px > limit) or (o.side == "sell" and px < limit)):
+        if (o.side == "buy" and px > limit) or (o.side == "sell" and px < limit):
             return
         filled = o.filled_quantity + qty
         avg = ((o.average_price or 0.0) * o.filled_quantity + px * qty) / filled

@@ -7,6 +7,7 @@ Rules come from spec.py and are applied mechanically:
   MAX_MISSING_METRICS missing sub-metrics, is not ranked (it is listed as excluded);
 * ties break on the growth component, then ticker, so ranks are deterministic.
 """
+
 from __future__ import annotations
 
 import math
@@ -28,6 +29,7 @@ def scale(value: float | None, s: spec.Scale) -> float:
 
 
 # --- raw metrics ---------------------------------------------------------------------------
+
 
 def price_return(close: pd.Series, start_back: int, end_back: int = 0) -> float | None:
     """Return from `start_back` bars before the last bar to `end_back` bars before it."""
@@ -53,7 +55,9 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     m["revenue_ttm"] = rev_ttm
     m["revenue_growth_ttm"] = growth(rev_ttm, rev_prev)
     rev_3y = ttm(rev, 12)
-    m["revenue_cagr_3y"] = ((rev_ttm / rev_3y) ** (1 / 3) - 1) if rev_ttm and rev_3y and rev_3y > 0 and rev_ttm > 0 else None
+    m["revenue_cagr_3y"] = (
+        ((rev_ttm / rev_3y) ** (1 / 3) - 1) if rev_ttm and rev_3y and rev_3y > 0 and rev_ttm > 0 else None
+    )
     yoy = [growth(rev[i], rev[i + 4]) if i + 4 < len(rev) else None for i in range(8)]
     known = [g for g in yoy if g is not None]
     m["growth_consistency"] = sum(g > 0 for g in known) / 8 if len(known) == 8 else None
@@ -73,8 +77,11 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     if fcf_prev is not None and fcf is not None and fcf_prev <= 0:
         m["fcf_growth_ttm"] = -1.0
     m["fcf_margin"] = fcf / rev_ttm if fcf is not None and rev_ttm else None
-    m["fcf_margin_change"] = (m["fcf_margin"] - fcf_prev / rev_prev
-                              if m["fcf_margin"] is not None and fcf_prev is not None and rev_prev else None)
+    m["fcf_margin_change"] = (
+        m["fcf_margin"] - fcf_prev / rev_prev
+        if m["fcf_margin"] is not None and fcf_prev is not None and rev_prev
+        else None
+    )
 
     gp = ttm(fl["gross_profit"])
     m["gross_margin"] = gp / rev_ttm if gp is not None and rev_ttm else None
@@ -104,8 +111,14 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     m["current_ratio"] = ca / cl if ca is not None and cl else None
     sh = f.diluted_shares
     # a fiscal Q4 has only a full-year share count, so fall back one quarter (spec 2026-10-14.4)
-    pair = next(((sh[i], sh[i + 4]) for i in range(spec.DILUTION_LOOKBACK_QUARTERS + 1)
-                 if i + 4 < len(sh) and sh[i] and sh[i + 4]), None)
+    pair = next(
+        (
+            (sh[i], sh[i + 4])
+            for i in range(spec.DILUTION_LOOKBACK_QUARTERS + 1)
+            if i + 4 < len(sh) and sh[i] and sh[i + 4]
+        ),
+        None,
+    )
     m["dilution"] = pair[0] / pair[1] - 1 if pair else None
     sbc = ttm(fl["sbc"])
     m["sbc_to_revenue"] = sbc / rev_ttm if sbc is not None and rev_ttm else None
@@ -128,8 +141,9 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     # long-horizon list: runway, operating leverage, track record and survival
     m["log_market_cap"] = math.log10(market_cap) if market_cap and market_cap > 0 else None
     oi_m_prev = oi_prev / rev_prev if oi_prev is not None and rev_prev else None
-    m["operating_margin_change"] = (m["operating_margin"] - oi_m_prev
-                                    if m["operating_margin"] is not None and oi_m_prev is not None else None)
+    m["operating_margin_change"] = (
+        m["operating_margin"] - oi_m_prev if m["operating_margin"] is not None and oi_m_prev is not None else None
+    )
     m["reported_quarters"] = float(sum(1 for v in rev if v is not None))
     if fcf is None:
         m["survival"] = None
@@ -149,6 +163,7 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
 
 
 # --- scoring --------------------------------------------------------------------------------
+
 
 @dataclass
 class Score:
@@ -178,7 +193,7 @@ def confidence(metrics_present: float, f: Fundamentals | None, flags: list[str])
     return round(c, 3), ("high" if c >= 0.8 else "medium" if c >= 0.6 else "low")
 
 
-COUNTER_TEXT = {   # neutral wording: the weakest input is not always "bad", only the weakest
+COUNTER_TEXT = {  # neutral wording: the weakest input is not always "bad", only the weakest
     "revenue_growth_ttm": "Weakest evidence: trailing revenue growth ({v:+.0%}).",
     "revenue_cagr_3y": "Weakest evidence: three-year revenue growth ({v:+.0%} a year), so the growth record is short or uneven.",
     "growth_consistency": "Weakest evidence: only {v:.0%} of the last 8 quarters grew year over year.",
@@ -205,8 +220,9 @@ COUNTER_TEXT = {   # neutral wording: the weakest input is not always "bad", onl
 }
 
 
-def counterargument(sub: dict[str, float], metrics: dict, missing: list[str],
-                    components: tuple = spec.COMPONENTS) -> str:
+def counterargument(
+    sub: dict[str, float], metrics: dict, missing: list[str], components: tuple = spec.COMPONENTS
+) -> str:
     """The weakest scored evidence, weighted by its component weight; missing critical data first."""
     weights = {m: c.weight / len(c.metrics) for c in components for m in c.metrics}
     crit_missing = [m for m in missing if any(m in c.metrics and c.critical for c in components)]
@@ -219,8 +235,12 @@ def counterargument(sub: dict[str, float], metrics: dict, missing: list[str],
     v = metrics.get(worst)
     if worst == "implied_growth_gap":
         from .scenarios import implied_growth_text
-        return "Weakest evidence: " + implied_growth_text(metrics.get("implied_revenue_cagr"),
-                                                         metrics.get("revenue_growth_ttm")) + "."
+
+        return (
+            "Weakest evidence: "
+            + implied_growth_text(metrics.get("implied_revenue_cagr"), metrics.get("revenue_growth_ttm"))
+            + "."
+        )
     text = COUNTER_TEXT[worst]
     if isinstance(v, (int, float)) and math.isfinite(v) and v != -1.0:
         try:
@@ -237,8 +257,9 @@ def counterargument(sub: dict[str, float], metrics: dict, missing: list[str],
     return text.split(" (")[0].rstrip(".") + "."
 
 
-def score_one(ticker: str, metrics: dict, f: Fundamentals | None, flags: list[str],
-              components: tuple = spec.COMPONENTS) -> Score:
+def score_one(
+    ticker: str, metrics: dict, f: Fundamentals | None, flags: list[str], components: tuple = spec.COMPONENTS
+) -> Score:
     sub: dict[str, float] = {}
     missing: list[str] = []
     comps: dict[str, float | None] = {}
@@ -262,17 +283,28 @@ def score_one(ticker: str, metrics: dict, f: Fundamentals | None, flags: list[st
         reason = "missing critical data: " + "; ".join(crit_missing)
     elif len(missing) > spec.MAX_MISSING_METRICS:
         reason = f"too little evidence: {len(missing)} of {len(sub)} sub-metrics missing"
-    composite = None if reason else round(100 * sum(
-        c.weight * (comps[c.key] or 0.0) for c in components), 2)
+    composite = None if reason else round(100 * sum(c.weight * (comps[c.key] or 0.0) for c in components), 2)
     conf, label = confidence(1 - len(missing) / len(sub), f, flags)
-    return Score(ticker, composite, comps, sub, missing, reason, conf, label,
-                 counterargument(sub, metrics, missing, components), flags=list(flags))
+    return Score(
+        ticker,
+        composite,
+        comps,
+        sub,
+        missing,
+        reason,
+        conf,
+        label,
+        counterargument(sub, metrics, missing, components),
+        flags=list(flags),
+    )
 
 
 def rank(scores: list[Score]) -> list[Score]:
     """Assign ranks 1..n to scored stocks; deterministic tie-breaks (spec.TIE_BREAK)."""
-    ranked = sorted([s for s in scores if s.composite is not None],
-                    key=lambda s: (-s.composite, -(s.components.get("growth") or 0.0), s.ticker))
+    ranked = sorted(
+        [s for s in scores if s.composite is not None],
+        key=lambda s: (-s.composite, -(s.components.get("growth") or 0.0), s.ticker),
+    )
     for i, s in enumerate(ranked, 1):
         s.rank = i
     return ranked

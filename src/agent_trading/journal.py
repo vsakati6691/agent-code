@@ -1,4 +1,5 @@
 """SQLite paper-trade journal. Long-only, paper-only, enforced by the schema."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -64,7 +65,9 @@ class Journal:
             )
             return int(cur.lastrowid)
 
-    def close_trade(self, trade_id: int, exit_price: float, exit_date: date, reason: str = "", fees: float = 0.0) -> None:
+    def close_trade(
+        self, trade_id: int, exit_price: float, exit_date: date, reason: str = "", fees: float = 0.0
+    ) -> None:
         with closing(self._connect()) as conn, conn:
             row = conn.execute("SELECT exit_date FROM trades WHERE id = ?", (trade_id,)).fetchone()
             if row is None:
@@ -105,7 +108,9 @@ class Journal:
     def cash(self, starting_equity: float) -> float:
         """Paper cash: starting equity + realized P&L - cost of open positions."""
         open_df = self.open_trades()
-        committed = float((open_df["quantity"] * open_df["entry_price"] + open_df["fees"]).sum()) if not open_df.empty else 0.0
+        committed = (
+            float((open_df["quantity"] * open_df["entry_price"] + open_df["fees"]).sum()) if not open_df.empty else 0.0
+        )
         return starting_equity + self.realized_pnl() - committed
 
     def summary(self, starting_equity: float, buffer: float = 0.0) -> dict:

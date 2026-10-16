@@ -65,7 +65,9 @@ class FakeClient:
 
     def earnings_calendar(self, horizon="3month"):
         self.calls_made += 1
-        return parse_earnings_csv("symbol,name,reportDate,fiscalDateEnding,estimate,currency,timeOfTheDay\nAAA,A,2026-10-15,2026-09-30,1.0,USD,\n")
+        return parse_earnings_csv(
+            "symbol,name,reportDate,fiscalDateEnding,estimate,currency,timeOfTheDay\nAAA,A,2026-10-15,2026-09-30,1.0,USD,\n"
+        )
 
 
 def test_refresh_respects_budget_and_reserves_earnings_call(settings):
@@ -111,14 +113,43 @@ def test_import_csv(settings, tmp_path):
 
 
 RH_PAYLOAD = {
-    "data": {"results": [{"symbol": "SPY", "interval": "day", "bars": [
-        {"begins_at": "2026-10-08T00:00:00Z", "open_price": "774.86", "close_price": "773.93",
-         "high_price": "777.09", "low_price": "770.435", "volume": 40431076, "session": "reg"},
-        {"begins_at": "2026-10-09T00:00:00Z", "open_price": "776.24", "close_price": "778.57",
-         "high_price": "779.42", "low_price": "775.14", "volume": 22624488, "session": "reg"},
-        {"begins_at": "2026-10-10T00:00:00Z", "open_price": "1", "close_price": "1",
-         "high_price": "1", "low_price": "1", "volume": 0, "interpolated": True},
-    ]}]},
+    "data": {
+        "results": [
+            {
+                "symbol": "SPY",
+                "interval": "day",
+                "bars": [
+                    {
+                        "begins_at": "2026-10-08T00:00:00Z",
+                        "open_price": "774.86",
+                        "close_price": "773.93",
+                        "high_price": "777.09",
+                        "low_price": "770.435",
+                        "volume": 40431076,
+                        "session": "reg",
+                    },
+                    {
+                        "begins_at": "2026-10-09T00:00:00Z",
+                        "open_price": "776.24",
+                        "close_price": "778.57",
+                        "high_price": "779.42",
+                        "low_price": "775.14",
+                        "volume": 22624488,
+                        "session": "reg",
+                    },
+                    {
+                        "begins_at": "2026-10-10T00:00:00Z",
+                        "open_price": "1",
+                        "close_price": "1",
+                        "high_price": "1",
+                        "low_price": "1",
+                        "volume": 0,
+                        "interpolated": True,
+                    },
+                ],
+            }
+        ]
+    },
     "guide": "...",
 }
 
@@ -163,8 +194,11 @@ def test_rate_limit_notice_echoing_the_key_is_redacted():
     from agent_trading.data.alphavantage import parse_dividends_json
 
     notice = {"Information": "We have detected your API key as ZZTESTKEY9876 and our standard API rate limit is 25"}
-    for parse in (lambda d: parse_daily_json(d, "SPY"), lambda d: parse_dividends_json(d, "SPY"),
-                  lambda d: parse_earnings_csv('{"Information": "' + d["Information"] + '"}')):
+    for parse in (
+        lambda d: parse_daily_json(d, "SPY"),
+        lambda d: parse_dividends_json(d, "SPY"),
+        lambda d: parse_earnings_csv('{"Information": "' + d["Information"] + '"}'),
+    ):
         with pytest.raises(AlphaVantageError) as exc:
             parse(notice)
         assert "ZZTESTKEY9876" not in str(exc.value) and "***" in str(exc.value)
