@@ -35,6 +35,8 @@ on the site.
 | [Options](https://vsakati6691.github.io/agent-code/options.html) | Separate weekly and daily call/put comparisons across 3M/6M/1Y expiry windows, plus speculative 30–90 days-to-expiry research and a hypothetical risk-budget calculator when options are enabled. |
 | [Small bets](https://vsakati6691.github.io/agent-code/bets.html) | A separate options explorer with Core/Long-shot tiers, premium filters, whole-contract budget arithmetic and a device-local research slip. |
 | [Watchlist 2030](https://vsakati6691.github.io/agent-code/watchlist.html) | A saved ticker list with verified symbol information, dated prices and conditional year-end-2030 bear/base/bull price scenarios. |
+| [Plan 2030](https://vsakati6691.github.io/agent-code/goal.html) | Browser-only target and contribution arithmetic, stored scenario comparisons, optional weighted ending values and a year-one drawdown stress test. Missing weighted scenarios stay unavailable. |
+| [Evidence](https://vsakati6691.github.io/agent-code/evidence.html) | Benchmark and GTAA results, acceptance rules and the no-candidate-passed verdict, read from the repository's tournament and final report at build time. |
 | [History & tracking](https://vsakati6691.github.io/agent-code/history.html) | Stored research reports and forward list returns versus benchmarks at 1, 3, 6 and 12 months, when enough observations exist. |
 | [Methodology](https://vsakati6691.github.io/agent-code/methodology.html) / [Audit trail](https://vsakati6691.github.io/agent-code/audit.html) | Versioned rules, exclusions, source coverage, timestamps, snapshot hashes, downloadable data and the append-only event log. |
 
@@ -44,11 +46,27 @@ calculators. A ticker lookup connects each symbol to its research and history.
 
 ### Latest research features
 
-Methodology **2026-10-14.9** adds dated growth-decision fields: fiscal-year revenue
+Methodology **2026-10-15.1** adds [dated ETF exposure and expense inputs](docs/ETF_INPUTS.md),
+with issuer sources, inception dates and explicit unverified labels. Existing
+scales, weights, gates and lists are unchanged. Scenarios remain unavailable
+where the registered models or required financial evidence do not support them.
+The [full methodology changelog](docs/SPEC_CHANGELOG.md) preserves every registration reason.
+
+The preceding **2026-10-14.9** version adds dated growth-decision fields: fiscal-year revenue
 and EPS growth, margins, debt and cash, valuation, ownership-data coverage and
 issuer business/risk excerpts. Growth lists separate **fundamental quality from
 momentum**; scores should be compared within their original list and profile.
 Older snapshots retain their original methodology and missing fields.
+
+Plan 2030 shows the return required for the goal beside the stored scenarios and
+research evidence. Inputs stay in the browser's local storage. The overview
+reports missing refresh datasets and progress toward 52 weekly snapshots under
+the current methodology; the freeze date still awaits the owner's choice.
+
+Every built HTML page has a 150 KB budget. Detail panels, scanner/comparison data
+and sparklines use separate assets; older larger options lists are split by
+expiry. Tables scroll within their wrappers, muted text meets AA contrast in
+both themes, and the stale warning is readable without JavaScript.
 
 The Options page also supports speculative 30–90 DTE comparisons for up to the
 top three names in each large/mid/small growth list. Its browser calculator
@@ -203,6 +221,9 @@ tests/                        unit, integration, dashboard and safety tests
 Runtime `data/`, `logs/`, `reports/`, generated `site/` and the local
 `research-data/` checkout are git-ignored.
 
+See the [module guide](docs/MODULES.md) for the pipeline stages, page renderers,
+CLI command groups and daily run phases.
+
 For historical findings, see the [research report](docs/FINAL_REPORT_2026-10-12.md).
 **AI assistants and contributors:** read [CLAUDE.md](CLAUDE.md) in full;
 [AGENTS.md](AGENTS.md) points to the same rules. Work on `feature/research-system`,
@@ -211,7 +232,7 @@ Changes reach `main` through a PR on the owner's instruction.
 
 The [CI workflow](.github/workflows/ci.yml) runs on every push and pull request:
 the full test suite, Ruff lint/format checks, and an offline fixture-site build
-with snapshot integrity and internal-link checks. **Tests, lint and fixture
+with snapshot integrity, internal-link checks and the 150 KB HTML budget. **Tests, lint and fixture
 site** is required for merge; the owner must select that check in the `main`
 branch protection rules or ruleset. Adding this workflow does not configure
 GitHub branch protection automatically. Run the same checks locally with
