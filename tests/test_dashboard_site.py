@@ -284,6 +284,16 @@ def test_every_page_has_exactly_one_h1(site):
     assert all(n == 1 for _, n in wrong), [w for w in wrong if w[1] != 1]
 
 
+def test_goal_and_evidence_are_built_and_linked(site):
+    overview = (site / "index.html").read_text(encoding="utf-8")
+    goal = (site / "goal.html").read_text(encoding="utf-8")
+    evidence = (site / "evidence.html").read_text(encoding="utf-8")
+    assert overview.index('href="watchlist.html"') < overview.index('href="goal.html"')
+    assert 'id="evidence"' in overview and "No candidate passed" in evidence
+    assert 'id="goal-required"' in goal and 'src="assets/goal.js' in goal
+    assert "localStorage" in (site / "assets/goal.js").read_text(encoding="utf-8")
+
+
 def test_favicon_and_404_work_for_nested_missing_paths(site):
     from xml.etree import ElementTree
 

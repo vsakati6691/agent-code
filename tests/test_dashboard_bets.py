@@ -53,7 +53,7 @@ def under(symbol="AAA"):
 
 
 def test_explorer_registration_has_fixed_rules_and_preserves_weekly_rules():
-    assert spec.SPEC_VERSION == "2026-10-14.9"
+    assert spec.SPEC_VERSION == "2026-10-15.1"
     entry = dict(spec.SPEC_CHANGELOG)["2026-10-14.8"]
     assert "registered before any explorer data" in entry
     assert spec.EXPLORER_BANDS == ("large", "ai_large", "ai_mid")
