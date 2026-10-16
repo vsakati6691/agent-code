@@ -530,6 +530,19 @@ CSS += SPECULATIVE_CSS
 JS += SPECULATIVE_JS
 
 CSS += r"""
+/* Signed outcomes and movement symbols carry meaning without relying on colour. */
+.positive { color: var(--good); }
+.negative { color: var(--bad-border); }
+.leaders-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 800px) {
+  .leaders-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .leaders-summary .scan-stat:nth-child(odd) { border-left: 0; }
+}
+.upside-range { display: block; margin-left: auto; }
+.upside-span { stroke: var(--reference); stroke-width: 5; }
+.upside-zero { stroke: var(--text-primary); stroke-width: 2; }
+.upside-base { fill: var(--link); stroke: var(--surface-1); stroke-width: 1; }
+.upside-reason, .leader-note { min-width: 150px; max-width: 240px; white-space: normal; }
 /* Keep wide tables within their own scroller; preserve the row label when no ticker class is present. */
 .table-wrap { max-width: 100%; min-width: 0; }
 .table-wrap > table:not(:has(th.tk)) > thead > tr > th:first-child,

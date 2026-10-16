@@ -32,6 +32,7 @@ NAV = [
     ("options.html", "Options"),
     ("bets.html", "Small bets"),
     ("watchlist.html", "Watchlist 2030"),
+    ("leaders.html", "Leaders 2030"),
     ("goal.html", "Plan 2030"),
     ("evidence.html", "Evidence"),
     ("compare.html", "Compare"),

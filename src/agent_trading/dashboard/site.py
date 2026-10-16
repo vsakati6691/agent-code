@@ -13,11 +13,13 @@ from . import (
     assets_goal,
     assets_research,
     compare,
+    leaders,
     site_basics,
     site_bets,
     site_build,
     site_evidence,
     site_goal,
+    site_leaders,
     site_methodology,
     site_performance,
     site_refresh,
@@ -40,6 +42,7 @@ from .site_company import profile_of as profile_of
 from .site_company import window_text as window_text
 from .site_compare import compare_page
 from .site_downloads import band_csv as band_csv
+from .site_downloads import leaders_csv
 from .site_downloads import options_csv as options_csv
 from .site_history import atom_feed as atom_feed
 from .site_history import history_page as history_page
@@ -82,6 +85,7 @@ def build_site(
     data_dir: Path, out: Path, secret_env: tuple[str, ...] = (), *, code_commit: str = "", data_commit: str = ""
 ) -> dict:
     store = Store(data_dir)
+    challengers = leaders.load_challengers()
     integrity = store.verify_all()
     bad = {p.split()[1] for p in integrity if p.startswith("snapshot ")}
     dates = [d for d in store.dates() if d not in bad]
@@ -137,6 +141,8 @@ def build_site(
         for rel, title in NAV:
             if not (out / rel).exists():
                 empty = f"<h1>{E(title)}</h1><p>No research data available. {E(msg)}</p>"
+                if rel == "leaders.html" and not challengers:
+                    empty += "<p>No curated challengers registered.</p>"
                 (out / rel).write_text(page(title, empty, rel), encoding="utf-8")
         (out / "feed.xml").write_text(atom_feed([]), encoding="utf-8")
         write_fallback()
@@ -191,6 +197,9 @@ def build_site(
         "bets.html", "Small-bet options research", site_bets.bets_page(snap, daily), "bets.html", js=("assets/bets.js",)
     )
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
+    leader_payload = leaders.build(snap, challengers)
+    leader_details: dict[str, str] = {}
+    write("leaders.html", "Leaders 2030", site_leaders.leaders_page(leader_payload, leader_details), "leaders.html")
     write("goal.html", "Plan 2030", site_goal.goal_page(snap), "goal.html", js=("assets/goal.js",))
     write("evidence.html", "Evidence", site_evidence.evidence_page(research_evidence), "evidence.html")
     write("history.html", "History", history_page(dates, tracking, history), "history.html")
@@ -213,6 +222,13 @@ def build_site(
     (out / "symbol").mkdir()
     (out / "fragments").mkdir()
     (out / "option").mkdir()
+    (out / "leaders").mkdir()
+    for rel, markup in leader_details.items():
+        write(rel, "Leaders evidence", markup, "leaders.html", 1)
+    (out / "downloads" / f"{snap['as_of']}_leaders_2030.csv").write_text(leaders_csv(leader_payload), encoding="utf-8")
+    (out / "data" / f"{snap['as_of']}_leaders_2030.json").write_text(
+        json.dumps(leader_payload, ensure_ascii=False), encoding="utf-8"
+    )
     for rel, text in browser_files.items():
         (out / rel).write_text(text, encoding="utf-8")
     for rid, markup in option_fragments.items():

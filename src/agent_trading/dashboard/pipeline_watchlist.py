@@ -78,6 +78,7 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
             e["unlock"] = wl_mod.unlock_steps("type")
     themes: dict[str, int] = {}
     for e in entries:
+        e.update(wl_mod.upside_fields(e))
         key = e["sector"] or ("Unresolved" if e["status"] != "listed" else "Unknown")
         themes[key] = themes.get(key, 0) + 1
     return {

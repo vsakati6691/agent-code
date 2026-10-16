@@ -21,3 +21,5 @@ The public dashboard modules still cannot import account, ticket, journal or
 daily-cycle code. The local desk's hard limits, reconciliation and kill switch
 remain in their existing enforcement modules. Nothing in the split executes
 brokerage orders.
+
+Leaders 2030: `leaders.py` validates owner config and computes pure comparisons; `pipeline_leaders.py` retains already-collected inputs; `site_leaders.py` renders the static table and separate evidence pages. `site_downloads.py` exports Leaders and Watchlist CSVs. The exact-date company method lives in `scenarios.py` and remains re-exported from `watchlist.py` for compatibility.

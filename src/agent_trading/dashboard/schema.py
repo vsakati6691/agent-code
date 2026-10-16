@@ -19,6 +19,78 @@ def _f(t: str, desc: str) -> dict:
     return {"type": t, "description": desc}
 
 
+LEADERS_CHALLENGER = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "name",
+        "ticker",
+        "listing_status",
+        "assumed_2030_market_cap_usd",
+        "assumption_source",
+        "assumption_date",
+        "growth_drivers",
+        "notes",
+    ],
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "ticker": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9.-]{0,14}$"},
+        "listing_status": {"enum": ["listed_non_index", "private", "pre_ipo"]},
+        "assumed_2030_market_cap_usd": {"type": "number", "exclusiveMinimum": 0},
+        "assumption_source": {"type": "string", "minLength": 1, "description": "Source URL or identified document."},
+        "assumption_date": {"type": "string", "format": "date"},
+        "growth_drivers": {
+            "type": "array",
+            "items": {"type": "string", "description": "ISO date followed by text; no later than the assumption date."},
+        },
+        "notes": {"type": "string"},
+    },
+}
+
+LEADER_ENTRY = _obj(
+    "Conditional 2030 size comparison; derived from stored inputs, never a tracked historical selection.",
+    {
+        **{
+            key: {"type": ["string", "null"]}
+            for key in (
+                "ticker",
+                "company_name",
+                "sector",
+                "listing_status",
+                "market_cap_date",
+                "price_date",
+                "shares_date",
+                "shares_basis",
+                "shares_assumption",
+                "movement",
+                "evidence_grade",
+                "unavailable_reason",
+                "scenario_basis",
+                "methodology_version",
+                "snapshot_id",
+                "snapshot_methodology_version",
+                "assumption_source",
+                "assumption_date",
+                "notes",
+            )
+        },
+        **{key: {"type": ["integer", "null"]} for key in ("current_rank", "rank_2030", "rank_delta")},
+        **{key: {"type": ["number", "null"]} for key in ("current_market_cap_usd", "shares_outstanding")},
+        "scenario_2030": _obj(
+            "USD caps and prices; each case uses its own projected shares. Curated records have only a base cap.",
+            {
+                f"{case}_{field}": {"type": ["number", "null"]}
+                for case in ("bear", "base", "bull")
+                for field in ("cap", "price", "shares")
+            },
+        ),
+        "growth_drivers": {"type": "array", "items": {"type": "string"}},
+        "missing_inputs": {"type": "array", "items": {"type": "string"}},
+        "is_scenario": {"const": True},
+    },
+)
+
+
 CANDIDATE = _obj(
     "One ranked stock in a list.",
     {
@@ -142,6 +214,13 @@ WATCH_ENTRY = _obj(
         "scenarios": _f(
             "object", "bear/base/bull: 2030-12-31 price, change and annualized price return, with assumptions."
         ),
+        **{
+            key: {
+                "type": ["number", "null"],
+                "description": "Percentage points (24 = 24%), derived from stored scenario returns; also exported for older snapshots.",
+            }
+            for key in ("upside_bear_pct", "upside_base_pct", "upside_bull_pct", "cagr_base_pct")
+        },
         "unavailable_reason": _f("string", "Why no scenario was computed (null when one was)."),
         "unlock": _f("array", "Exact missing inputs and what would unlock a scenario."),
         "evidence_quality": _f("string", "medium-high, medium, low or none."),
@@ -268,6 +347,18 @@ SCHEMA = {
                 "entries": {"type": "array", "items": WATCH_ENTRY},
                 "imported_at": _f("string", "When the ticker list was imported (not synchronised)."),
                 "target_date": _f("string", "2030-12-31."),
+            },
+        ),
+        "leaders_2030_inputs": _f(
+            "array",
+            "Prospectively retained S&P 500 company inputs already collected by the weekly run. No extra provider calls.",
+        ),
+        "leaders_2030": _obj(
+            "Conditional size comparison, with coverage and gap reasons. Code-only rebuilds export a separate derived JSON without rewriting the source snapshot.",
+            {
+                "entries": {"type": "array", "items": LEADER_ENTRY},
+                "partial": _f("boolean", "Ranks and movement labels cover available inputs only when true."),
+                "gaps": _f("array", "Index members without sufficient stored inputs and their specific reasons."),
             },
         ),
         "events": _obj(

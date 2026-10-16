@@ -10,6 +10,13 @@ from .fmt import cap
 E = html.escape
 
 
+def filter_select(table: str, field: str, title: str, choices: list[tuple[str, str]]) -> str:
+    """Use the shared progressive table controller, including the existing pin filter."""
+    attr = f'data-sector="{E(table)}"' if field == "sector" else f'data-filter="{E(table)}" data-field="{E(field)}"'
+    options = "".join(f'<option value="{E(key)}">{E(label)}</option>' for key, label in choices)
+    return f'<select {attr} aria-label="{E(title)}"><option value="">{E(title)}</option>{options}</select>'
+
+
 GROWTH_KEYS = ("large", "mid", "small")
 
 
