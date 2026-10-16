@@ -210,7 +210,7 @@ def _score_cells(rc: dict) -> str:
     return "".join(parts)
 
 
-def _row(x: dict, kind: str, rid: str, o: dict, snap: dict) -> str:
+def _row(x: dict, kind: str, rid: str, o: dict, snap: dict, fragments: dict | None = None) -> str:
     rc = x.get("rank_components", {})
     ev_state, ev_text = events_status(x, o)
     signed = x.get("breakeven_move")
@@ -266,7 +266,7 @@ def _row(x: dict, kind: str, rid: str, o: dict, snap: dict) -> str:
         f"liquidity {num(rc.get('liquidity'))}, breakeven {num(rc.get('breakeven'))}, "
         f"time decay {num(rc.get('time_decay')) if isinstance(rc.get('time_decay'), (int, float)) else 'missing'}"
     )
-    return f"""<tbody class="item" data-sector="{E(x["underlying"])}"><tr>
+    markup = f"""<tbody class="item" data-sector="{E(x["underlying"])}"><tr>
 <td class="num" data-v="{x.get("rank")}">{x.get("rank")}</td>
 <td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}">
 <strong>{E(x["underlying"])}</strong></button><div class="small muted">{kind} · {E(x["option"])}</div></td>
@@ -319,9 +319,24 @@ lost if the stock is {side} {money(x["strike"])} at expiry. Before fees. Nothing
 <p class="small"><strong>Probability of profit: {E(probability_text(x))}</strong> {E(why)}. Definition, validation gate and
 missing data: the note at the top of this page and the <a href="methodology.html#probability">methodology</a>.</p>
 </div></td></tr></tbody>"""
+    if fragments is None:
+        return markup
+    opening = f'<tr id="{rid}" class="detail" hidden><td colspan="18">'
+    summary, detail = markup.split(opening, 1)
+    fragments[rid] = detail.removesuffix("</td></tr></tbody>")
+    fallback = f"option/{rid}.html"
+    summary = summary.replace(
+        "</button>", f'</button><noscript><a href="{fallback}">Full contract research</a></noscript>', 1
+    )
+    return (
+        summary
+        + opening
+        + f'<div class="lazy" data-src="fragments/{rid}.json" data-page="{fallback}">'
+        + f'<p>Loading contract research… <a href="{fallback}">Read the full page</a></p></div></td></tr></tbody>'
+    )
 
 
-def _list(snap: dict, h, kind: str, data: dict | None, o: dict) -> str:
+def _list(snap: dict, h, kind: str, data: dict | None, o: dict, fragments: dict | None = None) -> str:
     plural = f"{kind}s"
     if not data:
         return f'<div class="banner warn"><strong>No {plural} listed</strong>Not collected in this snapshot.</div>'
@@ -345,7 +360,7 @@ def _list(snap: dict, h, kind: str, data: dict | None, o: dict) -> str:
         else ""
     )
     tid = f"o-{h.key}-{kind}"
-    body = "".join(_row(x, kind, f"{tid}-{i}", o, snap) for i, x in enumerate(rows))
+    body = "".join(_row(x, kind, f"{tid}-{i}", o, snap, fragments) for i, x in enumerate(rows))
     head = (
         "<th class='num' data-sort='num'>#</th><th class='tk' data-sort='text'>Underlying</th>"
         "<th class='num' data-sort='text' title='Actual expiration date and calendar days remaining'>Expiry</th>"
@@ -383,11 +398,14 @@ def _list(snap: dict, h, kind: str, data: dict | None, o: dict) -> str:
     )
 
 
-def options_page(snap: dict, daily: dict | None = None) -> str:
+def options_page(
+    snap: dict, daily: dict | None = None, fragments: dict | None = None, horizon: str | None = None
+) -> str:
     from .site_refresh import options_section
     from .site_speculative import section as speculative_section
 
     o = snap.get("options") or {}
+    horizons = [h for h in spec.HORIZONS if horizon is None or h.key == horizon]
     r = spec.OPTION_RULES
     head = f"""<h1>Options watchlist: calls and puts</h1>
 <p class="lede">Six independently ranked lists of liquid contracts on this week's large-cap research candidates (S&amp;P 500
@@ -427,25 +445,31 @@ premium, while before-expiration values are Black-Scholes MODEL estimates.</div>
         )
     # ARIA tabs pattern over two dimensions: a type tab controls that type's three panels, a horizon tab the two
     # panels in that window, and each panel names both tabs; the ids never collide with the #call-3m view hashes
+    if horizon:
+        head += (
+            '<nav aria-label="Option expiry lists">'
+            + " ".join(f'<a class="action" href="options-{h.key}.html">{E(h.title)}</a>' for h in spec.HORIZONS)
+            + "</nav><p>These larger historical lists are split by expiry. Every stored contract remains available.</p>"
+        )
     hz_tabs = "".join(
         f'<button role="tab" id="otab-hz-{h.key}" aria-controls="{" ".join(f"opanel-{k}-{h.key}" for k in spec.OPTION_TYPES)}" '
         f'data-dim="hz" data-val="{h.key}" aria-selected="false">{E(HZ_SHORT[h.key])} · {E(h.title.lower())} '
         f'<span class="small muted">({h.min_dte}-{h.max_dte} d)</span></button>'
-        for h in spec.HORIZONS
+        for h in horizons
     )
     type_tabs = "".join(
-        f'<button role="tab" id="otab-type-{k}" aria-controls="{" ".join(f"opanel-{k}-{h.key}" for h in spec.HORIZONS)}" '
+        f'<button role="tab" id="otab-type-{k}" aria-controls="{" ".join(f"opanel-{k}-{h.key}" for h in horizons)}" '
         f'data-dim="type" data-val="{k}" aria-selected="false">{k.capitalize()}s</button>'
         for k in spec.OPTION_TYPES
     )
     panels = []
-    for h in spec.HORIZONS:
+    for h in horizons:
         ls = lists_of(o.get(h.key) or {})
         for kind in spec.OPTION_TYPES:
             panels.append(
                 f'<section data-hz="{h.key}" data-type="{kind}" id="opanel-{kind}-{h.key}" role="tabpanel" '
                 f'aria-labelledby="otab-type-{kind} otab-hz-{h.key}" hidden><h2>{E(h.title)} · {kind}s · '
-                f"{h.min_dte}-{h.max_dte} days to expiry</h2>{_list(snap, h, kind, ls.get(f'{kind}s'), o)}</section>"
+                f"{h.min_dte}-{h.max_dte} days to expiry</h2>{_list(snap, h, kind, ls.get(f'{kind}s'), o, fragments)}</section>"
             )
     quotes = o.get("quotes") or {}
     qrows = "".join(

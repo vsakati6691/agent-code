@@ -417,7 +417,7 @@ def test_run_builds_ranked_lists_with_reasons(prov):
         assert c[key]
     assert c["probability"] == spec.PROBABILITY_STATEMENT
     blob = json.dumps(snap)
-    assert "account_number" not in blob and not re.search(r"(?<![\d.])8204(?!\d)", blob)
+    assert "account_number" not in blob and not re.search(r"(?<![\d.])1234(?!\d)", blob)
 
 
 def test_stale_price_and_missing_fundamentals_are_excluded_with_reasons(prov):
@@ -582,7 +582,7 @@ def test_site_build_pages_downloads_and_privacy(tmp_path, cli_env, monkeypatch):
     ):
         assert text in detail
     text = "".join(p.read_text(encoding="utf-8", errors="ignore") for p in out.rglob("*") if p.is_file())
-    assert not re.search(r"(?<![\d.])8204(?!\d)", text)  # the account's last four digits
+    assert not re.search(r"(?<![\d.])1234(?!\d)", text)  # the account's last four digits
     assert "account_number" not in text and "test@example.com" not in text
     # a secret value that leaks into the output blocks publication
     monkeypatch.setenv("ALPHAVANTAGE_API_KEY", "LEAKYKEY1234")

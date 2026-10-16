@@ -159,7 +159,9 @@ def cmd_tradability(args) -> int:
 
 
 def cmd_build(args) -> int:
-    info = build_site(Path(args.data), Path(args.out), SECRET_ENV)
+    info = build_site(
+        Path(args.data), Path(args.out), SECRET_ENV, code_commit=args.commit, data_commit=args.data_commit
+    )
     print(f"site built: {info}")
     return 0
 
@@ -216,6 +218,10 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("build", help="render the static site from stored snapshots (no network)")
     b.add_argument("--data", required=True)
     b.add_argument("--out", required=True)
+    b.add_argument(
+        "--commit", default=os.environ.get("GITHUB_SHA", ""), help="full site code commit for build metadata"
+    )
+    b.add_argument("--data-commit", default="", help="full stored-data commit for build metadata")
     b.set_defaults(func=cmd_build)
     t = sub.add_parser("tradability", help="Robinhood tradability verdicts (checked in a read-only Claude session)")
     t.add_argument("action", choices=["todo", "import"])

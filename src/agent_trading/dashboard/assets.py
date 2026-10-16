@@ -7,7 +7,7 @@ CSS = r"""
 :root {
   color-scheme: light;
   --bg: #f7f7f5; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #dddcd7;
-  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #6d6c67;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #686762;
   --series-1: #2a78d6; --reference: #6d6c67; --link: #1c5cab;
   --good: #0f7a3d; --warn-bg: #fff4d6; --warn-border: #c98500; --bad-bg: #fde8e8; --bad-border: #c23b3a;
   --info-bg: #e8f1fc; --info-border: #2a78d6;
@@ -528,3 +528,17 @@ from .assets_speculative import JS as SPECULATIVE_JS  # noqa: E402
 
 CSS += SPECULATIVE_CSS
 JS += SPECULATIVE_JS
+
+CSS += r"""
+/* Keep wide tables within their own scroller; preserve the row label when no ticker class is present. */
+.table-wrap { max-width: 100%; min-width: 0; }
+.table-wrap > table:not(:has(th.tk)) > thead > tr > th:first-child,
+.table-wrap > table:not(:has(th.tk)) > tbody > tr:not(.detail) > :first-child:not([colspan]) {
+  position: sticky; left: 0; z-index: 1; background: var(--surface-1); box-shadow: 1px 0 0 var(--border);
+}
+.table-wrap > table:not(:has(th.tk)) > thead > tr > th:first-child { background: var(--surface-2); z-index: 2; }
+main, .grid > *, .facts > *, .mb-grid > * { min-width: 0; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+"""

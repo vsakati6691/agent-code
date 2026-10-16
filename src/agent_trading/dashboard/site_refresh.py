@@ -13,6 +13,38 @@ from .refresh_store import RefreshStore
 E = html.escape
 
 
+def partial_details(data: dict) -> str:
+    if data.get("status") != "partial":
+        return ""
+    missing = []
+    for key, title in (("quotes", "Quote"), ("chain_status", "Options chain")):
+        for symbol, item in sorted(data.get(key, {}).items()):
+            if item.get("status") != "available":
+                missing.append(f"{title} {symbol}: {item.get('reason') or 'reason not recorded'}")
+    options = data.get("options") or {}
+    if options.get("enabled") and not options.get("events_known"):
+        missing.append("Earnings calendar: " + (options.get("earnings_reason") or "unavailable"))
+    if not missing:
+        missing.append("Incomplete refresh; the stored record did not provide dataset-level reasons.")
+    usage = data.get("usage") or {}
+    request_counts, budgets = (usage.get(k) or {} for k in ("requests", "budgets"))
+    counts = [
+        f"{provider}: {request_counts.get(provider, 0)} requests / {budgets.get(provider, 'unknown')} budget"
+        for provider in sorted(set(request_counts) | set(budgets))
+    ]
+    return (
+        '<div class="refresh-missing"><strong>Not refreshed</strong><ul>'
+        + "".join(f"<li>{E(str(reason))}</li>" for reason in missing)
+        + "</ul>"
+        + (
+            f"<p>Request usage: {E('; '.join(counts))}. Total cache hits: {E(str(usage.get('cache_hits', 0)))}.</p>"
+            if counts
+            else ""
+        )
+        + "</div>"
+    )
+
+
 def load_context(data: Path, snap: dict, out: Path) -> dict:
     store = RefreshStore(data)
     valid, problems = [], []
@@ -55,7 +87,8 @@ def banner(snap: dict, context: dict | None) -> str:
         f'<div class="banner info small daily-status"><strong>Daily refresh, {E(stamp)} UTC, delayed, not live</strong>'
         f"Session {E(data['as_of'])} · weekly snapshot {E(weekly_date)} · "
         f"refresh status: {E(data['status'])}. Scores, ranks and trailing returns remain weekly. "
-        "Change since weekly is an unadjusted price comparison; splits and dividends can affect it.</div>"
+        "Change since weekly is an unadjusted price comparison; splits and dividends can affect it."
+        f"{partial_details(data)}</div>"
     )
 
 

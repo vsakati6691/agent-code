@@ -35,6 +35,8 @@ on the site.
 | [Options](https://vsakati6691.github.io/agent-code/options.html) | Separate weekly and daily call/put comparisons across 3M/6M/1Y expiry windows, plus speculative 30–90 days-to-expiry research and a hypothetical risk-budget calculator when options are enabled. |
 | [Small bets](https://vsakati6691.github.io/agent-code/bets.html) | A separate options explorer with Core/Long-shot tiers, premium filters, whole-contract budget arithmetic and a device-local research slip. |
 | [Watchlist 2030](https://vsakati6691.github.io/agent-code/watchlist.html) | A saved ticker list with verified symbol information, dated prices and conditional year-end-2030 bear/base/bull price scenarios. |
+| [Plan 2030](https://vsakati6691.github.io/agent-code/goal.html) | Browser-only target and contribution arithmetic, stored scenario comparisons, optional weighted ending values and a year-one drawdown stress test. Missing weighted scenarios stay unavailable. |
+| [Evidence](https://vsakati6691.github.io/agent-code/evidence.html) | Benchmark and GTAA results, acceptance rules and the no-candidate-passed verdict, read from the repository's tournament and final report at build time. |
 | [History & tracking](https://vsakati6691.github.io/agent-code/history.html) | Stored research reports and forward list returns versus benchmarks at 1, 3, 6 and 12 months, when enough observations exist. |
 | [Methodology](https://vsakati6691.github.io/agent-code/methodology.html) / [Audit trail](https://vsakati6691.github.io/agent-code/audit.html) | Versioned rules, exclusions, source coverage, timestamps, snapshot hashes, downloadable data and the append-only event log. |
 
@@ -44,11 +46,28 @@ calculators. A ticker lookup connects each symbol to its research and history.
 
 ### Latest research features
 
-Methodology **2026-10-14.9** adds dated growth-decision fields: fiscal-year revenue
+Methodology **2026-10-15.1** adds [dated ETF exposure and expense inputs](docs/ETF_INPUTS.md),
+with issuer sources, inception dates and explicit unverified labels. Existing
+scales, weights, gates and lists are unchanged. Scenarios remain unavailable
+where the registered models or required financial evidence do not support them.
+The [full methodology changelog](docs/SPEC_CHANGELOG.md) preserves every registration reason.
+
+The preceding **2026-10-14.9** version adds dated growth-decision fields: fiscal-year revenue
 and EPS growth, margins, debt and cash, valuation, ownership-data coverage and
 issuer business/risk excerpts. Growth lists separate **fundamental quality from
 momentum**; scores should be compared within their original list and profile.
 Older snapshots retain their original methodology and missing fields.
+
+Plan 2030 shows the return required for the goal beside the stored scenarios and
+research evidence. Inputs stay in the browser's local storage. The overview
+reports missing refresh datasets and progress toward 52 weekly snapshots under
+the current methodology, frozen as of **2026-10-15**. The administrative freeze
+date does not change methodology version **2026-10-15.1** or its pinned hash.
+
+Every built HTML page has a 150 KB budget. Detail panels, scanner/comparison data
+and sparklines use separate assets; older larger options lists are split by
+expiry. Tables scroll within their wrappers, muted text meets AA contrast in
+both themes, and the stale warning is readable without JavaScript.
 
 The Options page also supports speculative 30–90 DTE comparisons for up to the
 top three names in each large/mid/small growth list. Its browser calculator
@@ -67,6 +86,7 @@ option contract can lose its entire premium.
 
 | Workflow | Schedule | What changes |
 |---|---|---|
+| [Publish code changes](.github/workflows/research-dashboard-publish.yml) | Every push to `main`, or manual run on `main` | Tests the code, verifies stored data and rebuilds Pages without collecting data or changing snapshots. |
 | [Weekly research](.github/workflows/research-dashboard.yml) | Saturday 14:17 UTC (10:17 EDT / 09:17 EST); Sunday retry at the same time | Collects fundamentals and prices, ranks candidates, stores an immutable snapshot, updates tracking and builds the site. |
 | [Daily light refresh](.github/workflows/research-dashboard-daily.yml) | Weekdays 22:17 UTC (18:17 EDT / 17:17 EST), when enabled | Adds delayed closing prices and optional options research. Weekly stock scores, ranks, trailing returns and tracking remain unchanged. |
 
@@ -74,6 +94,12 @@ GitHub Actions runs independently of the owner's laptop. Scheduled jobs can be
 late or skipped; holidays, provider failures and incomplete coverage are
 reported. Weekly snapshots and daily records live on the `research-data` branch
 with integrity manifests; existing records are never backfilled or overwritten.
+
+The [deployment runbook](docs/DEPLOYMENT.md) explains how to confirm the live
+site matches `main`. Every build writes `build.json` with the site-code commit,
+stored-data commit and separate registered/snapshot methodology versions.
+The audit page exposes the same provenance. A code-only rebuild preserves the
+stored scenarios; new methodology inputs appear after a future collection.
 
 Repository variables control `DASHBOARD_DAILY` (weekday collection),
 `DASHBOARD_OPTIONS` (option collection/display) and `DASHBOARD_PUBLISH` (Pages
@@ -172,7 +198,7 @@ collecting new data, first check out that branch into the ignored folder:
 
 ```powershell
 git fetch origin research-data
-git worktree add --detach research-data origin/research-data
+git -c core.autocrlf=false worktree add --detach research-data origin/research-data
 & $py -m agent_trading.dashboard verify --data research-data
 & $py -m agent_trading.dashboard build --data research-data --out site
 & $py -m http.server 8000 --directory site
@@ -182,6 +208,8 @@ Open [localhost:8000](http://localhost:8000). The build reads stored snapshots
 without network requests. If `research-data/` already exists, reuse its checkout
 instead of adding it again. See [dashboard commands](docs/RESEARCH_DASHBOARD.md#commands)
 for collection, refresh and tradability-import options.
+Keep the data checkout's original line endings: Windows CRLF conversion changes
+the snapshot bytes and correctly fails integrity verification.
 
 ## Repository layout
 
@@ -203,6 +231,9 @@ tests/                        unit, integration, dashboard and safety tests
 Runtime `data/`, `logs/`, `reports/`, generated `site/` and the local
 `research-data/` checkout are git-ignored.
 
+See the [module guide](docs/MODULES.md) for the pipeline stages, page renderers,
+CLI command groups and daily run phases.
+
 For historical findings, see the [research report](docs/FINAL_REPORT_2026-10-12.md).
 **AI assistants and contributors:** read [CLAUDE.md](CLAUDE.md) in full;
 [AGENTS.md](AGENTS.md) points to the same rules. Work on `feature/research-system`,
@@ -211,9 +242,22 @@ Changes reach `main` through a PR on the owner's instruction.
 
 The [CI workflow](.github/workflows/ci.yml) runs on every push and pull request:
 the full test suite, Ruff lint/format checks, and an offline fixture-site build
-with snapshot integrity and internal-link checks. **Tests, lint and fixture
+with snapshot integrity, internal-link checks and the 150 KB HTML budget. **Tests, lint and fixture
 site** is required for merge; the owner must select that check in the `main`
 branch protection rules or ruleset. Adding this workflow does not configure
 GitHub branch protection automatically. Run the same checks locally with
 `python -m ruff check .` and `python -m ruff format --check .` after installing
 the development dependencies.
+
+Local manual tickets require `BROKER_ACCOUNT_LAST4` in the ignored `.env` or
+process environment. The shipped configuration leaves the account suffix
+empty and fails closed while `live.enabled` is true until it is supplied.
+Process environment values take precedence over `.env`; leading zeros are
+preserved. Never commit an account identifier to configuration or documentation.
+
+## License
+
+Original project code is available under the [MIT License](LICENSE).
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and its linked license texts
+govern the adapted third-party pieces. Software licensing does not grant
+market-data redistribution rights.

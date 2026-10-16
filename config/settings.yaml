@@ -61,7 +61,7 @@ regime:
   high_vol_threshold: 0.25      # annualised 20-day realised volatility
 
 broker:                         # read-only snapshot checks; this code never places orders
-  account_last4: "8204"
+  account_last4: ""            # set BROKER_ACCOUNT_LAST4 in the ignored .env
   account_nickname: Agent-trading
   snapshot_max_age_hours: 24
 

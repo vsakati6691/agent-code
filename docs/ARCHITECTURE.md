@@ -48,7 +48,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    START["Post-close run<br/>(about 4:40 PM ET)"] --> SNAP{"Account snapshot<br/>fresh and from ••8204?"}
+    START["Post-close run<br/>(about 4:40 PM ET)"] --> SNAP{"Account snapshot<br/>fresh and from the configured account?"}
     SNAP -- no --> FAIL["No tickets<br/>alert: run FAILED"]
     SNAP -- yes --> RECON["Check previous tickets:<br/>filled, open or not placed"]
     RECON --> STOPS{"Every position has<br/>a stop-loss order?"}
@@ -105,7 +105,7 @@ sequenceDiagram
 
 | Setting (`live:` in `config/settings.yaml`) | Value |
 |---|---|
-| Account | Robinhood "Agent-trading" (••8204) only; snapshot must be under 24 hours old |
+| Account | Robinhood "Agent-trading" (the configured account) only; snapshot must be under 24 hours old |
 | Capital used for sizing | At most $1,000, whatever the account holds |
 | Strategies | B (desk) and C (GTAA). A stays paper-only |
 | Order type | Day limit order at the last close ± 0.5%; after a buy fills, a GTC stop-loss sell at the ticket's stop |

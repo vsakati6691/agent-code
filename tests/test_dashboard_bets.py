@@ -18,6 +18,7 @@ from agent_trading.dashboard.refresh_store import MAX_DAY_BYTES
 from agent_trading.dashboard.site import build_site
 from agent_trading.dashboard.site_bets import bets_page
 from tests.dashboard_fixtures import AS_OF, demo_site, option_row
+from tests.spec_history import historical_reason
 from tests.test_dashboard_refresh import NOW, RefreshProviders, weekly
 from tests.test_dashboard_site import visible_text
 
@@ -53,8 +54,8 @@ def under(symbol="AAA"):
 
 
 def test_explorer_registration_has_fixed_rules_and_preserves_weekly_rules():
-    assert spec.SPEC_VERSION == "2026-10-14.9"
-    entry = dict(spec.SPEC_CHANGELOG)["2026-10-14.8"]
+    assert spec.SPEC_VERSION == "2026-10-15.1"
+    entry = historical_reason("2026-10-14.8")
     assert "registered before any explorer data" in entry
     assert spec.EXPLORER_BANDS == ("large", "ai_large", "ai_mid")
     assert spec.EXPLORER_LONG_RULES == {

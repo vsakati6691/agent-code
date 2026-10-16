@@ -136,11 +136,25 @@ LAB_JS = r"""
 """
 
 COMPARE_JS = r"""
-(function () {
+(async function () {
   // Comparison page: mirrors dashboard/compare.py comparability() and rebase_common().
   var el = document.getElementById('cmp-data');
   if (!el || !document.getElementById('cmp-pick')) return;
-  var data = JSON.parse(el.textContent), rules = data.rules, byT = {};
+  var data;
+  try {
+    if (el.dataset.src) {
+      document.getElementById('cmp-hint').textContent = 'Loading stored comparison data…';
+      var response = await fetch(el.dataset.src, {credentials: 'same-origin'});
+      if (!response.ok) throw new Error('Unavailable');
+      data = await response.json();
+    } else data = JSON.parse(el.textContent);
+  } catch (error) {
+    document.getElementById('cmp-hint').textContent = 'Stored comparison data could not be loaded. Reload to retry, or open a company research page.';
+    document.getElementById('cmp-pick').disabled = true;
+    document.getElementById('cmp-add').disabled = true;
+    return;
+  }
+  var rules = data.rules, byT = {};
   data.entries.forEach(function (e) { e.chart.dates = data.date_sets[e.chart.dset] || []; byT[e.ticker] = e; });
   var COLORS = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)'], DASH = ['', '6 4', '2 3', '8 3 2 3'];
   var sel = [], win = 1;

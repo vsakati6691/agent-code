@@ -1,7 +1,7 @@
 # Automated execution: audit, gaps and plan (2026-10-12)
 
 Scope: can `agent-code` become an unattended trading system on the existing
-Robinhood Agent-trading account (••8204)? No order was placed, reviewed,
+Robinhood Agent-trading account (the configured account)? No order was placed, reviewed,
 modified or cancelled during this audit. Every Robinhood call was read-only:
 `get_accounts` and `get_trade_approval_setting`.
 

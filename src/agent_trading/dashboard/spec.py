@@ -18,155 +18,34 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.9"
+SPEC_VERSION = "2026-10-15.1"
+# Owner-approved administrative metadata, excluded from spec_dict().
+SPEC_FREEZE_DATE: str | None = "2026-10-15"
+# Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
 SPEC_CHANGELOG = [
-    ("2026-10-13.1", "Initial pre-registered rules, written before any dashboard results were computed."),
-    (
-        "2026-10-13.2",
-        "Data-integrity fix found in the first 25-stock smoke test, before any snapshot was published: "
-        "a company with several listed share classes (e.g. GOOG and GOOGL) is evaluated once, using "
-        "its most liquid class. No scoring rule, scale or weight changed.",
-    ),
-    (
-        "2026-10-14.1",
-        "Owner requests (2026-10-14), written before any data was run with them: (1) only stocks "
-        "Robinhood reports as tradable are published; a read-only Robinhood check no older than 35 "
-        "days is required, and unverified stocks are excluded with that reason. (2) New list: "
-        "long-horizon multibagger research candidates (5-10 years), $500M-$50B, with growth, margin, "
-        "track-record, dilution and survival gates, a long-horizon weight profile with a new runway "
-        "and operating-leverage component, and 10-year scenarios. The existing lists' rules, scales "
-        "and weights did not change; fixed scales mean removing untradable stocks leaves the order "
-        "of the others unchanged.",
-    ),
-    (
-        "2026-10-14.2",
-        "Owner redesign request (2026-10-14), written before any data was evaluated with it: "
-        "(1) three growth lists of up to 10: large cap (S&P 500 members), mid cap ($2B-$10B) and a "
-        "new small-cap list ($300M-$2B; the former 'speculative' list's price and liquidity floors, "
-        "without its 20% growth gate, and scored like the other growth lists); (2) the long-horizon "
-        "list is renamed 'Speculative multibagger research candidates' and shows up to 5; (3) options "
-        "cover calls AND puts, up to 10 per type per horizon (was 5 calls), with the same windows, "
-        "liquidity filters and per-underlying limit; put deltas use their absolute value; (4) a "
-        "separate owner watchlist with conditional year-end-2030 price scenarios (companies, "
-        "unleveraged ETFs and leveraged ETFs each with their own method). Scoring scales and "
-        "weights did not change.",
-    ),
+    ("2026-10-13.1", "Initial rules registered before any dashboard results."),
+    ("2026-10-13.2", "Evaluate one liquid share class per company; existing scoring remains unchanged."),
+    ("2026-10-14.1", "Register read-only tradability checks and the long-horizon multibagger list."),
+    ("2026-10-14.2", "Register three growth bands, calls and puts, and conditional Watchlist 2030 scenarios."),
     (
         "2026-10-14.3",
-        "Watchlist only, from the owner's watchlist requirements (connect margins to per-share "
-        "value): each company scenario now carries an explicit free-cash-flow margin path to "
-        "2030 (today's TTM FCF margin, or operating margin when FCF is unavailable, plus the "
-        "scenario's margin shift) and the EV/FCF multiple that the 2030 value implies. A value "
-        "with negative 2030 FCF or an implied EV/FCF above 60x is flagged as not supported by "
-        "cash generation. Scenario prices, growth lists, options and scoring are unchanged.",
+        "Add explicit watchlist margin paths and cash-generation checks without changing scenario prices.",
     ),
-    (
-        "2026-10-14.4",
-        "Data-gap fix approved by the owner on 2026-10-14 after the first live snapshot (2026-10-13), "
-        "not to improve tracked results: companies tag diluted weighted-average shares for a fiscal "
-        "fourth quarter only as a full-year figure, so the share-count change was missing whenever the "
-        "latest quarter was a fiscal Q4 (seen for MU, STX and WDC). That scored the dilution input as 0 "
-        "and failed the multibagger dilution gate as 'input unavailable'. Dilution now uses the newest "
-        "quarter that has a quarterly diluted share count and the same quarter a year earlier (at most "
-        "one quarter back). Scales, weights, gates and every other rule are unchanged; the 2026-10-13 "
-        "snapshot stays as published under 2026-10-14.3.",
-    ),
-    (
-        "2026-10-14.5",
-        "Owner request (2026-10-14), registered before any snapshot was evaluated with it. Display "
-        "and data-quality rules only: no ranking rule, scale, weight, gate, threshold or list size "
-        "changes, so the published lists and scores are unaffected. (1) Watchlist: the as-of price is "
-        "validated on its own (WATCHLIST_PRICE_RULE); too little history no longer hides a verified "
-        "price, and only the analyses that need history become unavailable, each naming the missing "
-        "input. (2) Return windows are stored with their start and end sessions, and list sparklines "
-        "use the same 1-year window and figures as the return table. (3) Freshness is counted in NYSE "
-        "sessions in New York time (FRESHNESS_RULE). (4) Each dataset gets one state (DATASET_STATES). "
-        "(5) A company research panel with deterministic trend, forensic (FORENSIC_RULES) and thesis "
-        "checks: thesis conditions are those recorded when a name first appeared on a list "
-        "(THESIS_TRACKING_RULE). (6) 'What changed since the previous snapshot?' (CHANGE_RULES). "
-        "(7) A comparison page (COMPARE_RULES) and an interactive scenario calculator whose results "
-        "are never stored or ranked (SCENARIO_LAB_BOUNDS). Several structures are adapted from "
-        "filingcopilot, ticker-dossier and cc-equity-research (see THIRD_PARTY_NOTICES.md).",
-    ),
+    ("2026-10-14.4", "Repair missing quarterly diluted-share comparisons without changing scales, weights or gates."),
+    ("2026-10-14.5", "Register dated data-quality checks, research panels, comparisons and the browser scenario lab."),
     (
         "2026-10-14.6",
-        "Owner request (2026-10-14), registered before any snapshot was evaluated with it. Options "
-        "watchlist: (1) each of the six option lists (calls and puts x 3, 6 and 12 months) shows up to "
-        "5 contracts instead of 10 (OPTION_RULES max_per_type_per_horizon); the windows, liquidity, "
-        "spread, delta, standard-contract and per-underlying rules and the ranking weights are "
-        "unchanged, and a list with fewer qualifying contracts is never padded. (2) Correctness: a "
-        "contract whose theta is missing (or reported as exactly zero) is not eligible, with the reason "
-        "'theta unavailable'; before this version a missing theta became zero and earned the maximum "
-        "time-decay score (OPTION_THETA_RULE). (3) Quote freshness is validated from the chain's own "
-        "snapshot timestamp (UTC, converted to the New York session date) as well as the underlying's "
-        "last trade; a contract's last trade time is reported separately and never used as its quote "
-        "time (OPTION_QUOTE_RULE). (4) A contract's earnings status is 'unknown' when the calendar was "
-        "not collected, never 'none scheduled' (OPTION_EVENT_RULE). (5) Probability of profit is "
-        "defined (PROBABILITY_OF_PROFIT_DEFINITION) and gated: a percentage may be shown only for a "
-        "calibration record that passes PROBABILITY_GATE; none exists, so every contract shows "
-        "PROBABILITY_NOT_ESTABLISHED. (6) Payoffs state their fee treatment (FEE_TREATMENT). Display "
-        "rules: the options page is always listed with its status; scenario-test flags are shown "
-        "separately from passing the research screen; pages name both the snapshot's methodology "
-        "version and the renderer version.",
+        "Register top-five options lists, theta eligibility, quote freshness, earnings state and validation gates.",
     ),
-    (
-        "2026-10-14.7",
-        "Owner request (2026-10-14), registered before any snapshot was evaluated with it. New AI "
-        "page with two new lists: (1) AI-exposed large cap (market cap of $10B or more) and AI-exposed "
-        "mid cap ($2B to $10B), up to 5 stocks each, drawn from a fixed, curated universe of US-listed "
-        "common stocks (AI_UNIVERSE) and evaluated by exactly the same data, liquidity, tradability and "
-        "fixed-scale scoring rules as the growth lists (standard profile, same scales and weights); "
-        "membership is a recorded judgement, and changing it needs a new version. (2) A top-20 "
-        "market-cap scenario test (AI_TOP20_RULE): each listed AI stock's bear, base and bull scenario "
-        "market caps at 5 and 10 years are compared with today's 20th-largest S&P 500 market cap, "
-        "conditional and never a probability. (3) A context section for private AI companies "
-        "(AI_PRIVATE_RULE): sourced, dated, labelled-unverified valuations from "
-        "config/ai_private_companies.json; not ranked, scored or tradable. No probability of reaching "
-        "the top 20 is shown, because none has out-of-sample calibration (PROBABILITY_GATE). The "
-        "existing lists, scales, weights, gates, option rules and tracking rules are unchanged; the "
-        "2026-10-13 snapshot stays as published under 2026-10-14.3. Display and reliability changes in "
-        "the same release (lazy evidence rows, sortable header buttons, saved filters) carry no "
-        "methodology change.",
-    ),
-    (
-        "2026-10-14.8",
-        "Owner request (2026-10-14), registered before any explorer data was evaluated. A separate "
-        "small-bet options explorer uses the union of large, ai_large and ai_mid weekly candidates. "
-        "Core uses existing OPTION_RULES. Long-shot requires 0.10 <= absolute delta < 0.30, open "
-        "interest >= 200, volume >= 10, positive bid and ask above bid, spread <= 20% of mid, "
-        "positive IV, nonzero theta and standard 100-share roots. Both use the existing 70-110, "
-        "150-210 and 300-430 day windows. Per tier, type, horizon and premium band, keep at most "
-        "12 contracts by the unchanged research score, ties by underlying, expiration, strike and "
-        "OCC symbol. Ask x 100 premium bands are [0,100), [100,250), [250,500), [500,1000], and "
-        "(1000,infinity). No padding, no per-underlying limit in the explorer, no short-dated "
-        "contracts. Existing weekly top-five lists, OPTION_RULES, ranking weights, stock scores "
-        "and tracking are unchanged. Browser budget filters and local slips do not rank or upload "
-        "choices. No probability is established; no unsupported expiry-frequency assertion is made.",
-    ),
+    ("2026-10-14.7", "Register AI lists, the conditional top-20 size test and dated private-company context."),
+    ("2026-10-14.8", "Register the separate small-bet explorer; existing weekly rules remain unchanged."),
     (
         "2026-10-14.9",
-        "Owner decision-research request, registered before any data is evaluated with these rules. "
-        "Future large/mid/small growth lists use fundamental_growth: growth 25%, earnings, quality, "
-        "balance and valuation 18.75% each, with existing scales/gates. Price momentum and relative "
-        "performance are displayed separately, never added to this score. Other lists and existing "
-        "option explorers stay unchanged. Extended means 1Y price return >150%. Annual revenue/EPS "
-        "CAGR uses matched reported fiscal years 3/5 years apart; positive endpoints required. "
-        "Quarterly growth trend compares latest YoY with previous-quarter YoY, stable within 2pp. "
-        "Margin trends compare TTM with prior TTM, stable within 1pp. Valuation percentiles use "
-        "same-list nonmissing observations, average ties, 0-100, at least two observations. "
-        "Current Alpha Vantage estimates and six-calendar-month reported insider activity are "
-        "display-only, never historical backfills or scoring inputs. SEC 10-K excerpts are dated "
-        "and attributed; unsupported fields remain n/a. Up to 61 Alpha Vantage attempts per weekly "
-        "run at existing pacing; daily earnings remain one request. New speculative options section "
-        "uses top three candidates in each growth list, up to three contracts per ticker, 30-90 DTE, "
-        "absolute delta 0.25-0.40, OI >500, volume >=10, positive two-sided markets, spread <=10% "
-        "of mid, positive IV, nonzero theta and standard 100-share roots. Select by existing score, "
-        "ties by expiry, strike, type, OCC. IV proxy averages ATM call/put IV in the nearest 20-40 "
-        "DTE expiry to 30 days; IV rank needs 252 stored comparable sessions in 366 days. Earnings "
-        "move uses ATM IV at the first expiry on/after the event within 90 days times sqrt(days/365). "
-        "Put/call ratio is standard-contract 30-90 DTE volume. Local hypothetical budgets default "
-        "to 5% overall and 1% per trade, with warnings, no storage/upload and no trading-limit "
-        "changes. Exit examples are +100%, -50% and 21 DTE, never automated or claimed optimal.",
+        "Register fundamental-growth scoring, dated decision fields and separate speculative options research.",
+    ),
+    (
+        "2026-10-15.1",
+        "Add dated ETF classification/fee inputs and observed drawdowns; no scale, weight, gate or list changes.",
     ),
 ]
 
@@ -984,6 +863,7 @@ WATCHLIST_COMPANY_METHOD = (
 WATCHLIST_MAX_SUPPORTED_EV_FCF = 60.0
 # annual TOTAL-return assumptions for the fund's underlying exposure (before fees), by exposure class;
 # price return = total return - assumed fee - assumed distribution yield
+ETF_INPUTS_SHA256 = "03e8b065b5e81a91679317ce6c86a160425986a60cbb87e614f6bf9df8cb22e1"
 ETF_EXPOSURE_RULES = (
     # (class, title, name keywords, (bear, base, bull) annual total return, assumed fee, assumed distribution yield)
     (
@@ -1253,6 +1133,7 @@ def spec_dict() -> dict:
             "company_method": WATCHLIST_COMPANY_METHOD,
             "max_supported_ev_fcf": WATCHLIST_MAX_SUPPORTED_EV_FCF,
             "etf_rules": ETF_EXPOSURE_RULES,
+            "etf_inputs_sha256": ETF_INPUTS_SHA256,
             "leveraged": LEVERAGED_METHOD,
             "leveraged_params": [
                 LEVERAGED_KEYWORDS,

@@ -164,7 +164,8 @@ def tracking_schedule(dates: list[str]) -> str:
         f"Tracking starts {h['1m']} trading sessions after the first snapshot ({dates[0]}): 1-month results from "
         f"about {after(h['1m'])}, 3-month from {after(h['3m'])}, 6-month from {after(h['6m'])} and 12-month from "
         f"{after(h['12m'])}. Any claim of an edge waits for at least {spec.MIN_SNAPSHOTS_FOR_EVIDENCE} weekly "
-        f"snapshots ({len(dates)} stored so far)."
+        f"snapshots under one methodology version. {len(dates)} snapshots are stored across all versions; "
+        "see the version continuity table for counts toward that requirement."
     )
 
 

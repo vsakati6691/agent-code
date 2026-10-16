@@ -159,7 +159,7 @@ def test_paper_broker_refuses_live_mode(settings, tmp_path):
 
 RAW = {
     "fetched_at": "2026-10-12T04:00:00+00:00",
-    "account_number": "000000008204",
+    "account_number": "000000001234",
     "nickname": "Agent-trading",
     "portfolio": {"total_value": "1000", "cash": "1000", "buying_power": {"buying_power": "1000.0000"}},
     "positions": [],
@@ -172,8 +172,8 @@ RAW = {
 
 def test_snapshot_masks_account_and_keeps_open_orders_only():
     snap = parse_snapshot(RAW)
-    assert snap.account_last4 == "8204"
-    assert "000000008204" not in repr(snap)
+    assert snap.account_last4 == "1234"
+    assert "000000001234" not in repr(snap)
     assert [o["symbol"] for o in snap.open_orders] == ["QQQ"]
 
 

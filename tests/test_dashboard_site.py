@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agent_trading.dashboard import scoring
@@ -139,6 +141,7 @@ def test_distance_to_breakeven_wording(kind, signed, text):
 
 def test_options_page_never_says_zero_move(site):
     page = (site / "options.html").read_text(encoding="utf-8")
+    page += "".join(p.read_text(encoding="utf-8") for p in (site / "option").glob("*.html"))
     assert "0.0% down" not in page and "0.0% up" not in page and "Distance to breakeven" in page
 
 
@@ -221,7 +224,8 @@ def test_empty_states_say_what_appears_and_when(tmp_path):
 
     text = tracking_schedule(["2026-10-09"])
     assert "21 trading sessions after the first snapshot (2026-10-09)" in text and "2026-11-09" in text
-    assert "52 weekly snapshots" in text and "1 stored" in text
+    assert "52 weekly snapshots under one methodology version" in text
+    assert "1 snapshots are stored across all versions" in text
     assert "first weekly snapshot" in tracking_schedule([])
 
 
@@ -261,9 +265,51 @@ def test_every_internal_link_and_source_resolves(site):
     assert not broken, broken[:10]
 
 
-def test_every_page_is_under_300_kb(site):
-    big = [(p.name, p.stat().st_size) for p in _pages(site) if p.stat().st_size >= 300_000]
+def test_every_page_is_under_150_kb(site):
+    big = [(p.name, p.stat().st_size) for p in _pages(site) if p.stat().st_size > 150_000]
     assert not big, big
+
+
+def test_growth_budget_covers_ten_candidates_in_each_band(site):
+    import copy
+    import json
+
+    from agent_trading.dashboard.site import page
+    from agent_trading.dashboard.site_lists import growth_page
+    from agent_trading.dashboard.site_performance import external_json
+
+    snap = json.loads((site / "data" / "latest.json").read_text(encoding="utf-8"))
+    for key in ("large", "mid", "small"):
+        candidates = snap["bands"][key]["candidates"]
+        while len(candidates) < 10:
+            row = copy.deepcopy(candidates[0])
+            row["ticker"] = f"TEST{len(candidates)}"
+            row["rank"] = len(candidates) + 1
+            candidates.append(row)
+    body = external_json(growth_page(snap), "growth", {})
+    assert len(page("Growth Stocks", body, "growth.html").encode("utf-8")) <= 150_000
+
+
+def test_option_panels_load_from_matching_files_with_complete_fallbacks(site):
+    import json
+
+    page = (site / "options.html").read_text(encoding="utf-8")
+    sources = re.findall(r'data-src="(fragments/o-[^"]+\.json)"', page)
+    assert len(sources) == 30
+    for source in sources:
+        content = json.loads((site / source).read_text(encoding="utf-8"))["html"]
+        fallback = (site / "option" / (Path(source).stem + ".html")).read_text(encoding="utf-8")
+        for phrase in (
+            "Maximum loss",
+            "Observed (delayed quote)",
+            "Assumptions",
+            "Risks in plain language",
+            "Probability of profit",
+        ):
+            assert phrase in content and phrase in fallback
+        assert '<th scope="col"' in content
+    assert 'data-src="data/growth-decision-data.json"' in (site / "growth.html").read_text(encoding="utf-8")
+    assert 'data-src="data/compare-cmp-data.json"' in (site / "compare.html").read_text(encoding="utf-8")
 
 
 def test_every_table_has_a_caption_or_label(site):
@@ -281,6 +327,40 @@ def test_every_page_has_exactly_one_h1(site):
         (p.relative_to(site).as_posix(), len(re.findall(r"<h1\b", p.read_text(encoding="utf-8")))) for p in _pages(site)
     ]
     assert all(n == 1 for _, n in wrong), [w for w in wrong if w[1] != 1]
+
+
+def test_goal_and_evidence_are_built_and_linked(site):
+    overview = (site / "index.html").read_text(encoding="utf-8")
+    goal = (site / "goal.html").read_text(encoding="utf-8")
+    evidence = (site / "evidence.html").read_text(encoding="utf-8")
+    assert overview.index('href="watchlist.html"') < overview.index('href="goal.html"')
+    assert 'id="evidence"' in overview and "No candidate passed" in evidence
+    assert 'id="goal-required"' in goal and 'src="assets/goal.js' in goal
+    assert "localStorage" in (site / "assets/goal.js").read_text(encoding="utf-8")
+
+
+def test_favicon_and_404_work_for_nested_missing_paths(site):
+    from xml.etree import ElementTree
+
+    icon = site / "assets" / "favicon.svg"
+    assert ElementTree.fromstring(icon.read_text(encoding="utf-8")).tag.endswith("svg")
+    assert "T/S" in icon.read_text(encoding="utf-8")
+    fallback = (site / "404.html").read_text(encoding="utf-8")
+    assert '<base href="https://vsakati6691.github.io/agent-code/">' in fallback
+    assert '<a href="index.html">Return to the research overview</a>' in fallback
+    for path in site.rglob("*.html"):
+        assert 'rel="icon" type="image/svg+xml"' in path.read_text(encoding="utf-8")
+
+
+def test_empty_site_has_working_fallback_and_navigation(tmp_path):
+    from agent_trading.dashboard.site import build_site
+    from tests.dashboard_ci import check_links
+
+    out = tmp_path / "site"
+    result = build_site(tmp_path / "data", out)
+    assert result["snapshot"] is None
+    assert (out / "404.html").is_file()
+    assert check_links(out) == []
 
 
 def test_excluded_lists_live_on_their_own_compact_pages(site):
@@ -320,9 +400,10 @@ def test_every_page_has_the_inline_symbol_search(site):
 
 def test_list_rows_have_a_one_year_sparkline_vs_benchmark(site):
     page = (site / "growth.html").read_text(encoding="utf-8")
-    sparks = re.findall(r'<svg class="spark"[^>]*aria-label="1-year price: ([^"]+)"', page)
+    sparks = re.findall(r'<img class="spark"[^>]*alt="1-year price: ([^"]+)"', page)
     assert len(sparks) >= 10 and all("SPY" in s or "IJH" in s or "IWM" in s for s in sparks)
-    assert 'stroke-dasharray="3 2"' in page
+    sources = re.findall(r'<img class="spark" src="([^"]+)"[^>]*alt="1-year price:', page)
+    assert all('stroke-dasharray="3 2"' in (site / src).read_text(encoding="utf-8") for src in sources)
 
 
 def test_lists_show_sector_and_market_cap_mix(site):

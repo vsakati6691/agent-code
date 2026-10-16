@@ -1,0 +1,145 @@
+{
+  "LAZR": {
+    "as_of": "2026-10-15",
+    "fund_name": "Tema Photonics & Optical ETF",
+    "issuer": "Tema ETFs LLC",
+    "index_tracked": "No tracked index (active)",
+    "expense_ratio": 0.0075,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "2026-06-30",
+    "exposure_class": "thematic",
+    "source_url": "https://temaetfs.com/lazr",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null,
+    "sec_cik": 1944285,
+    "additional_sources": [
+      "https://www.sec.gov/Archives/edgar/data/1944285/000199937126013918/lazr-497k_063026.htm"
+    ]
+  },
+  "NCLD": {
+    "as_of": "2026-10-15",
+    "fund_name": "Roundhill Neocloud ETF",
+    "issuer": "Roundhill Financial Inc.",
+    "index_tracked": "No tracked index (active)",
+    "expense_ratio": 0.0065,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "2026-08-06",
+    "exposure_class": "thematic",
+    "source_url": "https://www.roundhillinvestments.com/etf/ncld/",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null,
+    "sec_cik": 1976517,
+    "additional_sources": [
+      "https://www.roundhillinvestments.com/etf/",
+      "https://www.nasdaqtrader.com/Trader.aspx?id=circulars_2026"
+    ]
+  },
+  "QQQ": {
+    "as_of": "2026-10-15",
+    "fund_name": "Invesco QQQ ETF",
+    "issuer": "Invesco",
+    "index_tracked": "Nasdaq-100 Index",
+    "expense_ratio": 0.0018,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "1999-03-10",
+    "exposure_class": "broad_us",
+    "source_url": "https://www.invesco.com/qqq-etf/en/home.html",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null
+  },
+  "AIPO": {
+    "as_of": "2026-10-15",
+    "fund_name": "Defiance AI & Power Infrastructure ETF",
+    "issuer": "Defiance ETFs",
+    "index_tracked": "MarketVector US Listed AI and Power Infrastructure Index",
+    "expense_ratio": 0.0069,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "2025-07-24",
+    "exposure_class": "thematic",
+    "source_url": "https://www.defianceetfs.com/aipo/",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null,
+    "sec_cik": 1924868,
+    "additional_sources": [
+      "https://www.sec.gov/Archives/edgar/data/1924868/000199937125021156/aipo-497k_122325.htm"
+    ]
+  },
+  "EUV": {
+    "as_of": "2026-10-15",
+    "fund_name": "Corgi Lithography & Semiconductor Photonics ETF",
+    "issuer": "Corgi Strategies, LLC",
+    "index_tracked": "No tracked index (active)",
+    "expense_ratio": 0.0035,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "2026-05-05",
+    "exposure_class": "semis",
+    "source_url": "https://corgiinvest.com/euv",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null,
+    "sec_cik": 2078265,
+    "sec_series_id": "S000102689",
+    "additional_sources": [
+      "https://www.sec.gov/Archives/edgar/data/2078265/000207826526000145/Corgi_497K_EUV.htm"
+    ]
+  },
+  "NASA": {
+    "as_of": "2026-10-15",
+    "fund_name": "Tema Space Innovators ETF",
+    "issuer": "Tema ETFs LLC",
+    "index_tracked": "No tracked index (active)",
+    "expense_ratio": 0.0075,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "2026-03-30",
+    "exposure_class": "thematic",
+    "source_url": "https://temaetfs.com/NASA",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null,
+    "sec_cik": 1944285
+  },
+  "DRAM": {
+    "as_of": "2026-10-15",
+    "fund_name": "Roundhill Memory ETF",
+    "issuer": "Roundhill Financial Inc.",
+    "index_tracked": "No tracked index (active)",
+    "expense_ratio": 0.0065,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "2026-04-02",
+    "exposure_class": "semis",
+    "source_url": "https://www.roundhillinvestments.com/etf/dram/",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null,
+    "sec_cik": 1976517,
+    "additional_sources": [
+      "https://www.roundhillinvestments.com/assets/pdfs/DRAM_Factsheet.pdf",
+      "https://www.sec.gov/Archives/edgar/data/1976517/000139834426005950/fp0098200-1_485bposixbrl.htm"
+    ]
+  },
+  "TQQQ": {
+    "as_of": "2026-10-15",
+    "fund_name": "ProShares UltraPro QQQ",
+    "issuer": "ProShares",
+    "index_tracked": "Nasdaq-100 Index (3x daily objective)",
+    "expense_ratio": 0.0094,
+    "expense_basis": "Gross 0.94% used for the multi-year model; issuer also reports net 0.78%, which is not assumed to persist to 2030.",
+    "inception_date": "2010-02-09",
+    "exposure_class": "broad_us",
+    "source_url": "https://www.proshares.com/our-etfs/leveraged-and-inverse/tqqq",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null,
+    "net_expense_ratio": 0.0078,
+    "underlying_proxy": "QQQ"
+  },
+  "SMH": {
+    "as_of": "2026-10-15",
+    "fund_name": "VanEck Semiconductor ETF",
+    "issuer": "VanEck",
+    "index_tracked": "MVIS US Listed Semiconductor 25 Index",
+    "expense_ratio": 0.0035,
+    "expense_basis": "Total/gross annual operating expenses; distribution yield remains an explicit methodology assumption.",
+    "inception_date": "2011-12-20",
+    "exposure_class": "semis",
+    "source_url": "https://www.vaneck.com/us/en/investments/semiconductor-etf-smh/",
+    "label": "owner-supplied, unverified",
+    "distribution_yield": null
+  }
+}

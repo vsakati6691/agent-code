@@ -12,6 +12,12 @@ from agent_trading.config import load_settings
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture(autouse=True)
+def synthetic_broker_identity(monkeypatch):
+    """Tests never depend on the owner's environment or real account suffix."""
+    monkeypatch.setenv("BROKER_ACCOUNT_LAST4", "1234")
+
+
 def make_bars(
     n: int = 300,
     start: float = 100.0,
