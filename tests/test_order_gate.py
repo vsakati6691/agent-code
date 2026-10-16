@@ -28,7 +28,7 @@ def bars(**closes):
 def snap(total=1000.0, cash=1000.0, positions=(), orders=(), fetched=NOW - timedelta(minutes=20), unsettled=0.0):
     return AccountSnapshot(
         fetched.isoformat(timespec="seconds"),
-        "8204",
+        "1234",
         "Agent-trading",
         total,
         cash,

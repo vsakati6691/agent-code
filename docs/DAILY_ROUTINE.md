@@ -12,7 +12,7 @@ $py = ".\.venv\Scripts\python.exe"
 **Hard rules for every run:** the session never trades. Never call any
 `place_*`, `cancel_*`, `review_*` or `exercise_*` Robinhood tool, even to
 "place the tickets": live tickets are for the owner to place by hand. Robinhood
-account = Agent-trading (••8204) only. Never write the full account number,
+account = Agent-trading (the configured account) only. Never write the full account number,
 API keys or tokens to files, logs or reports. If a tool fails or data is
 stale, say so in the summary and continue with what is available; never
 invent data.
@@ -29,7 +29,7 @@ one-line note.
 1. **Account (read-only):** `get_accounts` (for the Agent-trading row's
    `unsettled_funds` and `type`), `get_portfolio`, `get_equity_positions`,
    `get_equity_orders` for the Agent-trading account. Write
-   `{"fetched_at": <UTC ISO>, "account_number": "8204", "nickname": "Agent-trading",
+   `{"fetched_at": <UTC ISO>, "account_number": "<configured suffix>", "nickname": "Agent-trading",
    "unsettled_funds": <from get_accounts>, "account_type": <type from get_accounts>,
    "portfolio": {...}, "positions": [...], "orders": [...]}` and run
    `& $py -m agent_trading account import <file>`. Without `unsettled_funds`

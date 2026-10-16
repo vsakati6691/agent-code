@@ -13,7 +13,7 @@ from agent_trading.paper import Intent
 AS_OF = date(2026, 10, 12)
 
 
-def snap(total=1000.0, cash=1000.0, positions=(), orders=(), last4="8204", age_h=1.0, unsettled=0.0):
+def snap(total=1000.0, cash=1000.0, positions=(), orders=(), last4="1234", age_h=1.0, unsettled=0.0):
     fetched = (datetime.now(UTC) - timedelta(hours=age_h)).isoformat(timespec="seconds")
     return AccountSnapshot(fetched, last4, "Agent-trading", total, cash, cash, list(positions), list(orders), unsettled)
 
@@ -38,7 +38,7 @@ def test_disabled_produces_nothing(settings, ledger):
     assert not res.enabled and not res.verified and not res.tickets
 
 
-@pytest.mark.parametrize("bad", [None, snap(last4="1234"), snap(age_h=48)])
+@pytest.mark.parametrize("bad", [None, snap(last4="9999"), snap(age_h=48)])
 def test_unverified_snapshot_blocks_tickets(settings, ledger, bad):
     res = prepare(settings, ledger, bad, AS_OF)
     assert res.enabled and not res.verified and res.account_note

@@ -427,8 +427,13 @@ def validate(settings: Settings) -> Settings:
     bad = set(lv.strategies) - set(LIVE_STRATEGIES)
     if bad:
         raise ConfigError(f"live.strategies has unknown entries {sorted(bad)}; allowed: {list(LIVE_STRATEGIES)}")
-    if lv.enabled and len(settings.broker.account_last4) != 4:
-        raise ConfigError("live.enabled requires broker.account_last4")
+    suffix = settings.broker.account_last4
+    if suffix and (not isinstance(suffix, str) or len(suffix) != 4 or not suffix.isascii() or not suffix.isdigit()):
+        raise ConfigError("broker.account_last4 must contain exactly four ASCII digits")
+    if lv.enabled and not suffix:
+        raise ConfigError(
+            "live.enabled requires broker.account_last4 from BROKER_ACCOUNT_LAST4 in the environment or .env"
+        )
     _validate_account_limits(settings.account_limits)
     return settings
 
@@ -488,6 +493,12 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
 
     # Config lives in <project>/config/, so paths resolve from the project root.
     base_dir = path.resolve().parent.parent
+    from dotenv import load_dotenv
+
+    # Load only this project's ignored file; process environment wins. Never log it.
+    load_dotenv(base_dir / ".env", override=False)
+    raw["broker"] = dict(raw.get("broker") or {})
+    raw["broker"]["account_last4"] = os.environ.get("BROKER_ACCOUNT_LAST4", "").strip()
     settings = Settings(
         mode=str(raw.get("mode", "")),
         paper_starting_equity=float(raw.get("paper_starting_equity", 0)),
