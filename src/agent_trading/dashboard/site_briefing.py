@@ -32,10 +32,12 @@ def _risk_flags(c: dict) -> list[str]:
     return [g for g, hit in zip(RISK_GROUPS, hits, strict=False) if hit]
 
 
-def move_cause(ch: dict, list_name: str) -> str:
+def move_cause(ch: dict, list_name: str, methodology_note: str = "") -> str:
     """'S04 up 4 to #1 (Large cap): score +5.3; growth +12.0, valuation -1.5' (older snapshots: stored text)."""
     d = ch["change"]
     head = f"{ch['ticker']} {'up' if d > 0 else 'down'} {abs(d)} to #{ch.get('to')} ({list_name})"
+    if methodology_note:
+        head += f": {methodology_note}"
     comps = ch.get("component_changes")
     if comps is None:
         return f"{head}: {ch.get('explanation', '')}"
@@ -102,6 +104,14 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
         )
         earn = f'<ul class="tight small">{earn}</ul>{more}<p class="small muted">{E(ev.get("note", ""))}</p>'
     new, gone, moves = [], [], []
+    methodology_note = ""
+    if prev_snap and prev_snap.get("spec_version") != snap.get("spec_version"):
+        methodology_note = (
+            f"methodology version changed ({prev_snap.get('spec_version', 'unavailable')} → "
+            f"{snap.get('spec_version', 'unavailable')}); ranks and scores are not like-for-like"
+        )
+    elif prev_snap and prev_snap.get("spec_hash") != snap.get("spec_hash"):
+        methodology_note = "methodology hash changed; ranks and scores are not like-for-like"
     for k in ordered(bands):
         short = band_title(k, bands[k])
         for ch in bands[k].get("rank_changes", []):
@@ -110,7 +120,7 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
             elif ch["change"] == "dropped":
                 gone.append(f"{ch['ticker']} (was #{ch.get('from')}, {short})")
             elif isinstance(ch["change"], int) and ch["change"]:
-                moves.append((abs(ch["change"]), move_cause(ch, short)))
+                moves.append((abs(ch["change"]), move_cause(ch, short, methodology_note)))
     first = all(ch["change"] == "new (first snapshot)" for b in bands.values() for ch in b.get("rank_changes", []))
     summ = changes_mod.summary(snap, prev_snap)
     if prev_snap is None:
