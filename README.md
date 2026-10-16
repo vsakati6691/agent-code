@@ -217,3 +217,9 @@ branch protection rules or ruleset. Adding this workflow does not configure
 GitHub branch protection automatically. Run the same checks locally with
 `python -m ruff check .` and `python -m ruff format --check .` after installing
 the development dependencies.
+
+Local manual tickets require `BROKER_ACCOUNT_LAST4` in the ignored `.env` or
+process environment. The shipped configuration leaves the account suffix
+empty and fails closed while `live.enabled` is true until it is supplied.
+Process environment values take precedence over `.env`; leading zeros are
+preserved. Never commit an account identifier to configuration or documentation.

@@ -43,7 +43,7 @@ BARS = bars(SPY=600.0, EFA=80.0, IEF=95.0, GLD=250.0)
 def snap(total=1000.0, cash=1000.0, positions=(), orders=(), fetched=NOW - timedelta(minutes=20)):
     return AccountSnapshot(
         fetched.isoformat(timespec="seconds"),
-        "8204",
+        "1234",
         "Agent-trading",
         total,
         cash,
@@ -123,7 +123,7 @@ def test_ledger_keeps_earlier_same_day_tickets_and_sizing_respects_them(settings
 def _stop_snapshot(orders):
     raw = {
         "fetched_at": datetime.now(UTC).isoformat(),
-        "account_number": "xxxx8204",
+        "account_number": "xxxx1234",
         "nickname": "Agent-trading",
         "unsettled_funds": "0",
         "portfolio": {"total_value": "1000", "cash": "910", "buying_power": {"buying_power": "910"}},
@@ -205,7 +205,7 @@ def test_baseline_recorded_after_a_fill_does_not_double_count(settings, tmp_path
 )
 def test_non_finite_or_negative_account_numbers_are_rejected(field, value):
     portfolio = {"total_value": "1000", "cash": "1000", "buying_power": "1000", field: value}
-    raw = {"fetched_at": NOW.isoformat(), "account_number": "xxxx8204", "portfolio": portfolio}
+    raw = {"fetched_at": NOW.isoformat(), "account_number": "xxxx1234", "portfolio": portfolio}
     with pytest.raises(SnapshotError):
         parse_snapshot(raw)
 
@@ -221,7 +221,7 @@ def test_non_finite_or_negative_account_numbers_are_rejected(field, value):
 def test_non_finite_position_numbers_are_rejected(raw_pos):
     raw = {
         "fetched_at": NOW.isoformat(),
-        "account_number": "xxxx8204",
+        "account_number": "xxxx1234",
         "unsettled_funds": "0",
         "portfolio": {"total_value": "1000", "cash": "1000", "buying_power": "1000"},
         "positions": [raw_pos],
@@ -233,7 +233,7 @@ def test_non_finite_position_numbers_are_rejected(raw_pos):
 def test_infinite_unsettled_funds_rejected():
     raw = {
         "fetched_at": NOW.isoformat(),
-        "account_number": "xxxx8204",
+        "account_number": "xxxx1234",
         "unsettled_funds": "inf",
         "portfolio": {"total_value": "1000", "cash": "1000", "buying_power": "1000"},
     }
