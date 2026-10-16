@@ -4,8 +4,8 @@ from agent_trading.dashboard import spec
 
 
 def test_registered_spec_hash_is_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-14.9"
-    assert spec.spec_hash() == "13c2a70787a83822"
+    assert spec.SPEC_VERSION == "2026-10-15.1"
+    assert spec.spec_hash() == "60c10ab9b32cdcc3"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():

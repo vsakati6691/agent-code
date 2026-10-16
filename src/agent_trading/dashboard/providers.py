@@ -452,6 +452,11 @@ class Providers:
     def submissions(self, cik: int) -> dict:
         return self.http.get_json(SEC_SUBMISSIONS_URL.format(cik=int(cik)), max_age_hours=168)
 
+    def fund_filing(self, metadata: dict, as_of: date) -> dict:
+        from .etf_inputs import collect_filing
+
+        return collect_filing(self, metadata, as_of)
+
     def symbol_directories(self) -> pd.DataFrame:
         return parse_symbol_directories(
             self.http.get_text(NASDAQ_LISTED_URL, max_age_hours=24),

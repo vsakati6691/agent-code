@@ -20,8 +20,8 @@ import pandas as pd
 from ..data.validation import DataQualityError, trim_bad_history, validate_bars
 from ..market_calendar import is_trading_day, previous_trading_day
 from . import ai as ai_mod
+from . import etf_inputs, scenarios, scoring, spec
 from . import options as opt
-from . import scenarios, scoring, spec
 from . import watchlist as wl_mod
 from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
@@ -607,6 +607,8 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
             "unlock": [],
         }
         entries.append(e)
+        if info["asset_type"] in ("ETF", "leveraged/inverse ETF"):
+            e["etf_metadata"] = etf_inputs.metadata(t, ctx.as_of)
         if info["status"] != "listed":
             e["unavailable_reason"] = info["status"]
             e["unlock"] = wl_mod.unlock_steps("unresolved" if info["status"].startswith("unresolved") else "type")
@@ -631,6 +633,7 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
         hist = scenarios.history_stats(df["close"], None)
         e["returns"] = {k: (v or {}).get("stock") for k, v in hist["returns"].items()}
         e["history_start"] = hist["first_date"]
+        e["history"] = hist
         kind = info["asset_type"] or ""
         if kind.startswith("operating company"):
             _watchlist_company(ctx, e, df, close, years, earnings, sp)
@@ -754,9 +757,28 @@ def cap_text(v) -> str:
 
 def _watchlist_etf(ctx, e, close, years) -> None:
     name = e["name"] or ""
+    meta = etf_inputs.metadata(e["ticker"], ctx.as_of)
+    e["etf_metadata"] = meta
+    e["etf_metadata_status"] = "Dated metadata unavailable at this snapshot date." if meta is None else meta["label"]
+    if meta:
+        e["sources"].append(meta["source_url"])
+        if meta["launched_under_12_months"]:
+            e["missing"].append("Launched less than 12 months ago; observed history is limited.")
+        if hasattr(ctx.providers, "fund_filing"):
+            filing, why = _guard(ctx, "sec", ctx.providers.fund_filing, meta, ctx.as_of)
+            e["sec_fund_filing"] = filing or {"status": "unavailable", "reason": why}
+        else:
+            e["sec_fund_filing"] = {
+                "status": "unavailable",
+                "reason": "SEC fund filings not supplied by this provider.",
+            }
     lev = wl_mod.leverage_of(name)
     e["evidence_quality"] = wl_mod.evidence_quality("leveraged" if lev else "etf")
-    e["missing"].append(spec.FEE_NOTE)
+    e["missing"].append(
+        "Distribution yield remains assumed; the expense input is owner-supplied, unverified."
+        if meta
+        else spec.FEE_NOTE
+    )
     if lev:
         e["method"] = "leveraged ETF: daily-reset model with volatility drag"
         narrative = wl_mod.etf_narrative(None, lev)
@@ -782,10 +804,14 @@ def _watchlist_etf(ctx, e, close, years) -> None:
             e["unavailable_reason"] = f"no 3-year price history for the tracked index fund {und}"
             e["unlock"] = wl_mod.unlock_steps("lev_history", index=und)
             return
-        e["scenarios"] = wl_mod.leveraged_scenarios(close, lev, rule, sigma, years)
+        e["scenarios"] = wl_mod.leveraged_scenarios(
+            close, lev, rule, sigma, years, fee=meta["expense_ratio"] if meta else None
+        )
         e["assumptions_note"] = spec.LEVERAGED_METHOD + f" Tracked index proxy: {und}; trailing volatility {sigma:.0%}."
         return
-    rule = wl_mod.exposure_class(name)
+    rule = next(
+        (r for r in spec.ETF_EXPOSURE_RULES if meta and r[0] == meta["exposure_class"]), None
+    ) or wl_mod.exposure_class(name)
     narrative = wl_mod.etf_narrative(rule, None)
     e.update(catalysts=narrative["catalysts"], bear_case=narrative["bear_case"], invalidation=narrative["invalidation"])
     e["method"] = "ETF: exposure-class return assumptions"
@@ -795,9 +821,9 @@ def _watchlist_etf(ctx, e, close, years) -> None:
         e["unlock"] = wl_mod.unlock_steps("etf_class")
         return
     e["sector"] = f"ETF: {rule[1]}"
-    e["scenarios"] = wl_mod.etf_scenarios(close, rule, years)
+    e["scenarios"] = wl_mod.etf_scenarios(close, rule, years, fee=meta["expense_ratio"] if meta else None)
     e["assumptions_note"] = (
-        "Fund-level model: exposure-class total-return assumptions minus an assumed fee and "
+        "Fund-level model: exposure-class total-return assumptions net of the dated expense input when available (otherwise assumed fee) and "
         "distribution yield give a price return, compounded to 2030-12-31. "
         "Company valuation formulas are not applied to funds."
     )
