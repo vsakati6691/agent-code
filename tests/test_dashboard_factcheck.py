@@ -1,6 +1,7 @@
 """Regressions from the immutable October 2026 dashboard snapshots. No network."""
 
 import json
+import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import Mock
@@ -56,6 +57,22 @@ def test_real_earnings_cadence_labels_name_the_gap_and_tolerance():
             assert "21-calendar-day" in markup and "remains unverified" in markup
             assert "consistent with" not in markup
         assert row == original
+
+
+def test_all_real_scheduled_earnings_remain_available_in_the_overview():
+    from agent_trading.dashboard.site_scan import scan_header
+
+    events = json.loads((FIXTURES / "earnings.json").read_text(encoding="utf-8"))["events"]
+    snap = {**preclose_fixture()["snapshot"], "bands": {}, "universe": {}, "events": events}
+    before = json.dumps(snap, sort_keys=True)
+    page = scan_header(snap, None) + panels(snap, None)
+    panel = re.search(r"<h3>Upcoming earnings \(45 days\)</h3>(.*?)</section>", page, re.S).group(1)
+    assert "Scheduled earnings</span><strong>32</strong>" in page
+    assert panel.count("<li>") == 32
+    assert "<summary>27 more</summary>" in panel
+    for item in events["items"]:
+        assert f"<strong>{item['ticker']}</strong> {item['date']}" in panel
+    assert json.dumps(snap, sort_keys=True) == before
 
 
 def test_weekly_run_rejects_real_preclose_collection_before_any_network():

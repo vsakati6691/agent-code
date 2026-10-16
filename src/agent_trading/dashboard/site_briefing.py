@@ -94,7 +94,7 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
         rows = [
             f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">(scheduled, unverified; '
             f"{E(i['list'])})</span>{_last_results(i)}</li>"
-            for i in items[:12]
+            for i in items
         ]
         earn = "".join(rows[:EARNINGS_SHOWN]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
         more = (
