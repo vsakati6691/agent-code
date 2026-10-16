@@ -221,7 +221,8 @@ def test_empty_states_say_what_appears_and_when(tmp_path):
 
     text = tracking_schedule(["2026-10-09"])
     assert "21 trading sessions after the first snapshot (2026-10-09)" in text and "2026-11-09" in text
-    assert "52 weekly snapshots" in text and "1 stored" in text
+    assert "52 weekly snapshots under one methodology version" in text
+    assert "1 snapshots are stored across all versions" in text
     assert "first weekly snapshot" in tracking_schedule([])
 
 
