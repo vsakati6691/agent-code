@@ -1,4 +1,5 @@
 """Reject stale, incomplete, or implausible price data before it is used."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -17,8 +18,8 @@ SPLIT_RATIOS = [2, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50]
 SPLIT_TOLERANCE = 0.06
 
 
-FROZEN_RUN = 3                 # consecutive flat bars that mark a frozen feed
-RECENT_BARS = 63               # a frozen run this recent means the current feed is broken
+FROZEN_RUN = 3  # consecutive flat bars that mark a frozen feed
+RECENT_BARS = 63  # a frozen run this recent means the current feed is broken
 
 
 class DataQualityError(ValueError):
@@ -130,8 +131,7 @@ def validate_bars(
     frozen = frozen_feed_start(df)
     if frozen is not None:
         raise DataQualityError(
-            f"{symbol}: feed looks frozen or broken from {frozen.date()} "
-            f"({FROZEN_RUN}+ consecutive flat bars)"
+            f"{symbol}: feed looks frozen or broken from {frozen.date()} ({FROZEN_RUN}+ consecutive flat bars)"
         )
 
     if len(df) < min_bars:

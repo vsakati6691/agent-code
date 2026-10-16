@@ -9,15 +9,18 @@ The idea of explicit, bounded user assumptions with the formula shown next to th
 https://github.com/francisown/filingcopilot at 80d3cb15d71b4b596b30de2502a73c215b535824). The formula itself is
 this project's EV/Sales scenario method (spec.SCENARIO_METHOD).
 """
+
 from __future__ import annotations
 
 import math
 
 from . import spec
 
-FORMULA = ("value per share in year t = (revenue_t x EV/Sales_t + net cash) / shares_t, where revenue grows at a "
-           "rate starting at your starting growth and fading each year toward the terminal rate, EV/Sales moves "
-           "in a straight line from today's to your exit multiple, and shares grow at your dilution rate")
+FORMULA = (
+    "value per share in year t = (revenue_t x EV/Sales_t + net cash) / shares_t, where revenue grows at a "
+    "rate starting at your starting growth and fading each year toward the terminal rate, EV/Sales moves "
+    "in a straight line from today's to your exit multiple, and shares grow at your dilution rate"
+)
 
 
 def _ok(x) -> bool:
@@ -27,24 +30,43 @@ def _ok(x) -> bool:
 def inputs(c: dict) -> dict | None:
     """Everything the calculator needs for one listed company, or None when no scenario was published."""
     sc, m = c.get("scenarios"), c.get("metrics") or {}
-    if not sc or not all(_ok(x) and x > 0 for x in (c.get("price"), c.get("market_cap"), m.get("revenue_ttm"),
-                                                    m.get("ev_to_sales"))):
+    if not sc or not all(
+        _ok(x) and x > 0 for x in (c.get("price"), c.get("market_cap"), m.get("revenue_ttm"), m.get("ev_to_sales"))
+    ):
         return None
     base = sc["base"]["assumptions"]
     years = sorted(int(y) for y in sc["base"]["years"])
-    published = {"starting_revenue_growth": base["starting_revenue_growth"],
-                 "exit_ev_to_sales": base["exit_ev_to_sales"], "annual_dilution": base["annual_dilution"],
-                 "fcf_margin": base.get("fcf_margin_end")}
+    published = {
+        "starting_revenue_growth": base["starting_revenue_growth"],
+        "exit_ev_to_sales": base["exit_ev_to_sales"],
+        "annual_dilution": base["annual_dilution"],
+        "fcf_margin": base.get("fcf_margin_end"),
+    }
     cases = {k: {str(y): sc[k]["years"][str(y)]["value_per_share"] for y in years} for k in ("bear", "base", "bull")}
-    return {"ticker": c["ticker"], "price": c["price"], "price_date": c.get("price_date"),
-            "shares": c["market_cap"] / c["price"], "revenue_ttm": m["revenue_ttm"], "ev_to_sales": m["ev_to_sales"],
-            "net_cash": base["net_cash_held"], "fcf_margin_today": base.get("fcf_margin_start"), "years": years,
-            "fade": spec.SCENARIO_GROWTH_FADE, "terminal": spec.SCENARIO_TERMINAL_GROWTH,
-            "published": published, "cases": cases,
-            "bounds": {k: [min(lo, published[k]) if _ok(published.get(k)) else lo,
-                           max(hi, published[k]) if _ok(published.get(k)) else hi]
-                       for k, (lo, hi) in ((k, v) for k, v in spec.SCENARIO_LAB_BOUNDS.items() if k != "note")},
-            "note": spec.SCENARIO_LAB_BOUNDS["note"], "formula": FORMULA}
+    return {
+        "ticker": c["ticker"],
+        "price": c["price"],
+        "price_date": c.get("price_date"),
+        "shares": c["market_cap"] / c["price"],
+        "revenue_ttm": m["revenue_ttm"],
+        "ev_to_sales": m["ev_to_sales"],
+        "net_cash": base["net_cash_held"],
+        "fcf_margin_today": base.get("fcf_margin_start"),
+        "years": years,
+        "fade": spec.SCENARIO_GROWTH_FADE,
+        "terminal": spec.SCENARIO_TERMINAL_GROWTH,
+        "published": published,
+        "cases": cases,
+        "bounds": {
+            k: [
+                min(lo, published[k]) if _ok(published.get(k)) else lo,
+                max(hi, published[k]) if _ok(published.get(k)) else hi,
+            ]
+            for k, (lo, hi) in ((k, v) for k, v in spec.SCENARIO_LAB_BOUNDS.items() if k != "note")
+        },
+        "note": spec.SCENARIO_LAB_BOUNDS["note"],
+        "formula": FORMULA,
+    }
 
 
 def clamp(inp: dict, name: str, value: float) -> float:
@@ -74,7 +96,13 @@ def run(inp: dict, choice: dict) -> dict:
         value = max(0.0, (rev * mult + inp["net_cash"]) / sh)
         mg = None if margin is None else (margin if not _ok(m0) else m0 + (margin - m0) * frac)
         fcf = None if mg is None else rev * mg
-        out[y] = {"revenue": rev, "ev_to_sales": mult, "shares": sh, "value_per_share": value,
-                  "multiple_of_price": value / inp["price"], "fcf": fcf,
-                  "ev_to_fcf": (rev * mult / fcf) if fcf and fcf > 0 else None}
+        out[y] = {
+            "revenue": rev,
+            "ev_to_sales": mult,
+            "shares": sh,
+            "value_per_share": value,
+            "multiple_of_price": value / inp["price"],
+            "fcf": fcf,
+            "ev_to_fcf": (rev * mult / fcf) if fcf and fcf > 0 else None,
+        }
     return out

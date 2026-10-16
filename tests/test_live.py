@@ -1,6 +1,7 @@
 """Manual live tickets: sizing against the real account, never sending orders."""
+
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -13,7 +14,7 @@ AS_OF = date(2026, 10, 12)
 
 
 def snap(total=1000.0, cash=1000.0, positions=(), orders=(), last4="8204", age_h=1.0, unsettled=0.0):
-    fetched = (datetime.now(timezone.utc) - timedelta(hours=age_h)).isoformat(timespec="seconds")
+    fetched = (datetime.now(UTC) - timedelta(hours=age_h)).isoformat(timespec="seconds")
     return AccountSnapshot(fetched, last4, "Agent-trading", total, cash, cash, list(positions), list(orders), unsettled)
 
 
@@ -75,10 +76,16 @@ def test_only_live_strategies_ticketed(settings, ledger):
 
 def test_sell_only_what_is_held(settings, ledger):
     ledger.replace_tickets(date(2026, 10, 1), [Ticket("NVDA", "buy", 2, 101, 95, "B-desk", "x", 5)])
-    held = snap(total=1000, cash=800, positions=[{"symbol": "NVDA", "quantity": 2.0, "average_buy_price": 100.0}],
-                orders=[{"symbol": "NVDA", "side": "sell", "state": "confirmed", "quantity": "2"}])
-    intents = [Intent("NVDA", "sell", 110, None, "B-desk", "below SMA50"),
-               Intent("TLT", "sell", 90, None, "C-gtaa", "below average")]
+    held = snap(
+        total=1000,
+        cash=800,
+        positions=[{"symbol": "NVDA", "quantity": 2.0, "average_buy_price": 100.0}],
+        orders=[{"symbol": "NVDA", "side": "sell", "state": "confirmed", "quantity": "2"}],
+    )
+    intents = [
+        Intent("NVDA", "sell", 110, None, "B-desk", "below SMA50"),
+        Intent("TLT", "sell", 90, None, "C-gtaa", "below average"),
+    ]
     res = run(settings, ledger, held, intents)
     (t,) = res.tickets
     assert (t.symbol, t.side, t.quantity, t.limit_price) == ("NVDA", "sell", 2.0, 109.45)
@@ -115,11 +122,20 @@ def test_tickets_are_idempotent_per_day(settings, ledger):
 
 
 def test_previous_tickets_reconciled_and_missing_stop_flagged(settings, ledger):
-    ledger.replace_tickets(date(2026, 10, 9), [Ticket("NVDA", "buy", 2, 101, 95, "B-desk", "x", 5),
-                                               Ticket("GLD", "buy", 1, 300, 290, "C-gtaa", "x", 10),
-                                               Ticket("IBIT", "buy", 3, 60, 55, "B-desk", "x", 5)])
-    s = snap(total=1000, cash=800, positions=[{"symbol": "NVDA", "quantity": 2.0, "average_buy_price": 100.0}],
-             orders=[{"symbol": "GLD", "side": "buy", "state": "queued", "quantity": "1"}])
+    ledger.replace_tickets(
+        date(2026, 10, 9),
+        [
+            Ticket("NVDA", "buy", 2, 101, 95, "B-desk", "x", 5),
+            Ticket("GLD", "buy", 1, 300, 290, "C-gtaa", "x", 10),
+            Ticket("IBIT", "buy", 3, 60, 55, "B-desk", "x", 5),
+        ],
+    )
+    s = snap(
+        total=1000,
+        cash=800,
+        positions=[{"symbol": "NVDA", "quantity": 2.0, "average_buy_price": 100.0}],
+        orders=[{"symbol": "GLD", "side": "buy", "state": "queued", "quantity": "1"}],
+    )
     res = prepare(settings, ledger, s, AS_OF)
     assert res.previous_date == "2026-10-09"
     status = dict(line.split(": ", 1) for line in res.previous)

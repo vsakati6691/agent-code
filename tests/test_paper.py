@@ -1,6 +1,7 @@
-﻿"""Paper-execution tests: fills, stops, timing, idempotency, fail-safes."""
+"""Paper-execution tests: fills, stops, timing, idempotency, fail-safes."""
+
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date
 
 import pandas as pd
 import pytest
@@ -162,8 +163,10 @@ RAW = {
     "nickname": "Agent-trading",
     "portfolio": {"total_value": "1000", "cash": "1000", "buying_power": {"buying_power": "1000.0000"}},
     "positions": [],
-    "orders": [{"symbol": "SPY", "side": "buy", "state": "filled", "quantity": "1"},
-               {"symbol": "QQQ", "side": "buy", "state": "queued", "quantity": "1"}],
+    "orders": [
+        {"symbol": "SPY", "side": "buy", "state": "filled", "quantity": "1"},
+        {"symbol": "QQQ", "side": "buy", "state": "queued", "quantity": "1"},
+    ],
 }
 
 
@@ -175,22 +178,27 @@ def test_snapshot_masks_account_and_keeps_open_orders_only():
 
 
 def test_snapshot_verification(settings):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     snap = parse_snapshot(RAW)
-    assert verify_snapshot(snap, settings, datetime(2026, 10, 12, 10, tzinfo=timezone.utc)) == []
-    stale = verify_snapshot(snap, settings, datetime(2026, 10, 14, tzinfo=timezone.utc))
+    assert verify_snapshot(snap, settings, datetime(2026, 10, 12, 10, tzinfo=UTC)) == []
+    stale = verify_snapshot(snap, settings, datetime(2026, 10, 14, tzinfo=UTC))
     assert any("hours old" in p for p in stale)
     wrong = parse_snapshot({**RAW, "account_number": "1111"})
-    assert any("not the configured" in p for p in verify_snapshot(wrong, settings, datetime(2026, 10, 12, 5, tzinfo=timezone.utc)))
+    assert any(
+        "not the configured" in p for p in verify_snapshot(wrong, settings, datetime(2026, 10, 12, 5, tzinfo=UTC))
+    )
 
 
-@pytest.mark.parametrize("bad", [
-    {k: v for k, v in RAW.items() if k != "fetched_at"},
-    {**RAW, "fetched_at": "2026-10-12T04:00:00"},          # no timezone
-    {**RAW, "portfolio": {"cash": "1000"}},                 # missing total value
-    {**RAW, "portfolio": {**RAW["portfolio"], "cash": "-5"}},
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {k: v for k, v in RAW.items() if k != "fetched_at"},
+        {**RAW, "fetched_at": "2026-10-12T04:00:00"},  # no timezone
+        {**RAW, "portfolio": {"cash": "1000"}},  # missing total value
+        {**RAW, "portfolio": {**RAW["portfolio"], "cash": "-5"}},
+    ],
+)
 def test_malformed_snapshot_rejected(bad):
     with pytest.raises(SnapshotError):
         parse_snapshot(bad)

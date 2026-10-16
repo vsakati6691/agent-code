@@ -1,4 +1,5 @@
 """Comparison page: pick 2-4 companies from one snapshot and see them side by side (spec 2026-10-14.5)."""
+
 from __future__ import annotations
 
 import html
@@ -12,8 +13,11 @@ E = html.escape
 
 def compare_page(data: dict) -> str:
     entries = data["entries"]
-    opts = "".join(f'<option value="{E(e["ticker"])}">{E(e["ticker"])} · {E(e["name"] or "")} '
-                   f'({E(", ".join(e["lists"]))})</option>' for e in sorted(entries, key=lambda e: e["ticker"]))
+    opts = "".join(
+        f'<option value="{E(e["ticker"])}">{E(e["ticker"])} · {E(e["name"] or "")} '
+        f"({E(', '.join(e['lists']))})</option>"
+        for e in sorted(entries, key=lambda e: e["ticker"])
+    )
     # "</" cannot appear inside the inline JSON block
     blob = json.dumps(pack(data), separators=(",", ":")).replace("</", "<\\/")
     if len(entries) < spec.COMPARE_RULES["min_names"]:

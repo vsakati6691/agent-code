@@ -17,6 +17,7 @@ only ever added to: a rerun on the same day keeps the earlier tickets (they may
 already be placed), counts them against the daily limits, and never re-issues
 a symbol already ticketed that day.
 """
+
 from __future__ import annotations
 
 import math
@@ -29,10 +30,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import order_gate
 from .account import AccountSnapshot, verify_snapshot
 from .config import Settings
 from .paper import Intent, returns_frame
-from . import order_gate
 from .risk import Holding, PortfolioState, RiskEngine, TradingStatus, _floor, planned_risk, trading_status
 from .strategies.desk import Position
 
@@ -57,7 +58,7 @@ CREATE TABLE IF NOT EXISTS live_equity (date TEXT PRIMARY KEY, equity REAL NOT N
 @dataclass(frozen=True)
 class Ticket:
     symbol: str
-    side: str                  # "buy" or "sell"
+    side: str  # "buy" or "sell"
     quantity: float
     limit_price: float
     stop_price: float | None
@@ -79,17 +80,17 @@ class LiveResult:
     enabled: bool
     verified: bool = False
     account_note: str = ""
-    equity: float | None = None          # sizing equity (capped at live.capital)
-    cash: float | None = None            # cash available to the strategies
+    equity: float | None = None  # sizing equity (capped at live.capital)
+    cash: float | None = None  # cash available to the strategies
     positions: dict[str, Position] = field(default_factory=dict)
     status: TradingStatus | None = None
     tickets: list[Ticket] = field(default_factory=list)
-    tickets_date: str | None = None      # when the tickets shown were issued
+    tickets_date: str | None = None  # when the tickets shown were issued
     skipped: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    previous_date: str | None = None     # the last earlier ticket day, checked against the account
+    previous_date: str | None = None  # the last earlier ticket day, checked against the account
     previous: list[str] = field(default_factory=list)
-    issued_today: list[Ticket] = field(default_factory=list)   # tickets already issued for this ticket day
+    issued_today: list[Ticket] = field(default_factory=list)  # tickets already issued for this ticket day
 
 
 class LiveLedger:
@@ -121,8 +122,20 @@ class LiveLedger:
             conn.executemany(
                 "INSERT INTO live_tickets (created_date, symbol, side, quantity, limit_price, stop_price, strategy,"
                 " reason, planned_risk) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [(as_of.isoformat(), t.symbol, t.side, t.quantity, t.limit_price, t.stop_price, t.strategy,
-                  t.reason, t.planned_risk) for t in tickets],
+                [
+                    (
+                        as_of.isoformat(),
+                        t.symbol,
+                        t.side,
+                        t.quantity,
+                        t.limit_price,
+                        t.stop_price,
+                        t.strategy,
+                        t.reason,
+                        t.planned_risk,
+                    )
+                    for t in tickets
+                ],
             )
 
     def add_tickets(self, as_of: date, tickets: list[Ticket]) -> None:
@@ -133,14 +146,27 @@ class LiveLedger:
             conn.executemany(
                 "INSERT INTO live_tickets (created_date, symbol, side, quantity, limit_price, stop_price, strategy,"
                 " reason, planned_risk) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [(as_of.isoformat(), t.symbol, t.side, t.quantity, t.limit_price, t.stop_price, t.strategy,
-                  t.reason, t.planned_risk) for t in new],
+                [
+                    (
+                        as_of.isoformat(),
+                        t.symbol,
+                        t.side,
+                        t.quantity,
+                        t.limit_price,
+                        t.stop_price,
+                        t.strategy,
+                        t.reason,
+                        t.planned_risk,
+                    )
+                    for t in new
+                ],
             )
 
     def tickets_on(self, as_of: date) -> list[Ticket]:
         with closing(self._connect()) as conn:
-            rows = conn.execute("SELECT * FROM live_tickets WHERE created_date = ? ORDER BY id",
-                                (as_of.isoformat(),)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM live_tickets WHERE created_date = ? ORDER BY id", (as_of.isoformat(),)
+            ).fetchall()
         return [_ticket(r) for r in rows]
 
     def latest_tickets(self, before: date | None = None) -> tuple[str | None, list[Ticket]]:
@@ -149,8 +175,9 @@ class LiveLedger:
             if before is None:
                 row = conn.execute("SELECT MAX(created_date) AS d FROM live_tickets").fetchone()
             else:
-                row = conn.execute("SELECT MAX(created_date) AS d FROM live_tickets WHERE created_date < ?",
-                                   (before.isoformat(),)).fetchone()
+                row = conn.execute(
+                    "SELECT MAX(created_date) AS d FROM live_tickets WHERE created_date < ?", (before.isoformat(),)
+                ).fetchone()
             if row is None or row["d"] is None:
                 return None, []
             rows = conn.execute("SELECT * FROM live_tickets WHERE created_date = ? ORDER BY id", (row["d"],)).fetchall()
@@ -167,8 +194,16 @@ class LiveLedger:
 
 
 def _ticket(r: sqlite3.Row) -> Ticket:
-    return Ticket(r["symbol"], r["side"], r["quantity"], r["limit_price"], r["stop_price"], r["strategy"],
-                  r["reason"] or "", r["planned_risk"])
+    return Ticket(
+        r["symbol"],
+        r["side"],
+        r["quantity"],
+        r["limit_price"],
+        r["stop_price"],
+        r["strategy"],
+        r["reason"] or "",
+        r["planned_risk"],
+    )
 
 
 STOP_ORDER_TYPES = {"stop", "stop_loss", "stop_limit", "stop_market", "trailing_stop"}
@@ -200,8 +235,9 @@ def stop_coverage(open_orders: list[dict]) -> dict[str, float]:
     return out
 
 
-def prepare(settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None, as_of: date,
-            record: bool = False) -> LiveResult:
+def prepare(
+    settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None, as_of: date, record: bool = False
+) -> LiveResult:
     """Verify the snapshot and derive live positions, sizing equity and loss-limit status."""
     cfg = settings.live
     res = LiveResult(enabled=cfg.enabled)
@@ -224,8 +260,10 @@ def prepare(settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None
         t = ledger.latest_buy(sym)
         avg = p.get("average_buy_price")
         if t is None:
-            res.warnings.append(f"{sym}: position was not opened from a ticket; its stop is unknown, so its whole "
-                                "value counts as open risk")
+            res.warnings.append(
+                f"{sym}: position was not opened from a ticket; its stop is unknown, so its whole "
+                "value counts as open risk"
+            )
             # unknown cost basis: assume the whole invested amount (conservative)
             entry = avg or invested / p["quantity"]
             res.positions[sym] = Position(p["quantity"], entry, 0.0, as_of)
@@ -239,12 +277,16 @@ def prepare(settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None
             continue
         have = covered.get(sym, 0.0)
         if have <= 0:
-            res.warnings.append(f"{sym}: no stop-loss order at the broker (an open limit sell does not count), so "
-                                f"the position is not protected; place a good-till-cancelled stop-loss sell of "
-                                f"{pos.quantity:g} at {pos.stop:.2f}")
+            res.warnings.append(
+                f"{sym}: no stop-loss order at the broker (an open limit sell does not count), so "
+                f"the position is not protected; place a good-till-cancelled stop-loss sell of "
+                f"{pos.quantity:g} at {pos.stop:.2f}"
+            )
         elif have < pos.quantity - 1e-9:
-            res.warnings.append(f"{sym}: the open stop-loss orders cover only {have:g} of {pos.quantity:g} shares; "
-                                f"add a stop-loss sell of {pos.quantity - have:g} at {pos.stop:.2f}")
+            res.warnings.append(
+                f"{sym}: the open stop-loss orders cover only {have:g} of {pos.quantity:g} shares; "
+                f"add a stop-loss sell of {pos.quantity - have:g} at {pos.stop:.2f}"
+            )
     res.previous_date, res.previous = reconcile(ledger, snap, res.positions, as_of)
     res.issued_today = ledger.tickets_on(as_of)
     res.equity = min(snap.total_value, cfg.capital)
@@ -255,8 +297,9 @@ def prepare(settings: Settings, ledger: LiveLedger, snap: AccountSnapshot | None
     return res
 
 
-def reconcile(ledger: LiveLedger, snap: AccountSnapshot, positions: dict[str, Position],
-              as_of: date) -> tuple[str | None, list[str]]:
+def reconcile(
+    ledger: LiveLedger, snap: AccountSnapshot, positions: dict[str, Position], as_of: date
+) -> tuple[str | None, list[str]]:
     """What happened to the previous ticket day's tickets, judged from the account snapshot."""
     day, tickets = ledger.latest_tickets(before=as_of)
     open_by_side = {(o["symbol"], str(o.get("side", "")).lower()) for o in snap.open_orders}
@@ -282,8 +325,9 @@ def holdings_of(positions: dict[str, Position]) -> tuple[Holding, ...]:
     return tuple(Holding(s, p.quantity, p.entry_price, p.stop) for s, p in positions.items())
 
 
-def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, intents: list[Intent],
-                  bars: dict[str, pd.DataFrame]) -> LiveResult:
+def build_tickets(
+    settings: Settings, res: LiveResult, snap: AccountSnapshot, intents: list[Intent], bars: dict[str, pd.DataFrame]
+) -> LiveResult:
     """Fill `res.tickets` (sells first, then sized buys) from the live strategies' intents."""
     cfg = settings.live
     buf = cfg.limit_buffer_pct
@@ -300,7 +344,9 @@ def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, in
             continue  # nothing held: nothing to sell (no short selling)
         ref = it.ref_price if it.ref_price > 0 else pos.entry_price
         reason = it.reason + ("; cancel its open stop order first" if it.symbol in open_syms else "")
-        res.tickets.append(Ticket(it.symbol, "sell", pos.quantity, round(ref * (1 - buf), 2), None, it.strategy, reason))
+        res.tickets.append(
+            Ticket(it.symbol, "sell", pos.quantity, round(ref * (1 - buf), 2), None, it.strategy, reason)
+        )
         selling.add(it.symbol)
 
     buys = sorted([i for i in live if i.side == "buy"], key=lambda i: -i.priority)
@@ -316,8 +362,10 @@ def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, in
     engine = RiskEngine(settings)
     returns = returns_frame(bars)
     # hard account limits (order_gate.py re-checks them independently before the tickets are written)
-    invested = sum(p.quantity * (float(bars[s]["close"].iloc[-1]) if s in bars and not bars[s].empty else p.entry_price)
-                   for s, p in res.positions.items())
+    invested = sum(
+        p.quantity * (float(bars[s]["close"].iloc[-1]) if s in bars and not bars[s].empty else p.entry_price)
+        for s, p in res.positions.items()
+    )
     cash = order_gate.spendable_cash(snap, settings.live.capital, invested)
     if cash is None:
         res.skipped += [f"{i.symbol}: settled cash unknown (snapshot has no unsettled_funds)" for i in buys]
@@ -347,8 +395,9 @@ def build_tickets(settings: Settings, res: LiveResult, snap: AccountSnapshot, in
             continue
         risk = planned_risk(qty, limit, stop, settings.risk.stop_risk_buffer)
         res.tickets.append(Ticket(it.symbol, "buy", qty, limit, stop, it.strategy, it.reason, risk))
-        state = PortfolioState(state.equity, state.cash - qty * limit,
-                               state.holdings + (Holding(it.symbol, qty, limit, stop),))
+        state = PortfolioState(
+            state.equity, state.cash - qty * limit, state.holdings + (Holding(it.symbol, qty, limit, stop),)
+        )
         bought += qty * limit
         entries += 1
     return res

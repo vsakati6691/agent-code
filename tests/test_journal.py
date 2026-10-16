@@ -1,4 +1,5 @@
 """Trade journal (the paper broker's position ledger)."""
+
 import sqlite3
 from datetime import date
 
@@ -32,11 +33,15 @@ def test_open_close_and_stats(journal):
 def test_schema_blocks_shorts_and_bad_stops(journal):
     with sqlite3.connect(journal.path) as conn:
         with pytest.raises(sqlite3.IntegrityError):
-            conn.execute("INSERT INTO trades (mode,symbol,side,quantity,entry_date,entry_price,stop_price) "
-                         "VALUES ('paper','X','short',1,'2026-01-01',10,11)")
+            conn.execute(
+                "INSERT INTO trades (mode,symbol,side,quantity,entry_date,entry_price,stop_price) "
+                "VALUES ('paper','X','short',1,'2026-01-01',10,11)"
+            )
         with pytest.raises(sqlite3.IntegrityError):
-            conn.execute("INSERT INTO trades (mode,symbol,side,quantity,entry_date,entry_price,stop_price) "
-                         "VALUES ('live','X','long',1,'2026-01-01',10,9)")
+            conn.execute(
+                "INSERT INTO trades (mode,symbol,side,quantity,entry_date,entry_price,stop_price) "
+                "VALUES ('live','X','long',1,'2026-01-01',10,9)"
+            )
     with pytest.raises(sqlite3.IntegrityError):
         journal.open_trade("X", 1, 10, 11, D)  # stop above entry
 
@@ -46,5 +51,3 @@ def test_cannot_close_twice(journal):
     journal.close_trade(t, 101, D)
     with pytest.raises(ValueError):
         journal.close_trade(t, 102, D)
-
-

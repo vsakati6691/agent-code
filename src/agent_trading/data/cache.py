@@ -1,4 +1,5 @@
 """Per-symbol CSV cache of daily bars. New bars are merged in, so history grows."""
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -19,12 +19,13 @@ Input JSON shape:
               "type": "market", "trigger": "stop", "stop_price": "480"}]   # as get_equity_orders returns them
 }
 """
+
 from __future__ import annotations
 
 import json
 import math
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import Settings
@@ -47,7 +48,7 @@ class AccountSnapshot:
     buying_power: float
     positions: list[dict] = field(default_factory=list)
     open_orders: list[dict] = field(default_factory=list)
-    unsettled_funds: float | None = None   # None = not captured (live buys are then blocked)
+    unsettled_funds: float | None = None  # None = not captured (live buys are then blocked)
     account_type: str = ""
 
     @property
@@ -94,20 +95,29 @@ def parse_snapshot(raw: dict) -> AccountSnapshot:
     bp = portfolio.get("buying_power")
     bp_value = bp.get("buying_power") if isinstance(bp, dict) else bp
     positions = [
-        {"symbol": str(p["symbol"]).upper(), "quantity": _num(p.get("quantity"), "position quantity"),
-         "average_buy_price": _price(p.get("average_buy_price"), "average_buy_price")}
+        {
+            "symbol": str(p["symbol"]).upper(),
+            "quantity": _num(p.get("quantity"), "position quantity"),
+            "average_buy_price": _price(p.get("average_buy_price"), "average_buy_price"),
+        }
         for p in raw.get("positions") or []
     ]
     # type/trigger/stop_price decide whether an open sell protects a position (live.stop_coverage)
     orders = [
-        {"symbol": str(o.get("symbol", "")).upper(), "side": o.get("side"), "state": o.get("state"),
-         "quantity": o.get("quantity"), "type": str(o.get("type") or "").lower(),
-         "trigger": str(o.get("trigger") or "").lower(), "stop_price": _price(o.get("stop_price"), "stop_price")}
+        {
+            "symbol": str(o.get("symbol", "")).upper(),
+            "side": o.get("side"),
+            "state": o.get("state"),
+            "quantity": o.get("quantity"),
+            "type": str(o.get("type") or "").lower(),
+            "trigger": str(o.get("trigger") or "").lower(),
+            "stop_price": _price(o.get("stop_price"), "stop_price"),
+        }
         for o in raw.get("orders") or []
         if str(o.get("state", "")).lower() in OPEN_ORDER_STATES
     ]
     return AccountSnapshot(
-        fetched_at=fetched.astimezone(timezone.utc).isoformat(timespec="seconds"),
+        fetched_at=fetched.astimezone(UTC).isoformat(timespec="seconds"),
         account_last4=acct[-4:],
         nickname=str(raw.get("nickname", "")),
         total_value=_num(portfolio.get("total_value"), "total_value"),
@@ -115,14 +125,16 @@ def parse_snapshot(raw: dict) -> AccountSnapshot:
         buying_power=_num(bp_value, "buying_power"),
         positions=positions,
         open_orders=orders,
-        unsettled_funds=None if raw.get("unsettled_funds") in (None, "") else _num(raw["unsettled_funds"], "unsettled_funds"),
+        unsettled_funds=None
+        if raw.get("unsettled_funds") in (None, "")
+        else _num(raw["unsettled_funds"], "unsettled_funds"),
         account_type=str(raw.get("account_type", "")),
     )
 
 
 def verify_snapshot(snap: AccountSnapshot, settings: Settings, now: datetime | None = None) -> list[str]:
     """Problems that make the snapshot unusable. Empty list = verified."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     cfg = settings.broker
     problems = []
     if cfg.account_last4 and snap.account_last4 != cfg.account_last4:

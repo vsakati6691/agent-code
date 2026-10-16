@@ -1,8 +1,9 @@
 """Bounded public-data refresh of weekly candidates; no rescoring or performance tracking."""
+
 from __future__ import annotations
 
 import math
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -18,10 +19,36 @@ CBOE_BUDGET = 80
 SECONDS_BUDGET = 14 * 60
 BENCHMARKS = ("SPY", "IJH", "IWM")
 # No duplicated prose, payoff grids or raw chains in the daily record. All numbers retain their precision.
-ROW_FIELDS = ("option", "underlying", "type", "horizon", "expiration", "dte", "strike", "spot", "bid", "ask",
-              "premium_per_contract_ask", "max_loss_per_contract", "breakeven", "breakeven_move", "required_move",
-              "implied_move_1sd", "delta", "theta", "iv", "spread_pct", "open_interest", "volume", "rank",
-              "rank_components", "events_status", "events_before_expiry", "quote_time_utc", "quote_status")
+ROW_FIELDS = (
+    "option",
+    "underlying",
+    "type",
+    "horizon",
+    "expiration",
+    "dte",
+    "strike",
+    "spot",
+    "bid",
+    "ask",
+    "premium_per_contract_ask",
+    "max_loss_per_contract",
+    "breakeven",
+    "breakeven_move",
+    "required_move",
+    "implied_move_1sd",
+    "delta",
+    "theta",
+    "iv",
+    "spread_pct",
+    "open_interest",
+    "volume",
+    "rank",
+    "rank_components",
+    "events_status",
+    "events_before_expiry",
+    "quote_time_utc",
+    "quote_status",
+)
 
 
 def compact_options(payload: dict) -> dict:
@@ -30,10 +57,12 @@ def compact_options(payload: dict) -> dict:
             rows = payload[horizon.key][kind + "s"]["rows"]
             payload[horizon.key][kind + "s"]["rows"] = [
                 {**{k: row.get(k) for k in ROW_FIELDS}, "status": "available", "reason": "passed existing eligibility"}
-                for row in rows]
+                for row in rows
+            ]
             for row in payload[horizon.key][kind + "s"]["rows"]:
-                row["events_before_expiry"] = [{**event, "date": event["date"].isoformat()}
-                                               for event in row["events_before_expiry"]]
+                row["events_before_expiry"] = [
+                    {**event, "date": event["date"].isoformat()} for event in row["events_before_expiry"]
+                ]
     return payload
 
 
@@ -70,8 +99,9 @@ def fetch(fn, *args):
         return None, "provider response unreadable"
 
 
-def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool, started: str,
-            iv_history: dict | None = None) -> dict:
+def collect(
+    providers: Providers, snap: dict, as_of: date, options_enabled: bool, started: str, iv_history: dict | None = None
+) -> dict:
     candidates = {c["ticker"] for b in snap.get("bands", {}).values() for c in b.get("candidates", [])}
     quotes, chain_states, chains = {}, {}, {}
     for symbol in sorted(candidates | set(BENCHMARKS)):
@@ -83,10 +113,13 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
                 reason = "stale quote: last trade date does not equal the refresh session"
             elif not valid_price(quote.close):
                 reason = "closing price missing or invalid"
-        quotes[symbol] = {"status": "unavailable" if reason else "available", "reason": reason or "session verified",
-                          "close": None if reason else quote.close,
-                          "last_trade": str(quote.last_trade) if quote is not None and quote.last_trade else None,
-                          "source": options.QUOTE_SOURCE}
+        quotes[symbol] = {
+            "status": "unavailable" if reason else "available",
+            "reason": reason or "session verified",
+            "close": None if reason else quote.close,
+            "last_trade": str(quote.last_trade) if quote is not None and quote.last_trade else None,
+            "source": options.QUOTE_SOURCE,
+        }
     events, events_known = {}, False
     option_payload = {"enabled": options_enabled, "status": "unavailable", "reason": "option collection disabled"}
     if options_enabled:
@@ -98,8 +131,9 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
                 if future:
                     events[symbol] = [{"date": future[0], "event": "earnings (scheduled, unverified)"}]
         core_underlyings = {c["ticker"] for c in snap.get("bands", {}).get("large", {}).get("candidates", [])}
-        underlyings = {c["ticker"] for key in spec.EXPLORER_BANDS
-                       for c in snap.get("bands", {}).get(key, {}).get("candidates", [])}
+        underlyings = {
+            c["ticker"] for key in spec.EXPLORER_BANDS for c in snap.get("bands", {}).get(key, {}).get("candidates", [])
+        }
         for symbol in sorted(underlyings | set(speculative.targets(snap))):
             chain, reason = fetch(providers.option_chain, symbol)
             info = {}
@@ -114,32 +148,59 @@ def collect(providers: Providers, snap: dict, as_of: date, options_enabled: bool
                 elif not valid_price(under.get("close")):
                     reason = "chain closing price missing or invalid"
             chains[symbol] = reason if reason else chain
-            chain_states[symbol] = {"status": "unavailable" if reason else "available",
-                                    "reason": reason or "session verified", **info}
+            chain_states[symbol] = {
+                "status": "unavailable" if reason else "available",
+                "reason": reason or "session verified",
+                **info,
+            }
         # The existing daily top-five view retains only the weekly large-list universe.
         core_chains = {s: chain for s, chain in chains.items() if s in core_underlyings}
         option_payload = compact_options(options.build_horizons(core_chains, as_of, events, events_known=events_known))
-        option_payload.update(enabled=True, status="available" if option_payload["underlyings"] else "unavailable",
-                              reason="eligible contracts only; lists are not padded", earnings_reason=earn_reason)
+        option_payload.update(
+            enabled=True,
+            status="available" if option_payload["underlyings"] else "unavailable",
+            reason="eligible contracts only; lists are not padded",
+            earnings_reason=earn_reason,
+        )
     partial = any(x["status"] != "available" for x in [*quotes.values(), *chain_states.values()])
     partial |= options_enabled and not events_known
-    return {"as_of": as_of.isoformat(), "weekly_as_of": snap["as_of"], "weekly_spec_version": snap.get("spec_version"),
-            "spec_version": spec.SPEC_VERSION, "spec_hash": spec.spec_hash(), "started_at": started,
-            "collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "status": "partial" if partial else "ok", "quotes": quotes, "chain_status": chain_states,
-            "options": option_payload,
-            "explorer": bets.build({s: ch for s, ch in chains.items() if s in underlyings}, as_of, events, events_known) if options_enabled else None,
-            "speculative": speculative.build({s: chains[s] for s in speculative.targets(snap)}, as_of, events,
-                                               iv_history, events_known) if options_enabled else None,
-            "usage": providers.http.usage()}
+    return {
+        "as_of": as_of.isoformat(),
+        "weekly_as_of": snap["as_of"],
+        "weekly_spec_version": snap.get("spec_version"),
+        "spec_version": spec.SPEC_VERSION,
+        "spec_hash": spec.spec_hash(),
+        "started_at": started,
+        "collected_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "status": "partial" if partial else "ok",
+        "quotes": quotes,
+        "chain_status": chain_states,
+        "options": option_payload,
+        "explorer": bets.build({s: ch for s, ch in chains.items() if s in underlyings}, as_of, events, events_known)
+        if options_enabled
+        else None,
+        "speculative": speculative.build(
+            {s: chains[s] for s in speculative.targets(snap)}, as_of, events, iv_history, events_known
+        )
+        if options_enabled
+        else None,
+        "usage": providers.http.usage(),
+    }
 
 
-def run(data: Path, providers: Providers, as_of: date | None = None, *, options_enabled: bool = True,
-        commit: str = "", now: datetime | None = None) -> dict:
-    now = now or datetime.now(timezone.utc)
+def run(
+    data: Path,
+    providers: Providers,
+    as_of: date | None = None,
+    *,
+    options_enabled: bool = True,
+    commit: str = "",
+    now: datetime | None = None,
+) -> dict:
+    now = now or datetime.now(UTC)
     session = as_of or now.astimezone(NY).date()
     store, daily = Store(data), RefreshStore(data)
-    started = now.astimezone(timezone.utc).isoformat(timespec="seconds")
+    started = now.astimezone(UTC).isoformat(timespec="seconds")
     reason = None
     if not is_trading_day(session):
         reason = "not an NYSE trading day"
@@ -161,9 +222,13 @@ def run(data: Path, providers: Providers, as_of: date | None = None, *, options_
         iv_history = speculative.stored_history(daily, session) if options_enabled else {}
         payload = collect(providers, snap, session, options_enabled, started, iv_history)
         written = daily.write(payload, commit)
-        store.audit("refresh_finished" if written else "refresh_skipped", as_of=str(session),
-                    status=payload["status"], reason="saved" if written else "first refresh kept unchanged",
-                    usage=payload["usage"])
+        store.audit(
+            "refresh_finished" if written else "refresh_skipped",
+            as_of=str(session),
+            status=payload["status"],
+            reason="saved" if written else "first refresh kept unchanged",
+            usage=payload["usage"],
+        )
         return payload
     except Exception as exc:  # preserve the last published data; never log provider payloads or secret values
         store.audit("refresh_failed", as_of=str(session), reason=type(exc).__name__)

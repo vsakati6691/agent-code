@@ -5,11 +5,13 @@ Everything shown comes from the stored snapshot. The scenario test compares cond
 20th-largest S&P 500 market cap and never states a probability; private valuations are shown as reported, with their
 source, and are not market caps.
 """
+
 from __future__ import annotations
 
 import html
 
-from . import ai as ai_mod, spec
+from . import ai as ai_mod
+from . import spec
 from .fmt import cap, num, sval
 from .site_overview import band_title, distribution_strip, excluded_summary, growth_table
 
@@ -26,20 +28,25 @@ def _definition(band: dict) -> str:
     d = band.get("definition") or {}
     lo, hi = d.get("min_cap"), d.get("max_cap")
     rng = f"{cap(lo)} or more" if lo and not hi else f"{cap(lo)} to {cap(hi)}"
-    return (f"Universe: the fixed AI-exposed list below; market cap {rng}; price ≥ ${d.get('min_price', 5):g}; 20-day "
-            f"median dollar volume ≥ {cap(d.get('min_dollar_volume'))}. Market cap = as-of close x SEC cover-page shares.")
+    return (
+        f"Universe: the fixed AI-exposed list below; market cap {rng}; price ≥ ${d.get('min_price', 5):g}; 20-day "
+        f"median dollar volume ≥ {cap(d.get('min_dollar_volume'))}. Market cap = as-of close x SEC cover-page shares."
+    )
 
 
 # --- the top-20 market-cap scenario test -------------------------------------------------------------------------
+
 
 def _cell(t: dict, case: str, year: int) -> str:
     r = next((x for x in t.get("rows", []) if x["case"] == case and x["year"] == year), None)
     if not r:
         return '<td class="num muted">n/a</td>'
     above = r["above_today_bar"]
-    return (f'<td class="num" data-v="{sval(r["market_cap"])}">{cap(r["market_cap"])}<div class="small muted">'
-            f'{num(r["multiple_of_threshold"], 2)}x the bar · <span class="pill {"ok" if above else "muted"}">'
-            f'{"above" if above else "below"}</span></div></td>')
+    return (
+        f'<td class="num" data-v="{sval(r["market_cap"])}">{cap(r["market_cap"])}<div class="small muted">'
+        f'{num(r["multiple_of_threshold"], 2)}x the bar · <span class="pill {"ok" if above else "muted"}">'
+        f"{'above' if above else 'below'}</span></div></td>"
+    )
 
 
 def top20_block(c: dict) -> str:
@@ -48,10 +55,14 @@ def top20_block(c: dict) -> str:
     if not t:
         return ""
     if t.get("status") != "ok":
-        return (f'<h2>Top-20 market-cap scenario test</h2><p class="small muted">Not available this week: '
-                f'{E(t.get("reason") or "no threshold")}.</p>')
-    rows = "".join(f'<tr><td><strong>{case}</strong></td>{_cell(t, case, 5)}{_cell(t, case, 10)}</tr>'
-                   for case in ("bear", "base", "bull"))
+        return (
+            f'<h2>Top-20 market-cap scenario test</h2><p class="small muted">Not available this week: '
+            f"{E(t.get('reason') or 'no threshold')}.</p>"
+        )
+    rows = "".join(
+        f"<tr><td><strong>{case}</strong></td>{_cell(t, case, 5)}{_cell(t, case, 10)}</tr>"
+        for case in ("bear", "base", "bull")
+    )
     return f"""<h2>Top-20 market-cap scenario test</h2>
 <p class="small">Today's bar: the 20th-largest S&amp;P 500 member by market cap is {E(t.get("threshold_ticker") or "")} at
 <strong>{cap(t.get("threshold"))}</strong>. This stock's market cap today is {cap(t.get("market_cap_now"))}
@@ -68,23 +79,30 @@ def _top20_table(bands: dict, ladder: dict) -> str:
             t = c.get("top20_test") or {}
             now = c.get("market_cap")
             ok10 = next((x for x in t.get("rows", []) if x["case"] == "bull" and x["year"] == 10), None)
-            verdict = ("n/a" if ok10 is None else
-                       f'<span class="pill {"ok" if ok10["above_today_bar"] else "muted"}">'
-                       f'{"above" if ok10["above_today_bar"] else "below"} the bar</span>')
-            rows.append(f'<tr><td class="tk"><a href="stock/{E(key)}-{E(c["ticker"])}.html"><strong>{E(c["ticker"])}</strong></a>'
-                        f'<div class="small muted">{E(band_title(key, bands[key]))}</div></td>'
-                        f'<td class="small hide-sm">{E(c.get("ai_role") or "")}</td>'
-                        f'<td class="num" data-v="{sval(now)}">{cap(now)}<div class="small muted">'
-                        f'{num(t.get("current_vs_threshold"), 2)}x the bar</div></td>'
-                        f'{_cell(t, "base", 5)}{_cell(t, "bull", 5)}{_cell(t, "base", 10)}{_cell(t, "bull", 10)}'
-                        f'<td class="small">{verdict}</td></tr>')
+            verdict = (
+                "n/a"
+                if ok10 is None
+                else f'<span class="pill {"ok" if ok10["above_today_bar"] else "muted"}">'
+                f"{'above' if ok10['above_today_bar'] else 'below'} the bar</span>"
+            )
+            rows.append(
+                f'<tr><td class="tk"><a href="stock/{E(key)}-{E(c["ticker"])}.html"><strong>{E(c["ticker"])}</strong></a>'
+                f'<div class="small muted">{E(band_title(key, bands[key]))}</div></td>'
+                f'<td class="small hide-sm">{E(c.get("ai_role") or "")}</td>'
+                f'<td class="num" data-v="{sval(now)}">{cap(now)}<div class="small muted">'
+                f"{num(t.get('current_vs_threshold'), 2)}x the bar</div></td>"
+                f"{_cell(t, 'base', 5)}{_cell(t, 'bull', 5)}{_cell(t, 'base', 10)}{_cell(t, 'bull', 10)}"
+                f'<td class="small">{verdict}</td></tr>'
+            )
     if not rows:
         return ""
     if ladder.get("threshold"):
-        bar = (f'<p class="small">Today\'s bar: the 20th-largest S&amp;P 500 member by market cap is '
-               f'<strong>{E(ladder.get("threshold_ticker") or "")}</strong> at <strong>{cap(ladder["threshold"])}</strong> '
-               f'({ladder.get("n_with_cap")} members with valid data this week).</p>')
-        top = ", ".join(f'#{m["rank"]} {E(m["ticker"])} {cap(m["market_cap"])}' for m in ladder.get("members", [])[:20])
+        bar = (
+            f'<p class="small">Today\'s bar: the 20th-largest S&amp;P 500 member by market cap is '
+            f"<strong>{E(ladder.get('threshold_ticker') or '')}</strong> at <strong>{cap(ladder['threshold'])}</strong> "
+            f"({ladder.get('n_with_cap')} members with valid data this week).</p>"
+        )
+        top = ", ".join(f"#{m['rank']} {E(m['ticker'])} {cap(m['market_cap'])}" for m in ladder.get("members", [])[:20])
         bar += f'<details class="small"><summary>The 20 largest today</summary><p>{top}</p></details>'
     else:
         bar = f'<p class="small muted">No bar this week: {E(ladder.get("reason") or "not computed")}.</p>'
@@ -101,12 +119,13 @@ Scenario assumptions are on each stock's page.</p>"""
 
 # --- universe and private companies ---------------------------------------------------------------------------------
 
+
 def _universe_table(snap: dict, ai: dict | None) -> str:
     roles = ((ai or {}).get("universe") or {}).get("roles") or dict(spec.AI_UNIVERSE)
     listed = {}
     for key in AI_KEYS:
         for c in (ai_bands(snap).get(key) or {}).get("candidates", []):
-            listed[c["ticker"]] = f'#{c["rank"]} {band_title(key, snap["bands"][key])}'
+            listed[c["ticker"]] = f"#{c['rank']} {band_title(key, snap['bands'][key])}"
     unresolved = ((ai or {}).get("universe") or {}).get("unresolved") or {}
     by_role: dict[str, list[str]] = {}
     for t, role in roles.items():
@@ -117,20 +136,33 @@ def _universe_table(snap: dict, ai: dict | None) -> str:
         if not names:
             continue
         chips = " ".join(
-            (f'<span class="pill ok" title="{E(listed[t])}">{E(t)}</span>' if t in listed else
-             f'<span class="pill muted" title="{E(unresolved[t])}">{E(t)}</span>' if t in unresolved else
-             f'<span class="pill">{E(t)}</span>') for t in names)
+            (
+                f'<span class="pill ok" title="{E(listed[t])}">{E(t)}</span>'
+                if t in listed
+                else f'<span class="pill muted" title="{E(unresolved[t])}">{E(t)}</span>'
+                if t in unresolved
+                else f'<span class="pill">{E(t)}</span>'
+            )
+            for t in names
+        )
         rows.append(f"<tr><td>{E(role)}</td><td>{chips}</td></tr>")
-    note = ("Green: in this week's top 5. Grey with a reason on hover: could not be evaluated (not listed, foreign filer...). "
-            "Plain: evaluated but not in a top 5, or outside both market-cap bands; the excluded pages give each reason.")
-    return (f'<h2 id="universe">The AI-exposed universe, by role</h2><p class="small">{E(spec.AI_UNIVERSE_DEFINITION)}</p>'
-            f'<div class="table-wrap"><table aria-label="AI-exposed universe by role"><thead><tr><th>Role in the AI chain</th>'
-            f'<th>Stocks</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div><p class="small muted">{E(note)}</p>')
+    note = (
+        "Green: in this week's top 5. Grey with a reason on hover: could not be evaluated (not listed, foreign filer...). "
+        "Plain: evaluated but not in a top 5, or outside both market-cap bands; the excluded pages give each reason."
+    )
+    return (
+        f'<h2 id="universe">The AI-exposed universe, by role</h2><p class="small">{E(spec.AI_UNIVERSE_DEFINITION)}</p>'
+        f'<div class="table-wrap"><table aria-label="AI-exposed universe by role"><thead><tr><th>Role in the AI chain</th>'
+        f'<th>Stocks</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div><p class="small muted">{E(note)}</p>'
+    )
 
 
 def _link(label: str | None, url: str | None) -> str:
-    return (f'<a href="{E(url)}" rel="noopener">{E(label or "source")}</a>' if url and str(url).startswith("https://")
-            else E(label or ""))
+    return (
+        f'<a href="{E(url)}" rel="noopener">{E(label or "source")}</a>'
+        if url and str(url).startswith("https://")
+        else E(label or "")
+    )
 
 
 def _private_section(ai: dict | None) -> str:
@@ -138,36 +170,56 @@ def _private_section(ai: dict | None) -> str:
     comps = p.get("companies") or []
     ladder = (ai or {}).get("ladder") or {}
     if not comps:
-        return (f'<h2 id="private">Private AI companies</h2><p class="small muted">None are configured in this snapshot. '
-                f'{E(spec.AI_PRIVATE_RULE)}</p>')
+        return (
+            f'<h2 id="private">Private AI companies</h2><p class="small muted">None are configured in this snapshot. '
+            f"{E(spec.AI_PRIVATE_RULE)}</p>"
+        )
     priced = [c for c in comps if c.get("valuation") is not None]
     rows = []
     for c in priced:
-        sym = SYMBOLS.get(c["currency"], f'{c["currency"]} ')
+        sym = SYMBOLS.get(c["currency"], f"{c['currency']} ")
         place = ai_mod.place_in_ladder(c, ladder)
-        compared = (E(place) if place else f'not compared: reported in {E(c["currency"])} and no exchange rate is collected')
-        status = (f'{E(c["status_note"])} ({_link(c.get("status_source_label"), c.get("status_source_url"))})'
-                  if c.get("status_note") else '<span class="muted">none reported</span>')
-        rows.append(f'<tr><td class="tk"><strong>{E(c["name"])}</strong><div class="small muted">{E(c["what"])}</div></td>'
-                    f'<td class="num" data-v="{sval(c["valuation"])}">{sym}{c["valuation"]:g}B<div class="small muted">'
-                    f'{E(c.get("basis") or "")}</div></td><td class="small">{E(str(c.get("valuation_date") or ""))}</td>'
-                    f'<td class="small">{_link(c.get("source_label"), c.get("source_url"))}<div class="muted">reported, unverified</div></td>'
-                    f'<td class="small hide-sm">{compared}</td><td class="small hide-sm">{status}</td></tr>')
-    table = (f'<div class="table-wrap"><table aria-label="Private AI companies with a reported valuation"><thead><tr>'
-             f'<th class="tk">Company</th><th class="num">Reported valuation</th><th>As of</th><th>Source</th>'
-             f'<th class="hide-sm">Against today\'s S&amp;P 500 market caps</th><th class="hide-sm">IPO status</th></tr></thead>'
-             f'<tbody>{"".join(rows)}</tbody></table></div>') if rows else ""
+        compared = (
+            E(place) if place else f"not compared: reported in {E(c['currency'])} and no exchange rate is collected"
+        )
+        status = (
+            f"{E(c['status_note'])} ({_link(c.get('status_source_label'), c.get('status_source_url'))})"
+            if c.get("status_note")
+            else '<span class="muted">none reported</span>'
+        )
+        rows.append(
+            f'<tr><td class="tk"><strong>{E(c["name"])}</strong><div class="small muted">{E(c["what"])}</div></td>'
+            f'<td class="num" data-v="{sval(c["valuation"])}">{sym}{c["valuation"]:g}B<div class="small muted">'
+            f'{E(c.get("basis") or "")}</div></td><td class="small">{E(str(c.get("valuation_date") or ""))}</td>'
+            f'<td class="small">{_link(c.get("source_label"), c.get("source_url"))}<div class="muted">reported, unverified</div></td>'
+            f'<td class="small hide-sm">{compared}</td><td class="small hide-sm">{status}</td></tr>'
+        )
+    table = (
+        (
+            f'<div class="table-wrap"><table aria-label="Private AI companies with a reported valuation"><thead><tr>'
+            f'<th class="tk">Company</th><th class="num">Reported valuation</th><th>As of</th><th>Source</th>'
+            f'<th class="hide-sm">Against today\'s S&amp;P 500 market caps</th><th class="hide-sm">IPO status</th></tr></thead>'
+            f"<tbody>{''.join(rows)}</tbody></table></div>"
+        )
+        if rows
+        else ""
+    )
     watched = "".join(
         f'<li><strong>{E(c["name"])}</strong>: {E(c["what"])} <span class="muted">{E(c.get("no_valuation_reason") or "")}</span>'
-        f'{" (" + _link(c.get("status_source_label"), c.get("status_source_url")) + ")" if c.get("status_source_url") else ""}</li>'
-        for c in comps if c.get("valuation") is None)
-    return (f'<h2 id="private">Private AI companies, for context</h2>'
-            f'<div class="banner warn small"><strong>Reported figures, not market prices</strong>{E(spec.AI_PRIVATE_RULE)}</div>'
-            f'<p class="small">File reviewed {E(str(p.get("reviewed_on") or "n/a"))}. {E(p.get("note") or "")}</p>{table}'
-            f'<h3>Also watched: no corroborated valuation</h3><ul class="tight small">{watched or "<li>none</li>"}</ul>')
+        f"{' (' + _link(c.get('status_source_label'), c.get('status_source_url')) + ')' if c.get('status_source_url') else ''}</li>"
+        for c in comps
+        if c.get("valuation") is None
+    )
+    return (
+        f'<h2 id="private">Private AI companies, for context</h2>'
+        f'<div class="banner warn small"><strong>Reported figures, not market prices</strong>{E(spec.AI_PRIVATE_RULE)}</div>'
+        f'<p class="small">File reviewed {E(str(p.get("reviewed_on") or "n/a"))}. {E(p.get("note") or "")}</p>{table}'
+        f'<h3>Also watched: no corroborated valuation</h3><ul class="tight small">{watched or "<li>none</li>"}</ul>'
+    )
 
 
 # --- the page ----------------------------------------------------------------------------------------------------------
+
 
 def ai_page(snap: dict) -> str:
     ai = snap.get("ai")
@@ -181,9 +233,11 @@ none of these numbers is a probability.</div>"""
     prob = f'<div class="banner info small"><strong>Probability not established</strong>{E(spec.AI_PROBABILITY_NOTE)}</div>'
     if not bands:
         v = snap.get("spec_version") or "unknown"
-        missing = (f'<div class="banner info"><strong>No AI lists in this snapshot</strong>This snapshot was collected under '
-                   f'methodology {E(str(v))}, before the AI lists existed (2026-10-14.7). The first weekly snapshot collected under the '
-                   f'new methodology adds them. The universe and rules below are the ones that run will use.</div>')
+        missing = (
+            f'<div class="banner info"><strong>No AI lists in this snapshot</strong>This snapshot was collected under '
+            f"methodology {E(str(v))}, before the AI lists existed (2026-10-14.7). The first weekly snapshot collected under the "
+            f"new methodology adds them. The universe and rules below are the ones that run will use.</div>"
+        )
         return head + prob + missing + _universe_table(snap, ai) + _private_section(ai)
     panels = []
     for key in AI_KEYS:
@@ -197,15 +251,26 @@ none of these numbers is a probability.</div>"""
 {growth_table(key, b)}<p class="small"><a href="downloads/{E(snap["as_of"])}_{key}.csv" download>Download CSV</a></p>
 {excluded_summary(key, b)}</section>""")
     ladder = (ai or {}).get("ladder") or {}
-    return (head + prob + f'<p class="small">Week ending {E(snap["as_of"])}. Quotes are end-of-session and delayed.</p>' +
-            "".join(panels) + _top20_table(bands, ladder) + _universe_table(snap, ai) + _private_section(ai))
+    return (
+        head
+        + prob
+        + f'<p class="small">Week ending {E(snap["as_of"])}. Quotes are end-of-session and delayed.</p>'
+        + "".join(panels)
+        + _top20_table(bands, ladder)
+        + _universe_table(snap, ai)
+        + _private_section(ai)
+    )
 
 
 def methodology_ai() -> str:
     """The AI rules as the methodology page shows them."""
-    rows = "".join(f"<tr><td>{E(role)}</td><td>{E(', '.join(t for t, r in spec.AI_UNIVERSE if r == role))}</td></tr>"
-                   for role in spec.AI_ROLES)
-    return (f'<h2 id="ai">AI-exposed lists (2026-10-14.7)</h2><p>{E(spec.AI_UNIVERSE_DEFINITION)}</p>'
-            f'<div class="table-wrap"><table aria-label="Registered AI universe"><thead><tr><th>Role</th><th>Registered stocks</th>'
-            f'</tr></thead><tbody>{rows}</tbody></table></div><p>{E(spec.AI_TOP20_RULE)}</p><p>{E(spec.AI_PRIVATE_RULE)}</p>'
-            f'<p>{E(spec.AI_PROBABILITY_NOTE)}</p>')
+    rows = "".join(
+        f"<tr><td>{E(role)}</td><td>{E(', '.join(t for t, r in spec.AI_UNIVERSE if r == role))}</td></tr>"
+        for role in spec.AI_ROLES
+    )
+    return (
+        f'<h2 id="ai">AI-exposed lists (2026-10-14.7)</h2><p>{E(spec.AI_UNIVERSE_DEFINITION)}</p>'
+        f'<div class="table-wrap"><table aria-label="Registered AI universe"><thead><tr><th>Role</th><th>Registered stocks</th>'
+        f"</tr></thead><tbody>{rows}</tbody></table></div><p>{E(spec.AI_TOP20_RULE)}</p><p>{E(spec.AI_PRIVATE_RULE)}</p>"
+        f"<p>{E(spec.AI_PROBABILITY_NOTE)}</p>"
+    )

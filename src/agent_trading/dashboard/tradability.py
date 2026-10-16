@@ -13,11 +13,12 @@ JSON results, and imports them here. The weekly run reads the stored verdicts:
 Only symbols, verdicts, reasons and check dates are stored, never an account
 number or any other account data.
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from . import spec
@@ -38,8 +39,10 @@ def verdict_from_result(r: dict) -> tuple[bool, str]:
         return False, "Robinhood: not tradeable"
     if str(r.get("state", "")).lower() != "active":
         return False, f"Robinhood: instrument state {r.get('state')!r}"
-    by_type = {str(x.get("account_type")): str(x.get("account_type_tradability"))
-               for x in r.get("account_type_tradabilities") or []}
+    by_type = {
+        str(x.get("account_type")): str(x.get("account_type_tradability"))
+        for x in r.get("account_type_tradabilities") or []
+    }
     if by_type.get("individual") != "tradable":
         return False, "Robinhood: not tradable in an individual account during regular hours"
     return True, ""
@@ -74,7 +77,7 @@ class Tradability:
     symbols: dict[str, dict] = field(default_factory=dict)
 
     @classmethod
-    def load(cls, data_dir: Path) -> "Tradability":
+    def load(cls, data_dir: Path) -> Tradability:
         p = Path(data_dir) / FILE
         if not p.exists():
             return cls()
@@ -84,11 +87,19 @@ class Tradability:
     def save(self, data_dir: Path) -> Path:
         p = Path(data_dir) / FILE
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({
-            "source": "Robinhood MCP get_equity_tradability (read-only), checked from a Claude session",
-            "rule": spec.TRADABILITY_RULE, "max_age_days": spec.TRADABILITY_MAX_AGE_DAYS,
-            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "symbols": dict(sorted(self.symbols.items()))}, indent=1), encoding="utf-8")
+        p.write_text(
+            json.dumps(
+                {
+                    "source": "Robinhood MCP get_equity_tradability (read-only), checked from a Claude session",
+                    "rule": spec.TRADABILITY_RULE,
+                    "max_age_days": spec.TRADABILITY_MAX_AGE_DAYS,
+                    "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+                    "symbols": dict(sorted(self.symbols.items())),
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
         return p
 
     def merge(self, verdicts: dict[str, dict]) -> int:
@@ -114,19 +125,28 @@ class Tradability:
         return (True, "") if v["tradable"] else (False, v.get("reason") or "Robinhood: not tradable")
 
     @classmethod
-    def all_tradable(cls, symbols, checked_at: str) -> "Tradability":
+    def all_tradable(cls, symbols, checked_at: str) -> Tradability:
         """For tests and fixtures."""
         return cls({canonical(s): {"tradable": True, "reason": "", "checked_at": checked_at} for s in symbols})
 
 
 def write_todo(data_dir: Path, todo: list[dict], as_of: date) -> Path:
     p = Path(data_dir) / TODO_FILE
-    p.write_text(json.dumps({"as_of": as_of.isoformat(), "count": len(todo),
-                             "instructions": "Check with the read-only Robinhood get_equity_tradability tool "
-                                             "(Agent-trading account, at most 10 symbols per call), save each "
-                                             "response, then run: python -m agent_trading.dashboard tradability "
-                                             "import --data <dir> <files>",
-                             "symbols": todo}, indent=1), encoding="utf-8")
+    p.write_text(
+        json.dumps(
+            {
+                "as_of": as_of.isoformat(),
+                "count": len(todo),
+                "instructions": "Check with the read-only Robinhood get_equity_tradability tool "
+                "(Agent-trading account, at most 10 symbols per call), save each "
+                "response, then run: python -m agent_trading.dashboard tradability "
+                "import --data <dir> <files>",
+                "symbols": todo,
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
     return p
 
 

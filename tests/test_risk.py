@@ -47,7 +47,7 @@ def test_whole_shares_mode_rounds_down():
 
 def test_dust_positions_skipped():
     # Only $0.003 of open-risk budget left: ~$0.06 position, below the $1 minimum.
-    d =size_position(1000, 1000, 65, 61.83, open_risk=14.997, cfg=CFG)
+    d = size_position(1000, 1000, 65, 61.83, open_risk=14.997, cfg=CFG)
     assert d.quantity == 0 and "minimum order" in d.limited_by
     ok = size_position(1000, 1000, 65, 61.83, open_risk=0, cfg=CFG)
     assert ok.notional >= CFG.min_order_notional

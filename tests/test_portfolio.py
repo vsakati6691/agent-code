@@ -1,4 +1,5 @@
 """Allocation (target-weight) engine: timing, risk caps, no look-ahead, stops."""
+
 from dataclasses import replace
 
 import pandas as pd
@@ -12,6 +13,7 @@ from .conftest import make_bars
 def equal(symbols):
     def fn(day, history):
         return {s: 1 / len(symbols) for s in symbols}
+
     return fn
 
 
@@ -30,13 +32,15 @@ def test_first_fills_at_open_after_first_month_end(settings, three):
     dates = list(three["A"].index)
     flags = month_end_flags(dates)
     # the first month-end with a full ATR(14) history behind it
-    first_me = next(d for i, (d, f) in enumerate(zip(dates, flags)) if f and i >= 14)
+    first_me = next(d for i, (d, f) in enumerate(zip(dates, flags, strict=False)) if f and i >= 14)
     first_fill = dates[dates.index(first_me) + 1]
     entries = sorted(t.entry_date for t in res.trades)
     assert entries[0] == first_fill.date()
     for t in res.trades:
         if t.entry_date == first_fill.date():
-            assert t.entry_price == pytest.approx(three[t.symbol].loc[first_fill, "open"] * (1 + settings.costs.per_side))
+            assert t.entry_price == pytest.approx(
+                three[t.symbol].loc[first_fill, "open"] * (1 + settings.costs.per_side)
+            )
 
 
 def test_weights_fn_never_sees_the_future(settings, three):
@@ -56,7 +60,7 @@ def test_existing_risk_caps_bind(settings, three):
     res = run_allocation(three, settings, equal(list(three)))
     buffer = settings.risk.stop_risk_buffer
     for t in res.trades:
-        equity_before = res.equity.loc[:pd.Timestamp(t.entry_date) - pd.Timedelta(days=1)]
+        equity_before = res.equity.loc[: pd.Timestamp(t.entry_date) - pd.Timedelta(days=1)]
         eq = equity_before.iloc[-1] if not equity_before.empty else settings.paper_starting_equity
         assert t.quantity * (t.entry_price - t.stop) * (1 + buffer) <= 0.005 * eq + 0.01  # 0.5% of current equity
         assert t.quantity * t.entry_price <= 0.25 * eq + 0.01
@@ -65,9 +69,18 @@ def test_existing_risk_caps_bind(settings, three):
 
 
 def test_relaxed_caps_track_buy_and_hold(settings, three):
-    loose = replace(settings, risk=replace(settings.risk, risk_per_trade_pct=0.01, max_open_risk_pct=0.05,
-                                           max_correlated_risk_pct=0.05, max_position_pct=1.0,
-                                           atr_stop_multiple=50.0, stop_risk_buffer=0.0))
+    loose = replace(
+        settings,
+        risk=replace(
+            settings.risk,
+            risk_per_trade_pct=0.01,
+            max_open_risk_pct=0.05,
+            max_correlated_risk_pct=0.05,
+            max_position_pct=1.0,
+            atr_stop_multiple=50.0,
+            stop_risk_buffer=0.0,
+        ),
+    )
     one = {"A": three["A"]}
     res = run_allocation(one, loose, equal(["A"]))
     assert res.metrics["trades"] >= 1
@@ -76,7 +89,7 @@ def test_relaxed_caps_track_buy_and_hold(settings, three):
 
 def test_dropped_symbol_sold_next_open(settings, three):
     dates = list(three["A"].index)
-    month_ends = [d for d, f in zip(dates, month_end_flags(dates)) if f]
+    month_ends = [d for d, f in zip(dates, month_end_flags(dates), strict=False) if f]
     cutoff = month_ends[3]  # hold B for a few months, then drop it
 
     def fn(day, history):
@@ -94,8 +107,8 @@ def test_stopped_position_waits_for_next_rebalance(settings):
     df = make_bars(n=120, seed=3, drift=0.0, vol=0.01, start=100)
     dates = list(df.index)
     flags = month_end_flags(dates)
-    me = [d for d, f in zip(dates, flags) if f]
-    crash_day = dates[dates.index(me[1]) - 5]          # inside the second month of holding
+    me = [d for d, f in zip(dates, flags, strict=False) if f]
+    crash_day = dates[dates.index(me[1]) - 5]  # inside the second month of holding
     df.loc[crash_day:, ["open", "high", "low", "close"]] *= 0.9
     df.loc[crash_day, "open"] = df.loc[crash_day, "close"] / 0.9 * 0.97
     df.loc[crash_day, "high"] = max(df.loc[crash_day, "high"], df.loc[crash_day, "open"])

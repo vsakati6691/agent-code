@@ -10,6 +10,7 @@ Nothing here can place a real order. When `live.enabled`, the post-close run
 also writes manual order tickets for the real account (see live.py); the
 account owner places them in the Robinhood app.
 """
+
 from __future__ import annotations
 
 import math
@@ -34,9 +35,11 @@ from .risk import PortfolioState
 from .strategies.desk import DeskDecision, Position, next_session, run_desk
 from .strategies.scanner import ScanResult, run_scan
 
-DISCLAIMER = ("> Research output, not investment advice. This system never places orders: live tickets are "
-              "rule output for the account owner to review and place by hand. Signals are hypotheses; confidence "
-              "labels are rule counts, not probabilities.")
+DISCLAIMER = (
+    "> Research output, not investment advice. This system never places orders: live tickets are "
+    "rule output for the account owner to review and place by hand. Signals are hypotheses; confidence "
+    "labels are rule counts, not probabilities."
+)
 
 
 @dataclass
@@ -99,26 +102,38 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
     ctx.code = code_version(settings.base_dir)
     ctx.config_hash = config_hash(settings)
     if label == "premarket" and (missed := missed_postclose(settings, as_of)) is not None:
-        ctx.missed_run = (f"no post-close run log for {missed} (data/runs/{missed}_postclose_*.json): the scheduled "
-                          "post-close run did not run or did not finish. Tickets shown here may be stale, and that "
-                          "day's paper fills, stops and loss-limit checks did not happen. Check the scheduled task "
-                          "and rerun the post-close cycle.")
+        ctx.missed_run = (
+            f"no post-close run log for {missed} (data/runs/{missed}_postclose_*.json): the scheduled "
+            "post-close run did not run or did not finish. Tickets shown here may be stale, and that "
+            "day's paper fills, stops and loss-limit checks did not happen. Check the scheduled task "
+            "and rerun the post-close cycle."
+        )
     svc = MarketDataService(settings)
     journal = Journal(settings.resolve(settings.paths.journal_db))
 
     # --- inputs
     universe = load_universe(settings)
     problems = universe_problems(universe, settings, as_of)
-    ctx.universe_note = "; ".join(problems) if problems else f"{len(universe.tickers)} constituents as of {universe.as_of} ({universe.source})"
+    ctx.universe_note = (
+        "; ".join(problems)
+        if problems
+        else f"{len(universe.tickers)} constituents as of {universe.as_of} ({universe.source})"
+    )
     snaps = {k: load_snapshot(settings, k) for k in ("fundamentals", "quotes", "news", "filings", "econ")}
     ctx.snapshots = snaps
     for k, s in snaps.items():
         if s is None:
             ctx.data_notes.append(f"{k}: not available")
         else:
-            ctx.data_notes.append(f"{k}: {len(s.table)} rows from {s.source}, fetched {s.fetched_at:%Y-%m-%d %H:%M} UTC "
-                                  f"({s.age_hours():.0f}h old)")
-    fund = snaps["fundamentals"].table if snaps["fundamentals"] is not None and snaps["fundamentals"].age_hours() <= 72 else None
+            ctx.data_notes.append(
+                f"{k}: {len(s.table)} rows from {s.source}, fetched {s.fetched_at:%Y-%m-%d %H:%M} UTC "
+                f"({s.age_hours():.0f}h old)"
+            )
+    fund = (
+        snaps["fundamentals"].table
+        if snaps["fundamentals"] is not None and snaps["fundamentals"].age_hours() <= 72
+        else None
+    )
     quotes = snaps["quotes"].table if snaps["quotes"] is not None and snaps["quotes"].age_hours() <= 24 else None
     cal = svc.earnings(as_of)
     lookup = _earnings_lookup(fund, cal, as_of)
@@ -126,8 +141,11 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
     # --- Strategy A
     sc = settings.scanner
     gtaa_assets = list(settings.gtaa.assets) if settings.gtaa.enabled else []
-    desk_syms = list(dict.fromkeys([*settings.desk.symbols, settings.desk.underlying, settings.desk.nvda_benchmark,
-                                    sc.benchmark, *gtaa_assets]))
+    desk_syms = list(
+        dict.fromkeys(
+            [*settings.desk.symbols, settings.desk.underlying, settings.desk.nvda_benchmark, sc.benchmark, *gtaa_assets]
+        )
+    )
     loaded_desk = svc.load(desk_syms, as_of)
     bench = loaded_desk.bars.get(sc.benchmark)
     if bench is not None:
@@ -135,15 +153,20 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
     if universe is not None and not problems:
         loaded = svc.load(universe.tickers, as_of)
         ctx.coverage = coverage(universe, list(loaded.bars), loaded.rejected)
-        ctx.scan = run_scan(loaded.bars, settings, as_of, fund, quotes,
-                            cal.table if cal.available else None, bench)
+        ctx.scan = run_scan(loaded.bars, settings, as_of, fund, quotes, cal.table if cal.available else None, bench)
     elif universe is not None:
         ctx.data_notes.append("Strategy A skipped: " + "; ".join(problems))
 
     # --- Strategy B
     open_df = journal.open_trades()
-    positions = {t.symbol: Position(t.quantity, t.entry_price, t.stop_price, date.fromisoformat(t.entry_date))
-                 for t in open_df.itertuples()} if not open_df.empty else {}
+    positions = (
+        {
+            t.symbol: Position(t.quantity, t.entry_price, t.stop_price, date.fromisoformat(t.entry_date))
+            for t in open_df.itertuples()
+        }
+        if not open_df.empty
+        else {}
+    )
     events = high_impact_events(snaps["econ"], next_session(as_of), settings.desk.event_blackout_days)
     ctx.desk_regime, ctx.desk = run_desk(loaded_desk.bars, settings, as_of, positions, events, lookup)
 
@@ -156,19 +179,40 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
         cal_days = list(bench.index) if bench is not None else []
         ctx.gtaa_rebalance = gtaa_mod.is_rebalance_day(cal_days, as_of)
         if ctx.gtaa_rebalance:
-            held_c = set(open_df.loc[open_df["strategy"] == "C-gtaa", "symbol"]) if not open_df.empty and "strategy" in open_df else set()
+            held_c = (
+                set(open_df.loc[open_df["strategy"] == "C-gtaa", "symbol"])
+                if not open_df.empty and "strategy" in open_df
+                else set()
+            )
             intents += _gtaa_intents(settings, ctx.gtaa, loaded_desk.bars, held_c)
     if ctx.scan is not None:
         for s in ctx.scan.actionable:
-            intents.append(Intent(s.ticker, "buy", s.entry_ref, s.stop, "A-scanner",
-                                  f"scanner rank {s.rank} (score {s.composite:.2f})", s.composite))
+            intents.append(
+                Intent(
+                    s.ticker,
+                    "buy",
+                    s.entry_ref,
+                    s.stop,
+                    "A-scanner",
+                    f"scanner rank {s.rank} (score {s.composite:.2f})",
+                    s.composite,
+                )
+            )
         tbl = ctx.scan.table
         for sym in positions:
             if sym in tbl.index and sym not in settings.desk.symbols:
                 row = tbl.loc[sym]
                 if row["close"] < row["sma50"] or row["setup"] == "bearish":
-                    intents.append(Intent(sym, "sell", float(row["close"]), None, "A-scanner",
-                                          "close below the 50-day SMA" if row["close"] < row["sma50"] else "setup turned bearish"))
+                    intents.append(
+                        Intent(
+                            sym,
+                            "sell",
+                            float(row["close"]),
+                            None,
+                            "A-scanner",
+                            "close below the 50-day SMA" if row["close"] < row["sma50"] else "setup turned bearish",
+                        )
+                    )
     all_bars = dict(loaded_desk.bars)
     if ctx.scan is not None:
         all_bars.update(loaded.bars)
@@ -179,8 +223,10 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
         broker._set_meta("spec_start_date", as_of.isoformat())
         frozen = ctx.config_hash
     if frozen is not None and frozen != ctx.config_hash:
-        ctx.spec_warning = (f"configuration changed during the paper evaluation (frozen {frozen}, now {ctx.config_hash}); "
-                            "results after the change are a new experiment, not the same out-of-sample period")
+        ctx.spec_warning = (
+            f"configuration changed during the paper evaluation (frozen {frozen}, now {ctx.config_hash}); "
+            "results after the change are a new experiment, not the same out-of-sample period"
+        )
     if run_paper and all_bars:
         res = broker.run(all_bars, as_of, intents)
         ctx.paper_events, ctx.paper_warnings, ctx.proposals = res.events, res.warnings, res.new_orders
@@ -220,8 +266,9 @@ def _gtaa_intents(settings: Settings, signals: dict, bars: dict[str, pd.DataFram
     return out
 
 
-def _run_live(settings: Settings, journal: Journal, ctx: DailyContext, desk_bars, all_bars, events, lookup,
-              issue: bool) -> LiveResult:
+def _run_live(
+    settings: Settings, journal: Journal, ctx: DailyContext, desk_bars, all_bars, events, lookup, issue: bool
+) -> LiveResult:
     """Re-run the live strategies against the REAL account's positions and write tickets.
 
     Tickets are issued only by the main (post-close) cycle; other runs show the
@@ -243,16 +290,21 @@ def _run_live(settings: Settings, journal: Journal, ctx: DailyContext, desk_bars
     if "C-gtaa" in settings.live.strategies and ctx.gtaa_rebalance:
         live_intents += _gtaa_intents(settings, ctx.gtaa, desk_bars, set(res.positions))
     if "A-scanner" in settings.live.strategies and ctx.scan is not None:
-        live_intents += [Intent(s.ticker, "buy", s.entry_ref, s.stop, "A-scanner", f"scanner rank {s.rank}", s.composite)
-                         for s in ctx.scan.actionable]
+        live_intents += [
+            Intent(s.ticker, "buy", s.entry_ref, s.stop, "A-scanner", f"scanner rank {s.rank}", s.composite)
+            for s in ctx.scan.actionable
+        ]
     res = live_mod.build_tickets(settings, res, snap, live_intents, all_bars)
     # final fail-closed gate: only approved tickets are ever written
-    gate = order_gate.check_tickets(settings, res.tickets, snap, ctx.as_of, all_bars, res.status,
-                                    issued_today=res.issued_today)
+    gate = order_gate.check_tickets(
+        settings, res.tickets, snap, ctx.as_of, all_bars, res.status, issued_today=res.issued_today
+    )
     if gate.engage_kill_switch:
         killswitch.engage(settings, gate.engage_kill_switch)
-        res.warnings.append(f"KILL SWITCH ENGAGED: {gate.engage_kill_switch}. Review the account, then release it "
-                            "with `kill-switch release`")
+        res.warnings.append(
+            f"KILL SWITCH ENGAGED: {gate.engage_kill_switch}. Review the account, then release it "
+            "with `kill-switch release`"
+        )
     res.warnings += [f"order gate blocked all tickets: {b}" for b in gate.blockers]
     res.skipped += [f"{t.symbol} ({t.side}): order gate: {why}" for t, why in gate.rejected if not gate.blockers]
     # append-only per ticket day: earlier same-day tickets may already be placed, so they are never replaced
@@ -267,37 +319,82 @@ def _write_manifest(settings: Settings, ctx: DailyContext, label: str, intents, 
 
     scan = ctx.scan
     payload = {
-        "as_of": ctx.as_of, "label": label, "mode": settings.mode,
-        "code": ctx.code, "config_hash": ctx.config_hash, "frozen_spec_hash": frozen,
-        "spec_start_date": broker._meta("spec_start_date"), "spec_warning": ctx.spec_warning or None,
+        "as_of": ctx.as_of,
+        "label": label,
+        "mode": settings.mode,
+        "code": ctx.code,
+        "config_hash": ctx.config_hash,
+        "frozen_spec_hash": frozen,
+        "spec_start_date": broker._meta("spec_start_date"),
+        "spec_warning": ctx.spec_warning or None,
         "missed_run": ctx.missed_run or None,
-        "inputs": {k: (None if s is None else {"source": s.source, "fetched_at": s.fetched_at, "rows": len(s.table)})
-                   for k, s in ctx.snapshots.items()},
-        "universe": ctx.universe_note, "coverage": ctx.coverage, "data_notes": ctx.data_notes,
-        "scanner": None if scan is None else {
+        "inputs": {
+            k: (None if s is None else {"source": s.source, "fetched_at": s.fetched_at, "rows": len(s.table)})
+            for k, s in ctx.snapshots.items()
+        },
+        "universe": ctx.universe_note,
+        "coverage": ctx.coverage,
+        "data_notes": ctx.data_notes,
+        "scanner": None
+        if scan is None
+        else {
             "scanned": len(scan.table),
-            "research_top": [{"ticker": s.ticker, "rank": s.rank, "score": s.composite, "setup": s.setup} for s in scan.research],
-            "actionable": [{"ticker": s.ticker, "entry_ref": s.entry_ref, "stop": s.stop, "target": s.target,
-                            "evidence": s.evidence, "risks": s.risks} for s in scan.actionable],
-            "rejected": scan.rejected, "bearish": scan.bearish},
-        "desk": [{"symbol": d.symbol, "action": d.action, "confidence": d.confidence, "price": d.price,
-                  "price_date": d.price_date, "stop": d.stop, "reasons": d.reasons} for d in ctx.desk],
+            "research_top": [
+                {"ticker": s.ticker, "rank": s.rank, "score": s.composite, "setup": s.setup} for s in scan.research
+            ],
+            "actionable": [
+                {
+                    "ticker": s.ticker,
+                    "entry_ref": s.entry_ref,
+                    "stop": s.stop,
+                    "target": s.target,
+                    "evidence": s.evidence,
+                    "risks": s.risks,
+                }
+                for s in scan.actionable
+            ],
+            "rejected": scan.rejected,
+            "bearish": scan.bearish,
+        },
+        "desk": [
+            {
+                "symbol": d.symbol,
+                "action": d.action,
+                "confidence": d.confidence,
+                "price": d.price,
+                "price_date": d.price_date,
+                "stop": d.stop,
+                "reasons": d.reasons,
+            }
+            for d in ctx.desk
+        ],
         "gtaa": {"rebalance_day": ctx.gtaa_rebalance, "signals": ctx.gtaa},
         "intents": [i.__dict__ for i in intents],
         "proposals": [p.__dict__ for p in ctx.proposals],
-        "paper_events": ctx.paper_events, "paper_warnings": ctx.paper_warnings,
+        "paper_events": ctx.paper_events,
+        "paper_warnings": ctx.paper_warnings,
         "risk_status": None if ctx.status is None else ctx.status.__dict__,
-        "live": None if ctx.live is None or not ctx.live.enabled else {
-            "verified": ctx.live.verified, "account": ctx.live.account_note, "equity": ctx.live.equity,
-            "cash": ctx.live.cash, "status": None if ctx.live.status is None else ctx.live.status.__dict__,
-            "tickets_date": ctx.live.tickets_date, "tickets": [t.__dict__ for t in ctx.live.tickets],
-            "skipped": ctx.live.skipped, "warnings": ctx.live.warnings,
-            "previous_date": ctx.live.previous_date, "previous": ctx.live.previous},
+        "live": None
+        if ctx.live is None or not ctx.live.enabled
+        else {
+            "verified": ctx.live.verified,
+            "account": ctx.live.account_note,
+            "equity": ctx.live.equity,
+            "cash": ctx.live.cash,
+            "status": None if ctx.live.status is None else ctx.live.status.__dict__,
+            "tickets_date": ctx.live.tickets_date,
+            "tickets": [t.__dict__ for t in ctx.live.tickets],
+            "skipped": ctx.live.skipped,
+            "warnings": ctx.live.warnings,
+            "previous_date": ctx.live.previous_date,
+            "previous": ctx.live.previous,
+        },
     }
     return write_manifest(settings, ctx.as_of, label, payload)
 
 
 # ---------------------------------------------------------------- rendering
+
 
 def _table(headers, rows):
     if not rows:
@@ -311,12 +408,20 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     as_of = ctx.as_of
     dirty = " (uncommitted changes)" if ctx.code.get("dirty") else ""
     lv = ctx.live
-    mode = ("PAPER + LIVE TICKETS (" + ", ".join(settings.live.strategies) + "; placed by hand)"
-            if lv is not None and lv.enabled else "PAPER")
-    out = [f"# Daily trading research: {as_of}", "",
-           f"**Mode: {mode}** · generated {datetime.now():%Y-%m-%d %H:%M} local · code {ctx.code.get('commit', '?')}{dirty} · "
-           f"config {ctx.config_hash} · run log `{Path(ctx.manifest_path).name if ctx.manifest_path else 'n/a'}`", "",
-           DISCLAIMER, ""]
+    mode = (
+        "PAPER + LIVE TICKETS (" + ", ".join(settings.live.strategies) + "; placed by hand)"
+        if lv is not None and lv.enabled
+        else "PAPER"
+    )
+    out = [
+        f"# Daily trading research: {as_of}",
+        "",
+        f"**Mode: {mode}** · generated {datetime.now():%Y-%m-%d %H:%M} local · code {ctx.code.get('commit', '?')}{dirty} · "
+        f"config {ctx.config_hash} · run log `{Path(ctx.manifest_path).name if ctx.manifest_path else 'n/a'}`",
+        "",
+        DISCLAIMER,
+        "",
+    ]
     if ctx.missed_run:
         out += [f"> ⚠ **MISSED RUN:** {ctx.missed_run}", ""]
     if ctx.spec_warning:
@@ -329,51 +434,87 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     out += ["## Section A: S&P 500 scanner", ""]
     if ctx.market:
         m = ctx.market
-        out.append(f"**Market regime ({settings.scanner.benchmark}, {m['date']}):** trend **{m['trend']}**, volatility "
-                   f"{m['volatility']} ({_pct(m['realized_vol'], 0)} annualised), {_pct(m['close_vs_slow_ma'])} vs 200-day SMA.\n")
+        out.append(
+            f"**Market regime ({settings.scanner.benchmark}, {m['date']}):** trend **{m['trend']}**, volatility "
+            f"{m['volatility']} ({_pct(m['realized_vol'], 0)} annualised), {_pct(m['close_vs_slow_ma'])} vs 200-day SMA.\n"
+        )
     events = high_impact_events(ctx.snapshots.get("econ"), as_of, 7)
     if events is None:
         out.append("**Economic calendar:** unavailable or stale. Event risk is unverified.\n")
     elif not events.empty:
-        out.append("**High-impact US releases (next 7 days):** " + "; ".join(
-            f"{r.date} {r.name}" for r in events.drop_duplicates(["date", "name"]).itertuples()) + "\n")
+        out.append(
+            "**High-impact US releases (next 7 days):** "
+            + "; ".join(f"{r.date} {r.name}" for r in events.drop_duplicates(["date", "name"]).itertuples())
+            + "\n"
+        )
     cov = ctx.coverage
     if cov is None:
         out.append("**Coverage:** scan not run (see data notes).\n")
     else:
         flag = "" if cov["ratio"] >= settings.scanner.min_coverage else " ⚠ **incomplete scan**"
-        out.append(f"**Coverage:** scanned {cov['scanned']} of {cov['expected']} constituents ({cov['ratio']:.1%}){flag}.")
+        out.append(
+            f"**Coverage:** scanned {cov['scanned']} of {cov['expected']} constituents ({cov['ratio']:.1%}){flag}."
+        )
         if cov["missing"]:
             sample = list(cov["missing"].items())[:10]
-            out.append("Missing: " + "; ".join(f"{t} ({r.split(': ', 1)[-1]})" for t, r in sample)
-                       + (f"; +{len(cov['missing']) - 10} more" if len(cov["missing"]) > 10 else "") + "\n")
+            out.append(
+                "Missing: "
+                + "; ".join(f"{t} ({r.split(': ', 1)[-1]})" for t, r in sample)
+                + (f"; +{len(cov['missing']) - 10} more" if len(cov["missing"]) > 10 else "")
+                + "\n"
+            )
         else:
             out.append("")
     scan = ctx.scan
     if scan is not None and not scan.table.empty:
-        out += ["> ⚠ **Evidence:** a point-in-time backtest of this ranking (price factors, S&P 500 lists 2019–2025, "
-                "`evaluate-scanner`) did **not** beat SPY and its score had no significant predictive power (rank IC ≈ 0). "
-                "Treat these as research candidates; paper results will show whether fundamentals add anything.", "",
-                "### Top 10 research candidates (ranked by composite score)", "",
-                "Score = 0.35 price strength (12-1 momentum, RS vs SPY, distance above 200-day, one combined factor) "
-                "+ 0.10 up/down volume + 0.20 quality (operating margin, ROE) + 0.10 valuation (forward earnings yield within sector) "
-                "+ 0.25 low volatility. Missing factors are reweighted and listed.", ""]
+        out += [
+            "> ⚠ **Evidence:** a point-in-time backtest of this ranking (price factors, S&P 500 lists 2019–2025, "
+            "`evaluate-scanner`) did **not** beat SPY and its score had no significant predictive power (rank IC ≈ 0). "
+            "Treat these as research candidates; paper results will show whether fundamentals add anything.",
+            "",
+            "### Top 10 research candidates (ranked by composite score)",
+            "",
+            "Score = 0.35 price strength (12-1 momentum, RS vs SPY, distance above 200-day, one combined factor) "
+            "+ 0.10 up/down volume + 0.20 quality (operating margin, ROE) + 0.10 valuation (forward earnings yield within sector) "
+            "+ 0.25 low volatility. Missing factors are reweighted and listed.",
+            "",
+        ]
         rows = []
         for s in scan.research:
             r = scan.table.loc[s.ticker]
-            rows.append([s.rank, s.ticker, _fmt(r["close"]), f"{s.composite:.2f}", s.setup, _pct(r["mom_12_1"]),
-                         _pct(r["rs_63"]), _fmt(r["rsi"], 0), s.earnings_date or "unverified", r["missing_factors"] or "-"])
-        out.append(_table(["#", "Ticker", "Close", "Score", "Setup", "12-1 mom", "RS vs SPY 63d", "RSI", "Earnings", "Missing"], rows))
+            rows.append(
+                [
+                    s.rank,
+                    s.ticker,
+                    _fmt(r["close"]),
+                    f"{s.composite:.2f}",
+                    s.setup,
+                    _pct(r["mom_12_1"]),
+                    _pct(r["rs_63"]),
+                    _fmt(r["rsi"], 0),
+                    s.earnings_date or "unverified",
+                    r["missing_factors"] or "-",
+                ]
+            )
+        out.append(
+            _table(
+                ["#", "Ticker", "Close", "Score", "Setup", "12-1 mom", "RS vs SPY 63d", "RSI", "Earnings", "Missing"],
+                rows,
+            )
+        )
         out += ["### Top actionable setups (passed every filter)", ""]
         if not scan.actionable:
             out.append("_None today. Cash is a valid position._\n")
         for s in scan.actionable:
-            out += [f"**{s.ticker}** (rank {s.rank}, score {s.composite:.2f}, {s.setup})",
-                    f"- Entry: next open, reference {_fmt(s.entry_ref)}; skip above {_fmt(s.max_entry)}",
-                    f"- Invalidation / stop: {_fmt(s.stop)} ({settings.risk.atr_stop_multiple} × ATR); a stop does not guarantee the fill price",
-                    f"- Target: {_fmt(s.target)} ({s.reward_risk:.0f}R methodology); holding: {s.holding_period}",
-                    "- Evidence: " + "; ".join(s.evidence),
-                    "- Risks: " + "; ".join(s.risks), ""]
+            out += [
+                f"**{s.ticker}** (rank {s.rank}, score {s.composite:.2f}, {s.setup})",
+                f"- Entry: next open, reference {_fmt(s.entry_ref)}; skip above {_fmt(s.max_entry)}",
+                f"- Invalidation / stop: {_fmt(s.stop)} ({settings.risk.atr_stop_multiple} × ATR); a stop does not guarantee the fill price",
+                f"- Target: {_fmt(s.target)} ({s.reward_risk:.0f}R methodology); holding: {s.holding_period}",
+                "- Evidence: " + "; ".join(s.evidence),
+                "- Risks: " + "; ".join(s.risks),
+                "",
+            ]
         if scan.rejected:
             out += ["### Rejected high-ranked candidates", ""]
             out += [f"- **{t}**: " + "; ".join(r) for t, r in list(scan.rejected.items())[:10]]
@@ -385,8 +526,10 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     out += ["## Section B: Focused desk (TQQQ, SQQQ, IBIT, NVDA)", ""]
     reg = ctx.desk_regime
     if reg:
-        out.append(f"**QQQ regime:** {reg['trend']} trend, {'above' if reg['above_sma20'] else 'below'} 20-day SMA, "
-                   f"20-day volatility {reg['vol20']:.0%} (as of {reg['date']}).\n")
+        out.append(
+            f"**QQQ regime:** {reg['trend']} trend, {'above' if reg['above_sma20'] else 'below'} 20-day SMA, "
+            f"20-day volatility {reg['vol20']:.0%} (as of {reg['date']}).\n"
+        )
     news = ctx.snapshots.get("news")
     qsnap = ctx.snapshots.get("quotes")
     live = {}
@@ -398,11 +541,15 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
         out.append(f"- Price: {_fmt(d.price)} (close of {d.price_date}; latest verified daily bar)")
         q = live.get(d.symbol)
         if q is not None and pd.notna(q.price):
-            out.append(f"- Live quote: {_fmt(q.price)} at {q.price_time} ({q.session} session; Robinhood); "
-                       f"spread {_pct(q.spread_pct, 2) if pd.notna(q.spread_pct) else 'n/a'}")
+            out.append(
+                f"- Live quote: {_fmt(q.price)} at {q.price_time} ({q.session} session; Robinhood); "
+                f"spread {_pct(q.spread_pct, 2) if pd.notna(q.spread_pct) else 'n/a'}"
+            )
             if d.position and q.price <= d.position.stop:
-                out.append(f"- ⚠ **Live price is at or below the stop {_fmt(d.position.stop)}**; the paper stop is "
-                           "applied on the daily bar after the close")
+                out.append(
+                    f"- ⚠ **Live price is at or below the stop {_fmt(d.position.stop)}**; the paper stop is "
+                    "applied on the daily bar after the close"
+                )
         out.append(f"- Trend: {d.trend}")
         out.append("- Reasons: " + "; ".join(d.reasons))
         if d.action in ("BUY", "WAIT"):
@@ -411,10 +558,14 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
             out.append(f"- Invalidation / stop: {_fmt(d.stop)}")
         p = proposals.get(d.symbol)
         if p is not None:
-            out.append(f"- Paper sizing: {('qty ' + format(p.quantity, 'g') + f', notional ${p.notional:,.2f}, planned risk ${p.risk:,.2f}') if p.approved else 'not sized: ' + p.reason}")
+            out.append(
+                f"- Paper sizing: {('qty ' + format(p.quantity, 'g') + f', notional ${p.notional:,.2f}, planned risk ${p.risk:,.2f}') if p.approved else 'not sized: ' + p.reason}"
+            )
         if d.position:
             unreal = (d.price - d.position.entry_price) * d.position.quantity if d.price else None
-            out.append(f"- Paper position: {d.position.quantity:g} @ {_fmt(d.position.entry_price)} since {d.position.entry_date}; unrealized ${_fmt(unreal)}")
+            out.append(
+                f"- Paper position: {d.position.quantity:g} @ {_fmt(d.position.entry_price)} since {d.position.entry_date}; unrealized ${_fmt(unreal)}"
+            )
         out.append(f"- Holding period: {d.holding_period}")
         out.append(f"- What would change the decision: {d.what_changes}")
         if d.catalysts:
@@ -427,15 +578,32 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
 
     # ---------------- Strategy C (GTAA)
     if ctx.gtaa:
-        out += ["## Strategy C: GTAA multi-asset trend (month-end)", "",
-                f"Rule: hold each asset (1/{len(ctx.gtaa)} target, sized by the RiskEngine) while its month-end close is above its "
-                f"{settings.gtaa.sma_months}-month average. "
-                + ("**Today is a rebalance day**: signals below are acted on at the next open." if ctx.gtaa_rebalance
-                   else "Not a rebalance day; signals below use the current month's latest close and are informational."), ""]
-        out.append(_table(["Asset", "Latest close", f"{settings.gtaa.sma_months}-month avg", "Signal"],
-                          [[a, _fmt(s["close"]), _fmt(s["sma"]),
-                            "n/a: " + s["reason"] if s["above"] is None else ("hold" if s["above"] else "cash")]
-                           for a, s in ctx.gtaa.items()]))
+        out += [
+            "## Strategy C: GTAA multi-asset trend (month-end)",
+            "",
+            f"Rule: hold each asset (1/{len(ctx.gtaa)} target, sized by the RiskEngine) while its month-end close is above its "
+            f"{settings.gtaa.sma_months}-month average. "
+            + (
+                "**Today is a rebalance day**: signals below are acted on at the next open."
+                if ctx.gtaa_rebalance
+                else "Not a rebalance day; signals below use the current month's latest close and are informational."
+            ),
+            "",
+        ]
+        out.append(
+            _table(
+                ["Asset", "Latest close", f"{settings.gtaa.sma_months}-month avg", "Signal"],
+                [
+                    [
+                        a,
+                        _fmt(s["close"]),
+                        _fmt(s["sma"]),
+                        "n/a: " + s["reason"] if s["above"] is None else ("hold" if s["above"] else "cash"),
+                    ]
+                    for a, s in ctx.gtaa.items()
+                ],
+            )
+        )
 
     # ---------------- Section C
     out += ["## Section C: Account and portfolio risk", ""]
@@ -444,58 +612,87 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
         out.append("- Broker account: **not verified** (no snapshot imported)")
     else:
         probs = verify_snapshot(snap, settings)
-        out.append(f"- Broker account {snap.nickname} ••{snap.account_last4}: "
-                   f"{'verified' if not probs else 'NOT VERIFIED (' + '; '.join(probs) + ')'} as of {snap.fetched_at}; "
-                   f"value ${snap.total_value:,.2f}, cash ${snap.cash:,.2f}, buying power ${snap.buying_power:,.2f}, "
-                   f"{len(snap.positions)} positions, {len(snap.open_orders)} open orders")
+        out.append(
+            f"- Broker account {snap.nickname} ••{snap.account_last4}: "
+            f"{'verified' if not probs else 'NOT VERIFIED (' + '; '.join(probs) + ')'} as of {snap.fetched_at}; "
+            f"value ${snap.total_value:,.2f}, cash ${snap.cash:,.2f}, buying power ${snap.buying_power:,.2f}, "
+            f"{len(snap.positions)} positions, {len(snap.open_orders)} open orders"
+        )
     ks = killswitch.status(settings)
     al = settings.account_limits
-    out.append(f"- Kill switch: **{'ENGAGED since ' + ks.engaged_at + ': ' + ks.reason if ks.engaged else 'off'}**. "
-               f"Hard account limits: ${al.max_order_notional:g}/order, ${al.max_daily_purchases:g} and "
-               f"{al.max_daily_entries} entries/day, ${al.max_total_exposure:g} max exposure, "
-               f"${al.min_cash_reserve:g} cash reserve, no leveraged/inverse ETFs")
+    out.append(
+        f"- Kill switch: **{'ENGAGED since ' + ks.engaged_at + ': ' + ks.reason if ks.engaged else 'off'}**. "
+        f"Hard account limits: ${al.max_order_notional:g}/order, ${al.max_daily_purchases:g} and "
+        f"{al.max_daily_entries} entries/day, ${al.max_total_exposure:g} max exposure, "
+        f"${al.min_cash_reserve:g} cash reserve, no leveraged/inverse ETFs"
+    )
     if snap is not None:
         settled = snap.settled_cash
-        out.append(f"- Settled cash: {'UNKNOWN (no unsettled_funds in the snapshot; buys blocked)' if settled is None else f'${settled:,.2f}'}"
-                   + (f"; broker account type `{snap.account_type}` (margin is never used)" if snap.account_type else ""))
+        out.append(
+            f"- Settled cash: {'UNKNOWN (no unsettled_funds in the snapshot; buys blocked)' if settled is None else f'${settled:,.2f}'}"
+            + (f"; broker account type `{snap.account_type}` (margin is never used)" if snap.account_type else "")
+        )
     r = settings.risk
     if lv is not None and lv.enabled:
         if not lv.verified:
             out.append(f"- **Live account: NOT VERIFIED** ({lv.account_note}); no new live tickets")
         else:
-            out.append(f"- Live sizing: equity ${lv.equity:,.2f} and cash ${lv.cash:,.2f} available "
-                       f"(capped at ${settings.live.capital:,.0f}); planned open risk "
-                       f"${PortfolioState(lv.equity, lv.cash, live_mod.holdings_of(lv.positions)).open_risk(r.stop_risk_buffer):,.2f} "
-                       f"of ${lv.equity * r.max_open_risk_pct:,.2f}")
+            out.append(
+                f"- Live sizing: equity ${lv.equity:,.2f} and cash ${lv.cash:,.2f} available "
+                f"(capped at ${settings.live.capital:,.0f}); planned open risk "
+                f"${PortfolioState(lv.equity, lv.cash, live_mod.holdings_of(lv.positions)).open_risk(r.stop_risk_buffer):,.2f} "
+                f"of ${lv.equity * r.max_open_risk_pct:,.2f}"
+            )
             st_l = lv.status
             if st_l is not None:
-                out.append(f"- Live loss limits: day P&L ${st_l.day_pnl:,.2f}, drawdown ${st_l.drawdown:,.2f} from peak "
-                           f"${st_l.peak_equity:,.2f}: **{'new entries allowed' if st_l.new_entries_allowed else st_l.reason}**")
+                out.append(
+                    f"- Live loss limits: day P&L ${st_l.day_pnl:,.2f}, drawdown ${st_l.drawdown:,.2f} from peak "
+                    f"${st_l.peak_equity:,.2f}: **{'new entries allowed' if st_l.new_entries_allowed else st_l.reason}**"
+                )
             if lv.positions:
-                out.append("- Live positions: " + "; ".join(
-                    f"{s} {p.quantity:g} @ {_fmt(p.entry_price)}, stop " + (_fmt(p.stop) if p.stop > 0 else "UNKNOWN")
-                    for s, p in lv.positions.items()))
+                out.append(
+                    "- Live positions: "
+                    + "; ".join(
+                        f"{s} {p.quantity:g} @ {_fmt(p.entry_price)}, stop "
+                        + (_fmt(p.stop) if p.stop > 0 else "UNKNOWN")
+                        for s, p in lv.positions.items()
+                    )
+                )
         out += [f"- ⚠ {w}" for w in lv.warnings]
     state = portfolio_state(journal, settings, bars, pd.Timestamp(as_of))
-    out.append(f"- Paper equity ${state.equity:,.2f}, cash ${state.cash:,.2f}, planned open risk "
-               f"${state.open_risk(r.stop_risk_buffer):,.2f} of ${state.equity * r.max_open_risk_pct:,.2f}")
+    out.append(
+        f"- Paper equity ${state.equity:,.2f}, cash ${state.cash:,.2f}, planned open risk "
+        f"${state.open_risk(r.stop_risk_buffer):,.2f} of ${state.equity * r.max_open_risk_pct:,.2f}"
+    )
     st = ctx.status
     if st is not None:
-        out.append(f"- Loss limits: day P&L ${st.day_pnl:,.2f} (limit -${state.equity * r.daily_loss_limit_pct:,.2f}), "
-                   f"drawdown ${st.drawdown:,.2f} from peak ${st.peak_equity:,.2f} (limit {r.max_drawdown_pct:.0%}): "
-                   f"**{'new entries allowed' if st.new_entries_allowed else st.reason}**")
+        out.append(
+            f"- Loss limits: day P&L ${st.day_pnl:,.2f} (limit -${state.equity * r.daily_loss_limit_pct:,.2f}), "
+            f"drawdown ${st.drawdown:,.2f} from peak ${st.peak_equity:,.2f} (limit {r.max_drawdown_pct:.0%}): "
+            f"**{'new entries allowed' if st.new_entries_allowed else st.reason}**"
+        )
     pos = broker.positions(bars, as_of)
     out.append("")
-    out.append(_table(["Symbol", "Qty", "Entry", "Stop", "Last", "Unrealized"],
-                      [[p.symbol, f"{p.quantity:g}", _fmt(p.entry_price), _fmt(p.stop_price), _fmt(p.last), _fmt(p.unrealized)]
-                       for p in pos.itertuples()] if not pos.empty else []))
+    out.append(
+        _table(
+            ["Symbol", "Qty", "Entry", "Stop", "Last", "Unrealized"],
+            [
+                [p.symbol, f"{p.quantity:g}", _fmt(p.entry_price), _fmt(p.stop_price), _fmt(p.last), _fmt(p.unrealized)]
+                for p in pos.itertuples()
+            ]
+            if not pos.empty
+            else [],
+        )
+    )
     hist = broker.equity_history()
     bench = bars.get(settings.scanner.benchmark)
     if len(hist) >= 2 and bench is not None:
-        b = bench["close"].loc[hist.index[0]:hist.index[-1]]
+        b = bench["close"].loc[hist.index[0] : hist.index[-1]]
         if len(b) >= 2:
-            out.append(f"- Paper equity since {hist.index[0].date()}: {_pct(hist.iloc[-1] / hist.iloc[0] - 1)} vs "
-                       f"SPY {_pct(b.iloc[-1] / b.iloc[0] - 1)}")
+            out.append(
+                f"- Paper equity since {hist.index[0].date()}: {_pct(hist.iloc[-1] / hist.iloc[0] - 1)} vs "
+                f"SPY {_pct(b.iloc[-1] / b.iloc[0] - 1)}"
+            )
     else:
         out.append("- Performance vs SPY: not enough paper history yet")
     out.append("")
@@ -503,8 +700,10 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     # ---------------- Section D
     out += ["## Section D: Actions", "", "**1. Research findings**", ""]
     if scan is not None:
-        out.append(f"- Scanner: {len(scan.actionable)} actionable of {len(scan.table)} scanned; "
-                   f"top research name {scan.research[0].ticker if scan.research else 'n/a'}")
+        out.append(
+            f"- Scanner: {len(scan.actionable)} actionable of {len(scan.table)} scanned; "
+            f"top research name {scan.research[0].ticker if scan.research else 'n/a'}"
+        )
     out += [f"- {d.symbol}: {d.action}" for d in ctx.desk]
     out += ["", "**2. Paper-trading actions** (simulated; fills at the next open)", ""]
     out += [f"- {e}" for e in ctx.paper_events] or ["- none"]
@@ -530,16 +729,36 @@ def _render_tickets(settings: Settings, lv: LiveResult | None) -> list[str]:
     if not lv.tickets:
         out.append("_No tickets. Nothing to place._")
     else:
-        out += ["Place these yourself in the Robinhood app; this system never sends orders. Review each one first. "
-                "Place SELLs before BUYs, as day LIMIT orders at the price shown (skip a BUY if it does not fill that day). "
-                "After a BUY fills, add a good-till-cancelled STOP-LOSS SELL for the filled quantity at the stop price.", ""]
-        out.append(_table(["Side", "Symbol", "Qty", "Limit", "Stop-loss", "Notional", "Planned risk", "Strategy", "Why"],
-                          [[t.side.upper(), t.symbol, f"{t.quantity:g}", _fmt(t.limit_price),
-                            _fmt(t.stop_price) if t.stop_price else "-", _fmt(t.notional),
-                            _fmt(t.planned_risk) if t.side == "buy" else "-", t.strategy, t.reason] for t in lv.tickets]))
+        out += [
+            "Place these yourself in the Robinhood app; this system never sends orders. Review each one first. "
+            "Place SELLs before BUYs, as day LIMIT orders at the price shown (skip a BUY if it does not fill that day). "
+            "After a BUY fills, add a good-till-cancelled STOP-LOSS SELL for the filled quantity at the stop price.",
+            "",
+        ]
+        out.append(
+            _table(
+                ["Side", "Symbol", "Qty", "Limit", "Stop-loss", "Notional", "Planned risk", "Strategy", "Why"],
+                [
+                    [
+                        t.side.upper(),
+                        t.symbol,
+                        f"{t.quantity:g}",
+                        _fmt(t.limit_price),
+                        _fmt(t.stop_price) if t.stop_price else "-",
+                        _fmt(t.notional),
+                        _fmt(t.planned_risk) if t.side == "buy" else "-",
+                        t.strategy,
+                        t.reason,
+                    ]
+                    for t in lv.tickets
+                ],
+            )
+        )
         if any(t.fractional and t.side == "buy" for t in lv.tickets):
-            out.append("Fractional quantities: if the app will not accept a stop order for a fractional quantity, "
-                       "set a price alert at the stop and sell by hand when it triggers.")
+            out.append(
+                "Fractional quantities: if the app will not accept a stop order for a fractional quantity, "
+                "set a price alert at the stop and sell by hand when it triggers."
+            )
     out += [f"- Not ticketed: {s}" for s in lv.skipped]
     out.append("")
     return out

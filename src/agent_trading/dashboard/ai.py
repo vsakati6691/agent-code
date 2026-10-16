@@ -8,6 +8,7 @@ context. Pure functions over data the run already holds; nothing here fetches an
 * Private companies come from `config/ai_private_companies.json`. A valuation is accepted only with a source link
   and a date, and is always shown as reported and unverified; nothing is invented.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,8 +35,9 @@ def roles() -> dict[str, str]:
     return dict(spec.AI_UNIVERSE)
 
 
-def resolve_universe(sec: pd.DataFrame, dirs: pd.DataFrame, sp: pd.DataFrame
-                     ) -> tuple[list[tuple[str, int, str, str | None]], dict[str, str]]:
+def resolve_universe(
+    sec: pd.DataFrame, dirs: pd.DataFrame, sp: pd.DataFrame
+) -> tuple[list[tuple[str, int, str, str | None]], dict[str, str]]:
     """([(ticker, cik, name, sector)], {ticker: why it cannot be evaluated}) for spec.AI_UNIVERSE.
 
     Uses the same listing, common-stock and SEC-registrant checks as the broad universe. The sector comes from the
@@ -47,7 +49,9 @@ def resolve_universe(sec: pd.DataFrame, dirs: pd.DataFrame, sp: pd.DataFrame
             rejects[t] = "not in the current exchange listings (not listed yet, renamed or delisted)"
             continue
         d = dirs.loc[t]
-        why = common_stock_reason(str(d["name"]), bool(d["etf"]), bool(d["test_issue"]), str(d.get("financial_status", "")))
+        why = common_stock_reason(
+            str(d["name"]), bool(d["etf"]), bool(d["test_issue"]), str(d.get("financial_status", ""))
+        )
         if why is None and d["exchange"] not in spec.LISTED_EXCHANGES:
             why = f"listed on {d['exchange']} (not an eligible exchange)"
         if why is None and t not in sec.index:
@@ -62,14 +66,20 @@ def resolve_universe(sec: pd.DataFrame, dirs: pd.DataFrame, sp: pd.DataFrame
 
 def size_ladder(caps: dict[str, float], n: int = LADDER_SIZE) -> dict:
     """The largest market caps among the S&P 500 members that had valid data, and the 20th-largest as the bar."""
-    ranked = sorted(((float(c), t) for t, c in caps.items()
-                     if isinstance(c, (int, float)) and math.isfinite(c) and c > 0), reverse=True)
+    ranked = sorted(
+        ((float(c), t) for t, c in caps.items() if isinstance(c, (int, float)) and math.isfinite(c) and c > 0),
+        reverse=True,
+    )
     ok = len(ranked) >= 20
-    return {"basis": "S&P 500 members with valid data in this run (as-of close x SEC cover-page shares)",
-            "n_with_cap": len(ranked), "available": ok,
-            "threshold": ranked[19][0] if ok else None, "threshold_ticker": ranked[19][1] if ok else None,
-            "reason": None if ok else "fewer than 20 S&P 500 members had a valid market cap in this run",
-            "members": [{"rank": i, "ticker": t, "market_cap": c} for i, (c, t) in enumerate(ranked[:n], 1)]}
+    return {
+        "basis": "S&P 500 members with valid data in this run (as-of close x SEC cover-page shares)",
+        "n_with_cap": len(ranked),
+        "available": ok,
+        "threshold": ranked[19][0] if ok else None,
+        "threshold_ticker": ranked[19][1] if ok else None,
+        "reason": None if ok else "fewer than 20 S&P 500 members had a valid market cap in this run",
+        "members": [{"rank": i, "ticker": t, "market_cap": c} for i, (c, t) in enumerate(ranked[:n], 1)],
+    }
 
 
 def top20_test(c: dict, ladder: dict) -> dict:
@@ -77,14 +87,24 @@ def top20_test(c: dict, ladder: dict) -> dict:
 
     `c` is a stored candidate record (scenario years are string keys). Nothing here is a forecast or a probability."""
     thr = ladder.get("threshold")
-    out = {"status": "ok", "threshold": thr, "threshold_ticker": ladder.get("threshold_ticker"),
-           "market_cap_now": c.get("market_cap"), "rows": [], "current_vs_threshold": None, "reason": None}
+    out = {
+        "status": "ok",
+        "threshold": thr,
+        "threshold_ticker": ladder.get("threshold_ticker"),
+        "market_cap_now": c.get("market_cap"),
+        "rows": [],
+        "current_vs_threshold": None,
+        "reason": None,
+    }
     if thr is None:
         return {**out, "status": "unavailable", "reason": ladder.get("reason") or "no threshold this week"}
     sc = c.get("scenarios")
     if not sc:
-        return {**out, "status": "unavailable",
-                "reason": c.get("scenario_note") or "scenarios were not computed for this stock"}
+        return {
+            **out,
+            "status": "unavailable",
+            "reason": c.get("scenario_note") or "scenarios were not computed for this stock",
+        }
     now = c.get("market_cap")
     out["current_vs_threshold"] = now / thr if isinstance(now, (int, float)) and math.isfinite(now) else None
     for case in ("bear", "base", "bull"):
@@ -93,14 +113,22 @@ def top20_test(c: dict, ladder: dict) -> dict:
             if not v:
                 continue
             cap = v["value_per_share"] * v["shares"]
-            out["rows"].append({"case": case, "year": y, "market_cap": cap, "multiple_of_threshold": cap / thr,
-                                "above_today_bar": cap >= thr})
+            out["rows"].append(
+                {
+                    "case": case,
+                    "year": y,
+                    "market_cap": cap,
+                    "multiple_of_threshold": cap / thr,
+                    "above_today_bar": cap >= thr,
+                }
+            )
     if not out["rows"]:
         return {**out, "status": "unavailable", "reason": "the scenario table has no 5- or 10-year values"}
     return out
 
 
 # --- private companies ------------------------------------------------------------------------------------------
+
 
 def _https(url) -> bool:
     return isinstance(url, str) and url.startswith("https://") and len(url) > 12
@@ -136,9 +164,25 @@ def load_private(path: Path = PRIVATE_FILE) -> dict:
             raise PrivateConfigError(f"{name}: a record without a valuation needs no_valuation_reason")
         if (c.get("status_note") or c.get("status_source_url")) and not _https(c.get("status_source_url")):
             raise PrivateConfigError(f"{name}: a status note needs an https source link")
-        out.append({k: c.get(k) for k in ("name", "what", "valuation", "currency", "basis", "valuation_date",
-                                          "source_label", "source_url", "no_valuation_reason", "status_note",
-                                          "status_source_label", "status_source_url")})
+        out.append(
+            {
+                k: c.get(k)
+                for k in (
+                    "name",
+                    "what",
+                    "valuation",
+                    "currency",
+                    "basis",
+                    "valuation_date",
+                    "source_label",
+                    "source_url",
+                    "no_valuation_reason",
+                    "status_note",
+                    "status_source_label",
+                    "status_source_url",
+                )
+            }
+        )
     return {"reviewed_on": raw.get("reviewed_on"), "note": raw.get("note"), "companies": out}
 
 
@@ -155,5 +199,7 @@ def place_in_ladder(company: dict, ladder: dict) -> str | None:
         return f"below the {len(members)}th-largest S&P 500 member by market cap"
     if above == 0:
         return f"above the largest S&P 500 member today ({members[0]['ticker']})"
-    return (f"between #{above} ({members[above - 1]['ticker']}) and #{above + 1} ({members[above]['ticker']}) "
-            "among today's largest S&P 500 members")
+    return (
+        f"between #{above} ({members[above - 1]['ticker']}) and #{above + 1} ({members[above]['ticker']}) "
+        "among today's largest S&P 500 members"
+    )

@@ -4,6 +4,7 @@ A Claude session calls Financial Datasets `get_index_fund` (ticker SPY,
 limit 1000) through MCP and saves the JSON; `universe import` validates it and
 stores a dated CSV. Coverage of the scan is always measured against this list.
 """
+
 from __future__ import annotations
 
 import json
@@ -28,8 +29,8 @@ class UniverseError(ValueError):
 class Universe:
     as_of: date
     source: str
-    table: pd.DataFrame          # ticker, name, weight
-    excluded: list[str]          # non-ticker rows (cash, placeholders) with reasons
+    table: pd.DataFrame  # ticker, name, weight
+    excluded: list[str]  # non-ticker rows (cash, placeholders) with reasons
 
     @property
     def tickers(self) -> list[str]:
@@ -38,7 +39,8 @@ class Universe:
 
 _SUFFIXES = re.compile(
     r"\b(INC|INCORPORATED|CORP|CORPORATION|CO|COMPANY|PLC|LTD|LIMITED|NV|N\.V|SA|AG|LP|LLC|HOLDINGS?|GROUP|"
-    r"CLASS [A-Z]|CL [A-Z]|THE|COM|SHS|ORD|REIT|TRUST)\b")
+    r"CLASS [A-Z]|CL [A-Z]|THE|COM|SHS|ORD|REIT|TRUST)\b"
+)
 
 
 def normalize_name(name: str) -> str:
@@ -52,8 +54,9 @@ def _clean_ticker(t: str | None) -> str:
     return (t or "").strip().upper().replace("/", ".")
 
 
-def parse_index_fund(raw: dict, settings: Settings, name_map: dict[str, str] | None = None,
-                     min_count: int | None = None) -> Universe:
+def parse_index_fund(
+    raw: dict, settings: Settings, name_map: dict[str, str] | None = None, min_count: int | None = None
+) -> Universe:
     """`name_map`: normalized company name -> ticker, used when a filing row has no
     ticker (N-PORT often omits them for foreign-domiciled companies).
     `min_count`: lower bound override for historical snapshots."""
@@ -95,7 +98,8 @@ def save_universe(settings: Settings, u: Universe) -> Path:
     u.table.to_csv(path, index=False)
     (d / f"sp500_{u.as_of.isoformat()}.meta.json").write_text(
         json.dumps({"as_of": u.as_of.isoformat(), "source": u.source, "excluded": u.excluded}, indent=2),
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     return path
 
 

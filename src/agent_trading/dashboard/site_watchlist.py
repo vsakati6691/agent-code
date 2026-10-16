@@ -1,4 +1,5 @@
 """Watchlist — 2030 Outlook page: verified symbols and conditional year-end-2030 price scenarios."""
+
 from __future__ import annotations
 
 import csv
@@ -32,39 +33,54 @@ def range_chart(entries: list[dict]) -> str:
 
     def x(v):
         return L + (R - L) * (v - lo) / (hi - lo)
+
     ticks = []
     for v in [t for t in (-0.75, -0.5, -0.25, 0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0) if lo <= t <= hi]:
-        ticks.append(f'<line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="18" y2="{H - 6}" stroke="var(--border)" '
-                     f'stroke-width="{2 if v == 0 else 1}"/><text x="{x(v):.1f}" y="12" text-anchor="middle" font-size="11" '
-                     f'fill="var(--text-muted)">{v:+.0%}</text>')
+        ticks.append(
+            f'<line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="18" y2="{H - 6}" stroke="var(--border)" '
+            f'stroke-width="{2 if v == 0 else 1}"/><text x="{x(v):.1f}" y="12" text-anchor="middle" font-size="11" '
+            f'fill="var(--text-muted)">{v:+.0%}</text>'
+        )
     marks = []
     for i, e in enumerate(rows):
         y = 30 + i * rowh
-        marks.append(f'<text x="{L - 8}" y="{y + 4}" text-anchor="end" font-size="12" fill="var(--text-primary)">{E(e["ticker"])}</text>')
+        marks.append(
+            f'<text x="{L - 8}" y="{y + 4}" text-anchor="end" font-size="12" fill="var(--text-primary)">{E(e["ticker"])}</text>'
+        )
         sc = e.get("scenarios")
         if not sc:
-            marks.append(f'<text x="{L + 4}" y="{y + 4}" font-size="11" fill="var(--text-muted)">scenario unavailable</text>')
+            marks.append(
+                f'<text x="{L + 4}" y="{y + 4}" font-size="11" fill="var(--text-muted)">scenario unavailable</text>'
+            )
             continue
         b0, b1, base = sc["bear"]["change"], sc["bull"]["change"], sc["base"]["change"]
-        tip = f'{e["ticker"]}: bear {b0:+.0%}, base {base:+.0%}, bull {b1:+.0%}'
-        marks.append(f'<g><title>{E(tip)}</title><rect x="{x(min(b0, b1)):.1f}" y="{y - 5}" width="{max(2, abs(x(b1) - x(b0))):.1f}" '
-                     f'height="10" rx="4" fill="var(--series-1)" opacity="0.35"/>'
-                     f'<circle cx="{x(base):.1f}" cy="{y}" r="5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/></g>')
-    return (f'<div class="legend"><span><i></i>bear-to-bull range</span><span>● base case</span>'
-            f'<span class="muted">% change from the latest price to 2030-12-31 (price only)</span></div>'
-            f'<div class="chart range"><svg viewBox="0 0 {W} {H}" role="img" aria-label="2030 scenario ranges by ticker">'
-            f'{"".join(ticks)}{"".join(marks)}</svg></div>')
+        tip = f"{e['ticker']}: bear {b0:+.0%}, base {base:+.0%}, bull {b1:+.0%}"
+        marks.append(
+            f'<g><title>{E(tip)}</title><rect x="{x(min(b0, b1)):.1f}" y="{y - 5}" width="{max(2, abs(x(b1) - x(b0))):.1f}" '
+            f'height="10" rx="4" fill="var(--series-1)" opacity="0.35"/>'
+            f'<circle cx="{x(base):.1f}" cy="{y}" r="5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/></g>'
+        )
+    return (
+        f'<div class="legend"><span><i></i>bear-to-bull range</span><span>● base case</span>'
+        f'<span class="muted">% change from the latest price to 2030-12-31 (price only)</span></div>'
+        f'<div class="chart range"><svg viewBox="0 0 {W} {H}" role="img" aria-label="2030 scenario ranges by ticker">'
+        f"{''.join(ticks)}{''.join(marks)}</svg></div>"
+    )
 
 
 def _scen_cells(e: dict) -> str:
     sc = e.get("scenarios")
     if not sc:
         # Keep all three cells so sorting later columns uses the correct index.
-        return ('<td class="small muted" data-v="">Scenario unavailable</td>'
-                '<td class="small muted" data-v="">—</td><td class="small muted" data-v="">—</td>')
-    return "".join(f'<td class="num" data-v="{sval(sc[k]["change"])}">{money(sc[k]["price"])}<div class="small muted">'
-                   f'{pct(sc[k]["change"], 0, True)} · {pct(sc[k]["annualized"], 1, True)}/yr</div></td>'
-                   for k in ("bear", "base", "bull"))
+        return (
+            '<td class="small muted" data-v="">Scenario unavailable</td>'
+            '<td class="small muted" data-v="">—</td><td class="small muted" data-v="">—</td>'
+        )
+    return "".join(
+        f'<td class="num" data-v="{sval(sc[k]["change"])}">{money(sc[k]["price"])}<div class="small muted">'
+        f"{pct(sc[k]['change'], 0, True)} · {pct(sc[k]['annualized'], 1, True)}/yr</div></td>"
+        for k in ("bear", "base", "bull")
+    )
 
 
 def _assumptions(e: dict) -> str:
@@ -75,23 +91,31 @@ def _assumptions(e: dict) -> str:
     for k in ("bear", "base", "bull"):
         a = sc[k]["assumptions"]
         if "starting_revenue_growth" in a:
-            txt = (f"revenue growth starts at {pct(a['starting_revenue_growth'])} and fades toward "
-                   f"{pct(spec.SCENARIO_TERMINAL_GROWTH)}; 2030 revenue {cap(a['revenue_2030'])}; exit EV/Sales "
-                   f"{num(a['exit_ev_to_sales'], 1)}x; {net_position(-a['net_cash_held'], False)} held flat; dilution "
-                   f"{pct(a['annual_dilution'], 1)}/yr")
+            txt = (
+                f"revenue growth starts at {pct(a['starting_revenue_growth'])} and fades toward "
+                f"{pct(spec.SCENARIO_TERMINAL_GROWTH)}; 2030 revenue {cap(a['revenue_2030'])}; exit EV/Sales "
+                f"{num(a['exit_ev_to_sales'], 1)}x; {net_position(-a['net_cash_held'], False)} held flat; dilution "
+                f"{pct(a['annual_dilution'], 1)}/yr"
+            )
             if a.get("margin_2030") is not None:
-                txt += (f"; {a.get('margin_source')} margin {pct(a['margin_today'])} → {pct(a['margin_2030'])} by 2030 "
-                        f"(2030 FCF {cap(a['fcf_2030'])}); cash check: {a['cash_support']}")
+                txt += (
+                    f"; {a.get('margin_source')} margin {pct(a['margin_today'])} → {pct(a['margin_2030'])} by 2030 "
+                    f"(2030 FCF {cap(a['fcf_2030'])}); cash check: {a['cash_support']}"
+                )
             elif a.get("cash_support"):
                 txt += f"; cash check: {a['cash_support']}"
         elif "leverage" in a:
-            txt = (f"{a['leverage']}x daily; index total return {pct(a['index_total_return'], 1)}/yr; index volatility "
-                   f"{pct(a['index_volatility'])}; volatility drag {pct(a['volatility_drag'], 1)}/yr; financing "
-                   f"{pct(a['financing_cost'], 1)}/yr; assumed fee {pct(a['assumed_fee'], 2)}")
+            txt = (
+                f"{a['leverage']}x daily; index total return {pct(a['index_total_return'], 1)}/yr; index volatility "
+                f"{pct(a['index_volatility'])}; volatility drag {pct(a['volatility_drag'], 1)}/yr; financing "
+                f"{pct(a['financing_cost'], 1)}/yr; assumed fee {pct(a['assumed_fee'], 2)}"
+            )
         else:
-            txt = (f"{a['exposure']}: total return {pct(a['total_return_assumption'], 1)}/yr − assumed fee "
-                   f"{pct(a['assumed_fee'], 2)} − assumed distribution yield {pct(a['assumed_distribution_yield'], 1)} "
-                   f"= price return {pct(a['price_return'], 1)}/yr")
+            txt = (
+                f"{a['exposure']}: total return {pct(a['total_return_assumption'], 1)}/yr − assumed fee "
+                f"{pct(a['assumed_fee'], 2)} − assumed distribution yield {pct(a['assumed_distribution_yield'], 1)} "
+                f"= price return {pct(a['price_return'], 1)}/yr"
+            )
         rows.append(f"<li><strong>{k}</strong>: {E(txt)}</li>")
     return f'<ul class="tight small">{"".join(rows)}</ul>'
 
@@ -114,27 +138,38 @@ def _unlock(e: dict) -> str:
 
 def watchlist_page(snap: dict) -> str:
     w = snap.get("watchlist")
-    head = ('<div class="section-heading watch-heading"><div><p class="eyebrow">RESEARCH DESK / LONG VIEW</p>'
-            '<h1>Watchlist — 2030 Outlook</h1><p class="lede">Scan the evidence. Explore the assumptions.</p></div>'
-            '<a class="action" href="index.html">← Market overview</a></div>')
+    head = (
+        '<div class="section-heading watch-heading"><div><p class="eyebrow">RESEARCH DESK / LONG VIEW</p>'
+        '<h1>Watchlist — 2030 Outlook</h1><p class="lede">Scan the evidence. Explore the assumptions.</p></div>'
+        '<a class="action" href="index.html">← Market overview</a></div>'
+    )
     if not w or w.get("status") != "ok":
-        return head + '<div class="banner warn"><strong>Watchlist not available</strong>This snapshot has no watchlist ' \
-                      'section (it predates spec 2026-10-14.2 or no list is configured).</div>'
+        return (
+            head + '<div class="banner warn"><strong>Watchlist not available</strong>This snapshot has no watchlist '
+            "section (it predates spec 2026-10-14.2 or no list is configured).</div>"
+        )
     entries = w["entries"]
     bodies = []
     for i, e in enumerate(entries):
         rid = f"w-{i}"
         status = tidy(e.get("unavailable_reason")) or (e.get("history_note") or "")
         km = e.get("key_metrics") or {}
-        km_txt = " · ".join(t for t in (
-            f"revenue {cap(km.get('revenue_ttm'))} ({pct(km.get('revenue_growth_ttm'), 0, True)})" if km.get("revenue_ttm") else "",
-            f"operating margin {pct(km.get('operating_margin'))}" if ok(km.get("operating_margin")) else "",
-            f"FCF {cap(km.get('fcf_ttm'))}" if ok(km.get("fcf_ttm")) else "",
-            f"EV/Sales {num(km.get('ev_to_sales'), 1)}x" if ok(km.get("ev_to_sales")) else "",
-            net_position(km.get("net_debt"), False) if ok(km.get("net_debt")) else "",
-            f"dilution {pct(km.get('dilution'), 1)}/yr" if ok(km.get("dilution")) else "") if t)
-        bodies.append(f"""<tbody class="item" data-ticker="{E(e['ticker'])}" data-scenario="{'available' if e.get('scenarios') else 'unavailable'}" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
-<td class="tk" data-v="{E(e['ticker'])}">{pin_button(e['ticker'])}<button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
+        km_txt = " · ".join(
+            t
+            for t in (
+                f"revenue {cap(km.get('revenue_ttm'))} ({pct(km.get('revenue_growth_ttm'), 0, True)})"
+                if km.get("revenue_ttm")
+                else "",
+                f"operating margin {pct(km.get('operating_margin'))}" if ok(km.get("operating_margin")) else "",
+                f"FCF {cap(km.get('fcf_ttm'))}" if ok(km.get("fcf_ttm")) else "",
+                f"EV/Sales {num(km.get('ev_to_sales'), 1)}x" if ok(km.get("ev_to_sales")) else "",
+                net_position(km.get("net_debt"), False) if ok(km.get("net_debt")) else "",
+                f"dilution {pct(km.get('dilution'), 1)}/yr" if ok(km.get("dilution")) else "",
+            )
+            if t
+        )
+        bodies.append(f"""<tbody class="item" data-ticker="{E(e["ticker"])}" data-scenario="{"available" if e.get("scenarios") else "unavailable"}" data-sector="{E(e.get("sector") or "Unknown")}"><tr>
+<td class="tk" data-v="{E(e["ticker"])}">{pin_button(e["ticker"])}<button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
 <div class="small muted">{E(e.get("name") or "name not resolved")}</div></td>
 <td class="small hide-sm" data-v="{E(tidy(e.get("asset_type")))}">{E(tidy(e.get("asset_type")) or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
@@ -148,18 +183,20 @@ status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") el
 3y {pct((e.get("returns") or {}).get("3y"), 0, True)} (history from {E(str(e.get("history_start") or "n/a"))}).</p></div>
 <div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}
 {_unlock(e)}</div>
-<div><h4>Catalysts</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("catalysts", []))}</ul>
+<div><h4>Catalysts</h4><ul class="tight small">{"".join(f"<li>{E(c)}</li>" for c in e.get("catalysts", []))}</ul>
 {_earnings_line(e)}<h4>Strongest bear case</h4><p class="small">{E(e.get("bear_case") or "n/a")}</p></div>
-<div><h4>Thesis invalidation</h4><ul class="tight small">{''.join(f"<li>{E(c)}</li>" for c in e.get("invalidation", []))}</ul>
+<div><h4>Thesis invalidation</h4><ul class="tight small">{"".join(f"<li>{E(c)}</li>" for c in e.get("invalidation", []))}</ul>
 <h4>Sources, evidence and gaps</h4><p class="small">Evidence quality: {E(e.get("evidence_quality") or "none")}. Sources:
-{E("; ".join(dict.fromkeys(e.get("sources", []))))}.</p><ul class="tight small">{''.join(f"<li>{E(m)}</li>" for m in e.get("missing", []))}</ul></div>
+{E("; ".join(dict.fromkeys(e.get("sources", []))))}.</p><ul class="tight small">{"".join(f"<li>{E(m)}</li>" for m in e.get("missing", []))}</ul></div>
 </div></td></tr></tbody>""")
     conc = " · ".join(f"{E(k)}: {v}" for k, v in sorted(w.get("concentration", {}).items(), key=lambda kv: -kv[1]))
     themes = sorted({e.get("sector") or "Unknown" for e in entries})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in themes)
     available = sum(bool(e.get("scenarios")) for e in entries)
     priced = sum(ok(e.get("price")) for e in entries)
-    return head + f"""<div class="watch-summary scan-stats">
+    return (
+        head
+        + f"""<div class="watch-summary scan-stats">
 <div class="scan-stat"><span>Symbols</span><strong>{len(entries)}</strong><small>Separate research universe</small></div>
 <div class="scan-stat"><span>With a recorded price</span><strong>{priced}</strong><small>Check each row's price date</small></div>
 <div class="scan-stat"><span>Scenarios available</span><strong>{available}</strong><small>Conditional, not forecasts</small></div>
@@ -179,7 +216,7 @@ theme concentration: {conc}.</p></details>
 <div class="table-wrap"><table id="t-watch" data-table data-grouped><caption class="sr-only">Watchlist 2030 scenarios</caption>
 <thead><tr><th class="tk" data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
 <th class="num" data-sort="num">Bear 2030</th><th class="num" data-sort="num">Base 2030</th><th class="num" data-sort="num">Bull 2030</th>
-<th class="hide-sm">Method</th><th data-sort="text">Evidence</th><th>Unavailable / notes</th></tr></thead>{''.join(bodies)}</table></div>
+<th class="hide-sm">Method</th><th data-sort="text">Evidence</th><th>Unavailable / notes</th></tr></thead>{"".join(bodies)}</table></div>
 <p class="scan-empty" data-empty="t-watch" hidden>No symbols match these filters. Reset filters or pin a ticker with its star first.</p>
 <p class="small muted" data-pin-status>Pins are saved only on this device.</p>
 <details class="context-details"><summary>Compare all 2030 scenario ranges</summary>{range_chart(entries)}</details>
@@ -187,20 +224,57 @@ theme concentration: {conc}.</p></details>
 <p class="small"><a href="downloads/{E(snap["as_of"])}_watchlist_2030.csv" download>Download (CSV)</a> · Prices are split-adjusted
 price data; scenarios are PRICE outcomes and exclude distributions (total return would add dividends). Methods:
 {E(spec.WATCHLIST_COMPANY_METHOD)} {E(spec.LEVERAGED_METHOD)} {E(spec.FEE_NOTE)}</p></details>
-<p class="small"><a class="action" href="downloads/{E(snap['as_of'])}_watchlist_2030.csv" download>Download watchlist CSV ↓</a></p>"""
+<p class="small"><a class="action" href="downloads/{E(snap["as_of"])}_watchlist_2030.csv" download>Download watchlist CSV ↓</a></p>"""
+    )
 
 
 def watchlist_csv(snap: dict) -> str:
     buf = io.StringIO()
     wr = csv.writer(buf)
-    wr.writerow(["ticker", "name", "asset_type", "exchange", "status", "price", "price_date", "method", "evidence_quality",
-                 "bear_2030", "base_2030", "bull_2030", "bear_change", "base_change", "bull_change", "bear_annualized",
-                 "base_annualized", "bull_annualized", "unavailable_reason"])
+    wr.writerow(
+        [
+            "ticker",
+            "name",
+            "asset_type",
+            "exchange",
+            "status",
+            "price",
+            "price_date",
+            "method",
+            "evidence_quality",
+            "bear_2030",
+            "base_2030",
+            "bull_2030",
+            "bear_change",
+            "base_change",
+            "bull_change",
+            "bear_annualized",
+            "base_annualized",
+            "bull_annualized",
+            "unavailable_reason",
+        ]
+    )
     for e in (snap.get("watchlist") or {}).get("entries", []):
         sc = e.get("scenarios") or {}
-        g = lambda k, f: (sc.get(k) or {}).get(f)  # noqa: E731
-        wr.writerow([csv_value(v) for v in [e["ticker"], e.get("name"), e.get("asset_type"), e.get("exchange"), e.get("status"), e.get("price"),
-                     e.get("price_date"), e.get("method"), e.get("evidence_quality"),
-                     *[g(k, "price") for k in ("bear", "base", "bull")], *[g(k, "change") for k in ("bear", "base", "bull")],
-                     *[g(k, "annualized") for k in ("bear", "base", "bull")], e.get("unavailable_reason")]])
+        g = lambda k, f: (sc.get(k) or {}).get(f)  # noqa: E731, B023 - consumed in this iteration.
+        wr.writerow(
+            [
+                csv_value(v)
+                for v in [
+                    e["ticker"],
+                    e.get("name"),
+                    e.get("asset_type"),
+                    e.get("exchange"),
+                    e.get("status"),
+                    e.get("price"),
+                    e.get("price_date"),
+                    e.get("method"),
+                    e.get("evidence_quality"),
+                    *[g(k, "price") for k in ("bear", "base", "bull")],
+                    *[g(k, "change") for k in ("bear", "base", "bull")],
+                    *[g(k, "annualized") for k in ("bear", "base", "bull")],
+                    e.get("unavailable_reason"),
+                ]
+            ]
+        )
     return buf.getvalue()

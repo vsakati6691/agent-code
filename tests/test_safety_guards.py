@@ -1,4 +1,5 @@
 """Static guards: the code base must not be able to reach a live broker."""
+
 import re
 from pathlib import Path
 
@@ -26,7 +27,7 @@ def test_no_broker_order_paths_in_source():
 
 
 def test_no_network_calls_except_market_data():
-    allowed = {"data/alphavantage.py", "dashboard/http.py"}   # dashboard: GET only, allow-listed public hosts
+    allowed = {"data/alphavantage.py", "dashboard/http.py"}  # dashboard: GET only, allow-listed public hosts
     for path in SRC.rglob("*.py"):
         rel = path.relative_to(SRC).as_posix()
         text = path.read_text(encoding="utf-8")
@@ -45,6 +46,11 @@ def test_cli_imports_and_every_command_parses():
     from agent_trading.cli import build_parser
 
     p = build_parser()
-    for argv in (["daily", "--no-paper"], ["tournament", "--no-test"], ["kill-switch", "status"],
-                 ["account", "show"], ["paper", "status"]):
+    for argv in (
+        ["daily", "--no-paper"],
+        ["tournament", "--no-test"],
+        ["kill-switch", "status"],
+        ["account", "show"],
+        ["paper", "status"],
+    ):
         assert p.parse_args(argv).func is not None

@@ -6,6 +6,7 @@ OHLC series is back-adjusted: on each ex-date, all earlier prices are scaled by
 (1 - dividend / previous close), the standard total-return adjustment that
 assumes dividends are reinvested at the ex-date close.
 """
+
 from __future__ import annotations
 
 import logging
@@ -80,7 +81,7 @@ def total_return_bars(df: pd.DataFrame, divs: pd.Series | None) -> pd.DataFrame:
     close = df["close"]
     factor = pd.Series(1.0, index=df.index)
     for ex, amount in divs.items():
-        prior = close.loc[:ex - pd.Timedelta(days=1)]
+        prior = close.loc[: ex - pd.Timedelta(days=1)]
         if prior.empty or amount <= 0:
             continue
         f = 1.0 - amount / float(prior.iloc[-1])

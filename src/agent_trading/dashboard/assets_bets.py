@@ -71,7 +71,9 @@ var BetMath = (function () {
 })();
 """
 
-JS = MATH_JS + r"""
+JS = (
+    MATH_JS
+    + r"""
 (function () {
   var source = document.getElementById('bets-data');
   if (!source) return;
@@ -192,3 +194,4 @@ JS = MATH_JS + r"""
   updateSizing(); renderSlip();
 })();
 """
+)

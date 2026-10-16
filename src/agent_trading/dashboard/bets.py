@@ -1,4 +1,5 @@
 """Registered options explorer and browser-calculator reference. Public research only."""
+
 from __future__ import annotations
 
 import math
@@ -9,17 +10,43 @@ from datetime import date
 from . import options, spec
 
 # Columnar JSON avoids repeating these keys up to 720 times. No source precision is discarded.
-COLUMNS = ("option", "underlying", "type", "tier", "horizon", "premium_band", "expiration", "dte", "strike",
-           "spot", "ask", "premium", "breakeven", "required_move", "implied_move", "delta", "spread_pct",
-           "open_interest", "volume", "theta", "iv", "events_status", "quote_time_utc", "score")
-WARNING = ("Buying an option can lose the entire premium; contracts in the long-shot tier can expire worthless; "
-           "size bets so losing all of them is acceptable. Not advice.")
+COLUMNS = (
+    "option",
+    "underlying",
+    "type",
+    "tier",
+    "horizon",
+    "premium_band",
+    "expiration",
+    "dte",
+    "strike",
+    "spot",
+    "ask",
+    "premium",
+    "breakeven",
+    "required_move",
+    "implied_move",
+    "delta",
+    "spread_pct",
+    "open_interest",
+    "volume",
+    "theta",
+    "iv",
+    "events_status",
+    "quote_time_utc",
+    "score",
+)
+WARNING = (
+    "Buying an option can lose the entire premium; contracts in the long-shot tier can expire worthless; "
+    "size bets so losing all of them is acceptable. Not advice."
+)
 
 
 def premium_band(premium: float) -> str:
     for key, lo, hi, inclusive in spec.EXPLORER_PREMIUM_BANDS:
-        if premium >= lo and (hi is None and premium > lo or hi is not None and
-                              (premium <= hi if inclusive else premium < hi)):
+        if premium >= lo and (
+            hi is None and premium > lo or hi is not None and (premium <= hi if inclusive else premium < hi)
+        ):
             return key
     raise ValueError("invalid premium")
 
@@ -29,8 +56,10 @@ def eligible(row: dict, underlying: str, as_of: date, tier: str) -> tuple[bool, 
     kind = row.get("type")
     if kind not in spec.OPTION_TYPES:
         return False, "unknown option type"
-    if not all(isinstance(row.get(k), (int, float)) and math.isfinite(row[k]) for k in
-               ("bid", "ask", "strike", "delta", "iv", "theta", "open_interest", "volume")):
+    if not all(
+        isinstance(row.get(k), (int, float)) and math.isfinite(row[k])
+        for k in ("bid", "ask", "strike", "delta", "iv", "theta", "open_interest", "volume")
+    ):
         return False, "required numeric input unavailable"
     if row["strike"] <= 0 or not options.horizon_for((row["expiration"] - as_of).days):
         return False, "outside the registered expiry windows or invalid strike"
@@ -49,16 +78,20 @@ def eligible(row: dict, underlying: str, as_of: date, tier: str) -> tuple[bool, 
     if row["open_interest"] < rules["min_open_interest"] or row["volume"] < rules["min_volume"]:
         return False, "open interest or volume too low"
     delta = row["delta"]
-    if (kind == "call" and delta < 0) or (kind == "put" and delta > 0) or not (
-            rules["min_delta"] <= abs(delta) < rules["max_delta_exclusive"]):
+    if (
+        (kind == "call" and delta < 0)
+        or (kind == "put" and delta > 0)
+        or not (rules["min_delta"] <= abs(delta) < rules["max_delta_exclusive"])
+    ):
         return False, "delta outside long-shot tier"
     if row["iv"] <= 0 or not options.theta_available(row):
         return False, "IV or theta unavailable"
     return True, ""
 
 
-def research_row(row: dict, symbol: str, spot: float, as_of: date, tier: str, events: list,
-                 events_known: bool, quote: dict) -> dict:
+def research_row(
+    row: dict, symbol: str, spot: float, as_of: date, tier: str, events: list, events_known: bool, quote: dict
+) -> dict:
     """Same premium, breakeven, implied move and score as options.research_row, without unused model grids."""
     kind, ask, bid = row["type"], row["ask"], row["bid"]
     dte = (row["expiration"] - as_of).days
@@ -66,26 +99,49 @@ def research_row(row: dict, symbol: str, spot: float, as_of: date, tier: str, ev
     signed, needed = options.required_move(kind, spot, be)
     implied = row["iv"] * math.sqrt(dte / 365.0)
     spread = (ask - bid) / ((ask + bid) / 2)
-    inputs = {"spread_pct": spread, "open_interest": row["open_interest"], "required_move": needed,
-              "breakeven_move": signed, "implied_move_1sd": implied,
-              "theta_share_per_day": abs(row["theta"]) / ((ask + bid) / 2)}
+    inputs = {
+        "spread_pct": spread,
+        "open_interest": row["open_interest"],
+        "required_move": needed,
+        "breakeven_move": signed,
+        "implied_move_1sd": implied,
+        "theta_share_per_day": abs(row["theta"]) / ((ask + bid) / 2),
+    }
     before = [e for e in events if as_of < e["date"] <= row["expiration"]]
     premium = ask * spec.OPTION_RULES["standard_multiplier"]
-    return {"option": row["option"], "underlying": symbol, "type": kind, "tier": tier,
-            "horizon": options.horizon_for(dte), "premium_band": premium_band(premium),
-            "expiration": str(row["expiration"]), "dte": dte, "strike": row["strike"], "spot": spot,
-            "ask": ask, "premium": premium, "breakeven": be, "required_move": needed, "implied_move": implied,
-            "delta": row["delta"], "spread_pct": spread, "open_interest": row["open_interest"],
-            "volume": row["volume"], "theta": row["theta"], "iv": row["iv"],
-            "events_status": "unknown" if not events_known else "scheduled" if before else "none scheduled",
-            "quote_time_utc": quote.get("quote_time_utc"), "score": options.rank_score(inputs)["total"]}
+    return {
+        "option": row["option"],
+        "underlying": symbol,
+        "type": kind,
+        "tier": tier,
+        "horizon": options.horizon_for(dte),
+        "premium_band": premium_band(premium),
+        "expiration": str(row["expiration"]),
+        "dte": dte,
+        "strike": row["strike"],
+        "spot": spot,
+        "ask": ask,
+        "premium": premium,
+        "breakeven": be,
+        "required_move": needed,
+        "implied_move": implied,
+        "delta": row["delta"],
+        "spread_pct": spread,
+        "open_interest": row["open_interest"],
+        "volume": row["volume"],
+        "theta": row["theta"],
+        "iv": row["iv"],
+        "events_status": "unknown" if not events_known else "scheduled" if before else "none scheduled",
+        "quote_time_utc": quote.get("quote_time_utc"),
+        "score": options.rank_score(inputs)["total"],
+    }
 
 
 def build(chains: dict, as_of: date, events: dict, events_known: bool = True) -> dict:
     groups, rejects, seen = defaultdict(list), defaultdict(int), set()
     for symbol, chain in sorted(chains.items()):
         if isinstance(chain, str):
-            continue                   # refresh.chain_status stores the specific failure
+            continue  # refresh.chain_status stores the specific failure
         under, rows = chain
         if options.chain_status(under, as_of):
             continue
@@ -96,7 +152,11 @@ def build(chains: dict, as_of: date, events: dict, events_known: bool = True) ->
                 continue
             seen.add(row.get("option"))
             delta = row.get("delta")
-            tier = "Long-shot" if isinstance(delta, (int, float)) and abs(delta) < spec.EXPLORER_LONG_RULES["max_delta_exclusive"] else "Core"
+            tier = (
+                "Long-shot"
+                if isinstance(delta, (int, float)) and abs(delta) < spec.EXPLORER_LONG_RULES["max_delta_exclusive"]
+                else "Core"
+            )
             ok, reason = eligible(row, symbol, as_of, tier)
             if not ok:
                 rejects[reason] += 1
@@ -104,14 +164,21 @@ def build(chains: dict, as_of: date, events: dict, events_known: bool = True) ->
             item = research_row(row, symbol, under["close"], as_of, tier, events.get(symbol, []), events_known, quote)
             groups[(tier, row["type"], item["horizon"], item["premium_band"])].append(item)
     selected = []
-    for key, rows in sorted(groups.items()):
+    for _key, rows in sorted(groups.items()):
         rows.sort(key=lambda r: (-r["score"], r["underlying"], r["expiration"], r["strike"], r["option"]))
-        selected.extend(rows[:spec.EXPLORER_PER_BAND])
-    return {"spec_version": spec.SPEC_VERSION, "columns": list(COLUMNS),
-            "rows": [[r[k] for k in COLUMNS] for r in selected], "eligible_count": sum(map(len, groups.values())),
-            "selected_count": len(selected), "rejections": dict(rejects), "status": "available",
-            "row_status": "available", "row_reason": "passed registered eligibility and premium-band selection",
-            "probability": spec.PROBABILITY_NOT_ESTABLISHED}
+        selected.extend(rows[: spec.EXPLORER_PER_BAND])
+    return {
+        "spec_version": spec.SPEC_VERSION,
+        "columns": list(COLUMNS),
+        "rows": [[r[k] for k in COLUMNS] for r in selected],
+        "eligible_count": sum(map(len, groups.values())),
+        "selected_count": len(selected),
+        "rejections": dict(rejects),
+        "status": "available",
+        "row_status": "available",
+        "row_reason": "passed registered eligibility and premium-band selection",
+        "probability": spec.PROBABILITY_NOT_ESTABLISHED,
+    }
 
 
 def unpack(payload: dict) -> list[dict]:
@@ -156,9 +223,16 @@ def slip_total(entries: list[dict], budget) -> dict:
     total = 0
     for item in entries:
         cost, qty = item.get("cost_cents"), item.get("quantity")
-        if (isinstance(cost, bool) or not isinstance(cost, (int, float)) or not 0 < cost <= MAX_CENTS or
-                cost != int(cost) or isinstance(qty, bool) or not isinstance(qty, (int, float)) or
-                not 1 <= qty <= MAX_QUANTITY or qty != int(qty)):
+        if (
+            isinstance(cost, bool)
+            or not isinstance(cost, (int, float))
+            or not 0 < cost <= MAX_CENTS
+            or cost != int(cost)
+            or isinstance(qty, bool)
+            or not isinstance(qty, (int, float))
+            or not 1 <= qty <= MAX_QUANTITY
+            or qty != int(qty)
+        ):
             return {"status": "invalid", "max_loss_cents": None, "over_budget": None}
         total += cost * qty
         if total > 2**53 - 1:

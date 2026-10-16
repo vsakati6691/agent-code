@@ -15,6 +15,7 @@ Optional account constraints mirror the real account's hard limits:
 Targets that cannot be reached in one day carry over to the next days until a
 new decision replaces them. Idle cash earns `cash_rate` (default 0).
 """
+
 from __future__ import annotations
 
 import math
@@ -35,8 +36,10 @@ class Constraints:
     def label(self) -> str:
         if self == Constraints():
             return "unconstrained"
-        return (f"max {self.max_weight:.0%}/position, {self.max_gross:.0%} gross, "
-                f"{self.max_daily_buy:.0%}/day buys, {self.max_daily_entries} entries/day")
+        return (
+            f"max {self.max_weight:.0%}/position, {self.max_gross:.0%} gross, "
+            f"{self.max_daily_buy:.0%}/day buys, {self.max_daily_entries} entries/day"
+        )
 
 
 ACCOUNT_CONSTRAINTS = Constraints(max_weight=0.10, max_gross=0.80, max_daily_buy=0.20, max_daily_entries=3)
@@ -44,9 +47,9 @@ ACCOUNT_CONSTRAINTS = Constraints(max_weight=0.10, max_gross=0.80, max_daily_buy
 
 @dataclass
 class SimResult:
-    returns: pd.Series                 # daily strategy returns (close to close)
-    exposure: pd.Series                # invested fraction at each close
-    activity: pd.DataFrame             # per day: turnover (traded notional / equity), entries, exits, costs
+    returns: pd.Series  # daily strategy returns (close to close)
+    exposure: pd.Series  # invested fraction at each close
+    activity: pd.DataFrame  # per day: turnover (traded notional / equity), entries, exits, costs
 
 
 def _apply_caps(target: np.ndarray, c: Constraints) -> np.ndarray:
@@ -111,7 +114,7 @@ def simulate(
                 new = (shares <= 0) & (buy > 0)
                 if constraints.max_daily_entries is not None and new.sum() > constraints.max_daily_entries:
                     order = np.argsort(-np.where(new, target_val, -np.inf))
-                    allowed = set(order[:constraints.max_daily_entries].tolist())
+                    allowed = set(order[: constraints.max_daily_entries].tolist())
                     blocked = np.array([new[j] and j not in allowed for j in range(n)])
                     buy = np.where(blocked, 0.0, buy)
                     done = False
@@ -171,22 +174,35 @@ def metrics(rets: pd.Series, cash_rets: pd.Series | None = None, sim: SimResult 
     sd = float(excess.std(ddof=1))
     sharpe = float(excess.mean() / sd * math.sqrt(TD)) if sd > 0 else 0.0
     downside = excess[excess < 0]
-    dd_sd = float(np.sqrt((downside ** 2).sum() / n)) if len(downside) else 0.0
+    dd_sd = float(np.sqrt((downside**2).sum() / n)) if len(downside) else 0.0
     sortino = float(excess.mean() / dd_sd * math.sqrt(TD)) if dd_sd > 0 else float("nan")
     mdd = max_drawdown(r)
     monthly = (1 + r).groupby(r.index.to_period("M")).prod() - 1
     pos, neg = monthly[monthly > 0].sum(), -monthly[monthly < 0].sum()
     out = {
-        "days": n, "years": round(years, 2), "cagr": cagr, "vol": vol, "sharpe": sharpe, "sortino": sortino,
-        "max_drawdown": mdd, "calmar": cagr / abs(mdd) if mdd < 0 else float("nan"),
-        "win_rate_months": float((monthly > 0).mean()), "profit_factor_months": float(pos / neg) if neg > 0 else float("inf"),
-        "worst_month": float(monthly.min()), "best_month": float(monthly.max()),
-        "skew": float(r.skew()), "kurtosis": float(r.kurt() + 3),
+        "days": n,
+        "years": round(years, 2),
+        "cagr": cagr,
+        "vol": vol,
+        "sharpe": sharpe,
+        "sortino": sortino,
+        "max_drawdown": mdd,
+        "calmar": cagr / abs(mdd) if mdd < 0 else float("nan"),
+        "win_rate_months": float((monthly > 0).mean()),
+        "profit_factor_months": float(pos / neg) if neg > 0 else float("inf"),
+        "worst_month": float(monthly.min()),
+        "best_month": float(monthly.max()),
+        "skew": float(r.skew()),
+        "kurtosis": float(r.kurt() + 3),
     }
     if sim is not None:
-        act = sim.activity.loc[r.index[0]:r.index[-1]]
-        out.update({"avg_exposure": float(sim.exposure.loc[r.index[0]:r.index[-1]].mean()),
-                    "turnover_per_year": float(act["turnover"].sum() / years),
-                    "trades": int(act["entries"].sum() + act["exits"].sum()),
-                    "cost_drag_per_year": float(act["costs"].sum() / years)})
+        act = sim.activity.loc[r.index[0] : r.index[-1]]
+        out.update(
+            {
+                "avg_exposure": float(sim.exposure.loc[r.index[0] : r.index[-1]].mean()),
+                "turnover_per_year": float(act["turnover"].sum() / years),
+                "trades": int(act["entries"].sum() + act["exits"].sum()),
+                "cost_drag_per_year": float(act["costs"].sum() / years),
+            }
+        )
     return out

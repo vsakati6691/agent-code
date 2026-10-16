@@ -1,4 +1,5 @@
 """Statistical uncertainty: block-bootstrap intervals and small-sample warnings."""
+
 from __future__ import annotations
 
 import math
@@ -19,9 +20,7 @@ def _ann_return(r: np.ndarray) -> float:
     return growth ** (TRADING_DAYS / len(r)) - 1 if growth > 0 else -1.0
 
 
-def block_bootstrap(
-    returns: pd.Series, n_samples: int = 1000, block: int = 20, seed: int = 0
-) -> dict:
+def block_bootstrap(returns: pd.Series, n_samples: int = 1000, block: int = 20, seed: int = 0) -> dict:
     """Circular block bootstrap 95% intervals for annualised return and Sharpe."""
     r = returns.dropna().to_numpy()
     n = len(r)
@@ -54,5 +53,3 @@ def warnings_for(metrics: dict, boot: dict, min_trades: int) -> list[str]:
     elif boot["sharpe_ci"][0] <= 0:
         out.append("95% interval for Sharpe includes zero: performance is not statistically distinguishable from zero")
     return out
-
-

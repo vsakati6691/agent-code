@@ -3,6 +3,7 @@
 Values are conditional on the explicit assumptions returned with them
 (spec.SCENARIO_METHOD). They are not forecasts, targets, maxima or probabilities.
 """
+
 from __future__ import annotations
 
 import math
@@ -21,9 +22,17 @@ def growth_path(start: float, years: int) -> list[float]:
     return out
 
 
-def scenario_table(price: float, shares: float, revenue_ttm: float, revenue_growth: float, ev_to_sales: float,
-                   net_cash: float, fcf_margin: float | None, dilution: float | None,
-                   years: tuple = spec.SCENARIO_YEARS) -> dict:
+def scenario_table(
+    price: float,
+    shares: float,
+    revenue_ttm: float,
+    revenue_growth: float,
+    ev_to_sales: float,
+    net_cash: float,
+    fcf_margin: float | None,
+    dilution: float | None,
+    years: tuple = spec.SCENARIO_YEARS,
+) -> dict:
     """{scenario: {"assumptions": {...}, "years": {1: {...}, 3: {...}, 5: {...}}}}."""
     if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in (price, shares, revenue_ttm, ev_to_sales)):
         raise ValueError("scenario inputs must be finite numbers")
@@ -51,15 +60,21 @@ def scenario_table(price: float, shares: float, revenue_ttm: float, revenue_grow
             equity = rev * mult + net_cash
             value = max(0.0, equity / sh)
             values[y] = {
-                "revenue": rev, "ev_to_sales": mult, "shares": sh, "value_per_share": value,
+                "revenue": rev,
+                "ev_to_sales": mult,
+                "shares": sh,
+                "value_per_share": value,
                 "multiple_of_price": value / price,
                 "annualized": (value / price) ** (1 / y) - 1 if value > 0 else -1.0,
                 "fcf_margin": None if margin is None else margin + rule.margin_shift * frac,
             }
         out[rule.key] = {
             "assumptions": {
-                "starting_revenue_growth": g0, "growth_path": path, "exit_ev_to_sales": exit_mult,
-                "annual_dilution": d, "fcf_margin_start": margin,
+                "starting_revenue_growth": g0,
+                "growth_path": path,
+                "exit_ev_to_sales": exit_mult,
+                "annual_dilution": d,
+                "fcf_margin_start": margin,
                 "fcf_margin_end": None if margin is None else margin + rule.margin_shift,
                 "horizon_years": horizon,
                 "net_cash_held": net_cash,
@@ -76,6 +91,7 @@ def scenario_table(price: float, shares: float, revenue_ttm: float, revenue_grow
 
 # --- price history ---------------------------------------------------------------------------
 
+
 def max_drawdown(close: pd.Series) -> tuple[float, str | None, str | None]:
     """(max drawdown, peak date, trough date) of a price series."""
     if close.empty:
@@ -87,7 +103,7 @@ def max_drawdown(close: pd.Series) -> tuple[float, str | None, str | None]:
     return float(dd.min()), str(peak_date.date()), str(trough.date())
 
 
-RETURN_WINDOWS = (("1m", 21), ("3m", 63), ("6m", 126), ("1y", 252), ("3y", 756), ("5y", 1260))   # trading sessions
+RETURN_WINDOWS = (("1m", 21), ("3m", 63), ("6m", 126), ("1y", 252), ("3y", 756), ("5y", 1260))  # trading sessions
 
 
 def history_stats(close: pd.Series, bench: pd.Series | None) -> dict:
@@ -102,9 +118,14 @@ def history_stats(close: pd.Series, bench: pd.Series | None) -> dict:
                 if len(aligned.dropna()) > n and aligned.iloc[-1 - n] > 0:
                     b = float(aligned.iloc[-1] / aligned.iloc[-1 - n] - 1)
             # the stock and its benchmark use the same start and end sessions (spec 2026-10-14.5)
-            out["returns"][key] = {"stock": r, "benchmark": b, "excess": None if b is None else r - b,
-                                   "start": str(close.index[-1 - n].date()), "end": str(close.index[-1].date()),
-                                   "sessions": n}
+            out["returns"][key] = {
+                "stock": r,
+                "benchmark": b,
+                "excess": None if b is None else r - b,
+                "start": str(close.index[-1 - n].date()),
+                "end": str(close.index[-1].date()),
+                "sessions": n,
+            }
         else:
             out["returns"][key] = None
     five = close.iloc[-1261:]
@@ -121,7 +142,7 @@ def history_stats(close: pd.Series, bench: pd.Series | None) -> dict:
 
 def chart_series(close: pd.Series, bench: pd.Series | None, bars: int = 1260, step: int = 5) -> dict:
     """Weekly-sampled, rebased-to-100 series for the detail-page chart."""
-    c = close.iloc[-bars - 1:]       # same base bar as the 5-year return in history_stats
+    c = close.iloc[-bars - 1 :]  # same base bar as the 5-year return in history_stats
     # weekly points plus the exact start session of every return window, so a chart cut at a window's start
     # shows the same figure as the return table (spec 2026-10-14.5)
     starts = [c.index[-1 - n] for _, n in RETURN_WINDOWS if len(c) > n]
@@ -136,16 +157,18 @@ def chart_series(close: pd.Series, bench: pd.Series | None, bars: int = 1260, st
 
 # --- narrative ---------------------------------------------------------------------------------
 
+
 def implied_growth_text(implied, trailing) -> str:
     """One-pass wording for 'the growth the price implies' (spec.IMPLIED_GROWTH) vs trailing growth."""
+
     def ok(x):
         return isinstance(x, (int, float)) and math.isfinite(x)
+
     tail = f" vs {trailing:.0%} trailing" if ok(trailing) else ""
     if not ok(implied):
         return "The growth the price implies could not be computed"
     if implied < 0:
-        return (f"The price implies shrinking revenue (about {abs(implied):.0%} a year smaller for 5 years)"
-                f"{tail}")
+        return f"The price implies shrinking revenue (about {abs(implied):.0%} a year smaller for 5 years){tail}"
     return f"Price implies about {implied:.0%}/yr revenue growth for 5 years{tail}"
 
 
@@ -157,8 +180,10 @@ def thesis(m: dict, comps: dict) -> str:
     """Rule-based summary of the strongest evidence. Generated from reported data; not a recommendation."""
     best = sorted(((v or 0.0, k) for k, v in comps.items()), reverse=True)[:2]
     titles = {c.key: c.title.lower() for c in spec.COMPONENTS}
-    parts = [f"Revenue grew {_pct(m.get('revenue_growth_ttm'))} over the trailing twelve months "
-             f"({_pct(m.get('revenue_cagr_3y'))} a year over three years)"]
+    parts = [
+        f"Revenue grew {_pct(m.get('revenue_growth_ttm'))} over the trailing twelve months "
+        f"({_pct(m.get('revenue_cagr_3y'))} a year over three years)"
+    ]
     if m.get("operating_margin") is not None:
         parts.append(f"with a {_pct(m.get('operating_margin'))} operating margin")
     if m.get("fcf_margin") is not None:
@@ -166,17 +191,21 @@ def thesis(m: dict, comps: dict) -> str:
     s = " ".join(parts) + ". "
     s += f"Its strongest scored areas are {titles[best[0][1]]} and {titles[best[1][1]]}. "
     if m.get("ev_to_sales") is not None:
-        s += (f"It trades at {m['ev_to_sales']:.1f}x EV/Sales. "
-              f"{implied_growth_text(m.get('implied_revenue_cagr'), m.get('revenue_growth_ttm'))} "
-              "(under the dashboard's fixed valuation assumptions).")
+        s += (
+            f"It trades at {m['ev_to_sales']:.1f}x EV/Sales. "
+            f"{implied_growth_text(m.get('implied_revenue_cagr'), m.get('revenue_growth_ttm'))} "
+            "(under the dashboard's fixed valuation assumptions)."
+        )
     return s
 
 
 def bear_case(m: dict, counter: str) -> str:
     items = [counter]
     if m.get("implied_growth_gap") is not None and m["implied_growth_gap"] < 0 and "implies" not in counter:
-        items.append(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")) +
-                     ": the valuation needs faster growth than recent results.")
+        items.append(
+            implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm"))
+            + ": the valuation needs faster growth than recent results."
+        )
     if m.get("growth_acceleration") is not None and m["growth_acceleration"] < 0:
         items.append(f"Growth is slowing ({_pct(m['growth_acceleration'], '{:+.0%}')} vs a year earlier).")
     if m.get("dilution") is not None and m["dilution"] > 0.03:
@@ -204,8 +233,9 @@ def key_risks(m: dict, f_flags: list[str], hist: dict | None, concentration: flo
     if concentration is not None:
         risks.append(f"The filing tags a concentration-risk percentage of {_pct(concentration)} (see the 10-K).")
     if hist and hist.get("drawdowns", {}).get("max_5y", {}).get("value", 0) < -0.5:
-        risks.append(f"The stock fell {_pct(-hist['drawdowns']['max_5y']['value'])} peak to trough in the last "
-                     "five years.")
+        risks.append(
+            f"The stock fell {_pct(-hist['drawdowns']['max_5y']['value'])} peak to trough in the last five years."
+        )
     risks += [f"{fl[0].upper()}{fl[1:]}." for fl in f_flags if fl.startswith("limited")]
     return risks or ["No rule-based risk flag triggered; read the 10-K risk factors."]
 
@@ -217,26 +247,67 @@ def thesis_conditions(m: dict, scen: dict | None) -> list[dict]:
     out = []
     g = m.get("revenue_growth_ttm")
     if g is not None and g > 0:
-        out.append({"id": "revenue_growth", "metric": "revenue_growth_ttm", "op": "<", "value": g / 2,
-                    "text": f"Trailing revenue growth falls below {_pct(g / 2)} (half of today's {_pct(g)})."})
+        out.append(
+            {
+                "id": "revenue_growth",
+                "metric": "revenue_growth_ttm",
+                "op": "<",
+                "value": g / 2,
+                "text": f"Trailing revenue growth falls below {_pct(g / 2)} (half of today's {_pct(g)}).",
+            }
+        )
     if m.get("operating_margin") is not None:
-        out.append({"id": "operating_margin", "metric": "operating_margin", "op": "<",
-                    "value": m["operating_margin"] - 0.05,
-                    "text": f"Operating margin falls more than 5 points below today's {_pct(m['operating_margin'])}."})
+        out.append(
+            {
+                "id": "operating_margin",
+                "metric": "operating_margin",
+                "op": "<",
+                "value": m["operating_margin"] - 0.05,
+                "text": f"Operating margin falls more than 5 points below today's {_pct(m['operating_margin'])}.",
+            }
+        )
     if m.get("fcf_ttm") is not None and m["fcf_ttm"] > 0:
-        out.append({"id": "fcf", "metric": "fcf_ttm", "op": "<", "value": 0.0,
-                    "text": "Trailing free cash flow turns negative."})
-    out.append({"id": "dilution", "metric": "dilution", "op": ">", "value": 0.05,
-                "text": "Diluted share count grows more than 5% in a year."})
+        out.append(
+            {
+                "id": "fcf",
+                "metric": "fcf_ttm",
+                "op": "<",
+                "value": 0.0,
+                "text": "Trailing free cash flow turns negative.",
+            }
+        )
+    out.append(
+        {
+            "id": "dilution",
+            "metric": "dilution",
+            "op": ">",
+            "value": 0.05,
+            "text": "Diluted share count grows more than 5% in a year.",
+        }
+    )
     if m.get("excess_12m") is not None:
-        out.append({"id": "relative", "metric": "excess_6m", "op": "<", "value": -0.20,
-                    "text": "The stock trails its benchmark by more than 20 points over six months."})
+        out.append(
+            {
+                "id": "relative",
+                "metric": "excess_6m",
+                "op": "<",
+                "value": -0.20,
+                "text": "The stock trails its benchmark by more than 20 points over six months.",
+            }
+        )
     if scen and scen["base"]["assumptions"]["starting_revenue_growth"] > 0:
         g0 = scen["base"]["assumptions"]["starting_revenue_growth"]
         bear = scen["bear"]["assumptions"]["starting_revenue_growth"]
-        out.append({"id": "quarterly_growth", "metric": "quarterly_yoy_last2", "op": "<", "value": bear,
-                    "text": f"Two consecutive quarters of year-over-year revenue growth below the bear case's "
-                            f"starting rate ({_pct(bear)}; base case {_pct(g0)})."})
+        out.append(
+            {
+                "id": "quarterly_growth",
+                "metric": "quarterly_yoy_last2",
+                "op": "<",
+                "value": bear,
+                "text": f"Two consecutive quarters of year-over-year revenue growth below the bear case's "
+                f"starting rate ({_pct(bear)}; base case {_pct(g0)}).",
+            }
+        )
     return out
 
 

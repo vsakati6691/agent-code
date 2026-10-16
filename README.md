@@ -208,3 +208,12 @@ For historical findings, see the [research report](docs/FINAL_REPORT_2026-10-12.
 [AGENTS.md](AGENTS.md) points to the same rules. Work on `feature/research-system`,
 run the full test suite and scan the staged diff for secrets before committing.
 Changes reach `main` through a PR on the owner's instruction.
+
+The [CI workflow](.github/workflows/ci.yml) runs on every push and pull request:
+the full test suite, Ruff lint/format checks, and an offline fixture-site build
+with snapshot integrity and internal-link checks. **Tests, lint and fixture
+site** is required for merge; the owner must select that check in the `main`
+branch protection rules or ruleset. Adding this workflow does not configure
+GitHub branch protection automatically. Run the same checks locally with
+`python -m ruff check .` and `python -m ruff format --check .` after installing
+the development dependencies.

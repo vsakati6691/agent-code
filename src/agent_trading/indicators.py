@@ -2,6 +2,7 @@
 
 All indicators are causal: the value on day t uses only data up to day t.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -51,5 +52,3 @@ def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
 
 def rate_of_change(close: pd.Series, n: int) -> pd.Series:
     return close / close.shift(n) - 1
-
-

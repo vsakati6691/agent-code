@@ -1,4 +1,5 @@
 """Daily scan: faithful snapshot summaries, empty states, and sortable row alignment."""
+
 from copy import deepcopy
 from html.parser import HTMLParser
 
@@ -9,12 +10,24 @@ from agent_trading.dashboard.site_watchlist import _scen_cells, watchlist_page
 
 
 def snapshot():
-    c = {"ticker": "ABC", "name": "Example <Company>", "rank": 1, "price": 20.0, "price_date": "2026-10-13",
-         "composite": 65.0, "confidence_label": "high", "sector": "Technology", "missing": ["dilution"],
-         "history": {"returns": {"1y": {"benchmark": 0.1, "stock": 0.3, "end": "2026-10-13"}}},
-         "counterargument": "Valuation < growth"}
-    return {"as_of": "2026-10-13", "bands": {"large": {"benchmark": "SPY", "candidates": [c]}},
-            "benchmarks": {"SPY": {"date": "2026-10-13", "close": 500.0}}}
+    c = {
+        "ticker": "ABC",
+        "name": "Example <Company>",
+        "rank": 1,
+        "price": 20.0,
+        "price_date": "2026-10-13",
+        "composite": 65.0,
+        "confidence_label": "high",
+        "sector": "Technology",
+        "missing": ["dilution"],
+        "history": {"returns": {"1y": {"benchmark": 0.1, "stock": 0.3, "end": "2026-10-13"}}},
+        "counterargument": "Valuation < growth",
+    }
+    return {
+        "as_of": "2026-10-13",
+        "bands": {"large": {"benchmark": "SPY", "candidates": [c]}},
+        "benchmarks": {"SPY": {"date": "2026-10-13", "close": 500.0}},
+    }
 
 
 def test_benchmark_return_uses_stored_return_not_candidate_performance():
@@ -60,8 +73,8 @@ def test_scan_summary_deduplicates_tickers_and_preserves_unknown_calendar():
     s = snapshot()
     s["bands"]["mid"] = deepcopy(s["bands"]["large"])
     page = scan_header(s, None)
-    assert '<strong>1</strong><small>Across 2 research lists' in page
-    assert '<strong>1</strong><small>Review evidence' in page
+    assert "<strong>1</strong><small>Across 2 research lists" in page
+    assert "<strong>1</strong><small>Review evidence" in page
     assert "Unknown" in page and "Calendar data unavailable" in page
     assert "First stored snapshot" in page
     s["events"] = {"items": [], "status": "ok"}
@@ -96,6 +109,7 @@ def test_growth_scanner_excludes_multibagger_rows_and_filters_without_mutating_d
 
 def test_research_pages_explain_absent_lists():
     from agent_trading.dashboard.site_lists import growth_page, multibaggers_page
+
     assert "Growth lists are not available" in growth_page({})
     assert "multibagger list is not available" in multibaggers_page({})
 
@@ -125,10 +139,16 @@ def test_empty_and_legacy_pages_remain_explanatory():
 
 def test_watchlist_counts_and_filters_are_based_on_stored_availability():
     s = snapshot()
-    s["watchlist"] = {"status": "ok", "entries": [{"ticker": "EMPTY", "price": None}],
-                      "statement": "Conditional only", "separation": "Independent list", "imported_at": "2026-10-13",
-                      "target_date": "2030-12-31", "years_to_target": 4.2}
+    s["watchlist"] = {
+        "status": "ok",
+        "entries": [{"ticker": "EMPTY", "price": None}],
+        "statement": "Conditional only",
+        "separation": "Independent list",
+        "imported_at": "2026-10-13",
+        "target_date": "2030-12-31",
+        "years_to_target": 4.2,
+    }
     page = watchlist_page(s)
     assert 'data-scenario="unavailable"' in page and 'data-ticker="EMPTY"' in page
-    assert 'Scenarios unavailable</span><strong>1</strong>' in page
+    assert "Scenarios unavailable</span><strong>1</strong>" in page
     assert page.index('id="t-watch"') < page.index("Compare all 2030 scenario ranges")

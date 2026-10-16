@@ -1,9 +1,10 @@
 """Strategy A (S&P 500 scanner), Strategy B (desk), new risk limits, and the daily cycle.
 
 All external services are mocked with saved-payload fixtures."""
+
 import json
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -31,18 +32,27 @@ AS_OF = date(2026, 10, 12)
 
 
 def small_settings(settings, n_min=3):
-    return replace(settings, scanner=replace(settings.scanner, min_constituents=n_min, max_constituents=600,
-                                             min_avg_dollar_volume=1e6))
+    return replace(
+        settings,
+        scanner=replace(settings.scanner, min_constituents=n_min, max_constituents=600, min_avg_dollar_volume=1e6),
+    )
 
 
 def fund_payload(tickers, as_of="2026-10-08"):
     holdings = [{"ticker": t, "name": t, "weight": 1.0, "asset_class": "equity"} for t in tickers]
-    holdings += [{"ticker": None, "name": "US DOLLAR", "weight": 0.2, "asset_class": "other"},
-                 {"ticker": "2602335D", "name": "TPG INC", "weight": 0.0, "asset_class": "equity"}]
-    return {"ticker": "SPY", "fund": {"name": "SPDR S&P 500", "as_of": as_of, "filing_date": as_of}, "holdings": holdings}
+    holdings += [
+        {"ticker": None, "name": "US DOLLAR", "weight": 0.2, "asset_class": "other"},
+        {"ticker": "2602335D", "name": "TPG INC", "weight": 0.0, "asset_class": "equity"},
+    ]
+    return {
+        "ticker": "SPY",
+        "fund": {"name": "SPDR S&P 500", "as_of": as_of, "filing_date": as_of},
+        "holdings": holdings,
+    }
 
 
 # ---------------------------------------------------------------- universe
+
 
 def test_universe_parsing_filters_non_tickers(settings):
     u = parse_index_fund(fund_payload(["AAA", "BRK.B", "CCC"]), small_settings(settings))
@@ -72,15 +82,57 @@ def test_coverage_reports_missing_constituents(settings):
 
 # ---------------------------------------------------------------- snapshots
 
-SCAN = {"data": {"result": {"total_items": 2, "results": [
-    {"ticker": "AAA", "columns": {"Market cap": "1e11", "Sector": "311", "Forward P/E": "20", "Operating margin": "0.3",
-                                  "Return on equity": "0.25", "Earnings date": "2.0261103e+07"}},
-    {"ticker": "BBB", "columns": {"Market cap": "5e10", "Sector": "311", "Forward P/E": "", "Operating margin": "",
-                                  "Return on equity": "0.1", "Earnings date": ""}}]}}}
+SCAN = {
+    "data": {
+        "result": {
+            "total_items": 2,
+            "results": [
+                {
+                    "ticker": "AAA",
+                    "columns": {
+                        "Market cap": "1e11",
+                        "Sector": "311",
+                        "Forward P/E": "20",
+                        "Operating margin": "0.3",
+                        "Return on equity": "0.25",
+                        "Earnings date": "2.0261103e+07",
+                    },
+                },
+                {
+                    "ticker": "BBB",
+                    "columns": {
+                        "Market cap": "5e10",
+                        "Sector": "311",
+                        "Forward P/E": "",
+                        "Operating margin": "",
+                        "Return on equity": "0.1",
+                        "Earnings date": "",
+                    },
+                },
+            ],
+        }
+    }
+}
 
-QUOTES = {"data": {"results": [{"quote": {"symbol": "AAA", "last_trade_price": "100", "venue_last_trade_time": "2026-10-09T19:59:59Z",
-                                          "last_non_reg_trade_price": "101", "venue_last_non_reg_trade_time": "2026-10-12T13:00:00Z",
-                                          "bid_price": "100.9", "ask_price": "101.1", "adjusted_previous_close": "100", "state": "active"}}]}}
+QUOTES = {
+    "data": {
+        "results": [
+            {
+                "quote": {
+                    "symbol": "AAA",
+                    "last_trade_price": "100",
+                    "venue_last_trade_time": "2026-10-09T19:59:59Z",
+                    "last_non_reg_trade_price": "101",
+                    "venue_last_non_reg_trade_time": "2026-10-12T13:00:00Z",
+                    "bid_price": "100.9",
+                    "ask_price": "101.1",
+                    "adjusted_previous_close": "100",
+                    "state": "active",
+                }
+            }
+        ]
+    }
+}
 
 
 def test_fundamentals_and_quotes_parsing():
@@ -102,16 +154,19 @@ def test_malformed_payloads_rejected(settings, tmp_path):
 
 def test_econ_calendar_staleness_fails_safe(settings, tmp_path):
     p = tmp_path / "econ.json"
-    p.write_text(json.dumps({"events": [{"date": "2026-10-14T12:30:00Z", "country": "US", "name": "CPI", "impact": "HIGH"}]}))
-    old = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    p.write_text(
+        json.dumps({"events": [{"date": "2026-10-14T12:30:00Z", "country": "US", "name": "CPI", "impact": "HIGH"}]})
+    )
+    old = datetime(2026, 10, 1, tzinfo=UTC)
     import_snapshot_files(settings, "econ", [p], fetched_at=old)
     snap = load_snapshot(settings, "econ")
-    assert high_impact_events(snap, date(2026, 10, 13), 1, now=datetime(2026, 10, 13, tzinfo=timezone.utc)) is None
+    assert high_impact_events(snap, date(2026, 10, 13), 1, now=datetime(2026, 10, 13, tzinfo=UTC)) is None
     fresh = high_impact_events(snap, date(2026, 10, 13), 1, now=old + timedelta(hours=1))
     assert list(fresh["name"]) == ["CPI"]
 
 
 # ---------------------------------------------------------------- risk limits
+
 
 def test_exclusive_group_and_symbol_risk(settings):
     engine = RiskEngine(settings)
@@ -134,6 +189,7 @@ def test_trading_status_daily_loss_and_drawdown(settings):
 
 
 # ---------------------------------------------------------------- Strategy A
+
 
 def universe_bars(n_up=4, n_flat=3, n_down=3):
     """Letter-only tickers (real ones never contain digits): UPA.., FLA.., DNA.."""
@@ -171,8 +227,19 @@ def test_scanner_unknown_earnings_blocks_actionable(settings):
 def test_scanner_actionable_respects_filters(settings):
     bars = universe_bars()
     spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
-    fund = pd.DataFrame([{"ticker": t, "operating_margin": 0.2 + i * 0.01, "roe": 0.2, "forward_pe": 20 + i,
-                          "sector_code": "311", "earnings_date": "2026-12-15"} for i, t in enumerate(bars)])
+    fund = pd.DataFrame(
+        [
+            {
+                "ticker": t,
+                "operating_margin": 0.2 + i * 0.01,
+                "roe": 0.2,
+                "forward_pe": 20 + i,
+                "sector_code": "311",
+                "earnings_date": "2026-12-15",
+            }
+            for i, t in enumerate(bars)
+        ]
+    )
     quotes = pd.DataFrame([{"ticker": "UPA", "spread_pct": 0.01}])
     res = run_scan(bars, settings, AS_OF, fund, quotes, bench=spy)
     assert len(res.actionable) <= settings.scanner.top_actionable
@@ -186,8 +253,19 @@ def test_scanner_actionable_respects_filters(settings):
 def test_missing_factor_blocks_actionable(settings):
     bars = universe_bars()
     spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
-    fund = pd.DataFrame([{"ticker": t, "operating_margin": 0.2, "roe": 0.2, "forward_pe": 20 if t != "UPB" else None,
-                          "sector_code": "311", "earnings_date": "2026-12-15"} for t in bars])
+    fund = pd.DataFrame(
+        [
+            {
+                "ticker": t,
+                "operating_margin": 0.2,
+                "roe": 0.2,
+                "forward_pe": 20 if t != "UPB" else None,
+                "sector_code": "311",
+                "earnings_date": "2026-12-15",
+            }
+            for t in bars
+        ]
+    )
     res = run_scan(bars, settings, AS_OF, fund, None, bench=spy)
     assert all(s.ticker != "UPB" for s in res.actionable)
     if "UPB" in res.rejected:
@@ -195,22 +273,42 @@ def test_missing_factor_blocks_actionable(settings):
 
 
 def test_no_score_without_price_factors(settings):
-    t = pd.DataFrame({"mom_12_1": [0.1, np.nan], "rs_63": [0.0, np.nan], "dist_200": [0.05, np.nan],
-                      "updown_volume": [1, 1], "vol_63": [0.2, np.nan], "uptrend": [True, True],
-                      "downtrend": [False, False]}, index=["A", "B"])
+    t = pd.DataFrame(
+        {
+            "mom_12_1": [0.1, np.nan],
+            "rs_63": [0.0, np.nan],
+            "dist_200": [0.05, np.nan],
+            "updown_volume": [1, 1],
+            "vol_63": [0.2, np.nan],
+            "uptrend": [True, True],
+            "downtrend": [False, False],
+        },
+        index=["A", "B"],
+    )
     out = score(t, None, settings.scanner.weights)
     assert pd.notna(out.loc["A", "composite"]) and pd.isna(out.loc["B", "composite"])
 
 
 def test_price_strength_is_a_single_factor(settings):
-    t = pd.DataFrame({"mom_12_1": [0.1, 0.2], "rs_63": [0.0, 0.1], "dist_200": [0.05, 0.1], "updown_volume": [1, 1],
-                      "vol_63": [0.2, 0.2], "uptrend": [True, True], "downtrend": [False, False]}, index=["A", "B"])
+    t = pd.DataFrame(
+        {
+            "mom_12_1": [0.1, 0.2],
+            "rs_63": [0.0, 0.1],
+            "dist_200": [0.05, 0.1],
+            "updown_volume": [1, 1],
+            "vol_63": [0.2, 0.2],
+            "uptrend": [True, True],
+            "downtrend": [False, False],
+        },
+        index=["A", "B"],
+    )
     out = score(t, None, settings.scanner.weights)
     assert set(["price_strength", "volume", "quality", "valuation", "risk"]) <= set(out.columns)
     assert out.loc["B", "price_strength"] == 1.0  # three correlated inputs averaged into one factor
 
 
 # ---------------------------------------------------------------- Strategy B
+
 
 def desk_bars(qqq_drift=0.002):
     return {
@@ -254,7 +352,9 @@ def test_blackout_measured_from_fill_day(settings, tmp_path):
     assert next_session(date(2026, 10, 12)) == date(2026, 10, 13)
     assert next_session(date(2026, 10, 9)) == date(2026, 10, 12)  # Friday -> Monday
     p = tmp_path / "econ.json"
-    p.write_text(json.dumps({"events": [{"date": "2026-10-14T12:30:00Z", "country": "US", "name": "CPI", "impact": "HIGH"}]}))
+    p.write_text(
+        json.dumps({"events": [{"date": "2026-10-14T12:30:00Z", "country": "US", "name": "CPI", "impact": "HIGH"}]})
+    )
     import_snapshot_files(settings, "econ", [p])
     ev = high_impact_events(load_snapshot(settings, "econ"), next_session(AS_OF), settings.desk.event_blackout_days)
     _, ds = run_desk(desk_bars(), settings, AS_OF, {}, ev, no_earnings)
@@ -263,7 +363,9 @@ def test_blackout_measured_from_fill_day(settings, tmp_path):
 
 
 def test_desk_downtrend_considers_sqqq(settings):
-    reg, ds = run_desk(desk_bars(qqq_drift=-0.002), settings, AS_OF, {}, pd.DataFrame(columns=["name", "date"]), no_earnings)
+    reg, ds = run_desk(
+        desk_bars(qqq_drift=-0.002), settings, AS_OF, {}, pd.DataFrame(columns=["name", "date"]), no_earnings
+    )
     assert reg["trend"] == "down"
     assert by_symbol(ds)["TQQQ"].action == "NO TRADE"
     assert by_symbol(ds)["SQQQ"].action in ("BUY", "WAIT", "NO TRADE")
@@ -278,8 +380,12 @@ def test_desk_time_exit_and_never_both(settings):
 
 
 def test_desk_nvda_earnings_blackout_and_unknown(settings):
-    soon = lambda s: (AS_OF + timedelta(days=2), True) if s == "NVDA" else (None, True)
-    unknown = lambda s: (None, False)
+    def soon(s):
+        return (AS_OF + timedelta(days=2), True) if s == "NVDA" else (None, True)
+
+    def unknown(s):
+        return (None, False)
+
     _, ds = run_desk(desk_bars(), settings, AS_OF, {}, pd.DataFrame(columns=["name", "date"]), soon)
     assert by_symbol(ds)["NVDA"].action in ("WAIT", "NO TRADE")
     _, ds2 = run_desk(desk_bars(), settings, AS_OF, {}, pd.DataFrame(columns=["name", "date"]), unknown)
@@ -298,6 +404,7 @@ def test_desk_missing_qqq_data_no_trade(settings):
 
 # ---------------------------------------------------------------- paper broker with intents
 
+
 @pytest.fixture
 def broker(settings, tmp_path):
     return PaperBroker(settings, Journal(tmp_path / "p.db"))
@@ -306,12 +413,14 @@ def broker(settings, tmp_path):
 def test_intents_dedupe_no_short_and_exclusive(settings, broker):
     bars = desk_bars()
     d = bars["TQQQ"].index[-2].date()
-    b1 = {s: df.loc[:str(d)] for s, df in bars.items()}
+    b1 = {s: df.loc[: str(d)] for s, df in bars.items()}
     close = float(b1["TQQQ"]["close"].iloc[-1])
-    intents = [Intent("TQQQ", "buy", close, close * 0.9, "B-desk", "test", 1),
-               Intent("TQQQ", "buy", close, close * 0.9, "B-desk", "dup", 1),
-               Intent("SQQQ", "buy", 30, 27, "B-desk", "other side", 0.5),
-               Intent("NVDA", "sell", 100, None, "B-desk", "no position")]
+    intents = [
+        Intent("TQQQ", "buy", close, close * 0.9, "B-desk", "test", 1),
+        Intent("TQQQ", "buy", close, close * 0.9, "B-desk", "dup", 1),
+        Intent("SQQQ", "buy", 30, 27, "B-desk", "other side", 0.5),
+        Intent("NVDA", "sell", 100, None, "B-desk", "no position"),
+    ]
     r = broker.run(b1, d, intents)
     pending = broker.orders("pending")
     assert list(pending["symbol"]) == ["TQQQ"]
@@ -359,6 +468,7 @@ def test_loss_limit_blocks_new_entries(settings, broker):
 
 # ---------------------------------------------------------------- Strategy B historical backtest
 
+
 def test_desk_backtest_respects_leveraged_rules(settings):
     from agent_trading.backtest.desk_backtest import run_desk_backtest
 
@@ -398,6 +508,7 @@ def test_unlevered_baseline_and_cost_stress(settings):
 
 # ---------------------------------------------------------------- end-to-end daily cycle (all inputs mocked)
 
+
 def test_daily_cycle_end_to_end(settings, tmp_path):
     from agent_trading.daily import run_daily
 
@@ -414,14 +525,21 @@ def test_daily_cycle_end_to_end(settings, tmp_path):
     fp.write_text(json.dumps(fund_payload([*uni, "MISSX"])))
     import_universe(s, fp)
     ep = tmp_path / "econ.json"
-    ep.write_text(json.dumps({"events": [{"date": "2026-10-14T12:30:00Z", "country": "US", "name": "CPI", "impact": "HIGH"}]}))
+    ep.write_text(
+        json.dumps({"events": [{"date": "2026-10-14T12:30:00Z", "country": "US", "name": "CPI", "impact": "HIGH"}]})
+    )
     import_snapshot_files(s, "econ", [ep])
 
     text, ctx = run_daily(s, AS_OF)
     assert ctx.coverage["expected"] == 11 and ctx.coverage["scanned"] == 10
     assert "MISSX" in ctx.coverage["missing"]
-    for section in ["Section A: S&P 500 scanner", "Section B: Focused desk", "Section C: Account and portfolio risk",
-                    "Section D: Actions", "Live order tickets for you to place by hand"]:
+    for section in [
+        "Section A: S&P 500 scanner",
+        "Section B: Focused desk",
+        "Section C: Account and portfolio risk",
+        "Section D: Actions",
+        "Live order tickets for you to place by hand",
+    ]:
         assert section in text
     assert "incomplete scan" in text  # 10/11 < 95%
     assert {d.symbol for d in ctx.desk} == {"TQQQ", "SQQQ", "IBIT", "NVDA"}
@@ -448,6 +566,7 @@ def test_spec_change_is_flagged(settings, tmp_path):
 
 # ---------------------------------------------------------------- missed scheduled runs
 
+
 def _postclose_log(s, day: str, label: str = "postclose"):
     from agent_trading.manifest import runs_dir
 
@@ -459,9 +578,9 @@ def _postclose_log(s, day: str, label: str = "postclose"):
 def test_missed_postclose_uses_previous_trading_day(settings):
     from agent_trading.manifest import missed_postclose
 
-    assert missed_postclose(settings, date(2026, 10, 12)) == date(2026, 10, 9)    # Monday -> Friday
-    assert missed_postclose(settings, date(2026, 11, 27)) == date(2026, 11, 25)   # skips Thanksgiving
-    _postclose_log(settings, "2026-10-09", label="intraday")                       # other labels don't count
+    assert missed_postclose(settings, date(2026, 10, 12)) == date(2026, 10, 9)  # Monday -> Friday
+    assert missed_postclose(settings, date(2026, 11, 27)) == date(2026, 11, 25)  # skips Thanksgiving
+    _postclose_log(settings, "2026-10-09", label="intraday")  # other labels don't count
     assert missed_postclose(settings, date(2026, 10, 12)) == date(2026, 10, 9)
     _postclose_log(settings, "2026-10-09")
     assert missed_postclose(settings, date(2026, 10, 12)) is None
@@ -494,6 +613,7 @@ def test_cli_prints_missed_run_warning(settings, tmp_path, capsys):
     import shutil
 
     from agent_trading.cli import main
+
     from .conftest import ROOT
 
     (tmp_path / "config").mkdir()

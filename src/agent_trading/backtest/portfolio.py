@@ -10,10 +10,11 @@ position stays out until the next rebalance. Positions that remain in the
 target are not resized at rebalance (avoids churn); positions dropped from the
 target are sold at the next open.
 """
+
 from __future__ import annotations
 
 import math
-from typing import Callable
+from collections.abc import Callable
 
 import pandas as pd
 
@@ -55,7 +56,7 @@ def run_allocation(
     atrs = {s: atr(df, 14).to_dict() for s, df in bars.items()}
     returns = pd.DataFrame({s: df["close"] for s, df in bars.items()}).sort_index().pct_change()
     all_dates = sorted(set().union(*(df.index for df in bars.values()))) if bars else []
-    is_month_end = dict(zip(all_dates, month_end_flags(all_dates)))
+    is_month_end = dict(zip(all_dates, month_end_flags(all_dates), strict=False))
     dates = [d for d in all_dates if (start is None or d >= start) and (end is None or d <= end)]
     rate_by_day = cash_rate.to_dict() if cash_rate is not None else {}
 
@@ -93,7 +94,7 @@ def run_allocation(
                 pending_sells.discard(sym)
         if target is not None:
             equity_est = cash + sum(t.quantity * last_close.get(s, t.entry_price) for s, t in positions.items())
-            known = returns.loc[:prev_day].iloc[-risk_cfg.correlation_lookback:] if prev_day is not None else None
+            known = returns.loc[:prev_day].iloc[-risk_cfg.correlation_lookback :] if prev_day is not None else None
             for sym, w in sorted(target.items(), key=lambda kv: -kv[1]):
                 bar = rows.get(sym, {}).get(d)
                 if w <= 0 or sym in positions or bar is None or prev_day is None:
@@ -105,8 +106,11 @@ def run_allocation(
                 stop = fill - risk_cfg.atr_stop_multiple * atr_prev if use_stops else fill * 0.01
                 if stop <= 0:
                     continue
-                state = PortfolioState(equity_est, cash - commission,
-                                       tuple(Holding(s, t.quantity, t.entry_price, t.stop) for s, t in positions.items()))
+                state = PortfolioState(
+                    equity_est,
+                    cash - commission,
+                    tuple(Holding(s, t.quantity, t.entry_price, t.stop) for s, t in positions.items()),
+                )
                 decision = engine.evaluate_entry(sym, fill, stop, state, known)
                 if not decision.approved:
                     continue
@@ -114,8 +118,9 @@ def run_allocation(
                 if qty <= 0 or qty * fill < risk_cfg.min_order_notional:
                     continue
                 cash -= qty * fill + commission
-                positions[sym] = Trade(sym, d.date(), fill, qty, stop, commission=commission,
-                                       slippage_cost=qty * bar["open"] * slip)
+                positions[sym] = Trade(
+                    sym, d.date(), fill, qty, stop, commission=commission, slippage_cost=qty * bar["open"] * slip
+                )
             target = None
 
         # 2. protective stops
@@ -153,7 +158,10 @@ def run_allocation(
 
     equity = pd.Series(curve, dtype=float).sort_index()
     metrics = compute_metrics(
-        equity, [t.pnl for t in closed], initial, days_exposed / len(dates) if dates else 0.0,
+        equity,
+        [t.pnl for t in closed],
+        initial,
+        days_exposed / len(dates) if dates else 0.0,
         sum(t.costs for t in closed),
         traded_notional=sum(t.quantity * (t.entry_price + t.exit_price) for t in closed),
         holding_days=[(t.exit_date - t.entry_date).days for t in closed],

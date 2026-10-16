@@ -1,4 +1,5 @@
 """Display-only daily context; never edit the weekly snapshot passed to a renderer."""
+
 from __future__ import annotations
 
 import html
@@ -45,13 +46,17 @@ def banner(snap: dict, context: dict | None) -> str:
     data = (context or {}).get("data")
     if not data:
         reason = (context or {}).get("reason") or "Daily data missing: no daily refresh available."
-        return (f'<p class="small muted daily-status">{E(reason)} Showing weekly data; '
-                f'weekly snapshot {E(weekly_date)}.</p>')
+        return (
+            f'<p class="small muted daily-status">{E(reason)} Showing weekly data; '
+            f"weekly snapshot {E(weekly_date)}.</p>"
+        )
     stamp = str(data["collected_at"]).replace("T", " ").replace("+00:00", "").removesuffix("Z")
-    return (f'<div class="banner info small daily-status"><strong>Daily refresh, {E(stamp)} UTC, delayed, not live</strong>'
-            f'Session {E(data["as_of"])} · weekly snapshot {E(weekly_date)} · '
-            f'refresh status: {E(data["status"])}. Scores, ranks and trailing returns remain weekly. '
-            'Change since weekly is an unadjusted price comparison; splits and dividends can affect it.</div>')
+    return (
+        f'<div class="banner info small daily-status"><strong>Daily refresh, {E(stamp)} UTC, delayed, not live</strong>'
+        f"Session {E(data['as_of'])} · weekly snapshot {E(weekly_date)} · "
+        f"refresh status: {E(data['status'])}. Scores, ranks and trailing returns remain weekly. "
+        "Change since weekly is an unadjusted price comparison; splits and dividends can affect it.</div>"
+    )
 
 
 def price(symbol: str, weekly, context: dict | None) -> tuple[float | None, str]:
@@ -73,36 +78,48 @@ def options_section(snap: dict, context: dict) -> str:
         return head + '<p class="small">The weekly tracked lists appear below.</p></section>'
     options = data.get("options") or {}
     if not options.get("enabled"):
-        return head + '<p>Daily options unavailable: collection disabled.</p></section>'
-    parts = [head, '<p class="small">Existing eligibility and ranking rules, recomputed on daily delayed chains. '
-             'These lists are not added to weekly performance tracking. Premium and maximum loss = ask × 100; '
-             'fees are not deducted. Buying an option can lose the entire premium. '
-             f'{E(spec.PROBABILITY_NOT_ESTABLISHED)} Delta is not a probability.</p>']
+        return head + "<p>Daily options unavailable: collection disabled.</p></section>"
+    parts = [
+        head,
+        '<p class="small">Existing eligibility and ranking rules, recomputed on daily delayed chains. '
+        "These lists are not added to weekly performance tracking. Premium and maximum loss = ask × 100; "
+        "fees are not deducted. Buying an option can lose the entire premium. "
+        f"{E(spec.PROBABILITY_NOT_ESTABLISHED)} Delta is not a probability.</p>",
+    ]
     for h in spec.HORIZONS:
         for kind in spec.OPTION_TYPES:
             lst = (options.get(h.key) or {}).get(kind + "s") or {}
             rows = []
             for row in lst.get("rows", []):
-                rows.append(f'<tr><td>{E(row["underlying"])} {kind}<div class="small">{E(row["expiration"])} · {row["dte"]}d</div></td>'
-                            f'<td class="num">{money(row["strike"])}</td>'
-                            f'<td class="num" data-v="{sval(row["premium_per_contract_ask"])}">{money(row["premium_per_contract_ask"])}</td>'
-                            f'<td class="num crit">{money(row["max_loss_per_contract"])}</td>'
-                            f'<td class="num">{money(row["breakeven"])}</td>'
-                            f'<td class="num">{num((row.get("rank_components") or {}).get("total"), 1)}</td>'
-                            f'<td class="small">{E(row.get("events_status") or "unknown")}</td></tr>')
-            parts.append(f'<details><summary>{E(h.title)} · {kind}s · {len(rows)} of up to 5</summary>')
+                rows.append(
+                    f'<tr><td>{E(row["underlying"])} {kind}<div class="small">{E(row["expiration"])} · {row["dte"]}d</div></td>'
+                    f'<td class="num">{money(row["strike"])}</td>'
+                    f'<td class="num" data-v="{sval(row["premium_per_contract_ask"])}">{money(row["premium_per_contract_ask"])}</td>'
+                    f'<td class="num crit">{money(row["max_loss_per_contract"])}</td>'
+                    f'<td class="num">{money(row["breakeven"])}</td>'
+                    f'<td class="num">{num((row.get("rank_components") or {}).get("total"), 1)}</td>'
+                    f'<td class="small">{E(row.get("events_status") or "unknown")}</td></tr>'
+                )
+            parts.append(f"<details><summary>{E(h.title)} · {kind}s · {len(rows)} of up to 5</summary>")
             if rows:
-                parts.append(f'<div class="table-wrap"><table id="daily-{h.key}-{kind}" data-table>'
-                             f'<caption class="sr-only">Daily {h.key} {kind}s</caption><thead><tr>'
-                             '<th>Contract</th><th>Strike</th><th data-sort="num">Premium</th><th>Max loss</th>'
-                             '<th>Breakeven</th><th>Research score</th><th>Earnings before expiry</th></tr></thead>'
-                             f'<tbody>{"".join(rows)}</tbody></table></div>')
+                parts.append(
+                    f'<div class="table-wrap"><table id="daily-{h.key}-{kind}" data-table>'
+                    f'<caption class="sr-only">Daily {h.key} {kind}s</caption><thead><tr>'
+                    '<th>Contract</th><th>Strike</th><th data-sort="num">Premium</th><th>Max loss</th>'
+                    "<th>Breakeven</th><th>Research score</th><th>Earnings before expiry</th></tr></thead>"
+                    f"<tbody>{''.join(rows)}</tbody></table></div>"
+                )
             if lst.get("shortfall"):
                 parts.append(f'<p class="small">{E(lst["shortfall"])}</p>')
-            parts.append('</details>')
-    failed = "".join(f'<li>{E(symbol)}: unavailable — {E(item["reason"])}</li>'
-                     for symbol, item in data.get("chain_status", {}).items() if item["status"] != "available")
+            parts.append("</details>")
+    failed = "".join(
+        f"<li>{E(symbol)}: unavailable — {E(item['reason'])}</li>"
+        for symbol, item in data.get("chain_status", {}).items()
+        if item["status"] != "available"
+    )
     if failed:
-        parts.append(f'<details><summary>Unavailable daily chains</summary><ul>{failed}</ul></details>')
-    parts.append(f'<p class="small"><a href="data/daily/{E(data["as_of"])}/refresh.json">Daily data and quote timestamps (JSON)</a></p></section>')
+        parts.append(f"<details><summary>Unavailable daily chains</summary><ul>{failed}</ul></details>")
+    parts.append(
+        f'<p class="small"><a href="data/daily/{E(data["as_of"])}/refresh.json">Daily data and quote timestamps (JSON)</a></p></section>'
+    )
     return "".join(parts)

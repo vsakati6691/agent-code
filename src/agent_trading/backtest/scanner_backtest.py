@@ -14,6 +14,7 @@ Two views:
   * account view: the same ranking traded through the allocation engine under
     the real RiskEngine limits (trading P&L only).
 """
+
 from __future__ import annotations
 
 import math
@@ -54,14 +55,16 @@ class ScannerBacktest:
         return pd.DataFrame([m.__dict__ for m in self.months]).set_index("signal_date")
 
 
-def _rank_month(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: list[str], d: pd.Timestamp,
-                settings: Settings) -> pd.DataFrame:
+def _rank_month(
+    bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: list[str], d: pd.Timestamp, settings: Settings
+) -> pd.DataFrame:
     raw = _features_month(bars, spy, members, d)
     return raw if raw.empty else score(raw, None, settings.scanner.weights)
 
 
-def _features_month(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: list[str],
-                    d: pd.Timestamp) -> pd.DataFrame:
+def _features_month(
+    bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: list[str], d: pd.Timestamp
+) -> pd.DataFrame:
     rows = {}
     bench = spy.loc[:d].iloc[-LOOKBACK_BARS:]
     for t in members:
@@ -79,8 +82,12 @@ def _features_month(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, members: l
 
 def _eligible(table: pd.DataFrame, settings: Settings) -> pd.DataFrame:
     sc = settings.scanner
-    return table[(table["setup"] == "bullish") & (table["close"] >= sc.min_price)
-                 & (table["avg_dollar_volume"] >= sc.min_avg_dollar_volume) & (table["rsi"] < 75)]
+    return table[
+        (table["setup"] == "bullish")
+        & (table["close"] >= sc.min_price)
+        & (table["avg_dollar_volume"] >= sc.min_avg_dollar_volume)
+        & (table["rsi"] < 75)
+    ]
 
 
 def _fwd(df: pd.DataFrame, entry_day: pd.Timestamp, exit_day: pd.Timestamp) -> float | None:
@@ -130,13 +137,19 @@ def variant_scores(table: pd.DataFrame, variant: str, settings: Settings) -> tup
     return s, s
 
 
-def run_ablation(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, history: dict[date, list[str]],
-                 settings: Settings, top_n: int = 10, start: date | None = None,
-                 variants: tuple[str, ...] = tuple(VARIANTS)) -> dict[str, ScannerBacktest]:
+def run_ablation(
+    bars: dict[str, pd.DataFrame],
+    spy: pd.DataFrame,
+    history: dict[date, list[str]],
+    settings: Settings,
+    top_n: int = 10,
+    start: date | None = None,
+    variants: tuple[str, ...] = tuple(VARIANTS),
+) -> dict[str, ScannerBacktest]:
     """All variants on the same months; features are computed once per month."""
     days = list(spy.index)
     flags = month_end_flags(days)
-    month_ends = [d for d, f in zip(days, flags) if f]
+    month_ends = [d for d, f in zip(days, flags, strict=False) if f]
     first_snap = min(history)
     out = {v: ScannerBacktest() for v in variants}
     prev: dict[str, set[str]] = {v: set() for v in variants}
@@ -162,15 +175,33 @@ def run_ablation(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, history: dict
             gross = float(np.mean(top)) if top else 0.0
             both = pd.DataFrame({"s": ic_score, "r": fwd}).dropna()
             ic = float(both["s"].rank().corr(both["r"].rank())) if len(both) > 20 else float("nan")
-            out[v].months.append(MonthResult(d.date(), len(members), len(table), len(elig), picks,
-                                             gross - 2 * cost * turnover, float(np.mean(univ)) if univ else 0.0,
-                                             spy_ret, turnover, ic, gross))
+            out[v].months.append(
+                MonthResult(
+                    d.date(),
+                    len(members),
+                    len(table),
+                    len(elig),
+                    picks,
+                    gross - 2 * cost * turnover,
+                    float(np.mean(univ)) if univ else 0.0,
+                    spy_ret,
+                    turnover,
+                    ic,
+                    gross,
+                )
+            )
             prev[v] = set(picks)
     return out
 
 
-def run_signal_backtest(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, history: dict[date, list[str]],
-                        settings: Settings, top_n: int = 10, start: date | None = None) -> ScannerBacktest:
+def run_signal_backtest(
+    bars: dict[str, pd.DataFrame],
+    spy: pd.DataFrame,
+    history: dict[date, list[str]],
+    settings: Settings,
+    top_n: int = 10,
+    start: date | None = None,
+) -> ScannerBacktest:
     """The production composite only (see run_ablation for the variants)."""
     return run_ablation(bars, spy, history, settings, top_n, start, ("full",))["full"]
 
@@ -187,10 +218,14 @@ def summarize(frame: pd.DataFrame) -> dict:
         n = len(r)
         growth = float((1 + r).prod())
         sd = r.std()
-        return {"months": n, "total": growth - 1,
-                "cagr": growth ** (12 / n) - 1 if n and growth > 0 else float("nan"),
-                "sharpe": float(math.sqrt(12) * r.mean() / sd) if sd and sd > 0 else float("nan"),
-                "max_dd": float(((1 + r).cumprod() / (1 + r).cumprod().cummax() - 1).min())}
+        return {
+            "months": n,
+            "total": growth - 1,
+            "cagr": growth ** (12 / n) - 1 if n and growth > 0 else float("nan"),
+            "sharpe": float(math.sqrt(12) * r.mean() / sd) if sd and sd > 0 else float("nan"),
+            "max_dd": float(((1 + r).cumprod() / (1 + r).cumprod().cummax() - 1).min()),
+        }
+
     ic = frame["ic"].dropna()
     excess = frame["top_return"] - frame["spy_return"]
     return {
@@ -198,10 +233,14 @@ def summarize(frame: pd.DataFrame) -> dict:
         "universe": stats(frame["universe_return"]),
         "spy": stats(frame["spy_return"]),
         "excess_vs_spy_mean_monthly": float(excess.mean()),
-        "excess_t_stat": float(excess.mean() / (excess.std() / math.sqrt(len(excess)))) if len(excess) > 2 and excess.std() > 0 else float("nan"),
+        "excess_t_stat": float(excess.mean() / (excess.std() / math.sqrt(len(excess))))
+        if len(excess) > 2 and excess.std() > 0
+        else float("nan"),
         "hit_rate_vs_spy": float((excess > 0).mean()),
         "ic_mean": float(ic.mean()) if len(ic) else float("nan"),
-        "ic_t_stat": float(ic.mean() / (ic.std() / math.sqrt(len(ic)))) if len(ic) > 2 and ic.std() > 0 else float("nan"),
+        "ic_t_stat": float(ic.mean() / (ic.std() / math.sqrt(len(ic))))
+        if len(ic) > 2 and ic.std() > 0
+        else float("nan"),
         "avg_members": float(frame["members"].mean()),
         "avg_scored": float(frame["scored"].mean()),
         "avg_eligible": float(frame["eligible"].mean()),
@@ -209,9 +248,17 @@ def summarize(frame: pd.DataFrame) -> dict:
     }
 
 
-def run_account_backtest(bars: dict[str, pd.DataFrame], spy: pd.DataFrame, history: dict[date, list[str]],
-                         settings: Settings, start, end, top_n: int = 10):
+def run_account_backtest(
+    bars: dict[str, pd.DataFrame],
+    spy: pd.DataFrame,
+    history: dict[date, list[str]],
+    settings: Settings,
+    start,
+    end,
+    top_n: int = 10,
+):
     """The same monthly ranking traded under the real RiskEngine limits (trading P&L only)."""
+
     def weights(d: pd.Timestamp, hist: dict[str, pd.DataFrame]) -> dict[str, float]:
         table = _rank_month(bars, spy, members_on(history, d.date()), d, settings)
         if table.empty:

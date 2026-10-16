@@ -1,11 +1,11 @@
 """Fast, snapshot-based market and candidate scan. No new scores or market signals."""
+
 from __future__ import annotations
 
 import html
 
-from . import evidence, spec
+from . import evidence, site_decisions, site_refresh, spec
 from .fmt import money, num, ok, pct, sval
-from . import site_refresh, site_decisions
 
 E = html.escape
 LIST_ORDER = ("large", "mid", "small", "multibagger")
@@ -13,8 +13,10 @@ BENCHMARKS = (("SPY", "S&P 500"), ("IJH", "US mid cap"), ("IWM", "US small cap")
 
 
 def pin_button(ticker: str) -> str:
-    return (f'<button class="pinbtn" type="button" data-pin="{E(ticker)}" aria-pressed="false" '
-            f'aria-label="Pin {E(ticker)}" title="Pin on this device">☆</button>')
+    return (
+        f'<button class="pinbtn" type="button" data-pin="{E(ticker)}" aria-pressed="false" '
+        f'aria-label="Pin {E(ticker)}" title="Pin on this device">☆</button>'
+    )
 
 
 def _label(key: str, band: dict) -> str:
@@ -47,13 +49,17 @@ def market_context(snap: dict, daily: dict | None = None) -> str:
         value = money(close) if close is not None else "Unavailable"
         r = benchmark_return(snap, ticker, "1y") if current else None
         direction = "positive" if ok(r) and r >= 0 else "negative" if ok(r) else "muted"
-        cards.append(f'<article class="market-tile"><div class="market-label"><strong>{ticker}</strong>'
-                     f'<span>{E(name)}</span></div><div class="market-value">{value}</div>'
-                     f'<div class="market-foot"><span class="{direction}">{pct(r, 1, True)} · 1Y price return</span>'
-                     f'<span>{E(note)}</span><span>Weekly: {E(str(b.get("date") or "Date unavailable"))}</span></div></article>')
-    return ('<section aria-label="Market context"><div class="section-heading"><h2>Market context</h2>'
-            '<span class="small muted">ETF benchmarks · stored closing prices</span></div>'
-            f'{site_refresh.banner(snap, daily)}<div class="market-grid">{"".join(cards)}</div></section>')
+        cards.append(
+            f'<article class="market-tile"><div class="market-label"><strong>{ticker}</strong>'
+            f'<span>{E(name)}</span></div><div class="market-value">{value}</div>'
+            f'<div class="market-foot"><span class="{direction}">{pct(r, 1, True)} · 1Y price return</span>'
+            f"<span>{E(note)}</span><span>Weekly: {E(str(b.get('date') or 'Date unavailable'))}</span></div></article>"
+        )
+    return (
+        '<section aria-label="Market context"><div class="section-heading"><h2>Market context</h2>'
+        '<span class="small muted">ETF benchmarks · stored closing prices</span></div>'
+        f'{site_refresh.banner(snap, daily)}<div class="market-grid">{"".join(cards)}</div></section>'
+    )
 
 
 def scan_header(snap: dict, prev_snap: dict | None) -> str:
@@ -67,23 +73,33 @@ def scan_header(snap: dict, prev_snap: dict | None) -> str:
     dates = {(e["ticker"], e["date"]) for e in events}
     earnings = str(len(dates)) if state == "available" else "Unknown"
     new_text = str(len(new)) if prev_snap else "—"
-    new_note = f'Since {E(prev_snap["as_of"])}' if prev_snap else "First stored snapshot"
+    new_note = f"Since {E(prev_snap['as_of'])}" if prev_snap else "First stored snapshot"
     window = (snap.get("events") or {}).get("window_days", 45)
-    stats = ((str(unique), "Research candidates", f"Across {len(bands)} research lists"),
-             (new_text, "New to a list", new_note),
-             (str(len(missing)), "With missing inputs", "Review evidence before comparing"),
-             (earnings, "Scheduled earnings", f"Next {window} days from snapshot" if state == "available" else "Calendar data unavailable"))
-    tiles = "".join(f'<div class="scan-stat"><span>{label}</span><strong>{value}</strong><small>{note}</small></div>'
-                    for value, label, note in stats)
-    return (f'<section class="scan-hero" data-overview><div><p class="eyebrow">RESEARCH DESK / DAILY REVIEW</p>'
-            '<h1>Your market scan.<br><span>Context first. Research next.</span></h1>'
-            '<p class="lede">Check the market backdrop, narrow the candidates, then inspect the evidence.</p>'
-            '<div class="hero-actions"><a class="action primary" href="growth.html">Explore growth stocks →</a>'
-            '<a class="action" href="multibaggers.html">Multibagger research →</a></div></div>'
-            f'<aside class="snapshot-note"><span class="eyebrow">SNAPSHOT CLOSE</span><strong>{E(snap["as_of"])}</strong>'
-            '<span>Weekly data · ready for your daily review</span><a href="#research-briefing">Open research briefing →</a>'
-            '</aside></section>'
-            f'<div class="scan-stats" aria-label="Snapshot summary">{tiles}</div>')
+    stats = (
+        (str(unique), "Research candidates", f"Across {len(bands)} research lists"),
+        (new_text, "New to a list", new_note),
+        (str(len(missing)), "With missing inputs", "Review evidence before comparing"),
+        (
+            earnings,
+            "Scheduled earnings",
+            f"Next {window} days from snapshot" if state == "available" else "Calendar data unavailable",
+        ),
+    )
+    tiles = "".join(
+        f'<div class="scan-stat"><span>{label}</span><strong>{value}</strong><small>{note}</small></div>'
+        for value, label, note in stats
+    )
+    return (
+        f'<section class="scan-hero" data-overview><div><p class="eyebrow">RESEARCH DESK / DAILY REVIEW</p>'
+        "<h1>Your market scan.<br><span>Context first. Research next.</span></h1>"
+        '<p class="lede">Check the market backdrop, narrow the candidates, then inspect the evidence.</p>'
+        '<div class="hero-actions"><a class="action primary" href="growth.html">Explore growth stocks →</a>'
+        '<a class="action" href="multibaggers.html">Multibagger research →</a></div></div>'
+        f'<aside class="snapshot-note"><span class="eyebrow">SNAPSHOT CLOSE</span><strong>{E(snap["as_of"])}</strong>'
+        '<span>Weekly data · ready for your daily review</span><a href="#research-briefing">Open research briefing →</a>'
+        "</aside></section>"
+        f'<div class="scan-stats" aria-label="Snapshot summary">{tiles}</div>'
+    )
 
 
 def candidate_scan(snap: dict, band_keys: list[str] | None = None, daily: dict | None = None) -> str:
@@ -107,19 +123,19 @@ def candidate_scan(snap: dict, band_keys: list[str] | None = None, daily: dict |
             momentum = research["momentum"]["text"]
             extension = research["extended"]["text"]
             rows.append(f'''<tr data-ticker="{E(ticker)}" data-sector="{E(sector)}" data-list="{E(key)}"
-data-quality="{E(quality)}" data-gaps="{'yes' if missing else 'no'}">
+data-quality="{E(quality)}" data-gaps="{"yes" if missing else "no"}">
 <td class="tk">{pin_button(ticker)}<a href="stock/{E(key)}-{E(ticker)}.html"><strong>{E(ticker)}</strong></a>
-<span class="scan-company">{E(c.get('name') or ticker)}</span></td>
-<td class="small">{E(_label(key, band))}<span class="scan-company">Rank #{c.get('rank', '—')} · {E(sector)}</span></td>
-<td class="num" data-v="{sval(close)}">{money(close) if close is not None else 'Unavailable'}<span class="scan-company">{E(price_note)}</span><span class="scan-company">Weekly {E(str(c.get('price_date') or 'Date unavailable'))}</span></td>
-<td class="num" data-label="Within-list score" data-v="{sval(c.get('composite'))}"><strong>{num(c.get('composite'), 1)}</strong><span class="scan-company">{'quality' if band.get('profile') == 'fundamental_growth' else 'recorded score'} / 100</span></td>
+<span class="scan-company">{E(c.get("name") or ticker)}</span></td>
+<td class="small">{E(_label(key, band))}<span class="scan-company">Rank #{c.get("rank", "—")} · {E(sector)}</span></td>
+<td class="num" data-v="{sval(close)}">{money(close) if close is not None else "Unavailable"}<span class="scan-company">{E(price_note)}</span><span class="scan-company">Weekly {E(str(c.get("price_date") or "Date unavailable"))}</span></td>
+<td class="num" data-label="Within-list score" data-v="{sval(c.get("composite"))}"><strong>{num(c.get("composite"), 1)}</strong><span class="scan-company">{"quality" if band.get("profile") == "fundamental_growth" else "recorded score"} / 100</span></td>
 <td data-label="Momentum">{E(momentum)}<span class="scan-company">/ 100 · separate</span></td>
-<td class="num {'positive' if ok(ret) and ret >= 0 else 'negative' if ok(ret) else ''}" data-v="{sval(ret)}">{pct(ret, 1, True)}<span class="scan-company">{E(extension)}</span>{site_decisions.spark(c)}</td>
-<td class="small"><span class="pill {E(quality)}">{E(quality)} evidence</span><span class="scan-company">{missing} missing input{'s' if missing != 1 else ''}</span></td>
+<td class="num {"positive" if ok(ret) and ret >= 0 else "negative" if ok(ret) else ""}" data-v="{sval(ret)}">{pct(ret, 1, True)}<span class="scan-company">{E(extension)}</span>{site_decisions.spark(c)}</td>
+<td class="small"><span class="pill {E(quality)}">{E(quality)} evidence</span><span class="scan-company">{missing} missing input{"s" if missing != 1 else ""}</span></td>
 <td class="small scan-risk">{E(risk)}</td><td class="research-value" data-research-value data-v="">n/a · select a research field</td></tr>''')
     lists = "".join(f'<option value="{E(k)}">{E(_label(k, bands[k]))}</option>' for k in keys)
     sector_options = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sorted(sectors))
-    return f'''<section id="candidate-scan" aria-labelledby="scan-title">
+    return f"""<section id="candidate-scan" aria-labelledby="scan-title">
 <div class="section-heading"><div><p class="eyebrow">FIND YOUR NEXT RESEARCH QUESTION</p><h2 id="scan-title">Candidate scanner</h2></div>
 <a class="small" href="compare.html">Compare companies →</a></div>
 <p class="small muted">Scores and ranks apply within each list, not across lists. A ticker may appear in more than one list.
@@ -139,9 +155,9 @@ data-quality="{E(quality)}" data-gaps="{'yes' if missing else 'no'}">
 <div class="table-wrap"><table id="t-scan" class="decision-scan" data-table><caption class="sr-only">Research candidate scanner</caption><thead><tr>
 <th class="tk">Ticker / company</th><th>Research list / sector</th><th class="num" data-sort="num">Price</th>
 <th class="num" data-sort="num" title="Within-list score; fundamental quality for new growth snapshots">Quality / recorded score</th><th data-sort="num">Momentum</th><th class="num" data-sort="num">1Y</th>
-<th>Evidence</th><th>Main risk / weakest evidence</th><th data-sort="num" data-research-heading>Research field</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
+<th>Evidence</th><th>Main risk / weakest evidence</th><th data-sort="num" data-research-heading>Research field</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <p class="scan-empty" data-empty="t-scan" hidden>No candidates match these filters. Clear the search or reset filters.
 To use Pinned tickers, first select a star beside a ticker.</p>
 {site_decisions.scanner_payload(snap, keys)}
 <noscript><p class="small">Open company pages for all decision fields. All candidates are shown. Enable JavaScript to search, filter, sort or pin tickers.</p></noscript>
-</section>'''
+</section>"""

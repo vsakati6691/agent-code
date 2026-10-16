@@ -1,4 +1,5 @@
 """Local hypothetical arithmetic. Nothing persisted, transmitted or connected to execution."""
+
 CSS = r"""
 .speculative-section { margin:24px 0 40px; }
 .risk-budget { margin:20px 0; border-left:4px solid var(--warn-border); }

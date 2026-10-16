@@ -40,8 +40,13 @@ def test_indicators_are_causal():
     shocked = df.copy()
     shocked.iloc[150:, shocked.columns.get_loc("close")] *= 1.5
     shocked["high"] = shocked[["high", "close"]].max(axis=1)
-    for f in (lambda d: sma(d["close"], 20), lambda d: rsi(d["close"], 14), lambda d: atr(d, 14),
-              lambda d: rate_of_change(d["close"], 63), lambda d: macd(d["close"])["macd"]):
+    for f in (
+        lambda d: sma(d["close"], 20),
+        lambda d: rsi(d["close"], 14),
+        lambda d: atr(d, 14),
+        lambda d: rate_of_change(d["close"], 63),
+        lambda d: macd(d["close"])["macd"],
+    ):
         pd.testing.assert_series_equal(f(df).iloc[:150], f(shocked).iloc[:150])
 
 

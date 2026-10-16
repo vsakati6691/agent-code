@@ -13,6 +13,7 @@ In short:
 
 The interactive Robinhood MCP is not used: it needs a logged-in Claude session and cannot run in CI.
 """
+
 from __future__ import annotations
 
 import io
@@ -32,8 +33,13 @@ SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 NASDAQ_LISTED_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
 OTHER_LISTED_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
 WIKI_SP500_URL = "https://en.wikipedia.org/w/api.php"
-WIKI_SP500_PARAMS = {"action": "parse", "page": "List_of_S&P_500_companies", "prop": "text",
-                     "format": "json", "formatversion": "2"}
+WIKI_SP500_PARAMS = {
+    "action": "parse",
+    "page": "List_of_S&P_500_companies",
+    "prop": "text",
+    "format": "json",
+    "formatversion": "2",
+}
 CBOE_BASE = "https://cdn-api.cboe.com/api/global/delayed_quotes"
 AV_URL = "https://www.alphavantage.co/query"
 
@@ -49,9 +55,14 @@ OTHER_EXCHANGES = {"N": "NYSE", "A": "NYSE American", "P": "NYSE Arca", "Z": "Cb
 NON_COMMON = re.compile(
     r"\b(warrants?|rights?|units?|preferred|depositary|debentures?|notes? due|%|subordinated|trust preferred|"
     r"etf|etn|fund|index|exchange[- ]traded|beneficial interest|limited partnership units?|acquisition corp(oration)?|"
-    r"acquisition company)\b", re.I)
-COMMON = re.compile(r"\b(common stock|common shares|ordinary shares|class [a-z] (common|ordinary)|"
-                    r"common units|capital stock|shares of beneficial)\b", re.I)
+    r"acquisition company)\b",
+    re.I,
+)
+COMMON = re.compile(
+    r"\b(common stock|common shares|ordinary shares|class [a-z] (common|ordinary)|"
+    r"common units|capital stock|shares of beneficial)\b",
+    re.I,
+)
 
 
 def canonical(ticker: str) -> str:
@@ -60,6 +71,7 @@ def canonical(ticker: str) -> str:
 
 
 # --- SEC ------------------------------------------------------------------------------
+
 
 def parse_sec_tickers(raw: dict) -> pd.DataFrame:
     fields = raw.get("fields")
@@ -98,16 +110,36 @@ def share_frame_periods(as_of: date, n: int = 3) -> list[str]:
 
 
 SIC_SECTORS = [  # coarse sectors from SEC SIC codes, for companies outside the S&P 500 list
-    ((100, 999), "Agriculture"), ((1000, 1499), "Materials"), ((1311, 1389), "Energy"), ((1500, 1799), "Industrials"),
-    ((2000, 2199), "Consumer Staples"), ((2200, 2799), "Consumer Discretionary"), ((2800, 2829), "Materials"),
-    ((2830, 2836), "Health Care"), ((2840, 2899), "Materials"), ((2900, 2999), "Energy"),
-    ((3000, 3569), "Industrials"), ((3570, 3579), "Information Technology"), ((3580, 3659), "Industrials"),
-    ((3660, 3699), "Information Technology"), ((3700, 3799), "Industrials"), ((3800, 3839), "Industrials"),
-    ((3840, 3859), "Health Care"), ((3860, 3999), "Industrials"), ((4000, 4799), "Industrials"),
-    ((4800, 4899), "Communication Services"), ((4900, 4999), "Utilities"), ((5000, 5199), "Industrials"),
-    ((5200, 5999), "Consumer Discretionary"), ((6000, 6499), "Financials"), ((6500, 6799), "Real Estate"),
-    ((7000, 7369), "Consumer Discretionary"), ((7370, 7379), "Information Technology"),
-    ((7380, 7999), "Consumer Discretionary"), ((8000, 8099), "Health Care"), ((8100, 8999), "Industrials"),
+    ((100, 999), "Agriculture"),
+    ((1000, 1499), "Materials"),
+    ((1311, 1389), "Energy"),
+    ((1500, 1799), "Industrials"),
+    ((2000, 2199), "Consumer Staples"),
+    ((2200, 2799), "Consumer Discretionary"),
+    ((2800, 2829), "Materials"),
+    ((2830, 2836), "Health Care"),
+    ((2840, 2899), "Materials"),
+    ((2900, 2999), "Energy"),
+    ((3000, 3569), "Industrials"),
+    ((3570, 3579), "Information Technology"),
+    ((3580, 3659), "Industrials"),
+    ((3660, 3699), "Information Technology"),
+    ((3700, 3799), "Industrials"),
+    ((3800, 3839), "Industrials"),
+    ((3840, 3859), "Health Care"),
+    ((3860, 3999), "Industrials"),
+    ((4000, 4799), "Industrials"),
+    ((4800, 4899), "Communication Services"),
+    ((4900, 4999), "Utilities"),
+    ((5000, 5199), "Industrials"),
+    ((5200, 5999), "Consumer Discretionary"),
+    ((6000, 6499), "Financials"),
+    ((6500, 6799), "Real Estate"),
+    ((7000, 7369), "Consumer Discretionary"),
+    ((7370, 7379), "Information Technology"),
+    ((7380, 7999), "Consumer Discretionary"),
+    ((8000, 8099), "Health Care"),
+    ((8100, 8999), "Industrials"),
 ]
 
 
@@ -117,7 +149,7 @@ def sector_from_sic(sic: str | int | None) -> str:
     except (TypeError, ValueError):
         return "Unknown"
     best = "Unknown"
-    for (lo, hi), name in SIC_SECTORS:   # later, narrower ranges override broader ones
+    for (lo, hi), name in SIC_SECTORS:  # later, narrower ranges override broader ones
         if lo <= code <= hi:
             best = name
     return best
@@ -132,13 +164,18 @@ def parse_earnings_8k(subs: dict | None, on_or_before: date | None = None) -> li
     recent = ((subs or {}).get("filings") or {}).get("recent") or {}
     forms, dates, items = recent.get("form") or [], recent.get("filingDate") or [], recent.get("items") or []
     cutoff = on_or_before.isoformat() if on_or_before else None
-    out = [d for f, d, it in zip(forms, dates, items + [""] * (len(forms) - len(items)))
-           if f in ("8-K", "8-K/A") and "2.02" in {s.strip() for s in str(it).split(",")}
-           and (cutoff is None or str(d) <= cutoff)]
+    out = [
+        d
+        for f, d, it in zip(forms, dates, items + [""] * (len(forms) - len(items)), strict=False)
+        if f in ("8-K", "8-K/A")
+        and "2.02" in {s.strip() for s in str(it).split(",")}
+        and (cutoff is None or str(d) <= cutoff)
+    ]
     return sorted(set(out), reverse=True)
 
 
 # --- Nasdaq Trader ------------------------------------------------------------------------
+
 
 def _pipe_table(text: str) -> pd.DataFrame:
     lines = [ln for ln in text.splitlines() if ln and not ln.startswith("File Creation Time")]
@@ -153,11 +190,27 @@ def parse_symbol_directories(nasdaq_text: str, other_text: str) -> pd.DataFrame:
         raise FetchError("Nasdaq Trader symbol directory has an unexpected layout")
     rows = []
     for _, r in n.iterrows():
-        rows.append((canonical(r["Symbol"]), r["Security Name"], "Nasdaq", r["ETF"] == "Y", r["Test Issue"] == "Y",
-                     r.get("Financial Status", "")))
+        rows.append(
+            (
+                canonical(r["Symbol"]),
+                r["Security Name"],
+                "Nasdaq",
+                r["ETF"] == "Y",
+                r["Test Issue"] == "Y",
+                r.get("Financial Status", ""),
+            )
+        )
     for _, r in o.iterrows():
-        rows.append((canonical(r["ACT Symbol"]), r["Security Name"], OTHER_EXCHANGES.get(r["Exchange"], r["Exchange"]),
-                     r["ETF"] == "Y", r["Test Issue"] == "Y", ""))
+        rows.append(
+            (
+                canonical(r["ACT Symbol"]),
+                r["Security Name"],
+                OTHER_EXCHANGES.get(r["Exchange"], r["Exchange"]),
+                r["ETF"] == "Y",
+                r["Test Issue"] == "Y",
+                "",
+            )
+        )
     df = pd.DataFrame(rows, columns=["ticker", "name", "exchange", "etf", "test_issue", "financial_status"])
     return df.drop_duplicates("ticker").set_index("ticker")
 
@@ -170,7 +223,7 @@ def common_stock_reason(name: str, etf: bool, test_issue: bool, financial_status
         return "ETF or fund"
     if "$" in name:
         return "preferred or other non-common class"
-    if financial_status in ("Q", "G", "H", "J", "K"):   # Nasdaq codes involving bankruptcy
+    if financial_status in ("Q", "G", "H", "J", "K"):  # Nasdaq codes involving bankruptcy
         return "bankruptcy status on Nasdaq"
     if NON_COMMON.search(name) and not re.search(r"common stock|ordinary shares", name, re.I):
         return "not common stock (warrant, right, unit, preferred, note, fund or blank-check)"
@@ -184,6 +237,7 @@ def common_stock_reason(name: str, etf: bool, test_issue: bool, financial_status
 
 
 # --- Wikipedia S&P 500 ------------------------------------------------------------------------
+
 
 class _TableParser(HTMLParser):
     """Collect the rows of the table with id="constituents"."""
@@ -227,8 +281,14 @@ def parse_sp500(raw: dict) -> pd.DataFrame:
     if not p.rows:
         raise FetchError("Wikipedia S&P 500 page: constituents table not found")
     head, body = p.rows[0], p.rows[1:]
-    want = {"Symbol": "ticker", "Security": "name", "GICS Sector": "sector", "GICS Sub-Industry": "industry",
-            "Date added": "date_added", "CIK": "cik"}
+    want = {
+        "Symbol": "ticker",
+        "Security": "name",
+        "GICS Sector": "sector",
+        "GICS Sub-Industry": "industry",
+        "Date added": "date_added",
+        "CIK": "cik",
+    }
     idx = {v: head.index(k) for k, v in want.items() if k in head}
     if "ticker" not in idx or "sector" not in idx:
         raise FetchError("Wikipedia S&P 500 page: unexpected table columns")
@@ -245,6 +305,7 @@ def parse_sp500(raw: dict) -> pd.DataFrame:
 
 
 # --- Cboe -------------------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Quote:
@@ -269,8 +330,14 @@ def parse_cboe_quote(raw: dict) -> Quote:
     if not d.get("symbol"):
         raise FetchError("Cboe quote: no data")
     lt = d.get("last_trade_time")
-    return Quote(canonical(d["symbol"]), _num(d.get("close")), _num(d.get("prev_day_close")),
-                 datetime.fromisoformat(lt) if lt else None, _num(d.get("iv30")), str(raw.get("timestamp", "")))
+    return Quote(
+        canonical(d["symbol"]),
+        _num(d.get("close")),
+        _num(d.get("prev_day_close")),
+        datetime.fromisoformat(lt) if lt else None,
+        _num(d.get("iv30")),
+        str(raw.get("timestamp", "")),
+    )
 
 
 def parse_cboe_history(raw: dict) -> pd.DataFrame:
@@ -309,8 +376,12 @@ def parse_occ(symbol: str) -> dict | None:
     m = OCC_RE.match(symbol.strip().upper())
     if not m:
         return None
-    return {"root": m["root"], "expiration": date(2000 + int(m["y"]), int(m["m"]), int(m["d"])),
-            "type": "call" if m["cp"] == "C" else "put", "strike": int(m["k"]) / 1000.0}
+    return {
+        "root": m["root"],
+        "expiration": date(2000 + int(m["y"]), int(m["m"]), int(m["d"])),
+        "type": "call" if m["cp"] == "C" else "put",
+        "strike": int(m["k"]) / 1000.0,
+    }
 
 
 def parse_cboe_chain(raw: dict) -> tuple[dict, list[dict]]:
@@ -318,23 +389,42 @@ def parse_cboe_chain(raw: dict) -> tuple[dict, list[dict]]:
     d = raw.get("data") or {}
     if not d.get("symbol") or not isinstance(d.get("options"), list):
         raise FetchError("Cboe option chain: no data")
-    under = {"symbol": canonical(d["symbol"]), "close": _num(d.get("close")), "price": _num(d.get("current_price")),
-             "last_trade_time": d.get("last_trade_time"), "iv30": _num(d.get("iv30")),
-             "timestamp": str(raw.get("timestamp", ""))}
+    under = {
+        "symbol": canonical(d["symbol"]),
+        "close": _num(d.get("close")),
+        "price": _num(d.get("current_price")),
+        "last_trade_time": d.get("last_trade_time"),
+        "iv30": _num(d.get("iv30")),
+        "timestamp": str(raw.get("timestamp", "")),
+    }
     rows = []
     for o in d["options"]:
         occ = parse_occ(str(o.get("option", "")))
         if occ is None:
             continue
-        rows.append({"option": o["option"], **occ, "bid": _num(o.get("bid")), "ask": _num(o.get("ask")),
-                     "iv": _num(o.get("iv")), "open_interest": _num(o.get("open_interest")),
-                     "volume": _num(o.get("volume")), "delta": _num(o.get("delta")), "gamma": _num(o.get("gamma")),
-                     "theta": _num(o.get("theta")), "vega": _num(o.get("vega")), "rho": _num(o.get("rho")),
-                     "last_trade_time": o.get("last_trade_time"), "last_price": _num(o.get("last_trade_price"))})
+        rows.append(
+            {
+                "option": o["option"],
+                **occ,
+                "bid": _num(o.get("bid")),
+                "ask": _num(o.get("ask")),
+                "iv": _num(o.get("iv")),
+                "open_interest": _num(o.get("open_interest")),
+                "volume": _num(o.get("volume")),
+                "delta": _num(o.get("delta")),
+                "gamma": _num(o.get("gamma")),
+                "theta": _num(o.get("theta")),
+                "vega": _num(o.get("vega")),
+                "rho": _num(o.get("rho")),
+                "last_trade_time": o.get("last_trade_time"),
+                "last_price": _num(o.get("last_trade_price")),
+            }
+        )
     return under, rows
 
 
 # --- fetchers ------------------------------------------------------------------------------------
+
 
 class Providers:
     """Thin fetch layer. Every method raises FetchError (or BudgetExceeded) on failure."""
@@ -352,7 +442,7 @@ class Providers:
             try:
                 frames.append(self.http.get_json(SEC_FRAME_URL.format(period=period), max_age_hours=24))
             except FetchError as exc:
-                if "HTTP 404" not in str(exc):     # a quarter with no filings yet is normal
+                if "HTTP 404" not in str(exc):  # a quarter with no filings yet is normal
                     raise
         return parse_share_frames(frames, as_of)
 
@@ -363,8 +453,10 @@ class Providers:
         return self.http.get_json(SEC_SUBMISSIONS_URL.format(cik=int(cik)), max_age_hours=168)
 
     def symbol_directories(self) -> pd.DataFrame:
-        return parse_symbol_directories(self.http.get_text(NASDAQ_LISTED_URL, max_age_hours=24),
-                                        self.http.get_text(OTHER_LISTED_URL, max_age_hours=24))
+        return parse_symbol_directories(
+            self.http.get_text(NASDAQ_LISTED_URL, max_age_hours=24),
+            self.http.get_text(OTHER_LISTED_URL, max_age_hours=24),
+        )
 
     def sp500(self) -> pd.DataFrame:
         return parse_sp500(self.http.get_json(WIKI_SP500_URL, WIKI_SP500_PARAMS, max_age_hours=24))
@@ -385,8 +477,9 @@ class Providers:
         from ..logging_setup import register_secret
 
         register_secret(self.av_key)
-        text = self.http.get_text(AV_URL, {"function": "EARNINGS_CALENDAR", "horizon": "12month",
-                                           "apikey": self.av_key}, max_age_hours=24)
+        text = self.http.get_text(
+            AV_URL, {"function": "EARNINGS_CALENDAR", "horizon": "12month", "apikey": self.av_key}, max_age_hours=24
+        )
         try:
             df = parse_earnings_csv(text)
         except AlphaVantageError as exc:
@@ -398,8 +491,11 @@ class Providers:
         if not self.av_key:
             raise FetchError("Alpha Vantage key not configured (ALPHAVANTAGE_API_KEY)")
         from ..logging_setup import register_secret
+
         register_secret(self.av_key)
-        raw = self.http.get_json(AV_URL, {"function": function, "symbol": symbol, "apikey": self.av_key}, max_age_hours=24)
+        raw = self.http.get_json(
+            AV_URL, {"function": function, "symbol": symbol, "apikey": self.av_key}, max_age_hours=24
+        )
         if not isinstance(raw, dict) or not raw:
             raise FetchError("Alpha Vantage returned no company data")
         if raw.get("Note") or raw.get("Information"):
@@ -417,7 +513,8 @@ class Providers:
         return self._overview_data("INSIDER_TRANSACTIONS", symbol)
 
     def annual_filing(self, cik: int, as_of: date) -> dict:
-        from .decision_sources import latest_10k, filing_excerpts
+        from .decision_sources import filing_excerpts, latest_10k
+
         filing = latest_10k(self.submissions(cik), cik, as_of)
         if filing is None:
             raise FetchError("No dated 10-K primary document in recent SEC submissions")

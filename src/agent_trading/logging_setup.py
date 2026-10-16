@@ -1,4 +1,5 @@
 """Logging with secret redaction applied to every handler."""
+
 from __future__ import annotations
 
 import logging
