@@ -82,7 +82,7 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <body><a class="skip" href="#main">Skip to content</a><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
 <nav>{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
 <main id="main" tabindex="-1">{column_headers(freshness + body)}
-<footer>{E(spec.DISCLAIMER)} Methodology version {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
+<footer>{E(spec.DISCLAIMER)} Current registered methodology {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
 Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>
 <script src="{up}assets/app.js{_SITE["v"]}"></script>{"".join(f'<script src="{up}{s}{_SITE["v"]}"></script>' for s in scripts)}</body></html>"""
 
@@ -109,7 +109,8 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
         f'data-sessions="{E(",".join(sessions_after(as_of)))}" data-stale-after="{spec.FRESHNESS_STALE_SESSIONS}">'
         f'<strong>Data as of the {E(as_of)} close (<span id="age">{age_text}'
         f"</span>).</strong>Age checked at site build {built:%Y-%m-%d %H:%M} ET. Snapshot built {E(str(snap.get('run_finished', '')).replace('+00:00', ''))} UTC. "
-        f"Quotes are end-of-session and delayed, never live. Run status: {E(snap.get('status', '?'))}.</div>"
+        f"Quotes are end-of-session and delayed, never live. Run status: {E(snap.get('status', '?'))}. "
+        f"Snapshot methodology: {E(str(snap.get('spec_version') or 'unavailable'))}.</div>"
     ]
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):
         parts.append(

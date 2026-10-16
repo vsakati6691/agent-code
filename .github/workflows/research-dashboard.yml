@@ -63,6 +63,7 @@ jobs:
 
   update:
     needs: test
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 240        # full run estimated at about 100 min (Cboe throttles to about 1 request/s)
     permissions:
@@ -136,7 +137,12 @@ jobs:
           DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
-        run: python -m agent_trading.dashboard build --data research-data --out site
+        run: >-
+          python -m agent_trading.dashboard build --data research-data --out site
+          --commit "$GITHUB_SHA" --data-commit "$(git -C research-data rev-parse HEAD)"
+
+      - name: Check every production page and local link
+        run: python -m tests.dashboard_ci check --site site
 
       - name: Summary
         run: |
@@ -154,16 +160,26 @@ jobs:
 
   deploy:
     needs: update
-    if: vars.DASHBOARD_PUBLISH == 'true'
+    if: vars.DASHBOARD_PUBLISH == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Refuse to deploy superseded code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            echo "main advanced; this obsolete build must not replace the current dashboard"
+            exit 1
+          fi
       - id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e   # v4
 
@@ -171,7 +187,7 @@ jobs:
     # The stale-data site is still deployed when the weekly run fails; this job then fails the
     # workflow so the failure is visible in the Actions tab.
     needs: [update, deploy]
-    if: always()
+    if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - run: |

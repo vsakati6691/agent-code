@@ -15,6 +15,7 @@ from . import (
     compare,
     site_basics,
     site_bets,
+    site_build,
     site_evidence,
     site_goal,
     site_methodology,
@@ -77,14 +78,19 @@ def scan_for_secrets(out: Path, env_names: tuple[str, ...]) -> list[str]:
     return hits
 
 
-def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> dict:
+def build_site(
+    data_dir: Path, out: Path, secret_env: tuple[str, ...] = (), *, code_commit: str = "", data_commit: str = ""
+) -> dict:
     store = Store(data_dir)
     integrity = store.verify_all()
     bad = {p.split()[1] for p in integrity if p.startswith("snapshot ")}
     dates = [d for d in store.dates() if d not in bad]
+    snap = store.load(dates[-1]) if dates else None
+    build_info = site_build.metadata(code_commit, data_commit, snap)
     if out.exists():
         shutil.rmtree(out)
     (out / "assets").mkdir(parents=True)
+    (out / "build.json").write_text(json.dumps(build_info, indent=2) + "\n", encoding="utf-8")
     _SYMBOLS.clear()
     (out / "assets" / "favicon.svg").write_text(site_basics.FAVICON_SVG, encoding="utf-8")
     # a content hash in every asset link, so a browser never pairs new pages with a cached old stylesheet or script
@@ -135,7 +141,6 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
         (out / "feed.xml").write_text(atom_feed([]), encoding="utf-8")
         write_fallback()
         return {"pages": len(list(out.rglob("*.html"))), "snapshot": None}
-    snap = store.load(dates[-1])
     _SYMBOLS.clear()
     _SYMBOLS.update(symbol_index(snap))
     write_fallback()
@@ -190,7 +195,9 @@ def build_site(data_dir: Path, out: Path, secret_env: tuple[str, ...] = ()) -> d
     write("evidence.html", "Evidence", site_evidence.evidence_page(research_evidence), "evidence.html")
     write("history.html", "History", history_page(dates, tracking, history), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
-    write("audit.html", "Audit trail", audit_page(store, snap, integrity), "audit.html")
+    write(
+        "audit.html", "Audit trail", audit_page(store, snap, integrity) + site_build.section(build_info), "audit.html"
+    )
     profiles = {k: b.get("profile", "standard") for k, b in snap["bands"].items()}
     write(
         "compare.html",

@@ -86,6 +86,7 @@ option contract can lose its entire premium.
 
 | Workflow | Schedule | What changes |
 |---|---|---|
+| [Publish code changes](.github/workflows/research-dashboard-publish.yml) | Every push to `main`, or manual run on `main` | Tests the code, verifies stored data and rebuilds Pages without collecting data or changing snapshots. |
 | [Weekly research](.github/workflows/research-dashboard.yml) | Saturday 14:17 UTC (10:17 EDT / 09:17 EST); Sunday retry at the same time | Collects fundamentals and prices, ranks candidates, stores an immutable snapshot, updates tracking and builds the site. |
 | [Daily light refresh](.github/workflows/research-dashboard-daily.yml) | Weekdays 22:17 UTC (18:17 EDT / 17:17 EST), when enabled | Adds delayed closing prices and optional options research. Weekly stock scores, ranks, trailing returns and tracking remain unchanged. |
 
@@ -93,6 +94,12 @@ GitHub Actions runs independently of the owner's laptop. Scheduled jobs can be
 late or skipped; holidays, provider failures and incomplete coverage are
 reported. Weekly snapshots and daily records live on the `research-data` branch
 with integrity manifests; existing records are never backfilled or overwritten.
+
+The [deployment runbook](docs/DEPLOYMENT.md) explains how to confirm the live
+site matches `main`. Every build writes `build.json` with the site-code commit,
+stored-data commit and separate registered/snapshot methodology versions.
+The audit page exposes the same provenance. A code-only rebuild preserves the
+stored scenarios; new methodology inputs appear after a future collection.
 
 Repository variables control `DASHBOARD_DAILY` (weekday collection),
 `DASHBOARD_OPTIONS` (option collection/display) and `DASHBOARD_PUBLISH` (Pages
@@ -191,7 +198,7 @@ collecting new data, first check out that branch into the ignored folder:
 
 ```powershell
 git fetch origin research-data
-git worktree add --detach research-data origin/research-data
+git -c core.autocrlf=false worktree add --detach research-data origin/research-data
 & $py -m agent_trading.dashboard verify --data research-data
 & $py -m agent_trading.dashboard build --data research-data --out site
 & $py -m http.server 8000 --directory site
@@ -201,6 +208,8 @@ Open [localhost:8000](http://localhost:8000). The build reads stored snapshots
 without network requests. If `research-data/` already exists, reuse its checkout
 instead of adding it again. See [dashboard commands](docs/RESEARCH_DASHBOARD.md#commands)
 for collection, refresh and tradability-import options.
+Keep the data checkout's original line endings: Windows CRLF conversion changes
+the snapshot bytes and correctly fails integrity verification.
 
 ## Repository layout
 
