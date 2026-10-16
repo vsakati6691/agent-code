@@ -23,3 +23,14 @@ remain in their existing enforcement modules. Nothing in the split executes
 brokerage orders.
 
 Leaders 2030: `leaders.py` validates owner config and computes pure comparisons; `pipeline_leaders.py` retains already-collected inputs; `site_leaders.py` renders the static table and separate evidence pages. `site_downloads.py` exports Leaders and Watchlist CSVs. The exact-date company method lives in `scenarios.py` and remains re-exported from `watchlist.py` for compatibility.
+
+Public datasets (2026-10-16.2): `pipeline_external.py` enriches already-selected
+research names. `sec_insiders.py` parses Form 4 XML and complete activity windows;
+`sec_institutions.py` joins quarterly 13F tables and dated FTD CUSIP mappings.
+`decision_sources.py` reuses its filing-text parser for EFTS-located quotations
+with reproducible offsets. `macro.py` collects FRED metadata/observations and
+provides CPI YoY and DGS1MO. `short_interest.py` validates the complete FINRA file
+and applies a dated XBRL denominator. `site_external.py` renders optional values
+and common CSV columns. `store.py` verifies immutable aggregate caches; all
+network pacing, retries and dataset subcaps stay in `http.py`. See
+[PUBLIC_DATASETS.md](PUBLIC_DATASETS.md) for source and field definitions.

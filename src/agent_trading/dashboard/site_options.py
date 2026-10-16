@@ -401,6 +401,7 @@ def _list(snap: dict, h, kind: str, data: dict | None, o: dict, fragments: dict 
 def options_page(
     snap: dict, daily: dict | None = None, fragments: dict | None = None, horizon: str | None = None
 ) -> str:
+    from .site_external import rate_note
     from .site_refresh import options_section
     from .site_speculative import section as speculative_section
 
@@ -417,6 +418,7 @@ before fees. Every contract here carries the risk of losing all of that premium.
 {speculative_section(snap, daily)}
 {options_section(snap, daily or {})}
 <h2>Weekly tracked view · {E(snap["as_of"])}</h2>
+{rate_note(snap)}
 {status_html(snap)}{version_line(snap)}
 <details class="card small" open><summary>What these lists are, and what "top" means</summary>
 <p>{E(spec.OPTION_UNIVERSE_TEXT)}</p><p>{E(spec.OPTION_TOP_DEFINITION)}</p><p>{E(spec.OPTION_RANKING_NOTE)}</p>

@@ -393,31 +393,66 @@ def research_row(
     return out
 
 
-def sensitivity(spot: float, strike: float, t: float, iv: float, mid: float, kind: str = "call") -> dict:
+def sensitivity(
+    spot: float, strike: float, t: float, iv: float, mid: float, kind: str = "call", rate: dict | None = None
+) -> dict:
     """Model-estimated value after `days_forward` days for price and IV shifts (Black-Scholes)."""
     p = spec.SENSITIVITY
+    r = spec.RISK_FREE_RATE if rate is None else rate.get("value")
+    if r is None:
+        return {
+            "days_forward": p["days_forward"],
+            "grid": [],
+            "rate_input": rate,
+            "reason": rate.get("reason", "Dated rate unavailable"),
+            "note": "Model estimate unavailable: " + rate.get("reason", "Dated rate unavailable"),
+            "assumptions": "Dated DGS1MO risk-free rate unavailable; no replacement rate assumed",
+        }
     t2 = max(0.0, t - p["days_forward"] / 365.0)
     grid = []
     for mv in p["price_moves"]:
         row = []
         for dv in p["iv_shifts"]:
-            v = bs_value(kind, spot * (1 + mv), strike, t2, max(0.01, iv + dv))
+            v = bs_value(kind, spot * (1 + mv), strike, t2, max(0.01, iv + dv), r)
             row.append(
                 {"price_move": mv, "iv_shift": dv, "model_value": v, "change_vs_mid": v / mid - 1 if mid else None}
             )
         grid.append(row)
-    model_now = bs_value(kind, spot, strike, t, iv)
+    model_now = bs_value(kind, spot, strike, t, iv, r)
+    rate_note = f"DGS1MO {r:.3%}, observed {rate['date']} (FRED)" if rate else "4% risk-free rate (legacy assumption)"
     return {
         "days_forward": p["days_forward"],
         "grid": grid,
         "model_value_now": model_now,
         "model_vs_mid_now": model_now / mid - 1 if mid else None,
-        "note": spec.RISK_FREE_RATE_NOTE,
+        "rate_input": rate or {"value": r, "date": None, "source": "Registered legacy assumption"},
+        "note": rate_note + "; no dividends (model estimate).",
         "assumptions": (
             "European exercise, no dividends, constant volatility equal to the chain's implied "
-            "volatility, 4% risk-free rate, value compared with today's mid; before fees"
+            f"volatility, {rate_note}, value compared with today's mid; before fees"
         ),
     }
+
+
+def apply_dated_rate(payload, rate: dict) -> None:
+    """Apply only to newly collected rows, after selection; stored snapshots are never repriced."""
+    if isinstance(payload, dict):
+        if "sensitivity" in payload and {"spot", "strike", "dte", "iv", "mid", "type"} <= payload.keys():
+            payload["sensitivity"] = sensitivity(
+                payload["spot"],
+                payload["strike"],
+                payload["dte"] / 365,
+                payload["iv"],
+                payload["mid"],
+                payload["type"],
+                rate,
+            )
+        else:
+            for value in payload.values():
+                apply_dated_rate(value, rate)
+    elif isinstance(payload, list):
+        for value in payload:
+            apply_dated_rate(value, rate)
 
 
 def rank_score(r: dict) -> dict:

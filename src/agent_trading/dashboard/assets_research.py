@@ -272,6 +272,16 @@ COMPARE_JS = r"""
     addRow(tb, 'Latest fiscal quarter in TTM', es.map(function (e) { return e.period.latest_quarter || na('not stored'); }));
     addRow(tb, 'Currency and basis', es.map(function (e) { return e.period.currency + ', ' + e.period.basis; }));
     addRow(tb, 'Lists', es.map(function (e) { return e.lists.join(', '); }));
+    addRow(tb, '13F holder count (report quarter)', es.map(function (e) {
+      var r = e.institutions || {};
+      if (!ok(r.holder_count)) return na(e.institution_reason || 'Not collected in this snapshot');
+      var d = document.createElement('span');
+      d.textContent = r.holder_count.toLocaleString() + ' · ' + r.report_quarter_end + ' · ' + r.state;
+      if (r.source && r.source.indexOf('https://www.sec.gov/') === 0) {
+        var a = text('a', ' SEC source'); a.href = r.source; d.appendChild(a);
+      }
+      return d;
+    }));
     data.groups.forEach(function (g) {
       addRow(tb, g.title, [], 'group');
       g.rows.forEach(function (r) {

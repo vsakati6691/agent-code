@@ -11,6 +11,7 @@
 #   SEC_USER_AGENT        required, "<name or project> <real contact email>" (SEC fair-access policy;
 #                         SEC rejects users.noreply.github.com addresses)
 #   ALPHAVANTAGE_API_KEY  optional, earnings dates (1 request per run)
+#   FRED_API_KEY          optional, dated macro observations and Black-Scholes rate input
 # Variable:
 #   DASHBOARD_OPTIONS     set to "true" to collect and publish option chains (off by default: Cboe terms)
 #   DASHBOARD_PUBLISH     set to "true" to deploy to Pages, after reviewing the data-source terms in
@@ -26,6 +27,10 @@ on:
     - cron: "17 14 * * 0"
   workflow_dispatch:
     inputs:
+      dry_run:
+        description: "Collect into workflow artifacts only; no data-branch checkout/push or Pages deployment"
+        type: boolean
+        default: false
       as_of:
         description: "As-of session YYYY-MM-DD (blank = latest completed NYSE session)"
         required: false
@@ -63,7 +68,7 @@ jobs:
 
   update:
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && !inputs.dry_run
     runs-on: ubuntu-latest
     timeout-minutes: 240        # full run estimated at about 100 min (Cboe throttles to about 1 request/s)
     permissions:
@@ -102,6 +107,7 @@ jobs:
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           AS_OF: ${{ github.event.inputs.as_of }}
           # options are off unless the owner opts in: repository variable DASHBOARD_OPTIONS=true (Cboe terms)
           OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' && (github.event_name == 'schedule' || github.event.inputs.options == 'true') }}
@@ -137,6 +143,7 @@ jobs:
           DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: >-
           python -m agent_trading.dashboard build --data research-data --out site
           --commit "$GITHUB_SHA" --data-commit "$(git -C research-data rev-parse HEAD)"
@@ -153,14 +160,78 @@ jobs:
           EOF
 
       - name: Upload the Pages artifact
-        if: vars.DASHBOARD_PUBLISH == 'true'
+        if: vars.DASHBOARD_PUBLISH == 'true' && !inputs.dry_run
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b   # v4
         with:
           path: site
 
+  dry-run:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1   # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: python -m pip install -e .
+      - name: Read existing public tradability verdicts into scratch storage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p scratch/data
+          gh api "repos/$GITHUB_REPOSITORY/contents/robinhood_tradability.json?ref=research-data" --jq .content | base64 --decode > scratch/data/robinhood_tradability.json
+      - name: Collect a weekly snapshot into scratch storage
+        id: collect
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          AS_OF: ${{ inputs.as_of }}
+          OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' && inputs.options == true }}
+        run: |
+          args=(run --data scratch/data --cache scratch/http --commit "$GITHUB_SHA")
+          [ -n "$AS_OF" ] && args+=(--as-of "$AS_OF")
+          [ "$OPTIONS" = "true" ] || args+=(--no-options)
+          started=$(date +%s)
+          set +e
+          python -m agent_trading.dashboard "${args[@]}"
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "{\"collection_seconds\":$(( $(date +%s) - started )),\"exit_code\":$code}" > scratch/runtime.json
+          exit "$code"
+      - name: Verify and build the dry-run snapshot
+        env:
+          DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          python -m agent_trading.dashboard verify --data scratch/data
+          python -m agent_trading.dashboard build --data scratch/data --out site --commit "$GITHUB_SHA"
+          python -m tests.dashboard_ci check --site site
+      - name: Upload dry-run outputs only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
+        with:
+          name: research-dry-run-${{ github.run_id }}
+          path: |
+            scratch/data
+            scratch/runtime.json
+            site
+          retention-days: 14
+          if-no-files-found: error
+
   deploy:
     needs: update
-    if: vars.DASHBOARD_PUBLISH == 'true' && github.ref == 'refs/heads/main'
+    if: vars.DASHBOARD_PUBLISH == 'true' && github.ref == 'refs/heads/main' && !inputs.dry_run
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -187,7 +258,7 @@ jobs:
     # The stale-data site is still deployed when the weekly run fails; this job then fails the
     # workflow so the failure is visible in the Actions tab.
     needs: [update, deploy]
-    if: always() && github.ref == 'refs/heads/main'
+    if: always() && github.ref == 'refs/heads/main' && !inputs.dry_run
     runs-on: ubuntu-latest
     steps:
       - run: |

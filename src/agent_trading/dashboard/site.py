@@ -42,7 +42,7 @@ from .site_company import profile_of as profile_of
 from .site_company import window_text as window_text
 from .site_compare import compare_page
 from .site_downloads import band_csv as band_csv
-from .site_downloads import leaders_csv
+from .site_downloads import external_csv, leaders_csv, macro_csv
 from .site_downloads import options_csv as options_csv
 from .site_history import atom_feed as atom_feed
 from .site_history import history_page as history_page
@@ -256,6 +256,8 @@ def build_site(
             )
     for d in dates:
         s = snap if d == dates[-1] else store.load(d)
+        (out / "downloads" / f"{d}_macro.csv").write_text(macro_csv(s), encoding="utf-8")
+        (out / "downloads" / f"{d}_external.csv").write_text(external_csv(s), encoding="utf-8")
         (out / "reports" / f"{d}.html").write_text(
             page(f"Week ending {d}", weekly_report(s), "history.html", 1, ""), encoding="utf-8"
         )

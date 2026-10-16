@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
 import re
 from datetime import date
 from html.parser import HTMLParser
@@ -140,7 +141,91 @@ def filing_excerpts(markup: str, url: str, filed: str) -> dict:
         "url": url,
         "filed": filed,
         "source": "SEC 10-K, issuer statements; excerpts, not independent forecasts",
+        "risk_record": risk_excerpt(
+            markup,
+            {
+                "filed": filed,
+                "form": "10-K",
+                "url": url,
+                "accession": _accession_from_url(url),
+            },
+        ),
     }
+
+
+def _accession_from_url(url: str) -> str | None:
+    match = re.search(r"/(\d{18})/", url)
+    if match:
+        value = match[1]
+        return f"{value[:10]}-{value[10:12]}-{value[12:]}"
+    return None
+
+
+def risk_excerpt(markup: str, filing: dict) -> dict:
+    """An exact substring of whitespace-normalized FilingText, with reproducible offsets."""
+    parser = FilingText()
+    parser.feed(markup)
+    text = re.sub(r"\s+", " ", " ".join(parser.parts))
+    headings = list(re.finditer(r"\bITEM\s+(1A|1B|1C|2)\s*[.\-:]?\s+([A-Z][A-Z ]{3,60})", text, re.I))
+    sections = []
+    for i, header in enumerate(headings):
+        if header[1].upper() != "1A" or not re.match(r"RISK\s+FACTORS", header[2], re.I):
+            continue
+        # The risk heading ends at 'Factors', not the following sentence captured by the permissive boundary.
+        start = header.start(2) + re.match(r"RISK\s+FACTORS", header[2], re.I).end()
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
+        if end - start >= 300:
+            sections.append((start, end))
+    for start, end in sorted(sections, key=lambda v: v[1] - v[0], reverse=True):
+        for sentence in re.finditer(r"[^.!?]+[.!?](?:\s|$)", text[start:end]):
+            quote = sentence[0].strip()
+            if 60 <= len(quote) <= 700 and re.search(
+                r"\b(risk\w*|adverse\w*|could|may|depend\w*|compet\w*)\b", quote, re.I
+            ):
+                offset = start + sentence.start() + len(sentence[0]) - len(sentence[0].lstrip())
+                return {
+                    **filing,
+                    "state": "available",
+                    "excerpt": quote,
+                    "character_range": [offset, offset + len(quote)],
+                    "range_basis": "FilingText HTML text; whitespace collapsed to single spaces; zero-based, end exclusive",
+                    "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                    "parser_version": "1",
+                }
+    return {**filing, "state": "missing", "reason": "No reliable quotation in identified Item 1A"}
+
+
+def parse_efts(raw: dict, cik: int, as_of: date) -> dict | None:
+    hits = raw.get("hits", {}).get("hits")
+    if not isinstance(hits, list):
+        from .http import FetchError
+
+        raise FetchError("EFTS response layout changed")
+    eligible = []
+    for hit in hits:
+        source = hit.get("_source", {})
+        form = source.get("file_type") or source.get("form")
+        if form not in ("10-K", "10-Q") or str(cik) not in {str(int(c)) for c in source.get("ciks", [])}:
+            continue
+        filed, accession = source.get("file_date", ""), source.get("adsh", "")
+        doc = str(hit.get("_id", "")).split(":")[-1]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", filed) or filed > str(as_of):
+            continue
+        if (
+            not re.fullmatch(r"\d{10}-\d{2}-\d{6}", accession)
+            or not re.fullmatch(r"[\w.-]+\.html?", doc)
+            or ".." in doc
+        ):
+            continue
+        eligible.append(
+            {
+                "filed": filed,
+                "form": form,
+                "accession": accession,
+                "url": f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}/{doc}",
+            }
+        )
+    return max(eligible, key=lambda f: (f["filed"], f["accession"])) if eligible else None
 
 
 def latest_10k(submissions: dict, cik: int, as_of: date) -> tuple[str, str] | None:

@@ -33,7 +33,7 @@ from .tradability import Tradability, TradabilityError, parse_results, read_todo
 from .watchlist import WatchlistConfig
 
 log = logging.getLogger("agent_trading.dashboard")
-SECRET_ENV = ("ALPHAVANTAGE_API_KEY", "SEC_USER_AGENT")
+SECRET_ENV = ("ALPHAVANTAGE_API_KEY", "SEC_USER_AGENT", "FRED_API_KEY")
 
 
 def _providers(cache: Path | None) -> Providers:
@@ -44,7 +44,7 @@ def _providers(cache: Path | None) -> Providers:
     if key:
         register_secret(key)
     register_secret(ua)
-    return Providers(HttpClient(cache, ua), key)
+    return Providers(HttpClient(cache, ua), key, os.environ.get("FRED_API_KEY", "").strip() or None)
 
 
 def cmd_run(args) -> int:
@@ -78,6 +78,7 @@ def cmd_run(args) -> int:
                 todo_out=todo,
                 watchlist=WatchlistConfig.load(),
                 iv_history=iv_history,
+                aggregate_store=store,
             )
         finally:
             write_todo(store.root, todo, as_of)  # symbols the next Claude session should check on Robinhood
@@ -118,6 +119,11 @@ def cmd_run(args) -> int:
     )
     store.audit("run_finished", as_of=as_of, status=status, usage=providers.http.usage())
     print(f"snapshot {as_of}: status {status}; requests {providers.http.usage()['requests']}")
+    usage = providers.http.usage()
+    print(
+        f"provider budgets {usage.get('budgets', {})}; dataset requests {usage.get('dataset_requests', {})}; dataset budgets {usage.get('dataset_budgets', {})}"
+    )
+    print("new datasets: " + json.dumps(payload.get("external_datasets", {}), sort_keys=True))
     return 0
 
 

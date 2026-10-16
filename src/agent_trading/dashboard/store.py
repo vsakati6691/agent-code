@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -152,7 +153,53 @@ class Store:
                 self.load(a)
             except (IntegrityError, OSError, ValueError) as exc:
                 problems.append(str(exc))
+        for p in (self.root / "source_aggregates").glob("*/*/aggregate.json"):
+            try:
+                self.source_aggregate(p.parent.parent.name, p.parent.name)
+            except (IntegrityError, OSError, ValueError) as exc:
+                problems.append(str(exc))
         return problems
+
+    def source_aggregate(self, kind: str, key: str) -> dict | None:
+        """Quarter/file-date aggregates have their own immutable integrity manifest."""
+        if not all(re.fullmatch(r"[a-zA-Z0-9_-]+", v) for v in (kind, key)):
+            raise ValueError("invalid aggregate cache key")
+        folder = self.root / "source_aggregates" / kind / key
+        if not folder.exists():
+            return None
+        try:
+            manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+            body = folder / "aggregate.json"
+            if _sha(body) != manifest["sha256"]:
+                raise IntegrityError(f"{kind}/{key}: aggregate hash mismatch")
+            return json.loads(body.read_text(encoding="utf-8"))
+        except (OSError, ValueError, KeyError):
+            raise IntegrityError(f"{kind}/{key}: incomplete or invalid aggregate manifest") from None
+
+    def write_source_aggregate(self, kind: str, key: str, payload: dict) -> dict:
+        previous = self.source_aggregate(kind, key)
+        if previous is not None:
+            return previous
+        if find_private_keys(payload):
+            raise IntegrityError("aggregate contains private-looking fields")
+        folder = self.root / "source_aggregates" / kind / key
+        folder.mkdir(parents=True, exist_ok=False)
+        body = folder / "aggregate.json"
+        body.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+        (folder / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "sha256": _sha(body),
+                    "archive_sha256": payload.get("archive_sha256"),
+                    "source": payload.get("source"),
+                    "created_at": _now(),
+                    "bytes": body.stat().st_size,
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
+        return payload
 
     def latest(self, before: str | None = None) -> dict | None:
         ds = [d for d in self.dates() if before is None or d < before]

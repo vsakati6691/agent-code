@@ -12,6 +12,7 @@ from .fmt import (
     sval as sval,
 )
 from .site_company import profile_of
+from .site_external import csv_fields, macro_rows
 from .watchlist import upside_fields
 
 
@@ -62,6 +63,7 @@ def band_csv(band: dict) -> str:
             "missing",
             "flags",
             "counterargument",
+            *csv_fields({}),
         ]
     )
     for c in band["candidates"]:
@@ -82,6 +84,7 @@ def band_csv(band: dict) -> str:
                     ";".join(c["missing"]),
                     ";".join(c["flags"]),
                     c["counterargument"],
+                    *csv_fields(c).values(),
                 ]
             ]
         )
@@ -146,6 +149,10 @@ def options_csv(rows: list[dict]) -> str:
             "probability_status",
             "probability_of_profit",
             "fees",
+            "risk_free_rate",
+            "rate_observation_date",
+            "rate_source",
+            "rate_reason",
         ]
     )
     for x in rows:
@@ -168,6 +175,10 @@ def options_csv(rows: list[dict]) -> str:
                     p.get("status") or "not_established",
                     p.get("probability_of_profit"),
                     "before fees (none deducted)",
+                    *[
+                        (x.get("sensitivity", {}).get("rate_input") or {}).get(k)
+                        for k in ("value", "date", "source", "reason")
+                    ],
                 ]
             ]
         )
@@ -202,6 +213,7 @@ def watchlist_csv(snap: dict) -> str:
             "upside_base_pct",
             "upside_bull_pct",
             "cagr_base_pct",
+            *csv_fields({}),
         ]
     )
     for e in (snap.get("watchlist") or {}).get("entries", []):
@@ -225,7 +237,29 @@ def watchlist_csv(snap: dict) -> str:
                     *[g(k, "annualized") for k in ("bear", "base", "bull")],
                     e.get("unavailable_reason"),
                     *upside_fields(e).values(),
+                    *csv_fields(e).values(),
                 ]
             ]
         )
+    return buf.getvalue()
+
+
+def macro_csv(snap: dict) -> str:
+    rows = macro_rows(snap)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(rows[0])
+    for row in rows:
+        writer.writerow([csv_value(v) for v in row.values()])
+    return buf.getvalue()
+
+
+def external_csv(snap: dict) -> str:
+    from .pipeline_external import subjects
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["ticker", *csv_fields({})])
+    for ticker, entries in sorted(subjects(snap.get("bands", {}), snap.get("watchlist") or {}).items()):
+        writer.writerow([csv_value(v) for v in [ticker, *csv_fields(entries[0]).values()]])
     return buf.getvalue()

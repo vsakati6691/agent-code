@@ -235,6 +235,43 @@ def datasets(snap: dict) -> list[dict]:
             o.get("collected_at") or at,
         )
     )
+    from .macro import SERIES
+    from .pipeline_external import OLD
+
+    for key, label in (
+        ("insiders", "Form 4 insider activity"),
+        ("institutions", "13F institutional holders"),
+        ("risk_excerpt", "SEC risk-factor excerpts"),
+        ("short_interest", "FINRA short interest"),
+    ):
+        row = (snap.get("external_datasets") or {}).get(key, {})
+        out.append(
+            record(
+                label,
+                row.get("source", "SEC EDGAR" if key != "short_interest" else "FINRA"),
+                row.get("state", "missing"),
+                "; ".join(row.get("reasons", [])) or (OLD if not row else "Validated dated public data"),
+                f"{row.get('available', 0)} of {row.get('requested', 0)}; {row.get('deferred', 0)} deferred",
+                as_of,
+                row.get("retrieved_at"),
+            )
+        )
+    for series in SERIES:
+        row = (snap.get("macro") or {}).get("series", {}).get(series, {})
+        out.append(
+            record(
+                f"FRED {series}",
+                f"https://fred.stlouisfed.org/series/{series}",
+                row.get("state", "missing"),
+                row.get("reason")
+                or (
+                    f"Series last updated {row.get('last_updated')}; vintage {row.get('vintage_date')}" if row else OLD
+                ),
+                "",
+                row.get("observation_date"),
+                at,
+            )
+        )
     return out
 
 

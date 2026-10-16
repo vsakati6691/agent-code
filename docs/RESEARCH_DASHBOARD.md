@@ -440,7 +440,7 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
   - If the history file lags, the end-of-session quote supplies that bar, and the stock is flagged.
   - A stock with neither is excluded as stale.
   - If fewer than 90% of S&P 500 members have a valid as-of price, or a benchmark is missing, the run **fails** instead of publishing a partial ranking.
-- **API budgets:** per-provider request caps (SEC 4,000; Cboe 7,000; Alpha Vantage 3). When a budget is spent, the remaining items are marked "not evaluated: request budget spent" and the run status becomes `partial`.
+- **API budgets:** per-provider request caps (SEC 6,000 (core 4,000; insiders 1,800; bulk 24; risk 120); Cboe 7,000; weekly Alpha Vantage 61; FRED 42; FINRA 9). When a budget is spent, the remaining items are marked "not evaluated: request budget spent" and the run status becomes `partial`.
 - **Retries:** at most 3 attempts per request, and only for timeouts, connection errors and 5xx.
   - HTTP 429 gets up to 5 attempts, honours `Retry-After`, and slows that provider for the rest of the run.
   - Requests that still fail are listed per stock, and the run is marked `partial`.
@@ -680,3 +680,22 @@ the browser budget has a matching cents-boundary test.
 ## Leaders 2030 and explicit watchlist upside · 2026-10-16.1
 
 See [LEADERS_2030.md](LEADERS_2030.md) for the closed challenger schema, worked example, share and ranking rules, and old-snapshot behavior. Watchlist adds signed upside to base and annualized price return immediately after the latest price, plus a per-row bear-to-bull bar with a zero tick. The four new CSV fields use percentage points (24 means 24%); existing decimal return columns remain unchanged. The freeze date is 2026-10-16; exact-version evidence counts remain separate.
+
+## Dated public datasets · 2026-10-16.2
+
+[PUBLIC_DATASETS.md](PUBLIC_DATASETS.md) records the verified source URLs and
+FINRA layout, request caps, field definitions, missing-data behavior, immutable
+aggregate caches and manual dry-run procedure. New company pages show dated
+Form 4 P/S activity, 13F holders, FINRA short interest and exact risk quotations.
+Compare adds holder counts; growth tables add sortable short interest as a
+percentage of XBRL diluted shares. Overview adds macro context below the ETF
+benchmarks; options show the dated FRED DGS1MO rate. Audit and CSV downloads
+carry states, reasons, dates and sources. Old snapshots stay unchanged.
+
+Set `FRED_API_KEY` in repository secrets (local development: ignored `.env`).
+Manually dispatch the weekly workflow on the feature branch with `dry_run=true`
+(default false) to collect into artifacts only. The job retains its 240-minute
+timeout, never checks out or pushes `research-data`, and skips production
+update/publish/deploy by condition. No schedule can activate this dry-run job.
+The only data-branch input read is the existing public tradability JSON via the
+read-only GitHub API. No new source changes ranks, gates or equity scenarios.

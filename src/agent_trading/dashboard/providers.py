@@ -426,12 +426,70 @@ def parse_cboe_chain(raw: dict) -> tuple[dict, list[dict]]:
 # --- fetchers ------------------------------------------------------------------------------------
 
 
+# Official index/download URLs and schema verified 2026-10-16. FINRA's .csv is pipe-delimited.
+EXTERNAL_PROVIDERS = {
+    "insiders": {"provider": "sec", "budget": 1800, "endpoint": "https://data.sec.gov/submissions/CIK{cik:010d}.json"},
+    "institutions": {
+        "provider": "sec",
+        "budget": 24,
+        "endpoint": "https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets",
+    },
+    "risk_excerpts": {
+        "provider": "sec",
+        "budget": 120,
+        "per_company": 2,
+        "endpoint": "https://efts.sec.gov/LATEST/search-index",
+    },
+    "macro": {
+        "provider": "fred",
+        "budget": 42,
+        "endpoint": "https://api.stlouisfed.org/fred/series/observations",
+        "metadata_endpoint": "https://api.stlouisfed.org/fred/series",
+    },
+    "short_interest": {
+        "provider": "finra",
+        "budget": 9,
+        "verified_on": "2026-10-16",
+        "endpoint": "https://www.finra.org/finra-data/browse-catalog/equity-short-interest/files",
+        "verified_file": "https://cdn.finra.org/equity/otcmarket/biweekly/shrt20260930.csv",
+        "columns": (
+            "accountingYearMonthNumber",
+            "symbolCode",
+            "issueName",
+            "issuerServicesGroupExchangeCode",
+            "marketClassCode",
+            "currentShortPositionQuantity",
+            "previousShortPositionQuantity",
+            "stockSplitFlag",
+            "averageDailyVolumeQuantity",
+            "daysToCoverQuantity",
+            "revisionFlag",
+            "changePercent",
+            "changePreviousNumber",
+            "settlementDate",
+        ),
+    },
+}
+SOURCES.update(
+    {
+        "fred": "Federal Reserve Bank of St. Louis FRED, dated observations and series metadata",
+        "finra": "FINRA consolidated equity short interest, twice-monthly settlement reports",
+    }
+)
+
+
 class Providers:
     """Thin fetch layer. Every method raises FetchError (or BudgetExceeded) on failure."""
 
-    def __init__(self, http: HttpClient, av_key: str | None = None) -> None:
+    def __init__(self, http: HttpClient, av_key: str | None = None, fred_key: str | None = None) -> None:
         self.http = http
         self.av_key = av_key
+        self.fred_key = fred_key
+        self._submissions: dict[int, dict] = {}
+        if fred_key:
+            from ..logging_setup import register_secret
+
+            register_secret(fred_key)
 
     def sec_tickers(self) -> pd.DataFrame:
         return parse_sec_tickers(self.http.get_json(SEC_TICKERS_URL, max_age_hours=24))
@@ -450,7 +508,11 @@ class Providers:
         return self.http.get_json(SEC_FACTS_URL.format(cik=int(cik)), max_age_hours=72)
 
     def submissions(self, cik: int) -> dict:
-        return self.http.get_json(SEC_SUBMISSIONS_URL.format(cik=int(cik)), max_age_hours=168)
+        if int(cik) not in self._submissions:
+            self._submissions[int(cik)] = self.http.get_json(
+                SEC_SUBMISSIONS_URL.format(cik=int(cik)), max_age_hours=168
+            )
+        return self._submissions[int(cik)]
 
     def fund_filing(self, metadata: dict, as_of: date) -> dict:
         from .etf_inputs import collect_filing

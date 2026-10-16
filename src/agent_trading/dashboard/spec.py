@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-16.1"
+SPEC_VERSION = "2026-10-16.2"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -51,7 +51,35 @@ SPEC_CHANGELOG = [
         "2026-10-16.1",
         "Add Leaders 2030 and explicit watchlist upside; prior version had zero snapshots. Existing rules and scenario math are unchanged.",
     ),
+    ("2026-10-16.2", "additive datasets; zero weekly snapshots under 2026-10-16.1 at registration"),
 ]
+
+EXTERNAL_DATA_RULES = {
+    "registration_reason": "additive datasets; zero weekly snapshots under 2026-10-16.1 at registration",
+    "bulk_availability": "Current SEC bulk and FINRA indexes are used only for the latest completed session at collection start; historical release availability is not inferred from settlement dates",
+    "insiders": "Form 4 codes P/S (open market or private); A, M, F, G and derivative rows excluded",
+    "insider_windows": "90 calendar days including as-of; trailing 12 calendar months; filings and transactions no later than as-of",
+    "insider_scope": "Current growth, AI, multibagger and operating-company watchlist entries; others unavailable: not in a research list",
+    "insider_incomplete": "Deferred names resume first; incomplete windows have no complete net total; unreconciled Form 4/A amendments are partial",
+    "institutions": "Quarterly SEC 13F bulk archives; SH rows excluding puts/calls; manager CIK deduplication and restatement/new-holdings amendments; overlapping managers may report the same shares",
+    "cusip_mapping": "Dated SEC fails-to-deliver file; no CUSIP mapping means unavailable; ambiguous mappings are never guessed",
+    "institution_staleness": "Stale after the following report quarter end plus 45 days without a newer dataset",
+    "risk_excerpts": "Reuse stored excerpt if no older than latest annual report; otherwise EFTS plus filing, at most two attempts/company; exact quotation with normalized-text character range",
+    "macro": ("DGS1MO", "DGS3MO", "DGS2", "DGS10", "FEDFUNDS", "CPIAUCSL", "UNRATE"),
+    "rate_input": "Dated FRED DGS1MO / 100 in existing Black-Scholes rate parameter; no formula change; unavailable when missing; stored legacy estimates unchanged",
+    "short_interest": "Short interest as a percentage of XBRL diluted shares outstanding",
+    "share_basis": "Latest dated quarterly diluted weighted-average XBRL shares; not float or class-specific shares",
+    "days_to_cover": "Short shares / previously stored average daily share volume only; unavailable without it",
+    "budgets": {
+        "sec": 6000,
+        "sec_core": 4000,
+        "sec_insiders": 1800,
+        "sec_bulk": 24,
+        "sec_risk": 120,
+        "fred": 42,
+        "finra": 9,
+    },
+}
 
 LEADERS_SHARE_RULE = (
     "Start with the latest stored quarterly diluted weighted-average share count and its period-end date. "
@@ -858,7 +886,10 @@ OPTION_RANKING_NOTE = (
 )
 PAYOFF_MOVES = (-0.50, -0.30, -0.15, 0.0, 0.10, 0.20, 0.30, 0.50)
 SENSITIVITY = {"days_forward": 30, "iv_shifts": (-0.05, 0.0, 0.05), "price_moves": (-0.10, 0.0, 0.10)}
-RISK_FREE_RATE_NOTE = "Black-Scholes sensitivities use a 4% risk-free rate and no dividends (model estimates)."
+RISK_FREE_RATE_NOTE = (
+    "New weekly Black-Scholes sensitivities use dated FRED DGS1MO and no dividends. "
+    "Missing DGS1MO makes the new estimate unavailable. Stored legacy estimates retain their 4% assumption."
+)
 RISK_FREE_RATE = 0.04
 
 # --- Owner watchlist: conditional 2030 price scenarios ---------------------------------------
@@ -1061,6 +1092,7 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "external_datasets": EXTERNAL_DATA_RULES,
         "leaders_2030": {"rule": LEADERS_RULE, "shares": LEADERS_SHARE_RULE, "top_n": 50},
         "decision_research": DECISION_RULES,
         "speculative_options": SPECULATIVE_RULES,

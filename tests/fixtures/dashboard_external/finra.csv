@@ -1,0 +1,2 @@
+"accountingYearMonthNumber"|"symbolCode"|"issueName"|"issuerServicesGroupExchangeCode"|"marketClassCode"|"currentShortPositionQuantity"|"previousShortPositionQuantity"|"stockSplitFlag"|"averageDailyVolumeQuantity"|"daysToCoverQuantity"|"revisionFlag"|"changePercent"|"changePreviousNumber"|"settlementDate"
+"20260930"|"ABC"|"Example company"|"A"|"NYSE"|"500"|"400"||"100"|"5.00"||"25.00"|"100"|"2026-09-30"

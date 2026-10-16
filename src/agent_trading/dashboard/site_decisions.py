@@ -166,6 +166,8 @@ def detail(c: dict) -> str:
     for group, fields in FIELDS.items():
         items = []
         for key, label, _ in fields:
+            if key == "insider_net" and flat[key]["v"] is None:
+                continue  # the dated Form 4 panel replaces the old unavailable ownership note
             x = flat[key]
             reason = f'<small class="muted">{E(x["reason"])}</small>' if x["reason"] else ""
             items.append(

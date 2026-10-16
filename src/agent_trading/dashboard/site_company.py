@@ -27,6 +27,7 @@ from .fmt import (
 )
 from .scenarios import RETURN_WINDOWS, implied_growth_text
 from .site_ai import top20_block
+from .site_external import company as external_company
 from .site_layout import E
 from .site_overview import band_title, list_page, scenario_flags_html
 from .site_research import changes_section, lab_section, quality_block, research_section
@@ -210,6 +211,7 @@ score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confi
 <div class="small muted">fundamentals: {E(fund.get("last_form") or "?")} filed {E(fund.get("last_filed") or "?")}</div></div></div>
 <p class="small">Flags: {flags}</p>
 {site_decisions.detail(c)}
+{external_company(c)}
 {changes_section(changes.compare(c, snap, prev_snap))}
 {research_section(research.panel(c, snap, history or [snap], profile_of(snap["bands"][c["band"]])))}
 {quality_block(evidence.company_check(c, str(snap["as_of"])))}

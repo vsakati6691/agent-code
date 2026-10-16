@@ -57,9 +57,12 @@ estimated data: anything not collected is shown as missing.</p>{datasets_table(e
 <h2>Latest run</h2><p class="small">Started {E(snap.get("run_started", ""))}, finished {E(snap.get("run_finished", ""))} UTC.
 Requests by provider: {E(", ".join(f"{k} {v}" for k, v in usage.get("requests", {}).items()) or "none (all answered from cache)")};
 cache hits {E(str(usage.get("cache_hits", 0)))}.
+Provider caps: {E(_readable(usage.get("budgets", {})))}. Dataset attempts: {E(_readable(usage.get("dataset_requests", {})))}.
+Dataset caps: {E(_readable(usage.get("dataset_budgets", {})))}.
 Problems: {E("; ".join(snap.get("problems", [])) or "none")}.</p>
 <h2>Data sources and terms</h2><ul class="small">{"".join(f"<li><strong>{E(k)}</strong>: {E(v)}</li>" for k, v in snap.get("sources", {}).items())}</ul>
 <h2>Machine-readable data</h2><ul class="small"><li><a href="data/schema.json">data/schema.json</a>: what every field means
 (ratios are decimals, money is USD, times are UTC)</li><li><a href="data/latest.json">data/latest.json</a>: the latest snapshot</li>
+<li><a href="downloads/{E(str(snap["as_of"]))}_external.csv">Company public-dataset CSV</a></li><li><a href="downloads/{E(str(snap["as_of"]))}_macro.csv">Macro CSV</a></li>
 {"".join(f'<li><a href="data/{E(d)}.json">data/{E(d)}.json</a>: week ending {E(d)}</li>' for d in reversed(store.dates()))}</ul>
 <h2>Events</h2><div class="table-wrap"><table aria-label="Audit events"><thead><tr><th>At (UTC)</th><th>Event</th><th>Details</th></tr></thead><tbody>{rows}</tbody></table></div>"""
