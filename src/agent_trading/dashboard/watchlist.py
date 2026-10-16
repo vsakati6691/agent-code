@@ -233,8 +233,9 @@ def company_scenarios(
     return out
 
 
-def etf_scenarios(price: float, rule, years: float) -> dict:
-    cls, title, _, rets, fee, yld = rule
+def etf_scenarios(price: float, rule, years: float, fee: float | None = None) -> dict:
+    cls, title, _, rets, default_fee, yld = rule
+    fee = default_fee if fee is None else fee
     out = {}
     for key, r_total in zip(("bear", "base", "bull"), rets, strict=False):
         r_price = (1 + r_total) / (1 + fee) / (1 + yld) - 1
@@ -259,13 +260,16 @@ def realized_vol(close: pd.Series, bars: int = 756) -> float | None:
     return float(r.std() * math.sqrt(252)) if len(r) >= 250 else None
 
 
-def leveraged_scenarios(price: float, lev: int, underlying_rule, sigma: float, years: float) -> dict:
+def leveraged_scenarios(
+    price: float, lev: int, underlying_rule, sigma: float, years: float, fee: float | None = None
+) -> dict:
     """Daily-reset model (spec.LEVERAGED_METHOD): g = L mu - L^2 sigma^2 / 2 - (L - 1) r - fee."""
+    fee = spec.LEVERAGED_ASSUMED_FEE if fee is None else fee
     out = {}
     for key, r_total in zip(("bear", "base", "bull"), underlying_rule[3], strict=False):
         s = sigma * spec.LEVERAGED_VOL_FACTORS[key]
         mu = math.log1p(r_total) + s * s / 2  # arithmetic drift of the index for this scenario
-        g = lev * mu - lev * lev * s * s / 2 - (lev - 1) * spec.LEVERAGED_FINANCING_RATE - spec.LEVERAGED_ASSUMED_FEE
+        g = lev * mu - lev * lev * s * s / 2 - (lev - 1) * spec.LEVERAGED_FINANCING_RATE - fee
         value = price * math.exp(g * years)
         out[key] = {
             "price": value,
@@ -277,7 +281,7 @@ def leveraged_scenarios(price: float, lev: int, underlying_rule, sigma: float, y
                 "index_volatility": s,
                 "volatility_drag": lev * lev * s * s / 2,
                 "financing_cost": (lev - 1) * spec.LEVERAGED_FINANCING_RATE,
-                "assumed_fee": spec.LEVERAGED_ASSUMED_FEE,
+                "assumed_fee": fee,
                 "log_growth_rate": g,
             },
         }

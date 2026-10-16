@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-14.9"
+SPEC_VERSION = "2026-10-15.1"
 # Administrative metadata, excluded from spec_dict(): awaiting the owner's date.
 SPEC_FREEZE_DATE: str | None = None
 SPEC_CHANGELOG = [
@@ -169,6 +169,10 @@ SPEC_CHANGELOG = [
         "Put/call ratio is standard-contract 30-90 DTE volume. Local hypothetical budgets default "
         "to 5% overall and 1% per trade, with warnings, no storage/upload and no trading-limit "
         "changes. Exit examples are +100%, -50% and 21 DTE, never automated or claimed optimal.",
+    ),
+    (
+        "2026-10-15.1",
+        "Adds dated, sourced ETF classification and fee inputs, optional matched SEC fund filings and observed watchlist drawdowns. No scale, weight, gate, list or scenario return assumption changes. Existing snapshots remain immutable.",
     ),
 ]
 
@@ -986,6 +990,7 @@ WATCHLIST_COMPANY_METHOD = (
 WATCHLIST_MAX_SUPPORTED_EV_FCF = 60.0
 # annual TOTAL-return assumptions for the fund's underlying exposure (before fees), by exposure class;
 # price return = total return - assumed fee - assumed distribution yield
+ETF_INPUTS_SHA256 = "03e8b065b5e81a91679317ce6c86a160425986a60cbb87e614f6bf9df8cb22e1"
 ETF_EXPOSURE_RULES = (
     # (class, title, name keywords, (bear, base, bull) annual total return, assumed fee, assumed distribution yield)
     (
@@ -1255,6 +1260,7 @@ def spec_dict() -> dict:
             "company_method": WATCHLIST_COMPANY_METHOD,
             "max_supported_ev_fcf": WATCHLIST_MAX_SUPPORTED_EV_FCF,
             "etf_rules": ETF_EXPOSURE_RULES,
+            "etf_inputs_sha256": ETF_INPUTS_SHA256,
             "leveraged": LEVERAGED_METHOD,
             "leveraged_params": [
                 LEVERAGED_KEYWORDS,

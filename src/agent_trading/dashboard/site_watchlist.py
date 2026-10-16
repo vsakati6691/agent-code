@@ -84,6 +84,7 @@ def _scen_cells(e: dict) -> str:
 
 
 def _assumptions(e: dict) -> str:
+    fee_label = "dated expense input (owner-supplied, unverified)" if e.get("etf_metadata") else "assumed fee"
     sc = e.get("scenarios") or {}
     if not sc:
         return ""
@@ -108,11 +109,11 @@ def _assumptions(e: dict) -> str:
             txt = (
                 f"{a['leverage']}x daily; index total return {pct(a['index_total_return'], 1)}/yr; index volatility "
                 f"{pct(a['index_volatility'])}; volatility drag {pct(a['volatility_drag'], 1)}/yr; financing "
-                f"{pct(a['financing_cost'], 1)}/yr; assumed fee {pct(a['assumed_fee'], 2)}"
+                f"{pct(a['financing_cost'], 1)}/yr; {fee_label} {pct(a['assumed_fee'], 2)}"
             )
         else:
             txt = (
-                f"{a['exposure']}: total return {pct(a['total_return_assumption'], 1)}/yr − assumed fee "
+                f"{a['exposure']}: total return {pct(a['total_return_assumption'], 1)}/yr; {fee_label} "
                 f"{pct(a['assumed_fee'], 2)} − assumed distribution yield {pct(a['assumed_distribution_yield'], 1)} "
                 f"= price return {pct(a['price_return'], 1)}/yr"
             )
@@ -127,6 +128,47 @@ def _earnings_line(e: dict) -> str:
     if ec.get("last_results_status"):
         return f'<p class="small muted">{E(ec["last_results_status"])}.</p>'
     return ""
+
+
+def etf_metadata_line(entry: dict) -> str:
+    if entry.get("asset_type") not in ("ETF", "leveraged/inverse ETF"):
+        return ""
+    meta = entry.get("etf_metadata") or {}
+    if not meta:
+        return '<p class="small">Expense ratio: unavailable · inception date: unavailable in this stored snapshot. Fund fee and yield are methodology assumptions.</p>'
+    young = " · launched less than 12 months ago" if meta.get("launched_under_12_months") else ""
+    return (
+        f'<p class="small">Expense ratio: {pct(meta.get("expense_ratio"), 2)} · inception: '
+        f"{E(meta['inception_date'])}{young}. {E(meta['label'])} as of {E(meta['as_of'])}. "
+        f'<a href="{E(meta["source_url"])}">Issuer source</a>.</p>'
+    )
+
+
+def etf_sources(entry: dict) -> str:
+    meta = entry.get("etf_metadata")
+    if not meta:
+        return ""
+    filing = entry.get("sec_fund_filing") or {}
+    detail = (
+        f'<p class="small">Issuer: {E(meta["issuer"])} · index: {E(meta["index_tracked"])}. {E(meta["expense_basis"])} '
+    )
+    detail += (
+        "The expense ratio is a dated input; distribution yield remains assumed and is not a sourced forecast.</p>"
+    )
+    if filing.get("status") == "available":
+        detail += (
+            f'<p class="small"><a href="{E(filing["source_url"])}">SEC {E(filing["form"])} filing</a> '
+            f"filed {E(filing['filed_at'])}; holdings reported {E(filing['reported_at'])}. "
+            f'{E(filing["fee_note"])}</p><ul class="small">'
+            + "".join(
+                f"<li>{E(h['name'])}: {pct(h['weight'], 2)} of reported fund net assets</li>"
+                for h in filing["top_holdings"]
+            )
+            + "</ul>"
+        )
+    else:
+        detail += f'<p class="small">SEC enrichment unavailable: {E(filing.get("reason") or "not collected in this snapshot")}.</p>'
+    return detail
 
 
 def _unlock(e: dict) -> str:
@@ -175,14 +217,14 @@ def watchlist_page(snap: dict) -> str:
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
 {_scen_cells(e)}
 <td class="small hide-sm">{E(e.get("method") or "")}</td><td class="small" data-v="{E(e.get("evidence_quality") or "")}">{quality_badge(quality_level(e.get("evidence_quality")), e.get("evidence_quality"), len(e.get("missing") or []))}</td>
-<td class="small">{E(status)}</td></tr>
+<td class="small">{E(status)}{etf_metadata_line(e)}</td></tr>
 <tr id="{rid}" class="detail" hidden><td colspan="9"><div class="evidence">
 <div><h4>Identity</h4><p class="small">{E(e.get("name") or "unresolved")} · {E(tidy(e.get("asset_type")))} · {E(e.get("exchange") or "")} ·
 status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") else ""}. Sector/theme: {E(e.get("sector") or "n/a")}.</p>
 <p class="small">{E(km_txt)}</p><p class="small">Trailing price returns: 1y {pct((e.get("returns") or {}).get("1y"), 0, True)},
 3y {pct((e.get("returns") or {}).get("3y"), 0, True)} (history from {E(str(e.get("history_start") or "n/a"))}).</p></div>
 <div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}
-{_unlock(e)}</div>
+{_unlock(e)}{etf_sources(e)}</div>
 <div><h4>Catalysts</h4><ul class="tight small">{"".join(f"<li>{E(c)}</li>" for c in e.get("catalysts", []))}</ul>
 {_earnings_line(e)}<h4>Strongest bear case</h4><p class="small">{E(e.get("bear_case") or "n/a")}</p></div>
 <div><h4>Thesis invalidation</h4><ul class="tight small">{"".join(f"<li>{E(c)}</li>" for c in e.get("invalidation", []))}</ul>

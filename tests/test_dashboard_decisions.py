@@ -12,8 +12,8 @@ from tests.dashboard_fixtures import AS_OF, make_facts
 
 
 def test_decision_rules_are_registered_before_evaluation():
-    assert spec.SPEC_VERSION == "2026-10-14.9"
-    assert "registered before any data" in dict(spec.SPEC_CHANGELOG)[spec.SPEC_VERSION]
+    assert spec.SPEC_VERSION == "2026-10-15.1"
+    assert "registered before any data" in dict(spec.SPEC_CHANGELOG)["2026-10-14.9"]
     assert spec.DECISION_RULES["growth_weights"] == {
         "growth": 0.25,
         "earnings": 0.1875,
