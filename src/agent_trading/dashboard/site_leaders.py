@@ -30,7 +30,7 @@ def methodology() -> str:
     )
 
 
-def detail(row: dict) -> str:
+def detail(row: dict, price_note: str = "") -> str:
     drivers = (
         "".join(f"<li>{E(text)}</li>" for text in row["growth_drivers"]) or "<li>No dated growth evidence stored.</li>"
     )
@@ -43,6 +43,7 @@ def detail(row: dict) -> str:
     return (
         f'<h1>{E(row["company_name"])} · Leaders evidence</h1><p><a href="../leaders.html">Back to Leaders 2030</a></p>'
         f"<p>{E(row['scenario_basis'])} · snapshot {E(row['snapshot_id'])} · evidence {E(row['evidence_grade'])}.</p>"
+        f"<p>{E(price_note)}</p>"
         f"<p>{E(row['shares_assumption'])}</p><p>Share basis: {E(row['shares_basis'] or 'not applicable')}; "
         f"{num(row['shares_outstanding'], 0)} shares, dated {E(row['shares_date'] or 'unavailable')}.</p>"
         f"{source_text}<p>{E(row['notes'])}</p><h2>Dated growth evidence</h2><ul>{drivers}</ul>"
@@ -50,7 +51,7 @@ def detail(row: dict) -> str:
     )
 
 
-def leaders_page(payload: dict, details: dict[str, str]) -> str:
+def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -> str:
     entries = payload["entries"]
     gaps = list(payload["gaps"])
     if not payload["computed_count"]:
@@ -121,7 +122,7 @@ def leaders_page(payload: dict, details: dict[str, str]) -> str:
         symbol, label, color = MOVEMENTS[row["movement"]]
         curated = row["scenario_basis"] == "curated assumption"
         path = f"leaders/{payload['as_of']}-{i}.html"
-        details[path] = detail(row)
+        details[path] = detail(row, price_note)
         shares = (
             f'<div class="small muted">Diluted shares: {num(row["shares_outstanding"], 0)} · {E(row["shares_date"] or "unavailable")}</div>'
             if not curated
@@ -142,7 +143,7 @@ def leaders_page(payload: dict, details: dict[str, str]) -> str:
             f'<td data-v="{sval(row["current_rank"])}">{num(row["current_rank"], 0)}</td>'
             f'<td class="tk" data-v="{E(row["ticker"] or row["company_name"])}">{pin}<strong>{E(row["ticker"] or "Private / pre-IPO")}</strong><div class="small muted">{E(row["company_name"])}</div></td>'
             f'<td>{E(row["sector"])}</td><td class="num" data-v="{sval(row["current_market_cap_usd"])}">{cap(row["current_market_cap_usd"])}'
-            f'<div class="small muted">Price/cap: {E(row["price_date"] or "unavailable")} / {E(row["market_cap_date"] or "unavailable")}</div>{shares}</td>'
+            f'<div class="small muted">Price/cap: {E(row["price_date"] or "unavailable")} / {E(row["market_cap_date"] or "unavailable")}</div>{shares}<small>{E(price_note)}</small></td>'
             f'<td class="num" data-v="{sval(sc["base_cap"])}">{cap(sc["base_cap"])}{span}</td>'
             f'<td data-v="{sval(row["rank_2030"])}">{num(row["rank_2030"], 0)}</td><td data-v="{sval(row["rank_delta"])}">{delta}</td>'
             f'<td data-v="{E(label)}"><span class="pill {color}">{symbol} {E(label)}</span></td>'

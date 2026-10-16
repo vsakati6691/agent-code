@@ -217,6 +217,8 @@ def evidence_fragments(bands: dict) -> dict[str, str]:
 
 
 def growth_table(key: str, band: dict) -> str:
+    from .price_integrity import record_note
+
     tid = f"t-{key}"
     bodies = []
     for c in band["candidates"]:
@@ -233,7 +235,7 @@ def growth_table(key: str, band: dict) -> str:
 <strong>{E(c["ticker"])}</strong></button><div class="small muted">{E(c.get("name") or "")}</div>
 <div class="small muted">{E(c.get("sector") or "Unknown")}</div>{f'<div class="small muted">AI role: {E(c["ai_role"])}</div>' if c.get("ai_role") else ""}</td>
 <td class="num hide-sm" data-v="{sval(c.get("market_cap"))}">{cap(c.get("market_cap"))}</td>
-<td class="num" data-v="{sval(c.get("price"))}">{money(c.get("price"))}</td>
+<td class="num" data-v="{sval(c.get("price"))}">{money(c.get("price"))}<small>{E(record_note(c))}</small></td>
 <td class="num hide-sm" data-v="{sval(m.get("revenue_growth_ttm"))}">{pct(m.get("revenue_growth_ttm"), 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(eg)}">{E(eg_txt)}</td>
 <td class="num val hide-sm" data-v="{sval(m.get("ev_to_sales"))}">{E(_valuation(m))}</td>

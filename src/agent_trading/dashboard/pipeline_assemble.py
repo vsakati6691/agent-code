@@ -11,7 +11,7 @@ from . import ai as ai_mod
 from . import options as opt
 from . import scoring, spec
 from .pipeline_collect import _guard, _quote, broad_universe, build_reference, latest_bars, verify_earnings
-from .pipeline_context import BENCHMARKS, MIN_SP500_COVERAGE, Context, RunFailed, log
+from .pipeline_context import BENCHMARKS, MIN_SP500_COVERAGE, Context, RunFailed, as_of_for, log
 from .pipeline_details import _clean, candidate_detail, concentration_warnings, rank_changes
 from .pipeline_score import evaluate, tradable_only
 from .pipeline_watchlist import evaluate_watchlist
@@ -32,6 +32,7 @@ def run(
     ai_private: dict | None = None,
     iv_history: dict | None = None,
     aggregate_store=None,
+    now: datetime | None = None,
 ) -> dict:
     """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
 
@@ -42,7 +43,10 @@ def run(
     todo = todo_out if todo_out is not None else []
     if not is_trading_day(as_of):
         raise RunFailed(f"{as_of} is not an NYSE trading day")
-    ctx = Context(as_of, providers, limit=limit)
+    started = now or datetime.now(UTC)
+    if as_of > as_of_for(started):
+        raise RunFailed(f"{as_of}: as-of close is not yet available under the completed-session collection clock")
+    ctx = Context(as_of, providers, started=started.isoformat(timespec="seconds"), limit=limit)
     ref = build_reference(ctx)
 
     bench = {}

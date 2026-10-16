@@ -203,6 +203,9 @@ def _unlock(e: dict) -> str:
 
 
 def watchlist_page(snap: dict) -> str:
+    from .price_integrity import SHORT_NOTE, preclose
+
+    price_note = SHORT_NOTE if preclose(snap) else ""
     w = snap.get("watchlist")
     head = (
         '<div class="section-heading watch-heading"><div><p class="eyebrow">RESEARCH DESK / LONG VIEW</p>'
@@ -238,7 +241,7 @@ def watchlist_page(snap: dict) -> str:
 <td class="tk" data-v="{E(e["ticker"])}">{pin_button(e["ticker"])}<button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}"><strong>{E(e["ticker"])}</strong></button>
 <div class="small muted">{E(e.get("name") or "name not resolved")}</div></td>
 <td class="small hide-sm" data-v="{E(tidy(e.get("asset_type")))}">{E(tidy(e.get("asset_type")) or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
-<td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
+<td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))} · {price_note}</div></td>
 {_upside_cell(e)}
 {_scen_cells(e)}
 <td class="small hide-sm">{E(e.get("method") or "")}</td><td class="small" data-v="{E(e.get("evidence_quality") or "")}">{quality_badge(quality_level(e.get("evidence_quality")), e.get("evidence_quality"), len(e.get("missing") or []))}</td>

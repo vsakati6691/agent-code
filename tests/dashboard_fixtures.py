@@ -221,7 +221,7 @@ class FakeProviders:
             float(df["close"].iloc[-2]),
             datetime(last.year, last.month, last.day, 16, 0),
             30.0,
-            "t",
+            f"{last}T22:00:00+00:00",
         )
 
     def history(self, symbol):

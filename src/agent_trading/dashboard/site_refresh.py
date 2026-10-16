@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import spec
 from .fmt import money, num, pct, sval
+from .price_integrity import SHORT_NOTE, preclose
 from .refresh_store import RefreshStore
 
 E = html.escape
@@ -70,7 +71,7 @@ def load_context(data: Path, snap: dict, out: Path) -> dict:
     if problems and (not latest or max(problems) > latest["as_of"]):
         reason = "Latest daily data failed its integrity check."
         latest = None
-    return {"data": latest, "reason": reason if latest is None else ""}
+    return {"data": latest, "reason": reason if latest is None else "", "weekly_preclose": preclose(snap)}
 
 
 def banner(snap: dict, context: dict | None) -> str:
@@ -95,12 +96,14 @@ def banner(snap: dict, context: dict | None) -> str:
 def price(symbol: str, weekly, context: dict | None) -> tuple[float | None, str]:
     data = (context or {}).get("data")
     if data is None:
-        return weekly, "Weekly close"
+        return weekly, SHORT_NOTE if (context or {}).get("weekly_preclose") else "Weekly close"
     quote = data.get("quotes", {}).get(symbol) or {}
     if quote.get("status") != "available":
         return None, "Daily unavailable: " + (quote.get("reason") or "not collected")
     value = quote["close"]
     delta = value / weekly - 1 if isinstance(weekly, (int, float)) and weekly > 0 else None
+    if (context or {}).get("weekly_preclose"):
+        return value, f"Daily close · {pct(delta, 1, True)} vs stored intraday input (correction 2026-10-16)"
     return value, f"Daily close · {pct(delta, 1, True)} since weekly"
 
 

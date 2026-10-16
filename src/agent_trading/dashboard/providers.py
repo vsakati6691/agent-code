@@ -19,7 +19,7 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 
 import pandas as pd
@@ -529,13 +529,20 @@ class Providers:
         return parse_sp500(self.http.get_json(WIKI_SP500_URL, WIKI_SP500_PARAMS, max_age_hours=24))
 
     def quote(self, symbol: str) -> Quote:
-        return parse_cboe_quote(self.http.get_json(f"{CBOE_BASE}/quotes/{symbol}.json", max_age_hours=12))
+        return parse_cboe_quote(self._price_json(f"{CBOE_BASE}/quotes/{symbol}.json"))
 
     def history(self, symbol: str) -> pd.DataFrame:
-        return parse_cboe_history(self.http.get_json(f"{CBOE_BASE}/charts/historical/{symbol}.json", max_age_hours=12))
+        return parse_cboe_history(self._price_json(f"{CBOE_BASE}/charts/historical/{symbol}.json"))
 
     def option_chain(self, symbol: str) -> tuple[dict, list[dict]]:
-        return parse_cboe_chain(self.http.get_json(f"{CBOE_BASE}/options/{symbol}.json", max_age_hours=12))
+        return parse_cboe_chain(self._price_json(f"{CBOE_BASE}/options/{symbol}.json"))
+
+    def _price_json(self, url: str) -> dict:
+        from .pipeline_context import as_of_for
+
+        # A new completed session must never reuse a cached response fetched before its close.
+        session = as_of_for(datetime.now(UTC))
+        return self.http.get_json(url, max_age_hours=12, cache_key_extra=f"completed-session-v1:{session}")
 
     def earnings_calendar(self) -> pd.DataFrame:
         if not self.av_key:

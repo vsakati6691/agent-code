@@ -1,0 +1,1035 @@
+{
+  "source": "research-data d8666d8095614a2a1a53c050ccede55d65d7769a; unmodified metadata and rank-change records",
+  "snapshots": [
+    {
+      "as_of": "2026-10-14",
+      "spec_version": "2026-10-14.8",
+      "spec_hash": "569ce297049c71ad",
+      "universe": {},
+      "bands": {
+        "ai_large": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "MU",
+              "to": 1
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "FIX",
+              "to": 2
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "DELL",
+              "to": 3
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "TER",
+              "to": 4
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "STX",
+              "to": 5
+            }
+          ]
+        },
+        "ai_mid": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "PATH",
+              "to": 1
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "APLD",
+              "to": 2
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "CORZ",
+              "to": 3
+            }
+          ]
+        },
+        "large": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {
+                "balance": 19.4,
+                "valuation": 1.0
+              },
+              "explanation": "component score changes (points of 100): balance +19.4, valuation +1.0",
+              "from": 1,
+              "score_change": 3.0600000000000023,
+              "ticker": "MU",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": -3.0,
+                "valuation": 1.3
+              },
+              "explanation": "component score changes (points of 100): relative -3.0, valuation +1.3",
+              "from": 2,
+              "score_change": -0.10999999999999943,
+              "ticker": "FIX",
+              "to": 2
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": 1.2
+              },
+              "explanation": "component score changes (points of 100): valuation +1.2",
+              "from": 3,
+              "score_change": 0.18000000000000682,
+              "ticker": "DELL",
+              "to": 3
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": -3.5,
+                "valuation": 1.2
+              },
+              "explanation": "component score changes (points of 100): relative -3.5, valuation +1.2",
+              "from": 4,
+              "score_change": -0.18000000000000682,
+              "ticker": "TER",
+              "to": 4
+            },
+            {
+              "change": 1,
+              "component_changes": {
+                "balance": 6.2,
+                "relative": -0.7,
+                "valuation": 3.1
+              },
+              "explanation": "component score changes (points of 100): balance +6.2, valuation +3.1, relative -0.7",
+              "from": 6,
+              "score_change": 1.3199999999999932,
+              "ticker": "STX",
+              "to": 5
+            },
+            {
+              "change": 1,
+              "component_changes": {
+                "valuation": 1.7
+              },
+              "explanation": "component score changes (points of 100): valuation +1.7",
+              "from": 7,
+              "score_change": 0.25,
+              "ticker": "HPE",
+              "to": 6
+            },
+            {
+              "change": -2,
+              "component_changes": {
+                "momentum": -4.7,
+                "relative": -3.8,
+                "valuation": 0.7
+              },
+              "explanation": "component score changes (points of 100): momentum -4.7, relative -3.8, valuation +0.7",
+              "from": 5,
+              "score_change": -0.7299999999999898,
+              "ticker": "APH",
+              "to": 7
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": 2.5
+              },
+              "explanation": "component score changes (points of 100): valuation +2.5",
+              "from": 8,
+              "score_change": 0.37999999999999545,
+              "ticker": "AMD",
+              "to": 8
+            },
+            {
+              "change": 1,
+              "component_changes": {
+                "relative": -2.1,
+                "valuation": 2.7
+              },
+              "explanation": "component score changes (points of 100): valuation +2.7, relative -2.1",
+              "from": 10,
+              "score_change": 0.20000000000000284,
+              "ticker": "WDC",
+              "to": 9
+            },
+            {
+              "change": -1,
+              "component_changes": {
+                "momentum": -3.1,
+                "relative": -5.5,
+                "valuation": 0.8
+              },
+              "explanation": "component score changes (points of 100): relative -5.5, momentum -3.1, valuation +0.8",
+              "from": 9,
+              "score_change": -0.75,
+              "ticker": "NVDA",
+              "to": 10
+            }
+          ]
+        },
+        "mid": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": -3.2,
+                "relative": -1.4,
+                "valuation": 0.7
+              },
+              "explanation": "component score changes (points of 100): momentum -3.2, relative -1.4, valuation +0.7",
+              "from": 1,
+              "score_change": -0.35999999999999943,
+              "ticker": "SEZL",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": -2.5
+              },
+              "explanation": "component score changes (points of 100): relative -2.5",
+              "from": 2,
+              "score_change": -0.20000000000000284,
+              "ticker": "WT",
+              "to": 2
+            },
+            {
+              "change": 3,
+              "component_changes": {
+                "momentum": 10.6,
+                "relative": 10.8,
+                "valuation": -0.9
+              },
+              "explanation": "component score changes (points of 100): relative +10.8, momentum +10.6, valuation -0.9",
+              "from": 6,
+              "score_change": 1.9899999999999949,
+              "ticker": "COCO",
+              "to": 3
+            },
+            {
+              "change": -1,
+              "component_changes": {
+                "momentum": -1.8,
+                "relative": -4.6
+              },
+              "explanation": "component score changes (points of 100): relative -4.6, momentum -1.8",
+              "from": 3,
+              "score_change": -0.6300000000000097,
+              "ticker": "RELY",
+              "to": 4
+            },
+            {
+              "change": -1,
+              "component_changes": {
+                "momentum": -3.6,
+                "relative": -2.6
+              },
+              "explanation": "component score changes (points of 100): momentum -3.6, relative -2.6",
+              "from": 4,
+              "score_change": -0.6200000000000045,
+              "ticker": "VCTR",
+              "to": 5
+            },
+            {
+              "change": -1,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 5,
+              "score_change": 0.0,
+              "ticker": "VSXY",
+              "to": 6
+            },
+            {
+              "change": 2,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 9,
+              "score_change": 0.0,
+              "ticker": "PARR",
+              "to": 7
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": -16.7,
+                "relative": -2.4
+              },
+              "explanation": "component score changes (points of 100): momentum -16.7, relative -2.4",
+              "from": 8,
+              "score_change": -1.9099999999999966,
+              "ticker": "SHOO",
+              "to": 8
+            },
+            {
+              "change": 1,
+              "component_changes": {
+                "momentum": -1.5,
+                "relative": -5.6,
+                "valuation": 1.1
+              },
+              "explanation": "component score changes (points of 100): relative -5.6, momentum -1.5, valuation +1.1",
+              "from": 10,
+              "score_change": -0.5499999999999972,
+              "ticker": "FIVN",
+              "to": 9
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "ECPG",
+              "to": 10
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 7,
+              "ticker": "AGX",
+              "to": null
+            }
+          ]
+        },
+        "multibagger": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": -14.4,
+                "runway": 0.9,
+                "valuation": 1.6
+              },
+              "explanation": "component score changes (points of 100): momentum -14.4, valuation +1.6, runway +0.9",
+              "from": 1,
+              "score_change": -0.39000000000000057,
+              "ticker": "HL",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 2,
+              "score_change": 0.060000000000002274,
+              "ticker": "PAYS",
+              "to": 2
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": -4.8,
+                "valuation": -0.5
+              },
+              "explanation": "component score changes (points of 100): momentum -4.8, valuation -0.5",
+              "from": 3,
+              "score_change": -0.3500000000000085,
+              "ticker": "FIVE",
+              "to": 3
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "runway": -0.7,
+                "valuation": -2.5
+              },
+              "explanation": "component score changes (points of 100): valuation -2.5, runway -0.7",
+              "from": 4,
+              "score_change": -0.4399999999999977,
+              "ticker": "HALO",
+              "to": 4
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": -5.0
+              },
+              "explanation": "component score changes (points of 100): momentum -5.0",
+              "from": 5,
+              "score_change": -0.25,
+              "ticker": "GMED",
+              "to": 5
+            }
+          ]
+        },
+        "small": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": 4.5
+              },
+              "explanation": "component score changes (points of 100): relative +4.5",
+              "from": 1,
+              "score_change": 0.480000000000004,
+              "ticker": "NWPX",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 2,
+              "score_change": 0.04000000000000625,
+              "ticker": "PAYS",
+              "to": 2
+            },
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 3,
+              "score_change": 0.029999999999986926,
+              "ticker": "KRT",
+              "to": 3
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": 0.6
+              },
+              "explanation": "component score changes (points of 100): valuation +0.6",
+              "from": 4,
+              "score_change": 0.09000000000000341,
+              "ticker": "NUTX",
+              "to": 4
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "QNST",
+              "to": 5
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "balance": 1.7
+              },
+              "explanation": "component score changes (points of 100): balance +1.7",
+              "from": 6,
+              "score_change": 0.28000000000000114,
+              "ticker": "FLXS",
+              "to": 6
+            },
+            {
+              "change": -2,
+              "component_changes": {
+                "momentum": -25.5,
+                "relative": 0.6
+              },
+              "explanation": "component score changes (points of 100): momentum -25.5, relative +0.6",
+              "from": 5,
+              "score_change": -2.4599999999999937,
+              "ticker": "MAMA",
+              "to": 7
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": -0.9
+              },
+              "explanation": "component score changes (points of 100): relative -0.9",
+              "from": 8,
+              "score_change": -0.030000000000001137,
+              "ticker": "LQDT",
+              "to": 8
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": -4.9,
+                "relative": 0.8,
+                "valuation": 1.0
+              },
+              "explanation": "component score changes (points of 100): momentum -4.9, valuation +1.0, relative +0.8",
+              "from": 9,
+              "score_change": -0.2599999999999909,
+              "ticker": "IA",
+              "to": 9
+            },
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 10,
+              "score_change": 0.060000000000002274,
+              "ticker": "OOMA",
+              "to": 10
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 7,
+              "ticker": "DCTH",
+              "to": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "as_of": "2026-10-15",
+      "spec_version": "2026-10-14.9",
+      "spec_hash": "13c2a70787a83822",
+      "universe": {},
+      "bands": {
+        "ai_large": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 1,
+              "score_change": 0.030000000000001137,
+              "ticker": "MU",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": -1.9,
+                "valuation": 1.0
+              },
+              "explanation": "component score changes (points of 100): relative -1.9, valuation +1.0",
+              "from": 2,
+              "score_change": -0.029999999999986926,
+              "ticker": "FIX",
+              "to": 2
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": 0.9
+              },
+              "explanation": "component score changes (points of 100): valuation +0.9",
+              "from": 3,
+              "score_change": 0.12999999999999545,
+              "ticker": "DELL",
+              "to": 3
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": -4.2,
+                "valuation": 1.0
+              },
+              "explanation": "component score changes (points of 100): relative -4.2, valuation +1.0",
+              "from": 4,
+              "score_change": -0.2799999999999869,
+              "ticker": "TER",
+              "to": 4
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": -9.3,
+                "valuation": 3.4
+              },
+              "explanation": "component score changes (points of 100): relative -9.3, valuation +3.4",
+              "from": 5,
+              "score_change": -0.4200000000000017,
+              "ticker": "STX",
+              "to": 5
+            }
+          ]
+        },
+        "ai_mid": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {
+                "relative": 3.3,
+                "valuation": -1.7
+              },
+              "explanation": "component score changes (points of 100): relative +3.3, valuation -1.7",
+              "from": 1,
+              "score_change": 0.030000000000001137,
+              "ticker": "PATH",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 2,
+              "score_change": 0.0,
+              "ticker": "APLD",
+              "to": 2
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "IREN",
+              "to": 3
+            },
+            {
+              "change": -1,
+              "component_changes": {
+                "momentum": 7.0,
+                "valuation": 1.4
+              },
+              "explanation": "component score changes (points of 100): momentum +7.0, valuation +1.4",
+              "from": 3,
+              "score_change": 0.9200000000000017,
+              "ticker": "CORZ",
+              "to": 4
+            }
+          ]
+        },
+        "large": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 1,
+              "score_change": -0.4200000000000017,
+              "ticker": "MU",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": 1.0
+              },
+              "explanation": "component score changes (points of 100): valuation +1.0",
+              "from": 2,
+              "score_change": 2.740000000000009,
+              "ticker": "FIX",
+              "to": 2
+            },
+            {
+              "change": 7,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 10,
+              "score_change": 9.170000000000002,
+              "ticker": "NVDA",
+              "to": 3
+            },
+            {
+              "change": 3,
+              "component_changes": {
+                "valuation": 0.7
+              },
+              "explanation": "component score changes (points of 100): valuation +0.7",
+              "from": 7,
+              "score_change": 6.359999999999999,
+              "ticker": "APH",
+              "to": 4
+            },
+            {
+              "change": -1,
+              "component_changes": {
+                "valuation": 1.0
+              },
+              "explanation": "component score changes (points of 100): valuation +1.0",
+              "from": 4,
+              "score_change": 0.7000000000000028,
+              "ticker": "TER",
+              "to": 5
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "AVGO",
+              "to": 6
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "PLTR",
+              "to": 7
+            },
+            {
+              "change": -5,
+              "component_changes": {
+                "valuation": 0.9
+              },
+              "explanation": "component score changes (points of 100): valuation +0.9",
+              "from": 3,
+              "score_change": -4.25,
+              "ticker": "DELL",
+              "to": 8
+            },
+            {
+              "change": -4,
+              "component_changes": {
+                "valuation": 3.4
+              },
+              "explanation": "component score changes (points of 100): valuation +3.4",
+              "from": 5,
+              "score_change": -3.719999999999999,
+              "ticker": "STX",
+              "to": 9
+            },
+            {
+              "change": -1,
+              "component_changes": {
+                "valuation": 3.2
+              },
+              "explanation": "component score changes (points of 100): valuation +3.2",
+              "from": 9,
+              "score_change": -0.030000000000001137,
+              "ticker": "WDC",
+              "to": 10
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 6,
+              "ticker": "HPE",
+              "to": null
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 8,
+              "ticker": "AMD",
+              "to": null
+            }
+          ]
+        },
+        "mid": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 1,
+              "score_change": -1.6899999999999977,
+              "ticker": "SEZL",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 2,
+              "score_change": -1.4699999999999989,
+              "ticker": "WT",
+              "to": 2
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": -1.9
+              },
+              "explanation": "component score changes (points of 100): valuation -1.9",
+              "from": 3,
+              "score_change": 1.4200000000000017,
+              "ticker": "COCO",
+              "to": 3
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "AGX",
+              "to": 4
+            },
+            {
+              "change": 3,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 8,
+              "score_change": 5.259999999999991,
+              "ticker": "SHOO",
+              "to": 5
+            },
+            {
+              "change": -2,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 4,
+              "score_change": -1.0899999999999892,
+              "ticker": "RELY",
+              "to": 6
+            },
+            {
+              "change": -2,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 5,
+              "score_change": -3.6500000000000057,
+              "ticker": "VCTR",
+              "to": 7
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "ELF",
+              "to": 8
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "JOE",
+              "to": 9
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "SSRM",
+              "to": 10
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 6,
+              "ticker": "VSXY",
+              "to": null
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 7,
+              "ticker": "PARR",
+              "to": null
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 9,
+              "ticker": "FIVN",
+              "to": null
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 10,
+              "ticker": "ECPG",
+              "to": null
+            }
+          ]
+        },
+        "multibagger": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": -4.0,
+                "valuation": -0.5
+              },
+              "explanation": "component score changes (points of 100): momentum -4.0, valuation -0.5",
+              "from": 1,
+              "score_change": -0.29999999999999716,
+              "ticker": "HL",
+              "to": 1
+            },
+            {
+              "change": 0,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 2,
+              "score_change": -0.020000000000010232,
+              "ticker": "PAYS",
+              "to": 2
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "momentum": 2.9
+              },
+              "explanation": "component score changes (points of 100): momentum +2.9",
+              "from": 3,
+              "score_change": 0.09000000000000341,
+              "ticker": "FIVE",
+              "to": 3
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": -1.7
+              },
+              "explanation": "component score changes (points of 100): valuation -1.7",
+              "from": 4,
+              "score_change": -0.28999999999999204,
+              "ticker": "HALO",
+              "to": 4
+            },
+            {
+              "change": 0,
+              "component_changes": {
+                "valuation": -0.7
+              },
+              "explanation": "component score changes (points of 100): valuation -0.7",
+              "from": 5,
+              "score_change": -0.15000000000000568,
+              "ticker": "GMED",
+              "to": 5
+            }
+          ]
+        },
+        "small": {
+          "label": "",
+          "candidates": [],
+          "rank_changes": [
+            {
+              "change": 6,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 7,
+              "score_change": 9.399999999999991,
+              "ticker": "MAMA",
+              "to": 1
+            },
+            {
+              "change": -1,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 1,
+              "score_change": -2.3100000000000023,
+              "ticker": "NWPX",
+              "to": 2
+            },
+            {
+              "change": 2,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 5,
+              "score_change": 2.8900000000000006,
+              "ticker": "QNST",
+              "to": 3
+            },
+            {
+              "change": -2,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 2,
+              "score_change": -4.540000000000006,
+              "ticker": "PAYS",
+              "to": 4
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "PKE",
+              "to": 5
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "LINC",
+              "to": 6
+            },
+            {
+              "change": 2,
+              "component_changes": {
+                "valuation": 0.8
+              },
+              "explanation": "component score changes (points of 100): valuation +0.8",
+              "from": 9,
+              "score_change": 0.519999999999996,
+              "ticker": "IA",
+              "to": 7
+            },
+            {
+              "change": -5,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 3,
+              "score_change": -5.079999999999998,
+              "ticker": "KRT",
+              "to": 8
+            },
+            {
+              "change": "new",
+              "explanation": "entered the top list this week",
+              "from": null,
+              "ticker": "VMD",
+              "to": 9
+            },
+            {
+              "change": -6,
+              "component_changes": {},
+              "explanation": "component score changes (points of 100): component scores unchanged",
+              "from": 4,
+              "score_change": -5.1200000000000045,
+              "ticker": "NUTX",
+              "to": 10
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 6,
+              "ticker": "FLXS",
+              "to": null
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 8,
+              "ticker": "LQDT",
+              "to": null
+            },
+            {
+              "change": "dropped",
+              "explanation": "no longer in the top list (lower score, excluded or out of band)",
+              "from": 10,
+              "ticker": "OOMA",
+              "to": null
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

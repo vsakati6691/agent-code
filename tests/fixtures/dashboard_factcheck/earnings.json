@@ -1,0 +1,292 @@
+{
+  "source": "research-data d8666d8095614a2a1a53c050ccede55d65d7769a",
+  "events": {
+    "calendar_rows": 4754,
+    "items": [
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-22)",
+        "date": "2026-10-22",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-23",
+        "last_results_status": "verified (8-K)",
+        "list": "large, ai_large",
+        "ticker": "FIX"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-05)",
+        "date": "2026-10-22",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-05",
+        "last_results_status": "verified (8-K)",
+        "list": "large",
+        "ticker": "WDC"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-19)",
+        "date": "2026-10-23",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-28",
+        "last_results_status": "verified (8-K)",
+        "list": "ai_mid",
+        "ticker": "CORZ"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-27)",
+        "date": "2026-10-27",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-28",
+        "last_results_status": "verified (8-K)",
+        "list": "large, ai_large",
+        "ticker": "STX"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-28)",
+        "date": "2026-10-27",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-29",
+        "last_results_status": "verified (8-K)",
+        "list": "large, ai_large",
+        "ticker": "TER"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-28)",
+        "date": "2026-10-28",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-29",
+        "last_results_status": "verified (8-K)",
+        "list": "large",
+        "ticker": "APH"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-30)",
+        "date": "2026-10-30",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-31",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "WT"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-31)",
+        "date": "2026-11-02",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-06",
+        "last_results_status": "verified (8-K)",
+        "list": "multibagger",
+        "ticker": "HALO"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-02)",
+        "date": "2026-11-02",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-03",
+        "last_results_status": "verified (8-K)",
+        "list": "large",
+        "ticker": "PLTR"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-03)",
+        "date": "2026-11-03",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-04",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "SSRM"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-22)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-23",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "COCO"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-04)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-05",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "ELF"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-25)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-04",
+        "last_results_status": "verified (8-K)",
+        "list": "multibagger",
+        "ticker": "HL"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-04)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-29",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "JOE"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-28)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-29",
+        "last_results_status": "verified (8-K)",
+        "list": "small",
+        "ticker": "NWPX"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-04)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-05",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "RELY"
+      },
+      {
+        "cadence_check": "differs by 36 days from the verified 8-K cadence (expected about 2026-12-10); treat the scheduled date with care",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-10-08",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "SEZL"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-05)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-07-30",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "SHOO"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-02)",
+        "date": "2026-11-04",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-03",
+        "last_results_status": "verified (8-K)",
+        "list": "small",
+        "ticker": "VMD"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-10-17)",
+        "date": "2026-11-05",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-06",
+        "last_results_status": "verified (8-K)",
+        "list": "multibagger",
+        "ticker": "GMED"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-05)",
+        "date": "2026-11-05",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-27",
+        "last_results_status": "verified (8-K)",
+        "list": "ai_mid",
+        "ticker": "IREN"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-05)",
+        "date": "2026-11-05",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-06",
+        "last_results_status": "verified (8-K)",
+        "list": "small",
+        "ticker": "KRT"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-05)",
+        "date": "2026-11-05",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-06",
+        "last_results_status": "verified (8-K)",
+        "list": "small",
+        "ticker": "QNST"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-04)",
+        "date": "2026-11-05",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-05",
+        "last_results_status": "verified (8-K)",
+        "list": "mid",
+        "ticker": "VCTR"
+      },
+      {
+        "date": "2026-11-09",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "list": "watchlist",
+        "ticker": "CRWV"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-09)",
+        "date": "2026-11-09",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-10",
+        "last_results_status": "verified (8-K)",
+        "list": "small",
+        "ticker": "LINC"
+      },
+      {
+        "date": "2026-11-10",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "list": "watchlist",
+        "ticker": "OKLO"
+      },
+      {
+        "date": "2026-11-11",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "list": "watchlist",
+        "ticker": "CBRS"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-12)",
+        "date": "2026-11-11",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-05",
+        "last_results_status": "verified (8-K)",
+        "list": "small, multibagger",
+        "ticker": "PAYS"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-11-12)",
+        "date": "2026-11-18",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-06",
+        "last_results_status": "verified (8-K)",
+        "list": "small",
+        "ticker": "NUTX"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-12-02)",
+        "date": "2026-11-18",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-08-26",
+        "last_results_status": "verified (8-K)",
+        "list": "large",
+        "ticker": "NVDA"
+      },
+      {
+        "cadence_check": "consistent with the verified 8-K cadence (expected about 2026-12-03)",
+        "date": "2026-11-24",
+        "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
+        "last_results": "2026-09-01",
+        "last_results_status": "verified (8-K)",
+        "list": "large, ai_large",
+        "ticker": "DELL"
+      }
+    ],
+    "note": "Scheduled earnings dates from Alpha Vantage's calendar. They are not independently verified; other dated catalysts are not tracked.",
+    "retrieved_at": "2026-10-15T14:37:46+00:00",
+    "state": "available",
+    "status": "ok",
+    "window_days": 45
+  }
+}

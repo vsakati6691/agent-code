@@ -199,7 +199,14 @@ def build_site(
     write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
     leader_payload = leaders.build(snap, challengers)
     leader_details: dict[str, str] = {}
-    write("leaders.html", "Leaders 2030", site_leaders.leaders_page(leader_payload, leader_details), "leaders.html")
+    from .price_integrity import SHORT_NOTE, preclose
+
+    write(
+        "leaders.html",
+        "Leaders 2030",
+        site_leaders.leaders_page(leader_payload, leader_details, SHORT_NOTE if preclose(snap) else ""),
+        "leaders.html",
+    )
     write("goal.html", "Plan 2030", site_goal.goal_page(snap), "goal.html", js=("assets/goal.js",))
     write("evidence.html", "Evidence", site_evidence.evidence_page(research_evidence), "evidence.html")
     write("history.html", "History", history_page(dates, tracking, history), "history.html")
