@@ -73,18 +73,19 @@ def multibagger_section(snap: dict) -> str:
         rows = ""
         if sc:
             yrs = sorted(int(y) for y in sc["base"]["years"])
-            head = "".join(f'<th class="num">{y}y</th>' for y in yrs)
+            head = "".join(f'<th class="num" data-sort="num">{y}y</th>' for y in yrs)
             for k in ("bear", "base", "bull"):
                 rows += (
                     f"<tr><td>{k}</td>"
                     + "".join(
-                        f'<td class="num">{money(sc[k]["years"][str(y)]["value_per_share"])}<div class="small muted">'
+                        f'<td class="num" data-v="{sc[k]["years"][str(y)]["value_per_share"]}">{money(sc[k]["years"][str(y)]["value_per_share"])}<div class="small muted">'
                         f"{num(sc[k]['years'][str(y)]['multiple_of_price'], 1)}x</div></td>"
                         for y in yrs
                     )
                     + "</tr>"
                 )
-            scen = f'<div class="table-wrap"><table aria-label="Bear, base and bull values per share"><thead><tr><th>Scenario</th>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
+            tid = f"mb-{E(c['ticker'])}"
+            scen = f'<div class="table-wrap"><table id="{tid}" data-table aria-label="{E(c["ticker"])} bear, base and bull values per share"><thead><tr><th data-sort="text">Scenario</th>{head}</tr></thead><tbody>{rows}</tbody></table></div><p><button class="linkbtn" type="button" data-reset="{tid}">Reset scenario order</button></p>'
         else:
             scen = f'<p class="small muted">{E(c.get("scenario_note") or "Scenarios not computed.")}</p>'
         runway = m.get("cash_runway_years")

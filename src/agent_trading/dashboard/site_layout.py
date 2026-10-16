@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 
 from ..market_calendar import is_trading_day
 from . import (
+    site_command,
+    site_tables,
     spec,
 )
 from .fmt import (
@@ -62,16 +64,7 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
     nav = "".join(
         f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>' for href, label in NAV
     )
-    opts = "".join(f'<option value="{E(t)}">{E(n)}</option>' for t, n in _SYMBOLS.items())
-    search = (
-        f'<form class="symsearch" role="search" data-base="{up}symbol/" onsubmit="return false">'
-        f'<label class="sr-only" for="symq">Find a ticker</label><input id="symq" type="search" list="symlist" '
-        f'placeholder="Find a ticker" autocomplete="off" aria-describedby="symhint">'
-        f'<span id="symhint" class="sr-only">Choose a ticker from the list to open its page</span>'
-        f'<datalist id="symlist">{opts}</datalist></form>'
-        if _SYMBOLS
-        else ""
-    )
+    search = site_command.search(_SYMBOLS, up + "symbol/")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{E(title)} · {E(brand())}</title>
@@ -81,11 +74,11 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <link rel="stylesheet" href="{up}assets/style.css{_SITE["v"]}">
 <link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
-<nav>{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
-<main id="main" tabindex="-1">{column_headers(freshness + body)}
+<nav aria-label="Research sections">{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
+<main id="main" tabindex="-1">{site_tables.enhance(column_headers(freshness + body))}
 <footer>{E(spec.DISCLAIMER)} Current registered methodology {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
-Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>
-<script src="{up}assets/app.js{_SITE["v"]}"></script>{"".join(f'<script src="{up}{s}{_SITE["v"]}"></script>' for s in scripts)}</body></html>"""
+Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>{site_command.dialog() if _SYMBOLS else ""}
+<script src="{up}assets/app.js{_SITE["v"]}"></script><script src="{up}assets/command.js{_SITE["v"]}"></script>{"".join(f'<script src="{up}{s}{_SITE["v"]}"></script>' for s in scripts)}</body></html>"""
 
 
 def sessions_after(as_of: str, days: int = spec.FRESHNESS_CALENDAR_DAYS) -> list[str]:
@@ -98,6 +91,7 @@ def sessions_after(as_of: str, days: int = spec.FRESHNESS_CALENDAR_DAYS) -> list
 
 def freshness_banner(snap: dict, status: dict | None, now: datetime | None = None) -> str:
     from .price_integrity import correction, preclose
+    from .site_status import notice
 
     as_of = snap["as_of"]
     built = (now or datetime.now(ZoneInfo("America/New_York"))).astimezone(ZoneInfo("America/New_York"))
@@ -125,8 +119,11 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
         )
     if snap.get("status") == "partial":
         parts.append(
-            '<div class="banner warn"><strong>Partial data.</strong>Some items could not be fetched; '
-            "they are listed as excluded with the reason. " + E("; ".join(snap.get("problems", [])[:3])) + "</div>"
+            notice(
+                "Partial data.",
+                "Some inputs are unavailable. Consult each list's exclusions and evidence gaps.",
+                snap.get("problems") or [],
+            )
         )
     parts.append(
         f'<div class="banner warn" id="stale-client"{"" if stale else " hidden"}><strong>This page may be out of date.</strong>'

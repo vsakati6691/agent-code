@@ -415,7 +415,7 @@ def test_the_ai_lists_have_their_own_page_not_a_growth_tab(site):
     assert 'href="../ai.html#ai_large"' in (site / "stock" / "ai_large-AIL6.html").read_text(encoding="utf-8")
     assert 'id="ai_large"' in (site / "ai.html").read_text(encoding="utf-8")
     assert 'id="ai-stocks"' in index and 'href="ai.html"' in index and 'href="stock/ai_large-AIL6.html"' in index
-    nav = re.search(r"<nav>(.*?)</nav>", index, re.S).group(1)
+    nav = re.search(r"<nav\b[^>]*>(.*?)</nav>", index, re.S).group(1)
     assert nav.index("AI stocks") < nav.index("Options")
     detail = (site / "stock" / "ai_large-AIL6.html").read_text(encoding="utf-8")
     assert "Top-20 market-cap scenario test" in detail and "Today's bar" in detail

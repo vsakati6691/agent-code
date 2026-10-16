@@ -70,7 +70,7 @@ The calculator uses whole contracts and rounds costs up to the next cent.</p>
 <section class="card" aria-labelledby="slip-title"><h2 id="slip-title">Local bet slip</h2>
 <p class="small muted">Choices stay in this browser's localStorage (betslip-v1). Nothing is uploaded.
 Saved prices keep their original session and are not updated or checked for execution. This is not an order ticket.</p>
-<ul id="bet-slip" class="bets-slip"></ul><p id="bet-slip-status" role="status" aria-live="polite"></p>
+<ul id="bet-slip" class="bets-slip"></ul><p id="bet-slip-status" class="small" role="status" aria-live="polite"></p>
 <button id="bet-clear" class="action" type="button">Clear local slip</button></section></div>
 <h2>Explore contracts</h2><p class="small">Initially listed by premium. Sort by cost or the needed/implied move ratio;
 the ratio compares contract characteristics and never estimates odds.</p>

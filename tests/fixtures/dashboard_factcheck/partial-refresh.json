@@ -1,0 +1,253 @@
+{
+  "source": "research-data d8666d8095614a2a1a53c050ccede55d65d7769a daily/2026-10-15/refresh.json; exact selected fields",
+  "refresh": {
+    "as_of": "2026-10-15",
+    "weekly_as_of": "2026-10-15",
+    "collected_at": "2026-10-16T00:29:07+00:00",
+    "status": "partial",
+    "chain_status": {
+      "APH": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-15T23:46:41+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "APLD": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:04:42+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "AVGO": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:10:51+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "COCO": {
+        "quote_date_ny": "2026-10-14",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": true,
+        "quote_status": "stale: the snapshot was taken 2026-10-14 (New York date), before the as-of session 2026-10-15",
+        "quote_time_utc": "2026-10-15T03:08:27+00:00",
+        "reason": "stale chain: last trade date does not equal the refresh session",
+        "status": "unavailable",
+        "underlying_last_trade": "2026-10-14T15:59:59"
+      },
+      "CORZ": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:04:45+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "DELL": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:04:45+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "FIX": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-15T23:17:38+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "IREN": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:27:23+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "MAMA": {
+        "quote_date_ny": "2026-10-14",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": true,
+        "quote_status": "stale: the snapshot was taken 2026-10-14 (New York date), before the as-of session 2026-10-15",
+        "quote_time_utc": "2026-10-14T23:17:24+00:00",
+        "reason": "stale chain: last trade date does not equal the refresh session",
+        "status": "unavailable",
+        "underlying_last_trade": "2026-10-14T15:59:58"
+      },
+      "MU": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:26:24+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "NVDA": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:25:08+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "NWPX": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-15T23:30:50+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "PATH": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-15T21:15:01+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "PLTR": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:24:57+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "QNST": {
+        "quote_date_ny": "2026-10-14",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": true,
+        "quote_status": "stale: the snapshot was taken 2026-10-14 (New York date), before the as-of session 2026-10-15",
+        "quote_time_utc": "2026-10-15T01:02:30+00:00",
+        "reason": "stale chain: last trade date does not equal the refresh session",
+        "status": "unavailable",
+        "underlying_last_trade": "2026-10-14T15:59:57"
+      },
+      "SEZL": {
+        "quote_date_ny": "2026-10-14",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": true,
+        "quote_status": "stale: the snapshot was taken 2026-10-14 (New York date), before the as-of session 2026-10-15",
+        "quote_time_utc": "2026-10-15T01:23:57+00:00",
+        "reason": "stale chain: last trade date does not equal the refresh session",
+        "status": "unavailable",
+        "underlying_last_trade": "2026-10-14T15:59:56"
+      },
+      "STX": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:00:57+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "TER": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-16T00:14:47+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "WDC": {
+        "quote_date_ny": "2026-10-15",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": false,
+        "quote_status": "snapshot taken in the as-of session (end-of-session values)",
+        "quote_time_utc": "2026-10-15T22:29:10+00:00",
+        "reason": "session verified",
+        "status": "available",
+        "underlying_last_trade": "2026-10-15T15:59:59"
+      },
+      "WT": {
+        "quote_date_ny": "2026-10-14",
+        "quote_delay": "delayed: about 15 minutes during the session; the snapshot is taken after the as-of session closes",
+        "quote_source": "Cboe delayed quotes (end-of-session snapshot of a delayed feed; never live)",
+        "quote_stale": true,
+        "quote_status": "stale: the snapshot was taken 2026-10-14 (New York date), before the as-of session 2026-10-15",
+        "quote_time_utc": "2026-10-15T01:56:48+00:00",
+        "reason": "stale chain: last trade date does not equal the refresh session",
+        "status": "unavailable",
+        "underlying_last_trade": "2026-10-14T15:59:59"
+      }
+    },
+    "usage": {
+      "budgets": {
+        "alphavantage": 1,
+        "cboe": 80,
+        "nasdaqtrader": 0,
+        "sec": 0,
+        "wikipedia": 0
+      },
+      "cache_hits": 0,
+      "final_interval_s": {
+        "alphavantage": 13.0,
+        "cboe": 0.5,
+        "nasdaqtrader": 1.0,
+        "sec": 0.15,
+        "wikipedia": 1.0
+      },
+      "rate_limited": {},
+      "requests": {
+        "alphavantage": 1,
+        "cboe": 61
+      }
+    }
+  }
+}

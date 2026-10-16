@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import (
     assets_bets,
+    assets_command,
     assets_goal,
     assets_research,
     compare,
@@ -110,11 +111,13 @@ def build_site(
                 + assets_bets.CSS
                 + assets_bets.JS
                 + assets_goal.JS
+                + assets_command.JS
             ).encode("utf-8")
         ).hexdigest()[:10]
     )
     (out / "assets" / "style.css").write_text(CSS + assets_research.CSS + assets_bets.CSS, encoding="utf-8")
     (out / "assets" / "app.js").write_text(JS, encoding="utf-8")
+    (out / "assets" / "command.js").write_text(assets_command.JS, encoding="utf-8")
     (out / "assets" / "compare.js").write_text(assets_research.COMPARE_JS, encoding="utf-8")
     (out / "assets" / "lab.js").write_text(assets_research.LAB_JS, encoding="utf-8")
     (out / "assets" / "bets.js").write_text(assets_bets.JS, encoding="utf-8")

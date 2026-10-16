@@ -302,9 +302,9 @@ def test_build_smoke_old_snapshot_immutability_and_page_budgets(tmp_path):
         assert spec.DISCLAIMER in leader_html
         watch_html = (site / "watchlist.html").read_text(encoding="utf-8")
         assert (
-            watch_html.index("Latest price</th>")
-            < watch_html.index("Upside to base 2030</th>")
-            < watch_html.index("Bear 2030</th>")
+            watch_html.index("Latest price</button></th>")
+            < watch_html.index("Upside to base 2030</button></th>")
+            < watch_html.index("Bear 2030</button></th>")
         )
 
 
