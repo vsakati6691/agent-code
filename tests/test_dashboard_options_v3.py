@@ -26,6 +26,7 @@ from agent_trading.dashboard.site_options import (
 from agent_trading.dashboard.store import Store
 from agent_trading.dashboard.tradability import Tradability
 from tests.dashboard_fixtures import AS_OF, FakeProviders, benchmarks, demo_site, option_row
+from tests.spec_history import historical_reason
 from tests.test_dashboard_site import _header_classes, visible_text
 from tests.test_dashboard_v2 import EXP, chains_for, put_row
 
@@ -38,7 +39,7 @@ UNDER = {"symbol": "ABC", "close": 100.0, "last_trade_time": f"{AS_OF}T16:00:00"
 
 def test_top_five_is_registered_as_a_new_spec_version_with_eligibility_rules_unchanged():
     # the .6 entry stays in the version history; a later version (2026-10-14.7 added the AI lists) does not undo it
-    entry = dict(spec.SPEC_CHANGELOG)["2026-10-14.6"]
+    entry = historical_reason("2026-10-14.6")
     assert "5 contracts instead of 10" in entry and "theta" in entry and "registered before any snapshot" in entry
     assert spec.SPEC_VERSION >= "2026-10-14.6" and [v for v, _ in spec.SPEC_CHANGELOG] == sorted(
         v for v, _ in spec.SPEC_CHANGELOG
