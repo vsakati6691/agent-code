@@ -44,6 +44,18 @@ def _component_rows(components) -> str:
 
 
 def methodology_page() -> str:
+    external_rules = "".join(
+        f"<li><strong>{E(key.replace('_', ' '))}:</strong> "
+        + E(
+            ", ".join(f"{k.replace('_', ' ')} {v:,}" for k, v in value.items())
+            if isinstance(value, dict)
+            else ", ".join(value)
+            if isinstance(value, tuple)
+            else value
+        )
+        + "</li>"
+        for key, value in spec.EXTERNAL_DATA_RULES.items()
+    )
     comps = _component_rows(spec.COMPONENTS)
     long_comps = _component_rows(spec.LONG_HORIZON_COMPONENTS)
     growth_comps = _component_rows(spec.GROWTH_COMPONENTS)
@@ -179,5 +191,6 @@ points or more.</p>
 dates, bounded scenario inputs), ticker-dossier (MIT; dataset coverage records and evidence checks) and cc-equity-research
 (Apache-2.0; thesis tracking, earnings-quality and catalyst templates, turned into fixed rules). See
 <a href="https://github.com/vsakati6691/agent-code/blob/main/THIRD_PARTY_NOTICES.md" rel="noopener">THIRD_PARTY_NOTICES.md</a>.</p>
+<h2>Dated public datasets · 2026-10-16.2</h2><ul>{external_rules}</ul>
 <h2>Version history</h2><ul>{log}</ul>
 <p><a href="https://github.com/vsakati6691/agent-code/blob/main/docs/SPEC_CHANGELOG.md">Full registration reasons and historical changelog</a>.</p>"""

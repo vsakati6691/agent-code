@@ -20,6 +20,7 @@ import hashlib
 import json
 import logging
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -36,6 +37,10 @@ ALLOWED_HOSTS = {
     "www.nasdaqtrader.com": "nasdaqtrader",
     "en.wikipedia.org": "wikipedia",
     "www.alphavantage.co": "alphavantage",
+    "efts.sec.gov": "sec",
+    "api.stlouisfed.org": "fred",
+    "www.finra.org": "finra",
+    "cdn.finra.org": "finra",
 }
 RETRY_STATUS = {429, 500, 502, 503, 504}
 RATE_LIMIT_ATTEMPTS = 5
@@ -58,12 +63,16 @@ class ProviderLimits:
 
 
 DEFAULT_LIMITS = {
-    "sec": ProviderLimits(0.15, 4000),  # ~6.7 requests/s, under the SEC's 10/s
+    "sec": ProviderLimits(0.15, 6000),  # shared pacing across all SEC hosts and datasets
     "cboe": ProviderLimits(0.5, 7000),  # undocumented limit; HTTP 429 seen at 4 requests/s
     "nasdaqtrader": ProviderLimits(1.0, 10),
     "wikipedia": ProviderLimits(1.0, 10),
     "alphavantage": ProviderLimits(13.0, 3),  # free key: 25/day; the dashboard needs 1
+    "fred": ProviderLimits(0.5, 42),
+    "finra": ProviderLimits(1.0, 9),
 }
+
+SEC_SUBCAPS = {"sec_core": 4000, "sec_insiders": 1800, "sec_bulk": 24, "sec_risk": 120}
 
 
 @dataclass
@@ -86,6 +95,9 @@ class HttpClient:
     _last: dict[str, float] = field(default_factory=dict)
     deadline: float | None = None  # optional monotonic deadline, used by the light refresh only
     fresh_only: bool = False  # bypass a pre-close cache on a post-close refresh
+    group_used: dict[str, int] = field(default_factory=dict)
+    _group: str | None = None
+    _scope_limits: list[tuple[str, int]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.session = self.session or requests.Session()
@@ -130,7 +142,25 @@ class HttpClient:
             "rate_limited": dict(self.throttled),
             "budgets": {k: v.budget for k, v in self.limits.items()},
             "final_interval_s": {k: round(v.min_interval, 2) for k, v in self.limits.items()},
+            "dataset_requests": dict(self.group_used),
+            "dataset_budgets": dict(SEC_SUBCAPS),
         }
+
+    @contextmanager
+    def budget_group(self, group: str, max_attempts: int | None = None):
+        """Subcaps count real attempts, including retries; every SEC group shares one pacer."""
+        if group not in SEC_SUBCAPS:
+            raise ValueError("unknown SEC request group")
+        previous = self._group
+        self._group = group
+        if max_attempts is not None:
+            self._scope_limits.append((group, self.group_used.get(group, 0) + max_attempts))
+        try:
+            yield
+        finally:
+            if max_attempts is not None:
+                self._scope_limits.pop()
+            self._group = previous
 
     # --- internals ---------------------------------------------------------------------
     def _remaining(self) -> float:
@@ -159,8 +189,15 @@ class HttpClient:
             attempt += 1
             if self.used.get(provider, 0) >= self.limits[provider].budget:
                 raise BudgetExceeded(f"{provider}: request budget of {self.limits[provider].budget} spent")
+            group = (self._group or "sec_core") if provider == "sec" else None
+            if group:
+                ceiling = min([SEC_SUBCAPS[group]] + [n for g, n in self._scope_limits if g == group])
+                if self.group_used.get(group, 0) >= ceiling:
+                    raise BudgetExceeded(f"{group}: request budget spent")
             self._pace(provider)
             self.used[provider] = self.used.get(provider, 0) + 1
+            if group:
+                self.group_used[group] = self.group_used.get(group, 0) + 1
             try:
                 resp = self.session.get(
                     url,

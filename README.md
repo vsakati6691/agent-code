@@ -22,7 +22,7 @@ desk analyzes data imported through read-only market and account connectors.
 The [GitHub Pages site](https://vsakati6691.github.io/agent-code/index.html) uses
 public market data only. Account snapshots, positions, orders, manual tickets
 and journals stay out of the dashboard. Sources include SEC EDGAR, Nasdaq
-Trader, Cboe delayed quotes and Alpha Vantage; coverage and timestamps appear
+Trader, Cboe delayed quotes, Alpha Vantage, FRED and FINRA; coverage and timestamps appear
 on the site.
 
 | Page | What you can explore |
@@ -45,7 +45,23 @@ Company detail pages bring together financial trends, thesis and bear case,
 valuation, filing links, changes since the previous snapshot, and scenario
 calculators. A ticker lookup connects each symbol to its research and history.
 
+### Data sources
+
+| Source | Weekly inputs |
+|---|---|
+| SEC EDGAR | XBRL fundamentals, Form 4 P/S activity, quarterly 13F aggregates, dated FTD CUSIP mappings and EFTS-located risk quotations. |
+| FRED | Seven dated macro series; DGS1MO supplies the existing Black-Scholes rate parameter for new weekly estimates. Requires `FRED_API_KEY`. |
+| FINRA | Settlement short shares and changes, divided by dated XBRL diluted shares; never float. |
+| Nasdaq Trader / Wikipedia | Listed symbols and S&P 500 membership. |
+| Cboe / Alpha Vantage | Delayed prices and optional option chains; earnings and current company estimates. |
+
 ### Latest research features
+
+Methodology **2026-10-16.2** adds [dated public datasets](docs/PUBLIC_DATASETS.md).
+The prior version had zero weekly snapshots at registration; exact-version
+continuity counts remain separate. Scores, weights, gates, lists and equity
+scenario formulas remain unchanged.
+
 
 Methodology **2026-10-16.1** adds [Leaders 2030 and explicit watchlist upside](docs/LEADERS_2030.md). Version **2026-10-15.1** added [dated ETF exposure and expense inputs](docs/ETF_INPUTS.md),
 with issuer sources, inception dates and explicit unverified labels. Existing
@@ -63,7 +79,7 @@ Plan 2030 shows the return required for the goal beside the stored scenarios and
 research evidence. Inputs stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
 the current methodology, frozen as of **2026-10-16**. The administrative freeze
-date is recorded separately from methodology version **2026-10-16.1** and its pinned hash. Versions retain separate evidence counts.
+date is recorded separately from methodology version **2026-10-16.2** and its pinned hash. Versions retain separate evidence counts.
 
 Every built HTML page has a 150 KB budget. Detail panels, scanner/comparison data
 and sparklines use separate assets; older larger options lists are split by
@@ -105,7 +121,7 @@ stored scenarios; new methodology inputs appear after a future collection.
 Repository variables control `DASHBOARD_DAILY` (weekday collection),
 `DASHBOARD_OPTIONS` (option collection/display) and `DASHBOARD_PUBLISH` (Pages
 deployment). These are opt-in gates. SEC access requires `SEC_USER_AGENT`;
-`ALPHAVANTAGE_API_KEY` supports earnings and optional enrichment. Local secrets
+`ALPHAVANTAGE_API_KEY` supports earnings and optional enrichment; `FRED_API_KEY` supports macro observations. Local secrets
 belong in the ignored `.env`; workflow credentials belong in GitHub Actions
 secrets. Review the [data-source terms and setup](docs/RESEARCH_DASHBOARD.md#owner-actions-required-before-the-first-deployment)
 before enabling collection or publication. Cboe redistribution requires consent.

@@ -18,6 +18,7 @@ from .site_exclusions import excluded_page as excluded_page
 from .site_exclusions import excluded_summary as excluded_summary
 from .site_exclusions import group_exclusions as group_exclusions
 from .site_exclusions import reason_group as reason_group
+from .site_external import macro_context
 from .site_growth_tables import CAP_BUCKETS as CAP_BUCKETS
 from .site_growth_tables import _earn_growth as _earn_growth
 from .site_growth_tables import _ret as _ret
@@ -90,6 +91,7 @@ def overview(
         ai_summary = f'<details class="context-details"><summary>AI stocks summary</summary>{ai_summary}</details>'
     return f"""{scan_header(snap, prev_snap)}
 {market_context(snap, daily)}
+{macro_context(snap)}
 <section aria-label="Choose a research list" class="research-paths">
 <a class="research-path" href="growth.html"><span class="eyebrow">LARGE · MID · SMALL CAP</span>
 <strong>Growth Stocks <span aria-hidden="true">↗</span></strong><span>Scan, filter and compare the ranked growth lists.</span>

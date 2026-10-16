@@ -37,6 +37,9 @@ def _contracts(snap: dict, ticker: str) -> list[tuple[str, str, dict]]:
 
 
 def symbol_page(ticker: str, snap: dict, history: list[dict]) -> str:
+    from .pipeline_external import subjects
+    from .site_external import company as external_company
+
     bands = snap.get("bands", {})
     name, sector = "", ""
     ranks = []
@@ -107,9 +110,13 @@ def symbol_page(ticker: str, snap: dict, history: list[dict]) -> str:
         if hist
         else '<p class="small muted">Not in any stored weekly list yet.</p>'
     )
+    records = subjects(bands, snap.get("watchlist") or {}).get(ticker, [])
+    external = (
+        external_company(records[0]) if records else "<p>Insider activity unavailable · not in a research list.</p>"
+    )
     return (
         f'<h1>{E(ticker)}{" · " + E(name) if name else ""}</h1><p class="lede">{E(sector) + " · " if sector else ""}Everything the '
         f"stored snapshots know about this symbol, as of {E(str(snap['as_of']))}.</p>"
         f"<h2>This week's lists</h2>{lists}<h2>Option contracts</h2>{options}<h2>Watchlist 2030</h2>{watch}"
-        f"<h2>History across snapshots</h2>{history_html}"
+        f"{external}<h2>History across snapshots</h2>{history_html}"
     )

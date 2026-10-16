@@ -47,6 +47,96 @@ LEADERS_CHALLENGER = {
     },
 }
 
+EXTERNAL = _obj(
+    "Optional dated public datasets, collected prospectively from version 2026-10-16.2; absent in older snapshots.",
+    {
+        "insiders": _obj(
+            "Non-derivative Form 4 P/S purchases/sales (open market or private). Incomplete windows have null totals.",
+            {
+                "state": _f(
+                    "string",
+                    "available, partial, missing or provider_error; budget exhaustion says deferred to next run.",
+                ),
+                "classification_basis": _f(
+                    "string", "Form 4 codes P/S (open market or private); A, M, F, G and derivative rows excluded"
+                ),
+                "as_of": _f("string", "Inclusive filing and transaction cutoff date."),
+                "windows": _obj(
+                    "90d and 12m; each has start/end, signed net_shares/net_dollars, distinct buyers/sellers and separate missing-value reasons."
+                ),
+                "filings": _f(
+                    "array",
+                    "Accessions, filing dates, source URLs, 10b5-1 checkbox (null when absent), owner CIKs and parsed transactions, including excluded codes/derivatives; reused prospectively.",
+                ),
+                "excluded_rows": _f("object", "Counts by excluded transaction code and derivative status."),
+                "latest_transaction_date": _f(
+                    "string", "Latest reported transaction in the eligible 12-month window; null if none."
+                ),
+            },
+        ),
+        "institutions": _obj(
+            "SEC 13F report-quarter aggregates, not total institutional ownership; reporting managers may overlap.",
+            {
+                "report_quarter_end": _f("string", "Holdings date, distinct from archive filing-window date."),
+                "holder_count": _f(
+                    "integer", "Distinct filing-manager CIKs with positive long SH holdings, excluding puts/calls."
+                ),
+                "reported_shares": _f("integer", "Sum of reported shares after manager amendment handling."),
+                "top_holders": _f(
+                    "array", "Up to ten manager names/CIKs and reported shares, descending shares then CIK."
+                ),
+                "holder_count_change": _f(
+                    "integer", "Current less immediately preceding quarter; null if not comparable."
+                ),
+                "reported_shares_change": _f(
+                    "integer", "Current less immediately preceding quarter shares; null if not comparable."
+                ),
+                "mapping_date": _f(
+                    "string", "SEC FTD mapping file period end; mapping_url identifies its dated source."
+                ),
+                "mapping_settlement_date": _f("string", "Latest observation supporting this ticker-CUSIP mapping."),
+                "stale_after": _f(
+                    "string", "Following report-quarter end plus 45 days; stale after that date without newer holdings."
+                ),
+            },
+        ),
+        "risk_excerpt": _obj(
+            "Issuer quotation through the existing filing-text parser; source, date, form and accession retained.",
+            {
+                "excerpt": _f("string", "Exact quoted substring; never paraphrased."),
+                "character_range": _f(
+                    "array", "Zero-based [start,end), end exclusive, in whitespace-normalized FilingText output."
+                ),
+                "range_basis": _f("string", "Text normalization used to reproduce offsets."),
+                "text_sha256": _f("string", "SHA-256 of normalized filing text, UTF-8."),
+                "parser_version": _f("string", "Offset normalization/extraction version."),
+            },
+        ),
+        "short_interest": _obj(
+            "FINRA settlement reports; unknown symbols are not zero.",
+            {
+                "settlement_date": _f("string", "FINRA report's settlement date."),
+                "shares_short": _f("integer", "Current reported short shares."),
+                "change_shares": _f(
+                    "integer", "Current minus FINRA's published prior quantity, retaining its revision/split basis."
+                ),
+                "percent_of_diluted_shares": _f(
+                    "number",
+                    "Short interest as a percentage of XBRL diluted shares outstanding; decimal ratio, not float.",
+                ),
+                "diluted_shares": _f("number", "Latest stored quarterly diluted weighted-average XBRL share count."),
+                "shares_date": _f(
+                    "string", "Period end of denominator; shares_basis discloses weighted-average proxy."
+                ),
+                "days_to_cover": _f(
+                    "number",
+                    "Short shares divided by existing stored average daily share volume; null without that input, with reason.",
+                ),
+            },
+        ),
+    },
+)
+
 LEADER_ENTRY = _obj(
     "Conditional 2030 size comparison; derived from stored inputs, never a tracked historical selection.",
     {
@@ -94,6 +184,7 @@ LEADER_ENTRY = _obj(
 CANDIDATE = _obj(
     "One ranked stock in a list.",
     {
+        "external": EXTERNAL,
         "ticker": _f("string", "Exchange ticker (share classes as BRK.B)."),
         "name": _f("string", "Security name from the exchange listing."),
         "sector": _f("string", "GICS sector (S&P 500) or a coarse sector from the SEC SIC code."),
@@ -163,7 +254,10 @@ CONTRACT = _obj(
         "theta": _f("number", "Model value lost per day, per share."),
         "rank_components": _f("object", "Ranking parts (liquidity, breakeven, time_decay, 0-1) and total (0-100)."),
         "payoffs": _f("array", "Profit per contract at expiration for fixed stock moves (exact arithmetic)."),
-        "sensitivity": _f("object", "Black-Scholes MODEL estimates of value after 30 days for price/IV shifts."),
+        "sensitivity": _f(
+            "object",
+            "Black-Scholes MODEL estimates after 30 days for price/IV shifts. From 2026-10-16.2, rate_input stores DGS1MO value/100, date, source, series and reason; missing rate means empty grid with reason. Older stored estimates keep their original rate assumption.",
+        ),
         "events_before_expiry": _f("array", "Scheduled earnings before expiry (unverified)."),
         "events_status": _f(
             "string", "From 2026-10-14.6: scheduled, none scheduled, or unknown (calendar not collected)."
@@ -201,6 +295,7 @@ CONTRACT = _obj(
 WATCH_ENTRY = _obj(
     "One watchlist symbol.",
     {
+        "external": EXTERNAL,
         "ticker": _f("string", "Symbol as imported."),
         "name": _f("string", "Official name from the listings or SEC file; null if unresolved."),
         "asset_type": _f("string", "operating company (common stock), ETF, leveraged/inverse ETF, or other."),
@@ -261,6 +356,19 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "as_of": _f("string", "NYSE session whose close the snapshot uses."),
+        "external_datasets": _f(
+            "object",
+            "Per-dataset status, coverage, deferred count, reasons, source and retrieval time; optional in older snapshots.",
+        ),
+        "macro": _obj(
+            "Optional FRED as-of observations, with per-series states and reasons.",
+            {
+                "series": _f(
+                    "object",
+                    "DGS1MO/DGS3MO/DGS2/DGS10/FEDFUNDS/CPIAUCSL/UNRATE: value, observation_date, last_updated, vintage_date, units, source. CPI also stores observations, decimal yoy and its two yoy_dates.",
+                ),
+            },
+        ),
         "run_started": _f("string", "UTC time the run started."),
         "run_finished": _f("string", "UTC time it finished."),
         "status": _f("string", "ok, or partial when some data could not be fetched."),
@@ -310,6 +418,10 @@ SCHEMA = {
         "options": _obj(
             "Option comparisons: 3m/6m/12m horizons, each with calls and puts lists.",
             {
+                "rate_input": _f(
+                    "object",
+                    "Optional dated FRED DGS1MO input: decimal value, observation date, source, series, reason. Applies only to new weekly sensitivities, never rankings or old stored estimates.",
+                ),
                 "3m": _obj(
                     "About 3 months.",
                     {

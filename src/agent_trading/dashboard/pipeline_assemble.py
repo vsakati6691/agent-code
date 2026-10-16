@@ -31,6 +31,7 @@ def run(
     watchlist: WatchlistConfig | None = None,
     ai_private: dict | None = None,
     iv_history: dict | None = None,
+    aggregate_store=None,
 ) -> dict:
     """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
 
@@ -227,7 +228,10 @@ def run(
             f"{len(todo)} symbols on the to-check list with a read-only Claude session"
         )
 
-    from . import speculative
+    from . import macro, pipeline_external, speculative
+
+    external_enabled = hasattr(providers, "fred_key") and hasattr(providers.http, "budget_group")
+    macro_payload = macro.collect(providers, as_of) if external_enabled else None
 
     speculative_payload = None
     options_payload = {"enabled": options_enabled, "status": "disabled in configuration"}
@@ -266,6 +270,23 @@ def run(
     watch_payload = {"status": "no watchlist configured", "entries": []}
     if watchlist is not None:
         watch_payload = evaluate_watchlist(ctx, ref, watchlist, earnings)
+    external_status = (
+        pipeline_external.collect(ctx, payload_bands, watch_payload, previous, aggregate_store)
+        if external_enabled
+        else {}
+    )
+    if external_enabled:
+        rate = macro.rate_input(macro_payload)
+        opt.apply_dated_rate(options_payload, rate)
+        opt.apply_dated_rate(speculative_payload, rate)
+        options_payload["rate_input"] = rate
+        for name, dataset in external_status.items():
+            if dataset["state"] != "available":
+                ctx.problems.append(
+                    f"{name}: {dataset['state']}; {dataset['available']}/{dataset['requested']} available; {dataset['deferred']} deferred"
+                )
+        if macro_payload["state"] != "available":
+            ctx.problems.append(f"macro: {macro_payload['state']}; see per-series reasons")
     for _key, b in payload_bands.items():
         for c in b["candidates"]:
             c["earnings_check"] = _clean(verify_earnings(ctx, c.get("cik"), c.get("next_earnings")))
@@ -358,6 +379,8 @@ def run(
             "spec_hash": spec.spec_hash(),
             "sources": SOURCES,
             "usage": providers.http.usage(),
+            "external_datasets": external_status,
+            "macro": macro_payload,
             "tradability": {
                 "rule": spec.TRADABILITY_RULE,
                 "verdicts_stored": len(trad.symbols),

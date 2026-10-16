@@ -226,6 +226,7 @@ def growth_table(key: str, band: dict) -> str:
         r1, x1 = _ret(c, "1y")
         eg_txt, eg = _earn_growth(m)
         rid = f"d-{key}-{c['ticker'].replace('.', '_')}"
+        short = (c.get("external") or {}).get("short_interest") or {}
         bodies.append(f"""<tbody class="item" data-sector="{E(c.get("sector") or "Unknown")}"><tr>
 <td class="num" data-v="{c["rank"]}">{c["rank"]}</td>
 <td class="tk"><button class="rowtoggle" type="button" aria-expanded="false" aria-controls="{rid}" title="Show evidence">
@@ -242,8 +243,9 @@ def growth_table(key: str, band: dict) -> str:
 <td class="num" data-v="{sval(r1)}">{pct(r1, 0, True)}</td>
 <td class="num hide-sm" data-v="{sval(x1)}">{pct(x1, 0, True)}</td>
 <td class="hide-sm">{row_spark(c, band.get("benchmark", "benchmark"))}</td>
+<td class="num hide-sm" data-v="{sval(short.get("percent_of_diluted_shares"))}" title="{E(short.get("reason") or short.get("percent_reason") or "Settlement " + (short.get("settlement_date") or "not collected"))}">{pct(short.get("percent_of_diluted_shares"), 1)}</td>
 <td class="small risk" title="{E(c.get("counterargument", ""))}">{E(short_risk(c.get("counterargument", "")))}</td></tr>
-<tr id="{rid}" class="detail" hidden><td colspan="14"><div class="lazy" data-src="{fragment_path(key, c["ticker"])}"
+<tr id="{rid}" class="detail" hidden><td colspan="15"><div class="lazy" data-src="{fragment_path(key, c["ticker"])}"
 data-page="stock/{key}-{E(c["ticker"])}.html"><p class="small muted">Loading the evidence…</p></div></td></tr></tbody>""")
     sectors = sorted({c.get("sector") or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
@@ -256,13 +258,14 @@ data-page="stock/{key}-{E(c["ticker"])}.html"><p class="small muted">Loading the
         '<th class="num hide-sm" data-sort="num">3M</th><th class="num hide-sm" data-sort="num">6M</th>'
         '<th class="num" data-sort="num">1Y</th><th class="num hide-sm" data-sort="num" title="1-year return minus the benchmark">vs bench</th>'
         '<th class="hide-sm" title="1-year price path: stock solid, benchmark dashed, both rebased to 100">1-yr path</th>'
+        '<th class="num hide-sm" data-sort="num" title="Short interest as a percentage of XBRL diluted shares outstanding">Short / diluted shares</th>'
         '<th class="risk" title="The weakest scored evidence for this stock">Main risk / weakest evidence</th>'
     )
     return f"""<div class="controls"><input type="search" placeholder="Search ticker, name, risk" data-search="{tid}"
 aria-label="Search {E(band_title(key, band))}"><select data-sector="{tid}" aria-label="Filter by sector"><option value="">All sectors</option>{opts}</select>
 <span class="small muted" data-count="{tid}" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="{tid}" data-table data-grouped><caption class="sr-only">{E(band_title(key, band))}</caption>
-<thead><tr>{head}</tr></thead>{"".join(bodies) or '<tbody><tr><td colspan="14" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
+<thead><tr>{head}</tr></thead>{"".join(bodies) or '<tbody><tr><td colspan="15" class="muted">No stock met every rule this week.</td></tr></tbody>'}</table></div>
 <p class="small muted">Returns are trailing price returns to the as-of close (dividends excluded); "vs bench" is the 1-year
 return minus {E(band.get("benchmark", ""))}. Select a ticker to show its evidence.</p>"""
 

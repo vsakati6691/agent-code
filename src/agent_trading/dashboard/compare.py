@@ -209,13 +209,25 @@ def payload(snap: dict, profile_names: dict[str, str]) -> dict:
     return {
         "as_of": as_of,
         "spec_version": snap.get("spec_version"),
-        "entries": list(seen.values()),
+        "entries": [_with_ownership(entry, snap) for entry in seen.values()],
         "groups": [
             {"title": t, "rows": [{"key": k, "label": lab, "kind": kind} for k, lab, kind in rows]}
             for t, rows in GROUPS
         ],
         "returns": list(RETURN_KEYS),
         "rules": {k: v for k, v in spec.COMPARE_RULES.items()},
+    }
+
+
+def _with_ownership(entry: dict, snap: dict) -> dict:
+    from .pipeline_external import OLD, subjects
+
+    records = subjects(snap.get("bands", {}), snap.get("watchlist") or {}).get(entry["ticker"], [])
+    row = ((records[0].get("external") or {}).get("institutions") or {}) if records else {}
+    return {
+        **entry,
+        "institutions": {key: row.get(key) for key in ("holder_count", "report_quarter_end", "source", "state")},
+        "institution_reason": row.get("reason", OLD if not row else None),
     }
 
 
