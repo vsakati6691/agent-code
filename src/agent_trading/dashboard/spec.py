@@ -18,9 +18,9 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-15.1"
+SPEC_VERSION = "2026-10-16.1"
 # Owner-approved administrative metadata, excluded from spec_dict().
-SPEC_FREEZE_DATE: str | None = "2026-10-15"
+SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
 SPEC_CHANGELOG = [
     ("2026-10-13.1", "Initial rules registered before any dashboard results."),
@@ -47,7 +47,32 @@ SPEC_CHANGELOG = [
         "2026-10-15.1",
         "Add dated ETF classification/fee inputs and observed drawdowns; no scale, weight, gate or list changes.",
     ),
+    (
+        "2026-10-16.1",
+        "Add Leaders 2030 and explicit watchlist upside; prior version had zero snapshots. Existing rules and scenario math are unchanged.",
+    ),
 ]
+
+LEADERS_SHARE_RULE = (
+    "Start with the latest stored quarterly diluted weighted-average share count and its period-end date. "
+    "For each 2030 cap use that scenario's projected shares: starting shares x "
+    "(1 + stored trailing dilution + registered scenario shift)^years to 2030-12-31. "
+    "Missing dilution or dated shares makes the calculation unavailable. These are issuer share-count proxies, "
+    "not float-adjusted index weights."
+)
+LEADERS_RULE = (
+    "Current ranks use the snapshot's S&P 500 members, ranked by stored as-of close x dated diluted shares. "
+    "Reuse the registered exact-date company scenario formula. Rank all available base caps, including dated "
+    "curated assumptions; display the union of the current top 50, the conditional top 50 and all curated challengers. "
+    "Ties use ticker then company name ascending (null tickers first), with consecutive ranks. "
+    "Rank change is current rank minus 2030 rank. Unavailable scenarios retain any current rank and their reason. "
+    "Coverage gaps are explicit: ranks and movement labels describe only available stored inputs, "
+    "not established full-index top-50 membership. Each index ticker is compared separately; issuer-level diluted "
+    "shares are not allocated across share classes, so class proxies are not additive company values. "
+    "2030 index membership is unknown. Curated caps are the owner's sourced, dated assumptions, "
+    "with evidence grade none and no computed price scenario. Assumptions dated after a snapshot are omitted. "
+    "Probability is not established without documented out-of-sample calibration."
+)
 
 DECISION_RULES = {
     "growth_bands": ("large", "mid", "small"),
@@ -1036,6 +1061,7 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "leaders_2030": {"rule": LEADERS_RULE, "shares": LEADERS_SHARE_RULE, "top_n": 50},
         "decision_research": DECISION_RULES,
         "speculative_options": SPECULATIVE_RULES,
         "bands": [asdict(b) for b in BANDS],

@@ -333,6 +333,19 @@ def run(
             "private": private,
         }
     status = "ok" if not ctx.problems and not ctx.budget_hit else "partial"
+    from . import leaders
+    from .pipeline_leaders import retained_inputs
+
+    leader_inputs = retained_inputs(ctx, ref)
+    leader_payload = leaders.build(
+        {
+            "as_of": as_of.isoformat(),
+            "spec_version": spec.SPEC_VERSION,
+            "universe": {"sp500_members": sorted(sp.index)},
+            "leaders_2030_inputs": leader_inputs,
+        },
+        leaders.load_challengers(),
+    )
     return _clean(
         {
             "as_of": as_of,
@@ -368,6 +381,8 @@ def run(
             "options": options_payload,
             "speculative": speculative_payload,
             "watchlist": _clean(watch_payload),
+            "leaders_2030_inputs": leader_inputs,
+            "leaders_2030": leader_payload,
             "ai": ai_payload,
             "events": {
                 "window_days": 45,

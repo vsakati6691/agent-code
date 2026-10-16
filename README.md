@@ -35,6 +35,7 @@ on the site.
 | [Options](https://vsakati6691.github.io/agent-code/options.html) | Separate weekly and daily call/put comparisons across 3M/6M/1Y expiry windows, plus speculative 30–90 days-to-expiry research and a hypothetical risk-budget calculator when options are enabled. |
 | [Small bets](https://vsakati6691.github.io/agent-code/bets.html) | A separate options explorer with Core/Long-shot tiers, premium filters, whole-contract budget arithmetic and a device-local research slip. |
 | [Watchlist 2030](https://vsakati6691.github.io/agent-code/watchlist.html) | A saved ticker list with verified symbol information, dated prices and conditional year-end-2030 bear/base/bull price scenarios. |
+| [Leaders 2030](https://vsakati6691.github.io/agent-code/leaders.html) | Current size versus conditional 2030 size, dated share assumptions, coverage gaps, curated challengers and CSV. |
 | [Plan 2030](https://vsakati6691.github.io/agent-code/goal.html) | Browser-only target and contribution arithmetic, stored scenario comparisons, optional weighted ending values and a year-one drawdown stress test. Missing weighted scenarios stay unavailable. |
 | [Evidence](https://vsakati6691.github.io/agent-code/evidence.html) | Benchmark and GTAA results, acceptance rules and the no-candidate-passed verdict, read from the repository's tournament and final report at build time. |
 | [History & tracking](https://vsakati6691.github.io/agent-code/history.html) | Stored research reports and forward list returns versus benchmarks at 1, 3, 6 and 12 months, when enough observations exist. |
@@ -46,7 +47,7 @@ calculators. A ticker lookup connects each symbol to its research and history.
 
 ### Latest research features
 
-Methodology **2026-10-15.1** adds [dated ETF exposure and expense inputs](docs/ETF_INPUTS.md),
+Methodology **2026-10-16.1** adds [Leaders 2030 and explicit watchlist upside](docs/LEADERS_2030.md). Version **2026-10-15.1** added [dated ETF exposure and expense inputs](docs/ETF_INPUTS.md),
 with issuer sources, inception dates and explicit unverified labels. Existing
 scales, weights, gates and lists are unchanged. Scenarios remain unavailable
 where the registered models or required financial evidence do not support them.
@@ -61,8 +62,8 @@ Older snapshots retain their original methodology and missing fields.
 Plan 2030 shows the return required for the goal beside the stored scenarios and
 research evidence. Inputs stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
-the current methodology, frozen as of **2026-10-15**. The administrative freeze
-date does not change methodology version **2026-10-15.1** or its pinned hash.
+the current methodology, frozen as of **2026-10-16**. The administrative freeze
+date is recorded separately from methodology version **2026-10-16.1** and its pinned hash. Versions retain separate evidence counts.
 
 Every built HTML page has a 150 KB budget. Detail panels, scanner/comparison data
 and sparklines use separate assets; older larger options lists are split by

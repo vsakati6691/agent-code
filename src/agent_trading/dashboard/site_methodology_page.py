@@ -16,6 +16,7 @@ from .fmt import (
 )
 from .site_ai import methodology_ai
 from .site_layout import E
+from .site_leaders import methodology as leaders_methodology
 
 _R = spec.OPTION_RULES
 
@@ -156,6 +157,7 @@ at expiration): {E(", ".join(probability.DATA_CONTRACT["record_fields"]))}. {E(p
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
 {site_bets.methodology()}
 <h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
+{leaders_methodology()}
 <h2 id="display-rules">Data states, research panel and comparisons</h2>
 <p>These rules decide how evidence is labelled and compared. No score, gate or ranking uses them.</p>
 <ul>{"".join(f"<li><strong>{E(k.replace('_', ' '))}</strong>: {E(v)}</li>" for k, v in spec.DATASET_STATES.items())}</ul>

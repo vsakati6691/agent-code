@@ -27,7 +27,7 @@ def test_build_records_code_and_data_without_relabeling_or_mutating_snapshots(tm
     assert info["snapshot_spec_version"] == stored_version
     assert info["snapshot_as_of"] == "2026-10-09"
     assert info["registered_spec_hash"] == spec.spec_hash()
-    assert info["spec_freeze_date"] == "2026-10-15"
+    assert info["spec_freeze_date"] == "2026-10-16"
     assert before == {
         p.relative_to(data): hashlib.sha256(p.read_bytes()).hexdigest() for p in data.rglob("*") if p.is_file()
     }

@@ -12,6 +12,34 @@ from .fmt import (
     sval as sval,
 )
 from .site_company import profile_of
+from .watchlist import upside_fields
+
+
+def leaders_csv(payload: dict) -> str:
+    from .schema import LEADER_ENTRY
+
+    cols = [key for key in LEADER_ENTRY["properties"] if key != "scenario_2030"]
+    scenario_cols = [f"{case}_{field}" for case in ("bear", "base", "bull") for field in ("cap", "price", "shares")]
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(cols + scenario_cols + ["rank_scope", "universe_count", "current_cap_count", "computed_count"])
+    for row in payload["entries"]:
+        values = ["; ".join(row[key]) if isinstance(row.get(key), list) else row.get(key) for key in cols]
+        values += [row["scenario_2030"].get(key) for key in scenario_cols]
+        values += [
+            "available stored inputs only" if payload["partial"] else "full stored index universe",
+            payload["universe_count"],
+            payload["current_cap_count"],
+            payload["computed_count"],
+        ]
+        # Prevent owner-supplied source/notes text from becoming a spreadsheet formula.
+        writer.writerow(
+            [
+                "'" + value if isinstance(value, str) and value.startswith(("=", "+", "-", "@")) else csv_value(value)
+                for value in values
+            ]
+        )
+    return buf.getvalue()
 
 
 def band_csv(band: dict) -> str:
@@ -140,6 +168,63 @@ def options_csv(rows: list[dict]) -> str:
                     p.get("status") or "not_established",
                     p.get("probability_of_profit"),
                     "before fees (none deducted)",
+                ]
+            ]
+        )
+    return buf.getvalue()
+
+
+def watchlist_csv(snap: dict) -> str:
+    buf = io.StringIO()
+    wr = csv.writer(buf)
+    wr.writerow(
+        [
+            "ticker",
+            "name",
+            "asset_type",
+            "exchange",
+            "status",
+            "price",
+            "price_date",
+            "method",
+            "evidence_quality",
+            "bear_2030",
+            "base_2030",
+            "bull_2030",
+            "bear_change",
+            "base_change",
+            "bull_change",
+            "bear_annualized",
+            "base_annualized",
+            "bull_annualized",
+            "unavailable_reason",
+            "upside_bear_pct",
+            "upside_base_pct",
+            "upside_bull_pct",
+            "cagr_base_pct",
+        ]
+    )
+    for e in (snap.get("watchlist") or {}).get("entries", []):
+        sc = e.get("scenarios") or {}
+        g = lambda k, f: (sc.get(k) or {}).get(f)  # noqa: E731, B023 - consumed in this iteration.
+        wr.writerow(
+            [
+                csv_value(v)
+                for v in [
+                    e["ticker"],
+                    e.get("name"),
+                    e.get("asset_type"),
+                    e.get("exchange"),
+                    e.get("status"),
+                    e.get("price"),
+                    e.get("price_date"),
+                    e.get("method"),
+                    e.get("evidence_quality"),
+                    *[g(k, "price") for k in ("bear", "base", "bull")],
+                    *[g(k, "change") for k in ("bear", "base", "bull")],
+                    *[g(k, "annualized") for k in ("bear", "base", "bull")],
+                    e.get("unavailable_reason"),
+                    *upside_fields(e).values(),
                 ]
             ]
         )

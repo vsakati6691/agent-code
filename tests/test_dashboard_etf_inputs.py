@@ -16,6 +16,8 @@ XML = """<edgarSubmission xmlns="http://www.sec.gov/edgar/nport"><genInfo><serie
 
 def test_new_version_changes_only_input_registration():
     raw = spec.spec_dict()
+    # Remove the later additive Leaders registration to check the original ETF delta.
+    raw.pop("leaders_2030")
     raw["version"] = "2026-10-14.9"
     assert raw["watchlist"].pop("etf_inputs_sha256") == etf_inputs.config_hash(etf_inputs.load())
     assert hashlib.sha256(json.dumps(raw, sort_keys=True, default=str).encode()).hexdigest()[:16] == "13c2a70787a83822"

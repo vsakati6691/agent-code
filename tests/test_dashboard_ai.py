@@ -32,7 +32,7 @@ from tests.test_dashboard_site import visible_text
 
 
 def test_ai_lists_are_a_new_spec_version_with_the_existing_rules_untouched():
-    assert spec.SPEC_VERSION == "2026-10-15.1"
+    assert spec.SPEC_VERSION == "2026-10-16.1"
     # The explorer is registered after AI; retain the exact original AI registration and every rule assertion.
     reason = historical_reason("2026-10-14.7")
     assert "AI" in reason and "registered before any snapshot" in reason

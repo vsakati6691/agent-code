@@ -33,6 +33,8 @@ import pandas as pd
 
 from . import spec
 from .providers import canonical, common_stock_reason
+from .scenarios import annualized as annualized
+from .scenarios import company_scenarios as company_scenarios
 
 CONFIG_FILE = Path(__file__).resolve().parents[3] / "config" / "research_watchlist.json"
 TARGET = date.fromisoformat(spec.WATCHLIST_TARGET_DATE)
@@ -71,10 +73,14 @@ def years_to_target(as_of: date) -> float:
     return max(0.0, (TARGET - as_of).days / 365.25)
 
 
-def annualized(multiple: float, years: float) -> float | None:
-    if years <= 0 or multiple <= 0:
-        return None
-    return multiple ** (1 / years) - 1
+def upside_fields(entry: dict) -> dict:
+    """Display/export percentage points from stored scenarios; never revalue a watchlist symbol."""
+    from .fmt import ok
+
+    sc = entry.get("scenarios") or {}
+    fields = {f"upside_{case}_pct": (sc.get(case) or {}).get("change") for case in ("bear", "base", "bull")}
+    fields["cagr_base_pct"] = (sc.get("base") or {}).get("annualized")
+    return {key: value * 100 if ok(value) else None for key, value in fields.items()}
 
 
 # --- classification -----------------------------------------------------------------------
@@ -151,86 +157,6 @@ def resolve(ticker: str, dirs: pd.DataFrame, sec: pd.DataFrame) -> dict:
 
 
 # --- scenario models --------------------------------------------------------------------
-
-
-def company_scenarios(
-    price: float,
-    shares: float,
-    revenue_ttm: float,
-    revenue_growth: float,
-    ev_to_sales: float,
-    net_cash: float,
-    dilution: float | None,
-    years: float,
-    margin: float | None = None,
-    margin_source: str = "FCF",
-) -> dict:
-    """Revenue x EV/Sales path to the target date (fractional years), per spec.WATCHLIST_COMPANY_METHOD.
-
-    `margin`: today's TTM FCF margin (or operating margin) for the margin cross-check; None = not available."""
-    if not all(
-        isinstance(x, (int, float)) and math.isfinite(x) and x > 0 for x in (price, shares, revenue_ttm, ev_to_sales)
-    ):
-        raise ValueError("price, shares, revenue and EV/Sales must be positive")
-    base_g = min(spec.SCENARIO_GROWTH_CAP, max(spec.SCENARIO_GROWTH_FLOOR, revenue_growth))
-    dil = dilution if dilution is not None and math.isfinite(dilution) else 0.0
-    out = {}
-    for rule in spec.SCENARIOS:
-        g = max(spec.SCENARIO_GROWTH_FLOOR, base_g * rule.growth_multiplier + rule.growth_shift)
-        g0, rev, t, path = g, revenue_ttm, 0.0, []
-        while t < years - 1e-9:
-            step = min(1.0, years - t)
-            rev *= (1 + g) ** step
-            path.append(g)
-            g += spec.SCENARIO_GROWTH_FADE * (spec.SCENARIO_TERMINAL_GROWTH - g)
-            t += step
-        exit_mult = max(spec.SCENARIO_MIN_EV_SALES, ev_to_sales * rule.exit_multiple_factor)
-        d = dil + rule.dilution_shift
-        sh = shares * (1 + d) ** years
-        ev_2030 = rev * exit_mult
-        value = max(0.0, (ev_2030 + net_cash) / sh)
-        a = {
-            "starting_revenue_growth": g0,
-            "growth_path": path,
-            "revenue_2030": rev,
-            "exit_ev_to_sales": exit_mult,
-            "annual_dilution": d,
-            "shares_2030": sh,
-            "net_cash_held": net_cash,
-            "ev_2030": ev_2030,
-            "margin_source": margin_source if margin is not None else None,
-        }
-        if margin is not None and math.isfinite(margin):
-            m30 = margin + rule.margin_shift
-            fcf = rev * m30
-            a.update(
-                margin_today=margin,
-                margin_2030=m30,
-                fcf_2030=fcf,
-                implied_ev_to_fcf=ev_2030 / fcf if fcf > 0 else None,
-                cash_support=(
-                    "not supported: 2030 free cash flow would be negative"
-                    if fcf <= 0
-                    else f"stretched: implies {ev_2030 / fcf:.0f}x EV/FCF in 2030"
-                    if ev_2030 / fcf > spec.WATCHLIST_MAX_SUPPORTED_EV_FCF
-                    else f"consistent: implies {ev_2030 / fcf:.0f}x EV/FCF in 2030"
-                ),
-            )
-        else:
-            a.update(
-                margin_today=None,
-                margin_2030=None,
-                fcf_2030=None,
-                implied_ev_to_fcf=None,
-                cash_support="not checked: no margin data",
-            )
-        out[rule.key] = {
-            "price": value,
-            "change": value / price - 1,
-            "annualized": annualized(value / price, years),
-            "assumptions": a,
-        }
-    return out
 
 
 def etf_scenarios(price: float, rule, years: float, fee: float | None = None) -> dict:

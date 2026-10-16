@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import csv
 import html
-import io
 
 from . import spec
 from .evidence import quality_level
-from .fmt import cap, csv_value, money, net_position, num, ok, pct, sval
+from .fmt import cap, money, net_position, num, ok, pct, sval
+from .site_downloads import watchlist_csv as watchlist_csv
 from .site_research import quality_badge
 from .site_scan import pin_button
+from .watchlist import upside_fields
 
 E = html.escape
 OLD_TYPE_DETAIL = " (warrant, right, unit, preferred, note, fund or blank-check)"
@@ -83,6 +83,32 @@ def _scen_cells(e: dict) -> str:
     )
 
 
+def _upside_cell(entry: dict) -> str:
+    values = upside_fields(entry)
+    base, annual = values["upside_base_pct"], values["cagr_base_pct"]
+    if not ok(base):
+        reason = tidy(entry.get("unavailable_reason")) or "Base 2030 scenario unavailable in this stored snapshot"
+        return f'<td data-v=""><span>—</span><div class="small muted upside-reason">{E(reason)}</div></td>'
+    color = "positive" if base > 0 else "negative" if base < 0 else ""
+    bar = ""
+    bear, bull = values["upside_bear_pct"], values["upside_bull_pct"]
+    if ok(bear) and ok(bull):
+        lo, hi = min(bear, base, bull, 0), max(bear, base, bull, 0)
+
+        def x(value):
+            return 6 + 108 * (value - lo) / (hi - lo) if hi > lo else 60
+
+        label = f"Bear {bear:+.0f}%, base {base:+.0f}%, bull {bull:+.0f}%; tick at 0% is the latest price. Row scale."
+        bar = (
+            f'<svg class="upside-range" viewBox="0 0 120 22" width="120" height="22" role="img" aria-label="{E(label)}">'
+            f'<title>{E(label)}</title><line class="upside-span" x1="{x(min(bear, bull)):.2f}" x2="{x(max(bear, bull)):.2f}" y1="11" y2="11"/>'
+            f'<line class="upside-zero" x1="{x(0):.2f}" x2="{x(0):.2f}" y1="3" y2="19"/>'
+            f'<circle class="upside-base" cx="{x(base):.2f}" cy="11" r="4"/></svg>'
+        )
+    annual_text = f"{annual:+.1f}%/yr" if ok(annual) else "annualized rate unavailable"
+    return f'<td class="num" data-v="{sval(base)}"><span class="{color}">{base:+.0f}%</span><div class="small muted">{annual_text}</div>{bar}</td>'
+
+
 def _assumptions(e: dict) -> str:
     fee_label = "dated expense input (owner-supplied, unverified)" if e.get("etf_metadata") else "assumed fee"
     sc = e.get("scenarios") or {}
@@ -152,9 +178,7 @@ def etf_sources(entry: dict) -> str:
     detail = (
         f'<p class="small">Issuer: {E(meta["issuer"])} · index: {E(meta["index_tracked"])}. {E(meta["expense_basis"])} '
     )
-    detail += (
-        "The expense ratio is a dated input; distribution yield remains assumed and is not a sourced forecast.</p>"
-    )
+    detail += "The expense ratio is a dated input; distribution yield remains assumed and is not a sourced return estimate.</p>"
     if filing.get("status") == "available":
         detail += (
             f'<p class="small"><a href="{E(filing["source_url"])}">SEC {E(filing["form"])} filing</a> '
@@ -215,10 +239,11 @@ def watchlist_page(snap: dict) -> str:
 <div class="small muted">{E(e.get("name") or "name not resolved")}</div></td>
 <td class="small hide-sm" data-v="{E(tidy(e.get("asset_type")))}">{E(tidy(e.get("asset_type")) or "unresolved")}<div class="muted">{E(e.get("exchange") or "")}</div></td>
 <td class="num" data-v="{sval(e.get("price"))}">{money(e.get("price"))}<div class="small muted">{E(str(e.get("price_date") or ""))}</div></td>
+{_upside_cell(e)}
 {_scen_cells(e)}
 <td class="small hide-sm">{E(e.get("method") or "")}</td><td class="small" data-v="{E(e.get("evidence_quality") or "")}">{quality_badge(quality_level(e.get("evidence_quality")), e.get("evidence_quality"), len(e.get("missing") or []))}</td>
 <td class="small">{E(status)}{etf_metadata_line(e)}</td></tr>
-<tr id="{rid}" class="detail" hidden><td colspan="9"><div class="evidence">
+<tr id="{rid}" class="detail" hidden><td colspan="10"><div class="evidence">
 <div><h4>Identity</h4><p class="small">{E(e.get("name") or "unresolved")} · {E(tidy(e.get("asset_type")))} · {E(e.get("exchange") or "")} ·
 status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") else ""}. Sector/theme: {E(e.get("sector") or "n/a")}.</p>
 <p class="small">{E(km_txt)}</p><p class="small">Trailing price returns: 1y {pct((e.get("returns") or {}).get("1y"), 0, True)},
@@ -241,10 +266,10 @@ status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") el
         + f"""<div class="watch-summary scan-stats">
 <div class="scan-stat"><span>Symbols</span><strong>{len(entries)}</strong><small>Separate research universe</small></div>
 <div class="scan-stat"><span>With a recorded price</span><strong>{priced}</strong><small>Check each row's price date</small></div>
-<div class="scan-stat"><span>Scenarios available</span><strong>{available}</strong><small>Conditional, not forecasts</small></div>
+<div class="scan-stat"><span>Scenarios available</span><strong>{available}</strong><small>Conditional calculations</small></div>
 <div class="scan-stat"><span>Scenarios unavailable</span><strong>{len(entries) - available}</strong><small>Reasons stay visible in each row</small></div></div>
-<div class="banner warn small"><strong>Conditional 2030 price scenarios</strong>Assumption-based price outcomes, not predictions or probabilities.
-<details><summary>Read the scenario limits</summary><p>{E(w["statement"])}</p></details></div>
+<div class="banner warn small"><strong>Conditional 2030 price scenarios</strong>Assumption-based price outcomes; probability is not established.
+<details><summary>Read the scenario limits</summary><p>{E(w["statement"].replace("predictions, ", ""))}</p></details></div>
 <details class="small"><summary>About this watchlist and its concentration</summary><p><strong>Separate research universe</strong> {E(w["separation"])} The ticker list was imported on
 {E(w["imported_at"])} and is not synchronized with any account; it works without a Robinhood login.</p>
 <p class="small">Valuation date {E(snap["as_of"])} close · target {E(w["target_date"])} · horizon {num(w["years_to_target"], 2)} years ·
@@ -257,6 +282,7 @@ theme concentration: {conc}.</p></details>
 <span class="small muted" data-count="t-watch" aria-live="polite"></span></div>
 <div class="table-wrap"><table id="t-watch" data-table data-grouped><caption class="sr-only">Watchlist 2030 scenarios</caption>
 <thead><tr><th class="tk" data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
+<th class="num" data-sort="num">Upside to base 2030</th>
 <th class="num" data-sort="num">Bear 2030</th><th class="num" data-sort="num">Base 2030</th><th class="num" data-sort="num">Bull 2030</th>
 <th class="hide-sm">Method</th><th data-sort="text">Evidence</th><th>Unavailable / notes</th></tr></thead>{"".join(bodies)}</table></div>
 <p class="scan-empty" data-empty="t-watch" hidden>No symbols match these filters. Reset filters or pin a ticker with its star first.</p>
@@ -264,59 +290,7 @@ theme concentration: {conc}.</p></details>
 <details class="context-details"><summary>Compare all 2030 scenario ranges</summary>{range_chart(entries)}</details>
 <details class="context-details"><summary>Valuation methods and assumptions</summary>
 <p class="small"><a href="downloads/{E(snap["as_of"])}_watchlist_2030.csv" download>Download (CSV)</a> · Prices are split-adjusted
-price data; scenarios are PRICE outcomes and exclude distributions (total return would add dividends). Methods:
+price data; scenarios are PRICE outcomes and exclude distributions (total return would add dividends). The upside bar uses a separate scale per row; its zero tick marks the latest price. Methods:
 {E(spec.WATCHLIST_COMPANY_METHOD)} {E(spec.LEVERAGED_METHOD)} {E(spec.FEE_NOTE)}</p></details>
 <p class="small"><a class="action" href="downloads/{E(snap["as_of"])}_watchlist_2030.csv" download>Download watchlist CSV ↓</a></p>"""
     )
-
-
-def watchlist_csv(snap: dict) -> str:
-    buf = io.StringIO()
-    wr = csv.writer(buf)
-    wr.writerow(
-        [
-            "ticker",
-            "name",
-            "asset_type",
-            "exchange",
-            "status",
-            "price",
-            "price_date",
-            "method",
-            "evidence_quality",
-            "bear_2030",
-            "base_2030",
-            "bull_2030",
-            "bear_change",
-            "base_change",
-            "bull_change",
-            "bear_annualized",
-            "base_annualized",
-            "bull_annualized",
-            "unavailable_reason",
-        ]
-    )
-    for e in (snap.get("watchlist") or {}).get("entries", []):
-        sc = e.get("scenarios") or {}
-        g = lambda k, f: (sc.get(k) or {}).get(f)  # noqa: E731, B023 - consumed in this iteration.
-        wr.writerow(
-            [
-                csv_value(v)
-                for v in [
-                    e["ticker"],
-                    e.get("name"),
-                    e.get("asset_type"),
-                    e.get("exchange"),
-                    e.get("status"),
-                    e.get("price"),
-                    e.get("price_date"),
-                    e.get("method"),
-                    e.get("evidence_quality"),
-                    *[g(k, "price") for k in ("bear", "base", "bull")],
-                    *[g(k, "change") for k in ("bear", "base", "bull")],
-                    *[g(k, "annualized") for k in ("bear", "base", "bull")],
-                    e.get("unavailable_reason"),
-                ]
-            ]
-        )
-    return buf.getvalue()
