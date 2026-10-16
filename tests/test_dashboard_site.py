@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agent_trading.dashboard import scoring
@@ -139,6 +141,7 @@ def test_distance_to_breakeven_wording(kind, signed, text):
 
 def test_options_page_never_says_zero_move(site):
     page = (site / "options.html").read_text(encoding="utf-8")
+    page += "".join(p.read_text(encoding="utf-8") for p in (site / "option").glob("*.html"))
     assert "0.0% down" not in page and "0.0% up" not in page and "Distance to breakeven" in page
 
 
@@ -262,9 +265,51 @@ def test_every_internal_link_and_source_resolves(site):
     assert not broken, broken[:10]
 
 
-def test_every_page_is_under_300_kb(site):
-    big = [(p.name, p.stat().st_size) for p in _pages(site) if p.stat().st_size >= 300_000]
+def test_every_page_is_under_150_kb(site):
+    big = [(p.name, p.stat().st_size) for p in _pages(site) if p.stat().st_size > 150_000]
     assert not big, big
+
+
+def test_growth_budget_covers_ten_candidates_in_each_band(site):
+    import copy
+    import json
+
+    from agent_trading.dashboard.site import page
+    from agent_trading.dashboard.site_lists import growth_page
+    from agent_trading.dashboard.site_performance import external_json
+
+    snap = json.loads((site / "data" / "latest.json").read_text(encoding="utf-8"))
+    for key in ("large", "mid", "small"):
+        candidates = snap["bands"][key]["candidates"]
+        while len(candidates) < 10:
+            row = copy.deepcopy(candidates[0])
+            row["ticker"] = f"TEST{len(candidates)}"
+            row["rank"] = len(candidates) + 1
+            candidates.append(row)
+    body = external_json(growth_page(snap), "growth", {})
+    assert len(page("Growth Stocks", body, "growth.html").encode("utf-8")) <= 150_000
+
+
+def test_option_panels_load_from_matching_files_with_complete_fallbacks(site):
+    import json
+
+    page = (site / "options.html").read_text(encoding="utf-8")
+    sources = re.findall(r'data-src="(fragments/o-[^"]+\.json)"', page)
+    assert len(sources) == 30
+    for source in sources:
+        content = json.loads((site / source).read_text(encoding="utf-8"))["html"]
+        fallback = (site / "option" / (Path(source).stem + ".html")).read_text(encoding="utf-8")
+        for phrase in (
+            "Maximum loss",
+            "Observed (delayed quote)",
+            "Assumptions",
+            "Risks in plain language",
+            "Probability of profit",
+        ):
+            assert phrase in content and phrase in fallback
+        assert '<th scope="col"' in content
+    assert 'data-src="data/growth-decision-data.json"' in (site / "growth.html").read_text(encoding="utf-8")
+    assert 'data-src="data/compare-cmp-data.json"' in (site / "compare.html").read_text(encoding="utf-8")
 
 
 def test_every_table_has_a_caption_or_label(site):
@@ -355,9 +400,10 @@ def test_every_page_has_the_inline_symbol_search(site):
 
 def test_list_rows_have_a_one_year_sparkline_vs_benchmark(site):
     page = (site / "growth.html").read_text(encoding="utf-8")
-    sparks = re.findall(r'<svg class="spark"[^>]*aria-label="1-year price: ([^"]+)"', page)
+    sparks = re.findall(r'<img class="spark"[^>]*alt="1-year price: ([^"]+)"', page)
     assert len(sparks) >= 10 and all("SPY" in s or "IJH" in s or "IWM" in s for s in sparks)
-    assert 'stroke-dasharray="3 2"' in page
+    sources = re.findall(r'<img class="spark" src="([^"]+)"[^>]*alt="1-year price:', page)
+    assert all('stroke-dasharray="3 2"' in (site / src).read_text(encoding="utf-8") for src in sources)
 
 
 def test_lists_show_sector_and_market_cap_mix(site):

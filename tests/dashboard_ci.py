@@ -14,7 +14,7 @@ class References(HTMLParser):
         self.urls: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.urls.extend(value for key, value in attrs if key in {"href", "src"} and value)
+        self.urls.extend(value for key, value in attrs if key in {"href", "src", "data-src"} and value)
 
 
 def check_links(site: Path) -> list[str]:
@@ -61,7 +61,9 @@ def main() -> int:
         data, site = demo_site(args.root)
         print(f"Built synthetic fixture data at {data} and site at {site}")
         return 0
-    problems = check_links(args.site)
+    from agent_trading.dashboard.site_performance import budget_problems
+
+    problems = check_links(args.site) + budget_problems(args.site)
     for problem in problems:
         print(problem)
     print(f"Checked {len(list(args.site.rglob('*.html')))} HTML pages; {len(problems)} broken links")

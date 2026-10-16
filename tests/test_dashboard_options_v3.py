@@ -416,6 +416,7 @@ def test_no_contract_is_described_as_safe(built):
 
 def test_facts_assumptions_missing_data_and_scores_are_shown_apart(built):
     page = (built[1] / "options.html").read_text(encoding="utf-8")
+    page += "".join(p.read_text(encoding="utf-8") for p in (built[1] / "option").glob("*.html"))
     for h in (
         "Observed (delayed quote)",
         "Assumptions",
@@ -455,6 +456,7 @@ def test_short_lists_say_why_on_the_page(tmp_path):
 
 def test_percentages_never_follow_the_probability_label(built):
     page = (built[1] / "options.html").read_text(encoding="utf-8")
+    page += "".join(p.read_text(encoding="utf-8") for p in (built[1] / "option").glob("*.html"))
     segments = page.split("Probability of profit:")[1:]
     assert len(segments) >= 31  # header note + one per contract
     for seg in segments:
@@ -578,6 +580,10 @@ def test_older_ten_contract_snapshot_renders_with_its_own_limit_and_without_new_
     page = (o / "options.html").read_text(encoding="utf-8")
     assert "10 of up to 10" in page and "Snapshot methodology <strong>2026-10-14.5" in page
     assert f"page renderer <strong>{spec.SPEC_VERSION}" in page and "never re-ranks" in page
+    assert len(list(o.glob("options-*.html"))) == 3
+    assert len(list((o / "option").glob("*.html"))) == 60
+    assert all(p.stat().st_size <= 150_000 for p in o.rglob("*.html"))
+    page += "".join(p.read_text(encoding="utf-8") for p in (o / "option").glob("*.html"))
     assert page.count("Probability not established") >= 61 and "risk notes were not stored" in page
     assert list_limit(snap, lists_of(snap["options"]["3m"])["calls"]) == 10
     index = (o / "index.html").read_text(encoding="utf-8")
