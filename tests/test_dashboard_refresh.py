@@ -249,9 +249,11 @@ def built_refresh(tmp_path_factory):
 
 def test_site_daily_labels_fallbacks_weekly_scores_links_and_size(built_refresh, tmp_path):
     data, out, snap = built_refresh
+    audit = (out / "audit.html").read_text(encoding="utf-8")
     for name in ("index", "growth", "options"):
         page = (out / f"{name}.html").read_text(encoding="utf-8")
-        assert "Daily refresh," in page and "UTC, delayed, not live" in page and f"weekly snapshot {AS_OF}" in page
+        assert "Daily:" in page and 'href="audit.html#daily-context"' in page
+        assert f"Weekly snapshot {AS_OF}" in audit and "Quotes are delayed, never live" in audit
         assert "None" not in visible_text(page) and "NaN" not in visible_text(page)
     assert "Daily view" in (out / "options.html").read_text(encoding="utf-8")
     assert "Daily unavailable" in (out / "growth.html").read_text(encoding="utf-8")

@@ -21,6 +21,26 @@ MOVEMENTS = {
 }
 
 
+def cap_range(row: dict) -> str:
+    sc = row["scenario_2030"]
+    values = [sc[f"{case}_cap"] for case in ("bear", "base", "bull")]
+    current = row["current_market_cap_usd"]
+    if not all(ok(v) for v in [current, *values]):
+        return ""
+    lo, hi = min(current, *values), max(current, *values)
+
+    def x(v):
+        return 6 + 108 * (v - lo) / (hi - lo) if hi > lo else 60
+
+    label = f"Bear {cap(values[0])}, base {cap(values[1])}, bull {cap(values[2])}; tick is current {cap(current)}. Row scale."
+    return (
+        f'<svg class="upside-range" viewBox="0 0 120 22" width="120" height="22" role="img" aria-label="{E(label)}"><title>{E(label)}</title>'
+        f'<line class="upside-span" x1="{x(values[0]):.2f}" x2="{x(values[2]):.2f}" y1="11" y2="11"/>'
+        f'<line class="upside-zero" x1="{x(current):.2f}" x2="{x(current):.2f}" y1="3" y2="19"/>'
+        f'<circle class="upside-base" cx="{x(values[1]):.2f}" cy="11" r="4"/></svg>'
+    )
+
+
 def methodology() -> str:
     return (
         f"<section><h2>How these ranks are computed and what they are not</h2><p>{E(spec.LEADERS_RULE)}</p>"
@@ -100,11 +120,13 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
     sectors = sorted({r["sector"] for r in entries})
     out.append(
         '<div class="controls"><input type="search" data-search="t-leaders" placeholder="Search ticker, name, reason" aria-label="Search Leaders">'
+        '<button class="action" type="button" data-reset="t-leaders">Reset filters</button><span class="small muted" data-count="t-leaders" aria-live="polite"></span></div>'
+        '<details class="filter-details"><summary>Filter leaders</summary><div class="controls">'
         + filter_select("t-leaders", "sector", "All sectors", [(s, s) for s in sectors])
         + filter_select("t-leaders", "movement", "All movements", [(k, v[1]) for k, v in MOVEMENTS.items()])
         + filter_select("t-leaders", "kind", "Computed and curated", [("computed", "Computed"), ("curated", "Curated")])
         + filter_select("t-leaders", "pinned", "All tickers", [("yes", "Pinned")])
-        + '<button class="action" type="button" data-reset="t-leaders">Reset filters</button><span class="small muted" data-count="t-leaders" aria-live="polite"></span></div>'
+        + "</div></details>"
     )
     out.append(
         '<div class="table-wrap"><table id="t-leaders" data-table><caption>Current and conditional 2030 size ranks within available stored inputs</caption><thead><tr>'
@@ -149,7 +171,7 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
                 else reason
             )
             scenario_cells.append(
-                f'<td class="num" data-v="{sval(value)}" title="{reason if not ok(value) else "Conditional, not a prediction"}">{cap(value) if ok(value) else "—"}</td>'
+                f'<td class="num" data-v="{sval(value)}" title="{reason if not ok(value) else "Conditional, not a prediction"}">{cap(value) if ok(value) else "—"}{cap_range(row) if case == "base" else ""}</td>'
                 f'<td class="num" data-v="{sval(rate)}" title="{rate_reason}">{pct(rate, 2) if ok(rate) else "—"}{flag}</td>'
             )
         pin = pin_button(row["ticker"]) if row["ticker"] else ""

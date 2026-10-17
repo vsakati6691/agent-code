@@ -7,6 +7,7 @@ def search(symbols: dict[str, str], base: str) -> str:
     if not symbols:
         return ""
     options = "".join(f'<option value="{escape(t)}">{escape(n)}</option>' for t, n in symbols.items())
+    links = " · ".join(f'<a href="{escape(base + t)}.html">{escape(t)}</a>' for t in symbols)
     return (
         f'<form class="symsearch" role="search" data-base="{escape(base)}" onsubmit="return false">'
         '<label class="sr-only" for="symq">Find a ticker</label>'
@@ -17,6 +18,7 @@ def search(symbols: dict[str, str], base: str) -> str:
         '<button class="command-trigger" type="button" hidden aria-haspopup="dialog" '
         'aria-controls="ticker-command" aria-keyshortcuts="Control+k Meta+k">'
         '<span>Find a ticker</span><kbd aria-hidden="true">Ctrl / ⌘ K</kbd></button></form>'
+        f"<noscript><details><summary>Browse tickers</summary><p>{links}</p></details></noscript>"
     )
 
 

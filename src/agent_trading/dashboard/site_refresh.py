@@ -81,17 +81,35 @@ def banner(snap: dict, context: dict | None) -> str:
     if not data:
         reason = (context or {}).get("reason") or "Daily data missing: no daily refresh available."
         return (
-            f'<p class="small muted daily-status">{E(reason)} Showing weekly data; '
-            f"weekly snapshot {E(weekly_date)}.</p>"
+            f'<p class="small muted daily-status" title="{E(reason)}">Daily refresh unavailable · weekly {E(weekly_date)} · '
+            '<a href="audit.html#daily-context">Details</a>.</p>'
         )
     stamp = str(data["collected_at"]).replace("T", " ").replace("+00:00", "").removesuffix("Z")
     state_class = "warn" if data.get("status") == "partial" else "info"
     return (
-        f'<div class="banner {state_class} small daily-status" role="note" aria-label="Daily data status"><strong>Daily refresh, {E(stamp)} UTC, delayed, not live</strong>'
-        f"Session {E(data['as_of'])} · weekly snapshot {E(weekly_date)} · "
-        f"refresh status: {E(data['status'])}. Scores, ranks and trailing returns remain weekly. "
-        "Change since weekly is an unadjusted price comparison; splits and dividends can affect it."
-        f"{partial_details(data)}</div>"
+        f'<div class="banner {state_class} small daily-status" role="note" aria-label="Daily data status" title="Collected {E(stamp)} UTC">'
+        f"Daily: {E(data['as_of'])} · delayed · {E(data['status'])} · "
+        '<a href="audit.html#daily-context">Refresh details</a></div>'
+    )
+
+
+def audit_context(snap: dict, context: dict | None) -> str:
+    data = (context or {}).get("data") or {}
+    text = (
+        f"Collected {data.get('collected_at', 'time not stored')}; session {data.get('as_of', 'date not stored')}; "
+        f"refresh status: {data.get('status', 'not stored')}."
+        if data
+        else (context or {}).get("reason") or "Daily data missing: no daily refresh available."
+    )
+    return (
+        '<section id="daily-context"><h2>Daily refresh details</h2>'
+        f"<p>{E(text)} Weekly snapshot {E(snap['as_of'])}. Scores, ranks and trailing returns remain weekly. "
+        "Change since weekly is an unadjusted price comparison; splits and dividends can affect it. "
+        "Quotes are delayed, never live.</p>"
+        + partial_details(data).replace(
+            '<details class="refresh-missing"><summary>', '<details class="refresh-missing" open><summary>'
+        )
+        + "</section>"
     )
 
 
@@ -113,16 +131,20 @@ def options_section(snap: dict, context: dict) -> str:
     head = '<section id="daily-options"><h2>Daily view</h2>' + banner(snap, context)
     data = context.get("data")
     if data is None:
-        return head + '<p class="small">The weekly tracked lists appear below.</p></section>'
+        return (
+            '<details class="empty-data" id="daily-options"><summary>Daily options unavailable</summary>'
+            + banner(snap, context)
+            + '<p class="small">The weekly tracked lists appear above.</p></details>'
+        )
     options = data.get("options") or {}
     if not options.get("enabled"):
-        return head + "<p>Daily options unavailable: collection disabled.</p></section>"
+        return '<details class="empty-data" id="daily-options"><summary>Daily options unavailable</summary><p>Collection disabled.</p></details>'
     parts = [
         head,
-        '<p class="small">Existing eligibility and ranking rules, recomputed on daily delayed chains. '
+        '<details><summary>Daily list basis</summary><p class="small">Existing eligibility and ranking rules, recomputed on daily delayed chains. '
         "These lists are not added to weekly performance tracking. Premium and maximum loss = ask × 100; "
         "fees are not deducted. Buying an option can lose the entire premium. "
-        f"{E(spec.PROBABILITY_NOT_ESTABLISHED)} Delta is not a probability.</p>",
+        f"{E(spec.PROBABILITY_NOT_ESTABLISHED)} Delta is not a probability.</p></details>",
     ]
     for h in spec.HORIZONS:
         for kind in spec.OPTION_TYPES:
@@ -150,13 +172,8 @@ def options_section(snap: dict, context: dict) -> str:
             if lst.get("shortfall"):
                 parts.append(f'<p class="small">{E(lst["shortfall"])}</p>')
             parts.append("</details>")
-    failed = "".join(
-        f"<li>{E(symbol)}: unavailable — {E(item['reason'])}</li>"
-        for symbol, item in data.get("chain_status", {}).items()
-        if item["status"] != "available"
-    )
-    if failed:
-        parts.append(f"<details><summary>Unavailable daily chains</summary><ul>{failed}</ul></details>")
+    if any(item["status"] != "available" for item in data.get("chain_status", {}).values()):
+        parts.append('<p class="small"><a href="audit.html#daily-context">Unavailable daily chains and reasons</a></p>')
     parts.append(
         f'<p class="small"><a href="data/daily/{E(data["as_of"])}/refresh.json">Daily data and quote timestamps (JSON)</a></p></section>'
     )

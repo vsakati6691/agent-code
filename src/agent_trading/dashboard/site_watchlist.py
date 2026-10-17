@@ -73,7 +73,7 @@ def _scen_cells(e: dict) -> str:
     if not sc:
         # Keep all three cells so sorting later columns uses the correct index.
         return (
-            '<td class="small muted" data-v="">Scenario unavailable</td>'
+            '<td class="small muted" data-v="" title="Scenario unavailable; open row details">—</td>'
             '<td class="small muted" data-v="">—</td><td class="small muted" data-v="">—</td>'
         )
     return "".join(
@@ -88,7 +88,7 @@ def _upside_cell(entry: dict) -> str:
     base, annual = values["upside_base_pct"], values["cagr_base_pct"]
     if not ok(base):
         reason = tidy(entry.get("unavailable_reason")) or "Base 2030 scenario unavailable in this stored snapshot"
-        return f'<td data-v=""><span>—</span><div class="small muted upside-reason">{E(reason)}</div></td>'
+        return f'<td data-v="" title="{E(reason)}">—</td>'
     color = "positive" if base > 0 else "negative" if base < 0 else ""
     bar = ""
     bear, bull = values["upside_bear_pct"], values["upside_bull_pct"]
@@ -207,11 +207,7 @@ def watchlist_page(snap: dict) -> str:
 
     price_note = SHORT_NOTE if preclose(snap) else ""
     w = snap.get("watchlist")
-    head = (
-        '<div class="section-heading watch-heading"><div><p class="eyebrow">RESEARCH DESK / LONG VIEW</p>'
-        '<h1>Watchlist — 2030 Outlook</h1><p class="lede">Scan the evidence. Explore the assumptions.</p></div>'
-        '<a class="action" href="index.html">← Market overview</a></div>'
-    )
+    head = '<header class="compact-heading"><h1>Watchlist 2030</h1><p>Stored prices and conditional 2030 price scenarios.</p></header>'
     if not w or w.get("status") != "ok":
         return (
             head + '<div class="banner warn"><strong>Watchlist not available</strong>This snapshot has no watchlist '
@@ -245,11 +241,11 @@ def watchlist_page(snap: dict) -> str:
 {_upside_cell(e)}
 {_scen_cells(e)}
 <td class="small hide-sm">{E(e.get("method") or "")}</td><td class="small" data-v="{E(e.get("evidence_quality") or "")}">{quality_badge(quality_level(e.get("evidence_quality")), e.get("evidence_quality"), len(e.get("missing") or []))}</td>
-<td class="small">{E(status)}{etf_metadata_line(e)}</td></tr>
+<td class="small" title="{E(status)}">{"—" if status else ""}</td></tr>
 <tr id="{rid}" class="detail" hidden><td colspan="10"><div class="evidence">
 <div><h4>Identity</h4><p class="small">{E(e.get("name") or "unresolved")} · {E(tidy(e.get("asset_type")))} · {E(e.get("exchange") or "")} ·
 status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") else ""}. Sector/theme: {E(e.get("sector") or "n/a")}.</p>
-<p class="small">{E(km_txt)}</p><p class="small">Trailing price returns: 1y {pct((e.get("returns") or {}).get("1y"), 0, True)},
+<p class="small">{E(status)}</p>{etf_metadata_line(e)}<p class="small">{E(km_txt)}</p><p class="small">Trailing price returns: 1y {pct((e.get("returns") or {}).get("1y"), 0, True)},
 3y {pct((e.get("returns") or {}).get("3y"), 0, True)} (history from {E(str(e.get("history_start") or "n/a"))}).</p></div>
 <div><h4>Valuation method and assumptions</h4><p class="small">{E(e.get("assumptions_note") or status or "")}</p>{_assumptions(e)}
 {_unlock(e)}{etf_sources(e)}</div>
@@ -270,19 +266,20 @@ status: {E(e.get("status") or "")}{" · CIK " + str(e["cik"]) if e.get("cik") el
 <div class="scan-stat"><span>Symbols</span><strong>{len(entries)}</strong><small>Separate research universe</small></div>
 <div class="scan-stat"><span>With a recorded price</span><strong>{priced}</strong><small>Check each row's price date</small></div>
 <div class="scan-stat"><span>Scenarios available</span><strong>{available}</strong><small>Conditional calculations</small></div>
-<div class="scan-stat"><span>Scenarios unavailable</span><strong>{len(entries) - available}</strong><small>Reasons stay visible in each row</small></div></div>
-<div class="banner warn small"><strong>Conditional 2030 price scenarios</strong>Assumption-based price outcomes; probability is not established.
-<details><summary>Read the scenario limits</summary><p>{E(w["statement"].replace("predictions, ", ""))}</p></details></div>
+<div class="scan-stat"><span>Scenarios unavailable</span><strong>{len(entries) - available}</strong><small>Reasons in row details</small></div></div>
+<details><summary>Scenario limits</summary><p>{E(w["statement"].replace("predictions, ", ""))}</p></details>
 <details class="small"><summary>About this watchlist and its concentration</summary><p><strong>Separate research universe</strong> {E(w["separation"])} The ticker list was imported on
 {E(w["imported_at"])} and is not synchronized with any account; it works without a Robinhood login.</p>
 <p class="small">Valuation date {E(snap["as_of"])} close · target {E(w["target_date"])} · horizon {num(w["years_to_target"], 2)} years ·
 theme concentration: {conc}.</p></details>
 <div class="controls"><input type="search" placeholder="Search ticker, name, reason" data-search="t-watch" aria-label="Search watchlist">
+<button class="action" type="button" data-reset="t-watch">Reset filters</button>
+<span class="small muted" data-count="t-watch" aria-live="polite"></span></div>
+<details class="filter-details"><summary>Filter watchlist</summary><div class="controls">
 <select data-sector="t-watch" aria-label="Filter by sector or theme"><option value="">All sectors and themes</option>{opts}</select>
 <select data-filter="t-watch" data-field="scenario" aria-label="Filter scenario availability"><option value="">All scenario states</option><option value="available">Scenarios available</option><option value="unavailable">Scenarios unavailable</option></select>
 <select data-filter="t-watch" data-field="pinned" aria-label="Filter pinned watchlist"><option value="">All tickers</option><option value="yes">Pinned tickers</option></select>
-<button class="action" type="button" data-reset="t-watch">Reset filters</button>
-<span class="small muted" data-count="t-watch" aria-live="polite"></span></div>
+</div></details>
 <div class="table-wrap"><table id="t-watch" data-table data-grouped><caption class="sr-only">Watchlist 2030 scenarios</caption>
 <thead><tr><th class="tk" data-sort="text">Ticker / name</th><th class="hide-sm" data-sort="text">Type</th><th class="num" data-sort="num">Latest price</th>
 <th class="num" data-sort="num">Upside to base 2030</th>

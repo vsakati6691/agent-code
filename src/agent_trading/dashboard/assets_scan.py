@@ -13,6 +13,19 @@ nav a[aria-current="page"] { color: var(--link); text-underline-offset: 8px; tex
 main { padding-top: 16px; }
 #freshness { font-size: 12px; border: 1px solid var(--border); background: var(--surface-1); padding: 9px 12px; }
 #freshness strong { display: inline; font-weight: 600; margin-right: 4px; }
+#freshness { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+#freshness details { margin: 0; }
+#freshness details[open] { flex-basis: 100%; order: 3; }
+.empty-data { margin: 12px 0; font-size: 13px; }
+.filter-details { margin: 8px 0; }
+.filter-details > summary { font-size: 13px; font-weight: 600; }
+.compact-heading { margin: 18px 0 12px; }
+.compact-heading h1 { margin: 0 0 6px; }
+.compact-heading p { margin: 0; }
+@media (max-width: 600px) {
+  .scan-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .controls { gap: 8px; }
+}
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; color: var(--text-secondary); margin: 0 0 12px; }
 .scan-hero { display: flex; justify-content: space-between; gap: 32px; align-items: center; padding: 28px 0 30px; }
 .scan-hero h1 { font-size: clamp(28px, 3.2vw, 44px); line-height: 1.16; letter-spacing: -1.6px; margin: 0 0 16px; }

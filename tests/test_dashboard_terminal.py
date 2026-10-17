@@ -4,7 +4,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from agent_trading.dashboard import site_command, site_external, site_layout, site_refresh, site_tables
+from agent_trading.dashboard import site_audit, site_command, site_external, site_layout, site_refresh, site_tables
+from agent_trading.dashboard.store import Store
 
 FIXTURES = Path(__file__).parent / "fixtures" / "dashboard_factcheck"
 
@@ -41,11 +42,13 @@ def test_real_partial_chains_are_compact_without_hiding_their_status():
     before = json.dumps(data, sort_keys=True)
     snap = json.loads((FIXTURES / "preclose.json").read_text())["snapshot"]
     markup = site_refresh.banner(snap, {"data": data["refresh"]})
-    assert 'class="banner warn small daily-status"' in markup and "refresh status: partial" in markup
-    assert '<details class="refresh-missing"><summary>Not refreshed (5)</summary>' in markup
+    assert 'class="banner warn small daily-status"' in markup and "· partial" in markup
+    assert 'href="audit.html#daily-context"' in markup and "Request usage:" not in markup
+    audit = site_refresh.audit_context(snap, {"data": data["refresh"]})
+    assert '<details class="refresh-missing" open><summary>Not refreshed (5)</summary>' in audit
     for ticker in ("COCO", "MAMA", "QNST", "SEZL", "WT"):
-        assert f"Options chain {ticker}: stale chain" in markup
-    assert "Request usage:" in markup and " open" not in markup
+        assert f"Options chain {ticker}: stale chain" in audit
+    assert "Request usage:" in audit and "refresh status: partial" in audit
     assert json.dumps(data, sort_keys=True) == before
 
 
@@ -53,7 +56,9 @@ def test_old_snapshot_macro_absence_stays_explicit_and_does_not_invent_a_rate():
     snap = json.loads((FIXTURES / "preclose.json").read_text())["snapshot"]
     markup = site_external.macro_context(snap) + site_external.rate_note(snap)
     assert "6 of 6 displayed series" in markup and "Treasury rate unavailable" in markup
-    assert markup.count('class="card macro-card"') == 6
+    assert "Macro data not collected this week</summary>" in markup
+    assert markup.count('class="card macro-card"') == 0
+    assert markup.count("<li>") == 6 and "_macro.csv" in markup
     assert "None" not in markup and "NaN" not in markup
     assert "Previously stored estimates retain their recorded assumptions" in markup
     # Missing optional branches can be null in legacy data; the display must not crash.
@@ -63,14 +68,33 @@ def test_old_snapshot_macro_absence_stays_explicit_and_does_not_invent_a_rate():
     )
 
 
-def test_partial_snapshot_reasons_are_escaped_and_all_recoverable():
+def test_partial_snapshot_reasons_are_escaped_and_all_recoverable(tmp_path):
     snap = json.loads((FIXTURES / "preclose.json").read_text())["snapshot"]
     reasons = ["XBRL input unavailable", "<script>alert(1)</script>", "Third reason", "Fourth reason"]
-    rendered = site_layout.freshness_banner(
-        {**snap, "status": "partial", "problems": reasons}, None, datetime(2026, 10, 16, 18, tzinfo=UTC)
-    )
-    assert "Data availability details (4)" in rendered and "Fourth reason" in rendered
-    assert "<script>" not in rendered and "&lt;script&gt;" in rendered
+    partial = {**snap, "status": "partial", "problems": reasons}
+    rendered = site_layout.freshness_banner(partial, None, datetime(2026, 10, 16, 18, tzinfo=UTC))
+    assert "Partial data" in rendered and 'href="audit.html#latest-run"' in rendered
+    assert "Fourth reason" not in rendered
+    audit = site_audit.audit_page(Store(tmp_path), partial, [])
+    for reason in ("XBRL input unavailable", "Third reason", "Fourth reason", "&lt;script&gt;"):
+        assert reason in audit
+    assert "<script>" not in audit
+
+
+def test_missing_cells_retain_reasons_without_repeating_them_inline():
+    markup = '<table><tr><td>Unavailable</td><td class="num">n/a</td><td>not meaningful (negative base)</td><td>0</td></tr></table>'
+    rendered = site_tables.enhance(markup)
+    assert rendered.count(">—</span>") == 3
+    assert 'title="not meaningful (negative base)"' in rendered
+    assert "<td>0</td>" in rendered
+    assert site_tables.enhance(rendered) == rendered
+
+
+def test_company_shell_links_to_audit_at_correct_depth_and_has_no_js_fallback():
+    fresh = site_layout.freshness_banner({"as_of": "2026-10-15"}, None)
+    rendered = site_layout.page("Test", "<h1>Company</h1>", "growth.html", depth=1, freshness=fresh)
+    assert 'href="../audit.html#latest-run"' in rendered
+    assert "<noscript><style>" in rendered and "tr.detail[hidden]{display:table-row!important}" in rendered
 
 
 def test_default_calculator_horizon_exists_before_javascript():

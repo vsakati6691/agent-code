@@ -323,7 +323,7 @@ def test_old_snapshot_build_keeps_bytes_and_explains_all_new_gaps(tmp_path):
         label in html
         for label in ("Insider activity", "Institutional holders", "Short interest", "Risk-factor quotation")
     )
-    assert OLD in html and "Macro context" in (out / "index.html").read_text(encoding="utf-8")
+    assert OLD in html and "Macro data not collected this week" in (out / "index.html").read_text(encoding="utf-8")
     assert all(
         csv_fields({})[key + "_reason"] == OLD for key in ("insiders", "institutions", "short_interest", "risk_excerpt")
     )

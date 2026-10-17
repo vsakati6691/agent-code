@@ -247,26 +247,34 @@ def ai_page(snap: dict) -> str:
             f"methodology {E(str(v))}, before the AI lists existed (2026-10-14.7). The first weekly snapshot collected under the "
             f"new methodology adds them. The universe and rules below are the ones that run will use.</div>"
         )
-        return head + missing + _universe_table(snap, ai) + _private_section(ai) + "</div>"
+        return (
+            head
+            + missing
+            + _universe_table(snap, ai)
+            + _private_section(ai)
+            + site_ai_context.guide(snap, bands)
+            + "</div>"
+        )
     panels = []
     for key in AI_KEYS:
         b = bands.get(key)
         if not b:
             continue
-        short = f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ""
+        short = f"<p>{E(b['shortfall_note'])}</p>" if b.get("shortfall_note") else ""
         panels.append(f"""<section id="{key}" aria-labelledby="h-{key}"><h2 id="h-{key}">{E(band_title(key, b))}: top {b.get("max_results", 5)}</h2>
 <p class="small">Showing {len(b["candidates"])} of up to {b.get("max_results", 5)} · Benchmark: {E(b.get("benchmark", ""))} ·
-<a href="downloads/{E(snap["as_of"])}_{key}.csv" download>Download CSV</a></p>{short}
+<a href="downloads/{E(snap["as_of"])}_{key}.csv" download>Download CSV</a></p>
+{growth_table(key, b)}
 <details class="small ai-list-context"><summary>Eligibility and list composition</summary>
 <p>{E(_definition(b, preclose(snap)))} Benchmark: {E(b.get("benchmark_name", b.get("benchmark", "")))}.
-{b.get("ranked", "?")} ranked; {len(b["excluded"])} excluded.</p>{distribution_strip(b["candidates"])}</details>
-{growth_table(key, b)}
+{b.get("ranked", "?")} ranked; {len(b["excluded"])} excluded.</p>{short}{distribution_strip(b["candidates"])}</details>
 <p class="small" data-empty="t-{key}" hidden>No stocks match this search or sector. Clear the search or use Reset view.</p>
 {excluded_summary(key, b)}</section>""")
     ladder = (ai or {}).get("ladder") or {}
     return (
         head
         + "".join(panels)
+        + site_ai_context.guide(snap, bands)
         + _top20_table(bands, ladder)
         + _universe_table(snap, ai)
         + _private_section(ai)

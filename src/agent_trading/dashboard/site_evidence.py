@@ -110,9 +110,9 @@ def evidence_page(data: dict) -> str:
     parts = [
         head,
         f'<p class="lede">{escape(data["verdict"])}</p>',
-        "<p>These are historical research results, not forward return assumptions. The selection data and final "
+        "<details><summary>Evidence limits: the final test was not untouched</summary><p>These are historical research results, not forward return assumptions. The selection data and final "
         "test are separate. Price-only series, trading costs and prior researcher exposure limit interpretation.</p>",
-        f'<p class="banner warn">{escape(data["caveat"])}</p>',
+        f"<p>{escape(data['caveat'])}</p></details>",
     ]
     for table in data["tables"]:
         rows = "".join(
@@ -128,11 +128,11 @@ def evidence_page(data: dict) -> str:
         )
     parts.extend(
         [
-            "<h2>Pre-registered acceptance rules</h2>",
+            "<details><summary>Pre-registered acceptance rules</summary>",
             f"<p>{escape(data['acceptance'])}</p>",
             "<p>The statistical threshold in these historical acceptance rules is not a probability of achieving "
             "a future scenario or return. No candidate passed all rules. No new holdout evaluation was run for this page.</p>",
-            '<p><a href="goal.html#required-rate">Compare the required return in Plan 2030</a>.</p>',
+            '</details><p><a href="goal.html#required-rate">Compare the required return in Plan 2030</a>.</p>',
         ]
     )
     return "".join(parts)

@@ -160,7 +160,9 @@ def test_tabs_are_not_silently_restored_and_follow_the_hash():
 
 def test_options_h2_names_the_active_choice(site):
     page = (site / "options.html").read_text(encoding="utf-8")
-    assert re.search(r'<section data-hz="3m" data-type="call"[^>]* hidden><h2>About 3 months · calls', page)
+    assert re.search(
+        r'<section data-hz="3m" data-type="call"[^>]* hidden><h2 class="sr-only">About 3 months · calls', page
+    )
 
 
 def _header_classes(page: str, table_id: str) -> list[tuple[str, str]]:

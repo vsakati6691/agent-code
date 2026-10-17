@@ -22,10 +22,10 @@ def growth_page(snap: dict, daily: dict | None = None) -> str:
         if keys
         else '<p class="scan-empty">Growth lists are not available in this snapshot.</p>'
     )
-    return f"""<header class="watch-heading"><p class="eyebrow">RANKED COMPANY RESEARCH</p>
-<h1>Growth Stocks</h1><p class="lede">Find candidates across large, mid and small caps. Filter the scan, pin a ticker,
-then open its evidence and risks.</p><div class="hero-actions">{links}</div></header>
+    return f"""<header class="compact-heading">
+<h1>Growth Stocks</h1><p>Compare candidates across large, mid and small caps.</p></header>
 {candidate_scan(snap, keys, daily)}
+<div class="hero-actions">{links}</div>
 {detail}"""
 
 
@@ -41,8 +41,5 @@ def multibaggers_page(snap: dict) -> str:
     )
     if band is None and "spec" in (snap.get("bands") or {}):
         content += '<p><a href="growth.html#spec">View the legacy speculative list →</a></p>'
-    return f"""<header class="watch-heading"><p class="eyebrow">LONG-TERM, SPECULATIVE RESEARCH</p>
-<h1>Multibaggers</h1><p class="lede">Study what would need to happen over 5–10 years: sustained growth,
-cash generation, valuation and dilution. Passing the screen does not predict a multibagger outcome.</p>
-<p class="small muted" data-pin-status>Pin a ticker to keep it on this device. Pins are shared with Growth Stocks and Watchlist 2030.</p></header>
-{content}"""
+    return f"""<header class="compact-heading"><h1>Multibaggers</h1><p>Conditional 5–10 year growth scenarios and their risks.</p></header>
+{content}<p class="small muted" data-pin-status>Pins stay on this device and are shared across research lists.</p>"""

@@ -311,11 +311,14 @@ def test_bets_page_has_labels_local_storage_warning_and_no_probability_estimate(
         "Nothing is uploaded",
         "betslip-v1",
         "Clear local slip",
-        "Daily refresh,",
-        "weekly snapshot",
+        "Daily:",
+        "Refresh details",
     ):
         assert phrase in text, phrase
     assert "most contracts" not in text and "chance of profit" not in text
+    assert 'href="audit.html#daily-context"' in page
+    assert '<tbody><tr><td data-label="Contract">AAA call' in page
+    assert "first 25 contracts by premium" in page
     assert not re.search(r"Probability[^<]{0,80}\d+(?:\.\d+)?%", page)
     for field in ("bet-budget", "bet-contract", "bet-quantity"):
         assert f'for="{field}"' in page and f'id="{field}"' in page

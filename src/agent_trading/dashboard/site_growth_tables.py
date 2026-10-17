@@ -248,7 +248,7 @@ def growth_table(key: str, band: dict) -> str:
 <td class="num hide-sm" data-v="{sval(short.get("percent_of_diluted_shares"))}" title="{E(short.get("reason") or short.get("percent_reason") or "Settlement " + (short.get("settlement_date") or "not collected"))}">{pct(short.get("percent_of_diluted_shares"), 1)}</td>
 <td class="small risk" title="{E(c.get("counterargument", ""))}">{E(short_risk(c.get("counterargument", "")))}</td></tr>
 <tr id="{rid}" class="detail" hidden><td colspan="15"><div class="lazy" data-src="{fragment_path(key, c["ticker"])}"
-data-page="stock/{key}-{E(c["ticker"])}.html"><p class="small muted">Loading the evidence…</p></div></td></tr></tbody>""")
+data-page="stock/{key}-{E(c["ticker"])}.html"><p class="small"><a href="stock/{key}-{E(c["ticker"])}.html">Open {E(c["ticker"])} evidence</a></p></div></td></tr></tbody>""")
     sectors = sorted({c.get("sector") or "Unknown" for c in band["candidates"]})
     opts = "".join(f'<option value="{E(s)}">{E(s)}</option>' for s in sectors)
     head = (

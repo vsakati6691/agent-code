@@ -64,6 +64,7 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
     symbols = context.symbols if context is not None else _SYMBOLS
     asset_version = context.asset_version if context is not None else _SITE["v"]
     up = "../" * depth
+    freshness = freshness.replace('href="audit.html', f'href="{up}audit.html')
     # the options page is always listed: it explains its own state when nothing was collected (2026-10-14.6)
     nav = "".join(
         f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>' for href, label in NAV
@@ -76,12 +77,15 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <meta name="robots" content="noindex">
 <script>try{{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}}catch(e){{}}</script>
 <link rel="stylesheet" href="{up}assets/style.css{asset_version}">
+<noscript><style>[role=tabpanel][hidden],[data-panel][hidden]{{display:block!important}}tr.detail[hidden]{{display:table-row!important}}</style></noscript>
 <link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
 <nav aria-label="Research sections">{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
 <main id="main" tabindex="-1">{site_tables.enhance(column_headers(freshness + body))}
-<footer>{E(spec.DISCLAIMER)} Current registered methodology {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
-Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>{site_command.dialog() if symbols else ""}
+<footer><details><summary>Research, not advice; scenarios are conditional, with no established probability.</summary>
+<p>{E(spec.DISCLAIMER)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p><p>Quotes are delayed, never live.
+Sources: SEC EDGAR, Nasdaq Trader, Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage.
+Built from stored weekly snapshots. <a href="{up}audit.html">Data sources and run details</a>.</p></details></footer></main>{site_command.dialog() if symbols else ""}
 <script src="{up}assets/app.js{asset_version}"></script><script src="{up}assets/command.js{asset_version}"></script>{"".join(f'<script src="{up}{s}{asset_version}"></script>' for s in scripts)}</body></html>"""
 
 
@@ -95,7 +99,6 @@ def sessions_after(as_of: str, days: int = spec.FRESHNESS_CALENDAR_DAYS) -> list
 
 def freshness_banner(snap: dict, status: dict | None, now: datetime | None = None) -> str:
     from .price_integrity import correction, preclose
-    from .site_status import notice
 
     as_of = snap["as_of"]
     built = (now or datetime.now(ZoneInfo("America/New_York"))).astimezone(ZoneInfo("America/New_York"))
@@ -103,31 +106,26 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
     end = built.date() if built.hour >= 16 else built.date() - timedelta(days=1)
     start = date.fromisoformat(as_of)
     age = sum(is_trading_day(start + timedelta(days=i)) for i in range(1, max(0, (end - start).days) + 1))
-    age_text = "the latest completed session" if age == 0 else f"{age} trading session{'s' if age != 1 else ''} old"
+    age_text = "latest session" if age == 0 else f"{age} session{'s' if age != 1 else ''} old"
     stale = age > spec.FRESHNESS_STALE_SESSIONS
-    price_basis = "session (stored intraday inputs)" if preclose(snap) else "close"
+    price_basis = "intraday inputs · delayed" if preclose(snap) else "delayed close"
     quote_note = correction(snap) or "Quotes are end-of-session and delayed, never live."
     parts = [
-        f'<div class="banner info" id="freshness" data-asof="{E(as_of)}" '
+        f'<div class="banner info freshness-line" id="freshness" data-asof="{E(as_of)}" '
         f'data-sessions="{E(",".join(sessions_after(as_of)))}" data-stale-after="{spec.FRESHNESS_STALE_SESSIONS}">'
-        f'<strong>Data as of the {E(as_of)} {price_basis} (<span id="age">{age_text}'
-        f"</span>).</strong>Age checked at site build {built:%Y-%m-%d %H:%M} ET. Snapshot built {E(str(snap.get('run_finished', '')).replace('+00:00', ''))} UTC. "
-        f"{E(quote_note)} Run status: {E(snap.get('status', '?'))}. "
-        f"Snapshot methodology: {E(str(snap.get('spec_version') or 'unavailable'))}.</div>"
+        f'<span>Data: {start:%d %b %Y} · <span id="age">{age_text}</span> · {price_basis}</span>'
+        f"<details><summary>Details</summary><p>{E(quote_note)} Age checked at site build {built:%Y-%m-%d %H:%M} ET. "
+        "Session age counts completed NYSE sessions, using the registered 16:00 ET convention.</p></details>"
+        '<a href="audit.html#latest-run">Run details</a></div>'
     ]
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):
         parts.append(
-            f'<div class="banner bad"><strong>Stale data: the latest weekly update failed.</strong>'
-            f"{E(status.get('message', ''))} (at {E(str(status.get('at')))} UTC). The research below is the "
-            f"last successful snapshot, from {E(as_of)}.</div>"
+            '<div class="banner bad"><strong>Stale data: the latest weekly update failed.</strong>'
+            f'Displaying {E(as_of)}. <a href="audit.html#latest-run">Failure details</a>.</div>'
         )
     if snap.get("status") == "partial":
         parts.append(
-            notice(
-                "Partial data.",
-                "Some inputs are unavailable. Consult each list's exclusions and evidence gaps.",
-                snap.get("problems") or [],
-            )
+            '<p class="small warn">Partial data · <a href="audit.html#latest-run">Missing inputs and run details</a>.</p>'
         )
     parts.append(
         f'<div class="banner warn" id="stale-client"{"" if stale else " hidden"}><strong>This page may be out of date.</strong>'

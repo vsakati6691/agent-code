@@ -33,7 +33,7 @@ def formatted(value, kind: str) -> str:
 def spark(c: dict) -> str:
     values = (c.get("decision_research") or {}).get("spark", [])
     if len(values) < 2:
-        return '<span class="small muted">n/a · 1Y price history not collected</span>'
+        return '<span class="small muted" title="1Y price history not collected">—</span>'
     from .site_overview import sparkline
 
     sampled = values[:-1:5] + [values[-1]]
@@ -169,17 +169,18 @@ def detail(c: dict) -> str:
             if key == "insider_net" and flat[key]["v"] is None:
                 continue  # the dated Form 4 panel replaces the old unavailable ownership note
             x = flat[key]
-            reason = f'<small class="muted">{E(x["reason"])}</small>' if x["reason"] else ""
             items.append(
-                f'<div class="research-metric"><dt>{E(label)}</dt><dd>{E(x["text"])}{reason}'
-                f'<small class="muted">{E(x["note"])}</small></dd></div>'
+                f'<div class="research-metric"><dt>{E(label)}</dt><dd title="{E(" · ".join(v for v in (x["reason"], x["note"]) if v))}">{E(x["text"]) if x["v"] is not None else "—"}</dd></div>'
             )
         stamp = research.get("groups", {}).get(group, {}).get("as_of") or "n/a · not collected"
         source = research.get("groups", {}).get(group, {}).get("source", "")
-        cards.append(
+        card = (
             f'<article class="card"><h3>{group.title()}</h3><p class="small muted">Data as of {E(stamp)} · {E(source)}</p>'
             f"<dl>{''.join(items)}</dl></article>"
         )
+        if all(flat[key]["v"] is None for key, _, _ in fields):
+            card = f'<details class="empty-data"><summary>{group.title()} data unavailable</summary>{card}</details>'
+        cards.append(card)
     business = research.get("business") or {}
     narrative = "".join(
         f"<div><h3>{label}</h3><p>{E(business.get(key) or 'n/a · ' + business.get('reason', OLD))}</p></div>"
@@ -195,11 +196,15 @@ def detail(c: dict) -> str:
         if url.startswith("https://www.sec.gov/Archives/edgar/data/")
         else "10-K source n/a"
     )
-    return f"""<section class="decision-research"><div class="section-heading"><div><p class="eyebrow">THE DECISION FILE</p><h2>Quality, price &amp; durability</h2></div>{spark(c)}</div>
+    if not any(business.get(key) for key in ("description", "growth", "risk")):
+        narrative = f'<details class="empty-data"><summary>Business excerpts unavailable</summary>{narrative}</details>'
+    return f"""<section class="decision-research"><div class="section-heading"><h2>Quality, price &amp; durability</h2>{spark(c)}</div>
+<div class="decision-grid">{"".join(cards)}</div>
+<details><summary>Field definitions, dates and sources</summary>
 <p class="small muted">Fundamental quality excludes momentum. Scores are research comparisons, not probabilities.
 Valuation percentiles compare available values in this same published list; higher means numerically higher, not better.</p>
 <p class="small muted">Prices: {E(research.get("price_as_of") or "n/a")} · delayed, not live. SEC filed through {E(research.get("filing_as_of") or "n/a")}; quarter ended {E(research.get("period_end") or "n/a")}.
 Estimates are current observations, not historical forecasts. Margin trends compare TTM with prior TTM.</p>
 <p class="small muted">Registered score and scenario panels retain their reported-debt definitions. The decision fields require complete debt inputs and can be n/a when those older inputs are available.</p>
-<div class="decision-grid">{"".join(cards)}</div><div class="card business-evidence">{narrative}
+ </details><div class="card business-evidence">{narrative}
 <p class="small muted">Issuer excerpts · data as of {E(business.get("filed") or "n/a")} · {source}. These are issuer statements, not independently verified forecasts.</p></div></section>"""

@@ -41,7 +41,7 @@ def _list(snap: dict, h, kind: str, data: dict | None, o: dict, fragments: dict 
             "contracts are invented to fill the list.</div>"
         )
     short = (
-        f'<div class="banner info small"><strong>Fewer than {limit}</strong>{E(why)}</div>'
+        f'<details class="small"><summary>Why fewer than {limit} qualified</summary><p>{E(why)}</p></details>'
         if len(rows) < limit and why
         else ""
     )
@@ -77,59 +77,44 @@ def _list(snap: dict, h, kind: str, data: dict | None, o: dict, fragments: dict 
     )
     return (
         count
-        + short
         + f"""<div class="table-wrap wide"><table id="{tid}" data-table data-grouped><caption class="sr-only">{E(h.title)} {plural}</caption>
 <thead><tr>{head}</tr></thead>{body}</table></div>
-<p class="small">Select an underlying to show every fact, assumption, risk and payoff for that contract. <a href="downloads/{E(snap["as_of"])}_options_{h.key}_{plural}.csv" download>Download {plural} (CSV)</a></p>{exclusions}"""
+<p class="small">Select an underlying to show every fact, assumption, risk and payoff for that contract. <a href="downloads/{E(snap["as_of"])}_options_{h.key}_{plural}.csv" download>Download {plural} (CSV)</a></p>{short}{exclusions}"""
     )
 
 
 def options_page(
     snap: dict, daily: dict | None = None, fragments: dict | None = None, horizon: str | None = None
 ) -> str:
-    from .site_external import rate_note
     from .site_refresh import options_section
     from .site_speculative import section as speculative_section
 
     o = snap.get("options") or {}
     horizons = [h for h in spec.HORIZONS if horizon is None or h.key == horizon]
     r = spec.OPTION_RULES
-    head = f"""<h1>Options watchlist: calls and puts</h1>
-<p class="lede">Six independently ranked lists of liquid contracts on this week's large-cap research candidates (S&amp;P 500
-members): the top calls and the top puts for expiries about 3 months, 6 months and 1 year out. Research comparisons,
-not recommendations.</p>
-<div class="banner bad small" id="options-critical"><strong>Buying an option can lose the entire premium.</strong>Maximum loss
-for every contract below is the premium paid (ask x 100), shown in its own column on every screen size. Figures are
-before fees. Every contract here carries the risk of losing all of that premium.</div>
-{speculative_section(snap, daily)}
-{options_section(snap, daily or {})}
-<h2>Weekly tracked view · {E(snap["as_of"])}</h2>
-{rate_note(snap)}
-{status_html(snap)}{version_line(snap)}
-<details class="card small" open><summary>What these lists are, and what "top" means</summary>
+    state = status_block(snap)
+    head = f"""<h1>Options</h1><p>Stored calls and puts by expiry, premium and maximum loss.</p>
+<p class="small bad" id="options-critical">Buying an option can lose the entire premium.</p>
+<p class="small" id="options-status" data-state="{E(state["state"])}" title="{E(state["headline"])}">Options: {E(STATE_LABEL[state["state"]])} · <a href="audit.html#options-data">Data details</a>.</p>"""
+    guide = f"""<details class="card small"><summary>Eligibility, pricing and probability limits</summary>
 <p>{E(spec.OPTION_UNIVERSE_TEXT)}</p><p>{E(spec.OPTION_TOP_DEFINITION)}</p><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>Eligibility (fixed in advance): open interest ≥ {r["min_open_interest"]}, volume ≥ {r["min_volume"]}, spread ≤
 {r["max_spread_pct"]:.0%} of mid, |delta| {r["min_delta"]}-{r["max_delta"]} (calls positive, puts negative), implied volatility and
 theta present, standard 100-share contracts, at most {r["max_per_underlying_per_horizon"]} per underlying per list, up to
 {r["max_per_type_per_horizon"]} per list. Expiry windows: {E(", ".join(f"{h.title.lower()} = {h.min_dte}-{h.max_dte} days" for h in spec.HORIZONS))}.</p>
-<p>{E(spec.OPTION_THETA_RULE)} {E(spec.OPTION_QUOTE_RULE)} {E(spec.OPTION_EVENT_RULE)}</p></details>
+<p>{E(spec.OPTION_THETA_RULE)} {E(spec.OPTION_QUOTE_RULE)} {E(spec.OPTION_EVENT_RULE)}</p>
 <div class="banner warn small"><strong>Delta is not a probability of profit</strong>{E(spec.DELTA_STATEMENT)}</div>
 <div class="banner info small"><strong>* Premium assumption and fees</strong>{E(spec.PREMIUM_ASSUMPTION)} {E(spec.FEE_TREATMENT)}
 Quotes are delayed, end-of-session data from Cboe for {E(str(snap["as_of"]))}; payoffs at expiration are exact arithmetic on that
 premium, while before-expiration values are Black-Scholes MODEL estimates.</div>
 <div class="banner info small"><strong>Probability of profit: {E(spec.PROBABILITY_NOT_ESTABLISHED)}</strong>{E(spec.PROBABILITY_OF_PROFIT_DEFINITION)}
-{E(spec.ITM_PROBABILITY_DEFINITION)} {E(spec.PROBABILITY_NEVER_SUBSTITUTED)} <a href="methodology.html#probability">Validation gate and missing data</a>.</div>"""
-    probs = "".join(f"<li>{E(k)}: {E(v)}</li>" for k, v in (o.get("chain_problems") or {}).items())
-    unused = (
-        f'<details><summary>Chains not used ({len(o.get("chain_problems") or {})})</summary><ul class="small">{probs}</ul></details>'
-        if probs
-        else ""
-    )
+{E(spec.ITM_PROBABILITY_DEFINITION)} {E(spec.PROBABILITY_NEVER_SUBSTITUTED)} <a href="methodology.html#probability">Validation gate and missing data</a>.</div></details>"""
+    extra = guide + speculative_section(snap, daily) + options_section(snap, daily or {})
     if not o.get("enabled") or o.get("status") != "ok" or not o.get("underlyings"):
         return head + (
-            '<h2>The six lists</h2><p class="small">Top 5 calls and top 5 puts for about 3 months, 6 months and 1 year '
+            '<details class="empty-data"><summary>Options lists unavailable</summary><p class="small">Top 5 calls and top 5 puts for about 3 months, 6 months and 1 year '
             "to expiry will appear here once option chains are collected and validated for a snapshot (see the "
-            'status above). The <a href="methodology.html">methodology</a> page has every rule.</p>' + unused
+            'status above). The <a href="methodology.html">methodology</a> page has every rule.</p></details>' + extra
         )
     # ARIA tabs pattern over two dimensions: a type tab controls that type's three panels, a horizon tab the two
     # panels in that window, and each panel names both tabs; the ids never collide with the #call-3m view hashes
@@ -141,8 +126,7 @@ premium, while before-expiration values are Black-Scholes MODEL estimates.</div>
         )
     hz_tabs = "".join(
         f'<button role="tab" id="otab-hz-{h.key}" aria-controls="{" ".join(f"opanel-{k}-{h.key}" for k in spec.OPTION_TYPES)}" '
-        f'data-dim="hz" data-val="{h.key}" aria-selected="false">{E(HZ_SHORT[h.key])} · {E(h.title.lower())} '
-        f'<span class="small muted">({h.min_dte}-{h.max_dte} d)</span></button>'
+        f'data-dim="hz" data-val="{h.key}" aria-selected="false" title="{E(h.title)} · {h.min_dte}-{h.max_dte} days">{E(HZ_SHORT[h.key])}</button>'
         for h in horizons
     )
     type_tabs = "".join(
@@ -156,7 +140,7 @@ premium, while before-expiration values are Black-Scholes MODEL estimates.</div>
         for kind in spec.OPTION_TYPES:
             panels.append(
                 f'<section data-hz="{h.key}" data-type="{kind}" id="opanel-{kind}-{h.key}" role="tabpanel" '
-                f'aria-labelledby="otab-type-{kind} otab-hz-{h.key}" hidden><h2>{E(h.title)} · {kind}s · '
+                f'aria-labelledby="otab-type-{kind} otab-hz-{h.key}" hidden><h2 class="sr-only">{E(h.title)} · {kind}s · '
                 f"{h.min_dte}-{h.max_dte} days to expiry</h2>{_list(snap, h, kind, ls.get(f'{kind}s'), o, fragments)}</section>"
             )
     quotes = o.get("quotes") or {}
@@ -172,12 +156,12 @@ premium, while before-expiration values are Black-Scholes MODEL estimates.</div>
     )
     return (
         head
-        + f"""{summary_strip(snap)}
-<p class="small">Underlyings with a valid chain: {E(", ".join(o.get("underlyings", [])) or "none")}. Use the controls to choose calls or puts and an expiry window; arrow keys move between tabs.</p>{earn}
-<div data-matrix><div class="tabs seg" role="tablist" aria-label="Option type">{type_tabs}</div>
+        + f"""<div data-matrix><div class="tabs seg" role="tablist" aria-label="Option type">{type_tabs}</div>
 <div class="tabs" role="tablist" aria-label="Expiry horizon">{hz_tabs}</div>{"".join(panels)}</div>
+{summary_strip(snap)}
+<details><summary>Underlying coverage and controls</summary><p class="small">Underlyings with a valid chain: {E(", ".join(o.get("underlyings", [])) or "none")}. Use the controls to choose calls or puts and an expiry window; arrow keys move between tabs.</p>{earn}</details>
 <details><summary>Quote snapshot times by underlying ({len(quotes)})</summary><ul class="small">{qrows or '<li class="muted">not stored in this snapshot</li>'}</ul></details>
-{unused}"""
+{extra}"""
     )
 
 
@@ -201,13 +185,11 @@ def summary_strip(snap: dict) -> str:
 def watchlist_cards(snap: dict) -> str:
     """Prominent overview block: six compact lists (or the plain-language status when none can be shown)."""
     o = snap.get("options") or {}
-    intro = (
-        '<p class="small">Top calls and top puts on this week\'s large-cap candidates for about 3 months, 6 months and 1 year '
-        "to expiry, each list ranked on its own by liquidity, breakeven vs the implied move and time decay. Not "
-        'recommendations; a long option can lose its entire premium. <a href="options.html">Full options page</a>.</p>'
-    )
+    intro = '<p class="small">Long options can lose the entire premium. <a href="options.html">Lists, eligibility and payoff details</a>.</p>'
+    state = status_block(snap)
+    status = f'<p class="small" data-state="{E(state["state"])}">Options: {E(state["label"])} · <a href="audit.html#options-data">Collection details</a>.</p>'
     if not o.get("enabled") or o.get("status") != "ok":
-        return f'<h2 id="options-watchlist">Options watchlist</h2>{intro}{status_html(snap, compact=True)}'
+        return f'<details class="empty-data" id="options-watchlist"><summary>Options watchlist unavailable</summary>{intro}{status}</details>'
     cards = []
     for kind in spec.OPTION_TYPES:
         for h in spec.HORIZONS:
@@ -237,6 +219,5 @@ def watchlist_cards(snap: dict) -> str:
                 f'<p class="small"><a href="options.html#{kind}-{h.key}">Details, risks and payoffs →</a></p></section>'
             )
     return (
-        f'<h2 id="options-watchlist">Options watchlist</h2>{intro}{status_html(snap, compact=True)}'
-        f'<div class="ow-grid">{"".join(cards)}</div>'
+        f'<h2 id="options-watchlist">Options watchlist</h2>{intro}{status}<div class="ow-grid">{"".join(cards)}</div>'
     )
