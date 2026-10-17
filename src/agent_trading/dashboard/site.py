@@ -238,7 +238,7 @@ def _build_site(
         site_leaders.leaders_page(leader_payload, leader_details, SHORT_NOTE if preclose(snap) else ""),
         "leaders.html",
     )
-    write("goal.html", "Plan 2030", site_goal.goal_page(snap), "goal.html", js=("assets/goal.js",))
+    write("goal.html", "Plan 2030", site_goal.goal_page(snap, daily=daily), "goal.html", js=("assets/goal.js",))
     write("evidence.html", "Evidence", site_evidence.evidence_page(research_evidence), "evidence.html")
     write("history.html", "History", history_page(dates, tracking, history), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
