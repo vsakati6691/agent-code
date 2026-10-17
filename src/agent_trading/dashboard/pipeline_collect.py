@@ -56,19 +56,23 @@ def latest_bars(
     if key in ctx.histories:
         return ctx.histories[key]
     flags: list[str] = []
-    df, why = _guard(ctx, "cboe", ctx.providers.history, symbol)
+    provider = getattr(ctx.providers, "history_provider", "cboe")
+    cboe = provider == "cboe"  # PRICE_BAR_RULE covers public Cboe bars; private history keeps PRIVATE_HISTORY_RULE
+    df, why = _guard(ctx, provider, ctx.providers.history, symbol)
     if df is None:
         ctx.histories[key] = (None, why, flags)
         return ctx.histories[key]
     df = df[df.index <= pd.Timestamp(ctx.as_of)]
     if not df.empty and df.index[-1].date() < ctx.as_of:
-        # The history file can lag the close by a session; only a full post-close quote bar fills it (PRICE_BAR_RULE).
+        # The Cboe history file can lag the close by a session; only a full post-close quote bar fills it.
         q, _ = _quote(ctx, symbol)
-        if q is not None:
+        if q is not None and cboe:
             bar, note = quote_session_bar(q, df, ctx.as_of, spec.QUOTE_PREV_CLOSE_TOLERANCE)
             if bar is not None:
                 df = pd.concat([df, bar])
             flags.append(note)
+        elif q is not None:  # one source per private series: never spliced with a Cboe quote
+            flags.append("close-only quote available; daily OHLCV history is missing for the as-of session")
     try:
         df, trimmed = trim_bad_history(df, symbol)  # an old glitch drops older history, a recent one rejects
         if trimmed:
@@ -79,8 +83,8 @@ def latest_bars(
             ctx.as_of,
             spec.MAX_PRICE_LAG_BUSINESS_DAYS,
             min_bars,
-            check_open_range=False,
-            close_range_bars=spec.PRICE_RANGE_CHECK_BARS,
+            check_open_range=not cboe,
+            close_range_bars=spec.PRICE_RANGE_CHECK_BARS if cboe else None,
         )
     except DataQualityError as exc:
         ctx.histories[key] = (None, f"price data rejected: {exc}", flags)

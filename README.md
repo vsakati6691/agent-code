@@ -25,6 +25,9 @@ and journals stay out of the dashboard. Sources include SEC EDGAR, Nasdaq
 Trader, Cboe delayed quotes, Alpha Vantage, FRED and FINRA; coverage and timestamps appear
 on the site.
 
+For personal-use Massive history on this PC, see the [private dashboard setup](docs/PRIVATE_DASHBOARD.md).
+Private data and generated pages stay in ignored local folders and cannot enter the public build.
+
 | Page | What you can explore |
 |---|---|
 | [Overview](https://vsakati6691.github.io/agent-code/index.html) | SPY/IJH/IWM market context, snapshot changes, scheduled earnings, concentration and downside flags, benchmark tracking and data coverage. |
@@ -80,17 +83,17 @@ required for the goal beside the stored scenarios and research evidence. Inputs
 stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
 the current methodology, frozen as of **2026-10-16**. The administrative freeze
-date is recorded separately from methodology version **2026-10-17.3** and its pinned hash. Versions retain separate evidence counts.
+date is recorded separately from methodology version **2026-10-17.4** and its pinned hash. Versions retain separate evidence counts.
 
 Version **2026-10-17.1** registers full S&P 500 collection for the current top-20
 Leaders view. Version **2026-10-17.2** anchors Leaders base growth in three-year
 revenue CAGR, accelerates the fade above $500B, permits revenue declines in bear
 cases and shows implied cap growth next to every scenario. A base above 25%/yr
 is labelled an aggressive assumption. See [Leaders rules](docs/LEADERS_2030.md).
-Version **2026-10-17.3** accepts Cboe daily bars as published (Cboe's open often
+Version **2026-10-17.4** accepts public Cboe daily bars as published (Cboe's open often
 lies just outside its own high-low range and is not range-checked) and fills a
 lagging history file's as-of bar only from a verified post-close quote with its
-own open, high, low, close and volume. See [the changelog](docs/SPEC_CHANGELOG.md#2026-10-173).
+own open, high, low, close and volume. See [the changelog](docs/SPEC_CHANGELOG.md#2026-10-174).
 These rows still depend on a successful weekly import; code deployment does not
 fill missing data in older snapshots.
 

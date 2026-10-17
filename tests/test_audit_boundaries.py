@@ -115,6 +115,21 @@ def test_cboe_open_outside_range_is_kept_but_recent_close_break_rejects():
     assert result is None and reason == "price data rejected: SYN: close outside high/low range"
 
 
+def test_private_history_keeps_strict_checks_and_is_never_completed_from_a_cboe_quote():
+    frame = make_bars(n=300, end=AS_OF.isoformat())
+    frame.iloc[10, frame.columns.get_loc("open")] = frame.iloc[10]["high"] * 1.002
+    private = SimpleNamespace(history_provider="massive", history=lambda _: frame)
+    result, reason, _ = pipeline_collect.latest_bars(Context(AS_OF, private), "SYN")
+    assert result is None and reason == "price data rejected: SYN: open outside high/low range"
+
+    lagging = make_bars(n=80, end="2026-10-09")
+    quote = session_quote(lagging)
+    private = SimpleNamespace(history_provider="massive", history=lambda _: lagging, quote=lambda _: quote)
+    result, reason, flags = pipeline_collect.latest_bars(Context(AS_OF, private), "SYN")
+    assert result is None and "stale" in reason
+    assert flags == ["close-only quote available; daily OHLCV history is missing for the as-of session"]
+
+
 def test_parser_preserves_unknown_volume():
     result = providers.parse_cboe_history(
         {"data": [{"date": "2026-10-12", "open": 10, "high": 11, "low": 9, "close": 10, "volume": None}]}

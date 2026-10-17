@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-17.3"
+SPEC_VERSION = "2026-10-17.4"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -59,9 +59,25 @@ SPEC_CHANGELOG = [
     ),
     (
         "2026-10-17.3",
+        "Owner chose private access: register local Massive daily history with unchanged validation, explicit source and publication restrictions.",
+    ),
+    (
+        "2026-10-17.4",
         "Owner-approved data fix: Cboe bars used as published; open not range-checked; lagging as-of bar from a verified close quote.",
     ),
 ]
+
+PRIVATE_HISTORY_RULE = {
+    "provider": "Massive REST daily aggregates; local personal research only, explicitly enabled",
+    "basis": "Split-adjusted OHLCV, not dividend-adjusted; one source per price series; no repair or splice with rejected Cboe bars",
+    "window_days": 730,
+    "window_start": "Later of as-of minus 730 days and UTC collection date minus 729 days; avoid the rolling Basic entitlement boundary",
+    "limits": {"attempts": 600, "min_interval_seconds": 13},
+    "validation": "Existing exact completed-session, minimum-history, finite OHLCV, range, split and frozen-feed checks remain required; missing longer windows stay unavailable",
+    "errors": "Stop this provider for the run on access, billing or quota responses; no automatic provider fallback",
+    "publication": "Private snapshots and their derived outputs cannot enter the public build; no GitHub Actions private collection or rendering",
+    "unchanged": "Existing Cboe public collection, scoring, eligibility, 90% S&P price coverage, scenarios, tracking horizons and immutable snapshots",
+}
 
 EXTERNAL_DATA_RULES = {
     "registration_reason": "additive datasets; zero weekly snapshots under 2026-10-16.1 at registration",
@@ -516,7 +532,7 @@ LIMITED_HISTORY_QUARTERS = 8  # fewer reported quarters than this -> 'limited op
 LIMITED_HISTORY_DAYS = 504  # fewer price bars than this (about 2 years) -> 'limited trading history' flag
 MAX_FILING_AGE_DAYS = 200  # latest 10-Q/10-K older than this -> fundamentals stale, excluded
 MAX_PRICE_LAG_BUSINESS_DAYS = 0  # the as-of close must be present (0 = exactly the as-of session)
-# spec 2026-10-17.3: daily bars are used as Cboe publishes them; nothing is repaired or invented.
+# spec 2026-10-17.4: public Cboe daily bars are used as published; nothing is repaired or invented.
 PRICE_BAR_RULE = (
     "Daily bars are used as Cboe publishes them: open, high, low and close must be positive and finite, high at "
     "least low, with no unadjusted-split gap or frozen feed. Cboe's open often lies slightly outside its own "
@@ -527,7 +543,9 @@ PRICE_BAR_RULE = (
     "after the 16:00 ET close, its last trade is in the as-of session, it reports a positive open, high, low and "
     "close, a volume and a range containing the close, the history file ends on the preceding NYSE session, and "
     "the quote's close less its reported change matches that session's history close within half a cent (Cboe "
-    "can roll the quote's previous close to the session close after hours). Otherwise the price is stale."
+    "can roll the quote's previous close to the session close after hours). Otherwise the price is stale. This "
+    "rule covers the public Cboe history only: private Massive history keeps every check in PRIVATE_HISTORY_RULE "
+    "and is never completed from a Cboe quote."
 )
 PRICE_RANGE_CHECK_BARS = 252
 QUOTE_PREV_CLOSE_TOLERANCE = 0.005  # dollars, between close - change and the preceding history close
@@ -1174,6 +1192,7 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "private_history": PRIVATE_HISTORY_RULE,
         "external_datasets": EXTERNAL_DATA_RULES,
         "leaders_2030": {
             "rule": LEADERS_RULE,

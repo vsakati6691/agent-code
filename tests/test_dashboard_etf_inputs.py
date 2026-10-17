@@ -16,10 +16,11 @@ XML = """<edgarSubmission xmlns="http://www.sec.gov/edgar/nport"><genInfo><serie
 
 def test_new_version_changes_only_input_registration():
     raw = spec.spec_dict()
-    # Remove the later additive Leaders registration to check the original ETF delta.
+    # Remove later additive registrations to check the original ETF delta.
+    assert raw.pop("private_history") == spec.PRIVATE_HISTORY_RULE
     raw.pop("leaders_2030")
     raw.pop("external_datasets")
-    raw.pop("price_bars")  # 2026-10-17.3
+    raw.pop("price_bars")  # 2026-10-17.4
     raw["display_rules"]["watchlist_price"][0] = spec.WATCHLIST_PRICE_RULE_2026_10_14_5
     raw["version"] = "2026-10-14.9"
     assert raw["watchlist"].pop("etf_inputs_sha256") == etf_inputs.config_hash(etf_inputs.load())
