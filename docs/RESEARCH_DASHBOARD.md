@@ -8,6 +8,9 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 - Tests: `tests/test_dashboard.py`, `tests/test_dashboard_v2.py`, `tests/test_dashboard_http.py`, `tests/test_dashboard_site.py` (builds a two-snapshot demo site and checks it: links, page size, table labels, one h1 per page, no raw values), `tests/test_dashboard_ai.py` (AI lists, scenario test, private-company validation, page weight)
 - Site modules: `site.py` (shell, detail pages, history, methodology, audit, build), `site_overview.py`, `site_lists.py`, `site_scan.py`, `site_ai.py`, `site_options.py`, `site_watchlist.py`, `fmt.py`; AI logic in `ai.py`
 
+For the opt-in local personal-use Massive source, see [Private dashboard setup](PRIVATE_DASHBOARD.md).
+Its snapshots, HTTP cache and generated pages must stay local; public build/verification rejects private data.
+
 ## What the site shows
 
 | Page | Contents |

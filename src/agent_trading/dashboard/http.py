@@ -44,6 +44,7 @@ ALLOWED_HOSTS = {
     "api.stlouisfed.org": "fred",
     "www.finra.org": "finra",
     "cdn.finra.org": "finra",
+    "api.massive.com": "massive",
 }
 RETRY_STATUS = {429, 500, 502, 503, 504}
 RATE_LIMIT_ATTEMPTS = 5
@@ -77,6 +78,7 @@ DEFAULT_LIMITS = {
     "alphavantage": ProviderLimits(13.0, 3),  # free key: 25/day; the dashboard needs 1
     "fred": ProviderLimits(0.5, 42),
     "finra": ProviderLimits(1.0, 9),
+    "massive": ProviderLimits(13.0, 600),  # private Basic stocks: at most five requests/minute
 }
 
 SEC_SUBCAPS = {"sec_core": 4000, "sec_insiders": 1800, "sec_bulk": 24, "sec_risk": 120}
@@ -105,6 +107,7 @@ class HttpClient:
     group_used: dict[str, int] = field(default_factory=dict)
     _group: str | None = None
     _scope_limits: list[tuple[str, int]] = field(default_factory=list)
+    unavailable: set[str] = field(default_factory=set)
     daily_budget: DailyRequestBudget = field(default_factory=DailyRequestBudget)
 
     def __post_init__(self) -> None:
@@ -191,6 +194,8 @@ class HttpClient:
 
     def _fetch(self, provider: str, url: str, params: dict | None) -> bytes:
         assert self.session is not None  # established in __post_init__
+        if provider in self.unavailable:
+            raise ProviderUnavailable(f"{provider}: provider stopped for this run")
         host = urlsplit(url).hostname
         last_error = ""
         attempt, limit = 0, self.attempts
@@ -225,6 +230,9 @@ class HttpClient:
             except requests.RequestException as exc:
                 raise FetchError(f"{host}: {type(exc).__name__}") from None
             else:
+                if provider == "massive" and resp.status_code in {401, 402, 403, 429}:
+                    self.unavailable.add(provider)
+                    raise ProviderUnavailable("Massive access, billing or quota response; stopped for this run")
                 if provider == "alphavantage" and (
                     resp.status_code in {402, 403, 429} or (resp.status_code == 200 and quota_notice(resp.content))
                 ):

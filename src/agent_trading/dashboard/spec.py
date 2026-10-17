@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-17.2"
+SPEC_VERSION = "2026-10-17.3"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -57,7 +57,23 @@ SPEC_CHANGELOG = [
         "2026-10-17.2",
         "Owner requested Leaders scenario sanity: three-year growth, faster mega-cap fade, explicit bear stress and implied cap CAGR.",
     ),
+    (
+        "2026-10-17.3",
+        "Owner chose private access: register local Massive daily history with unchanged validation, explicit source and publication restrictions.",
+    ),
 ]
+
+PRIVATE_HISTORY_RULE = {
+    "provider": "Massive REST daily aggregates; local personal research only, explicitly enabled",
+    "basis": "Split-adjusted OHLCV, not dividend-adjusted; one source per price series; no repair or splice with rejected Cboe bars",
+    "window_days": 730,
+    "window_start": "Later of as-of minus 730 days and UTC collection date minus 729 days; avoid the rolling Basic entitlement boundary",
+    "limits": {"attempts": 600, "min_interval_seconds": 13},
+    "validation": "Existing exact completed-session, minimum-history, finite OHLCV, range, split and frozen-feed checks remain required; missing longer windows stay unavailable",
+    "errors": "Stop this provider for the run on access, billing or quota responses; no automatic provider fallback",
+    "publication": "Private snapshots and their derived outputs cannot enter the public build; no GitHub Actions private collection or rendering",
+    "unchanged": "Existing Cboe public collection, scoring, eligibility, 90% S&P price coverage, scenarios, tracking horizons and immutable snapshots",
+}
 
 EXTERNAL_DATA_RULES = {
     "registration_reason": "additive datasets; zero weekly snapshots under 2026-10-16.1 at registration",
@@ -1150,6 +1166,7 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "private_history": PRIVATE_HISTORY_RULE,
         "external_datasets": EXTERNAL_DATA_RULES,
         "leaders_2030": {
             "rule": LEADERS_RULE,

@@ -56,7 +56,7 @@ def latest_bars(
     if key in ctx.histories:
         return ctx.histories[key]
     flags: list[str] = []
-    df, why = _guard(ctx, "cboe", ctx.providers.history, symbol)
+    df, why = _guard(ctx, getattr(ctx.providers, "history_provider", "cboe"), ctx.providers.history, symbol)
     if df is None:
         ctx.histories[key] = (None, why, flags)
         return ctx.histories[key]

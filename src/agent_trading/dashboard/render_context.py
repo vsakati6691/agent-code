@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 class RenderContext:
     symbols: dict[str, str] = field(default_factory=dict)
     asset_version: str = ""
+    private: bool = False
 
 
 CURRENT_RENDER: ContextVar[RenderContext | None] = ContextVar("dashboard_render", default=None)
