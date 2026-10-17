@@ -149,6 +149,8 @@ def validate_bars(
     last = df.index[-1].date()
     if last > as_of:
         raise DataQualityError(f"{symbol}: last bar {last} is after as-of date {as_of}")
+    # Intentionally conservative weekday budget. Discounting exchange holidays
+    # would admit older data; the exact-session live/dashboard checks stay stricter.
     lag = int(np.busday_count(last, as_of))
     if lag > max_staleness_days:
         raise DataQualityError(

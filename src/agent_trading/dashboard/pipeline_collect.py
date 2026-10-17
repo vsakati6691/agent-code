@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import date, timedelta
+from typing import ParamSpec, TypeVar
 
 import pandas as pd
 
@@ -12,23 +14,28 @@ from . import spec
 from .earnings_cadence import label as cadence_label
 from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
-from .http import BudgetExceeded, FetchError
+from .http import BudgetExceeded, FetchError, ProviderUnavailable
 from .pipeline_context import Context, RunFailed
 from .price_integrity import quote_close_reason
-from .providers import common_stock_reason
+from .providers import Quote, common_stock_reason
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
-def _guard(ctx: Context, provider: str, fn, *args):
+def _guard(  # noqa: UP047 -- keep the declared Python 3.11 package compatibility
+    ctx: Context, provider: str, fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs
+) -> tuple[T | None, str | None]:
     if provider in ctx.budget_hit:
         return None, "not evaluated: request budget spent"
     try:
-        return fn(*args), None
+        return fn(*args, **kwargs), None
     except BudgetExceeded as exc:
         ctx.budget_hit.add(provider)
         ctx.problems.append(str(exc))
         return None, "not evaluated: request budget spent"
     except FetchError as exc:
-        if provider == "alphavantage" and "quota or entitlement" in str(exc):
+        if isinstance(exc, ProviderUnavailable) or (provider == "alphavantage" and "quota or entitlement" in str(exc)):
             ctx.budget_hit.add(provider)
             ctx.problems.append(str(exc))
         if "attempts" in str(exc):
@@ -96,7 +103,7 @@ def watchlist_bars(ctx: Context, symbol: str) -> tuple[pd.DataFrame | None, str 
     return short, None, flags2, note
 
 
-def _quote(ctx: Context, symbol: str):
+def _quote(ctx: Context, symbol: str) -> tuple[Quote | None, str | None]:
     if symbol not in ctx.quotes:
         quote, reason = _guard(ctx, "cboe", ctx.providers.quote, symbol)
         if quote is not None:
@@ -114,7 +121,9 @@ def _facts(ctx: Context, cik: int) -> tuple[Fundamentals | None, str | None]:
     elif not (raw.get("facts") or {}).get("us-gaap"):
         ctx.facts[cik] = (None, "no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)")
     else:
-        ctx.facts[cik] = (build_fundamentals(raw, ctx.as_of, max_quarters=spec.DECISION_RULES["max_quarters"]), None)
+        max_quarters = spec.DECISION_RULES["max_quarters"]
+        assert isinstance(max_quarters, int)  # fixed registered rule
+        ctx.facts[cik] = (build_fundamentals(raw, ctx.as_of, max_quarters=max_quarters), None)
     return ctx.facts[cik]
 
 

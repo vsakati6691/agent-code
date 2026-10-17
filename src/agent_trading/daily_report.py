@@ -62,6 +62,22 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     out += [f"- {n}" for n in ctx.data_notes]
     out += [f"- S&P 500 constituents: {ctx.universe_note}", ""]
 
+    out += _scanner_section(settings, ctx)
+
+    out += _desk_section(ctx)
+
+    out += _gtaa_section(settings, ctx)
+
+    out += _account_section(settings, ctx, journal, broker, bars)
+
+    out += _actions_section(settings, ctx)
+
+    return "\n".join(out)
+
+
+def _scanner_section(settings: Settings, ctx: DailyContext) -> list[str]:
+    out: list[str] = []
+    as_of = ctx.as_of
     # ---------------- Section A
     out += ["## Section A: S&P 500 scanner", ""]
     if ctx.market:
@@ -153,7 +169,11 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
             out.append("")
         if scan.bearish:
             out.append("**Bearish setups (avoid / exit if held; no short selling):** " + ", ".join(scan.bearish) + "\n")
+    return out
 
+
+def _desk_section(ctx: DailyContext) -> list[str]:
+    out: list[str] = []
     # ---------------- Section B
     out += ["## Section B: Focused desk (TQQQ, SQQQ, IBIT, NVDA)", ""]
     reg = ctx.desk_regime
@@ -207,7 +227,11 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
             for h in heads.itertuples():
                 out.append(f"- News (UNVERIFIED headline, {h.source}, {h.date}): {h.title}")
         out.append("")
+    return out
 
+
+def _gtaa_section(settings: Settings, ctx: DailyContext) -> list[str]:
+    out: list[str] = []
     # ---------------- Strategy C (GTAA)
     if ctx.gtaa:
         out += [
@@ -236,7 +260,12 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
                 ],
             )
         )
+    return out
 
+
+def _account_section(settings: Settings, ctx: DailyContext, journal: Journal, broker: PaperBroker, bars) -> list[str]:
+    out: list[str] = []
+    as_of, lv = ctx.as_of, ctx.live
     # ---------------- Section C
     out += ["## Section C: Account and portfolio risk", ""]
     snap = load_saved_snapshot(settings)
@@ -269,6 +298,7 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
         if not lv.verified:
             out.append(f"- **Live account: NOT VERIFIED** ({lv.account_note}); no new live tickets")
         else:
+            assert lv.equity is not None and lv.cash is not None  # verified by live.prepare
             out.append(
                 f"- Live sizing: equity ${lv.equity:,.2f} and cash ${lv.cash:,.2f} available "
                 f"(capped at ${settings.live.capital:,.0f}); planned open risk "
@@ -328,7 +358,12 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     else:
         out.append("- Performance vs SPY: not enough paper history yet")
     out.append("")
+    return out
 
+
+def _actions_section(settings: Settings, ctx: DailyContext) -> list[str]:
+    out: list[str] = []
+    scan, lv = ctx.scan, ctx.live
     # ---------------- Section D
     out += ["## Section D: Actions", "", "**1. Research findings**", ""]
     if scan is not None:
@@ -344,7 +379,7 @@ def render(settings: Settings, ctx: DailyContext, journal: Journal, broker: Pape
     if rejected:
         out.append("- Not sized: " + "; ".join(f"{p.symbol} ({p.reason})" for p in rejected))
     out += ["", *_render_tickets(settings, lv)]
-    return "\n".join(out)
+    return out
 
 
 def _render_tickets(settings: Settings, lv: LiveResult | None) -> list[str]:

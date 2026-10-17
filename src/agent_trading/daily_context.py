@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from .live import LiveResult
+from .risk import TradingStatus
 from .strategies.desk import DeskDecision
 from .strategies.scanner import ScanResult
 
@@ -29,7 +30,7 @@ class DailyContext:
     paper_events: list[str] = field(default_factory=list)
     paper_warnings: list[str] = field(default_factory=list)
     proposals: list = field(default_factory=list)
-    status: object = None
+    status: TradingStatus | None = None
     snapshots: dict = field(default_factory=dict)
     gtaa: dict = field(default_factory=dict)
     gtaa_rebalance: bool = False

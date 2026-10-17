@@ -4,6 +4,7 @@ the probability gate, the always-linked options page, phone-visible maximum loss
 from __future__ import annotations
 
 import csv
+import inspect
 import io
 import re
 from datetime import timedelta
@@ -329,8 +330,7 @@ def test_probability_gate_lets_a_complete_record_through_with_its_provenance():
 def test_engine_never_passes_an_estimate_into_the_probability_display():
     src = (ROOT / "src" / "agent_trading" / "dashboard" / "options.py").read_text(encoding="utf-8")
     assert "probability.display(kind, hz)" in src and "pop=" not in src and "itm=" not in src
-    page_src = (ROOT / "src" / "agent_trading" / "dashboard" / "site_options.py").read_text(encoding="utf-8")
-    assert "delta" not in page_src.split("def probability_text")[1].split("def ")[0]
+    assert "delta" not in inspect.getsource(probability_text)
 
 
 # --- the built site ---------------------------------------------------------------------------------------------

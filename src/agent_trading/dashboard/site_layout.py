@@ -16,11 +16,12 @@ from . import (
 from .fmt import (
     sval as sval,
 )
+from .render_context import CURRENT_RENDER
 
-_SYMBOLS: dict[str, str] = {}  # ticker -> name, for the header search (set by build_site)
+_SYMBOLS: dict[str, str] = {}  # legacy standalone page() callers; build_site uses its isolated RenderContext
 
 
-_SITE = {"v": ""}  # asset version for cache busting (set by build_site)
+_SITE = {"v": ""}  # legacy standalone asset version; never mutated by build_site
 
 
 E = html.escape
@@ -59,26 +60,29 @@ def brand() -> str:
 
 
 def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "", scripts: tuple = ()) -> str:
+    context = CURRENT_RENDER.get()
+    symbols = context.symbols if context is not None else _SYMBOLS
+    asset_version = context.asset_version if context is not None else _SITE["v"]
     up = "../" * depth
     # the options page is always listed: it explains its own state when nothing was collected (2026-10-14.6)
     nav = "".join(
         f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>' for href, label in NAV
     )
-    search = site_command.search(_SYMBOLS, up + "symbol/")
+    search = site_command.search(symbols, up + "symbol/")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{E(title)} · {E(brand())}</title>
 <link rel="icon" type="image/svg+xml" href="{up}assets/favicon.svg">
 <meta name="robots" content="noindex">
 <script>try{{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}}catch(e){{}}</script>
-<link rel="stylesheet" href="{up}assets/style.css{_SITE["v"]}">
+<link rel="stylesheet" href="{up}assets/style.css{asset_version}">
 <link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
 <nav aria-label="Research sections">{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
 <main id="main" tabindex="-1">{site_tables.enhance(column_headers(freshness + body))}
 <footer>{E(spec.DISCLAIMER)} Current registered methodology {E(spec.SPEC_VERSION)}. Sources: SEC EDGAR, Nasdaq Trader,
-Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>{site_command.dialog() if _SYMBOLS else ""}
-<script src="{up}assets/app.js{_SITE["v"]}"></script><script src="{up}assets/command.js{_SITE["v"]}"></script>{"".join(f'<script src="{up}{s}{_SITE["v"]}"></script>' for s in scripts)}</body></html>"""
+Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage. Built from stored weekly snapshots.</footer></main>{site_command.dialog() if symbols else ""}
+<script src="{up}assets/app.js{asset_version}"></script><script src="{up}assets/command.js{asset_version}"></script>{"".join(f'<script src="{up}{s}{asset_version}"></script>' for s in scripts)}</body></html>"""
 
 
 def sessions_after(as_of: str, days: int = spec.FRESHNESS_CALENDAR_DAYS) -> list[str]:

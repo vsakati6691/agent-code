@@ -72,14 +72,14 @@ def size_position(
         if correlated_remaining <= 0:
             return SizeDecision(0.0, 0.0, 0.0, "correlated-risk limit reached")
         risk_caps["correlated-risk limit"] = correlated_remaining
-    risk_label = min(risk_caps, key=risk_caps.get)
+    risk_label = min(risk_caps, key=risk_caps.__getitem__)
 
     candidates = {
         risk_label: risk_caps[risk_label] / per_share,
         "max position size": equity * cfg.max_position_pct / entry_price,
         "available cash": max(0.0, cash) / entry_price,
     }
-    limited_by = min(candidates, key=candidates.get)
+    limited_by = min(candidates, key=candidates.__getitem__)
     qty = _floor(candidates[limited_by], cfg.fractional_shares)
     if qty <= 0:
         return SizeDecision(0.0, 0.0, 0.0, f"size rounds to zero ({limited_by})")

@@ -8,6 +8,11 @@ const http = require('node:http');
 const path = require('node:path');
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(process.argv[2]);
+const profilePath = path.join(root, 'browser-fixture.json');
+const profile = fs.existsSync(profilePath) ? JSON.parse(fs.readFileSync(profilePath, 'utf8')) : {
+  ticker: 'NVDA', query: 'nvidia', dailyMissingTicker: 'COCO',
+  unavailableTicker: 'ARM', unavailableReason: 'not common stock', firstAiHref: 'stock/ai_large-MU.html'
+};
 const out = path.resolve(process.argv[3] || 'reports/dashboard-ui');
 fs.mkdirSync(out, {recursive: true});
 const pages = ['index', 'growth', 'multibaggers', 'ai', 'options', 'bets', 'watchlist', 'leaders',
@@ -82,9 +87,9 @@ const server = http.createServer((req, res) => {
     await page.keyboard.press('Tab');
     assert.equal(await page.locator('#ticker-command').evaluate(e => e.contains(document.activeElement)), true);
     await query.focus();
-    await query.fill('nvidia');
+    await query.fill(profile.query);
     assert.equal(await page.locator('#command-results li').count(), 1);
-    assert.match(await page.locator('#command-results').innerText(), /NVDA/);
+    assert.ok((await page.locator('#command-results').innerText()).includes(profile.ticker));
     await page.screenshot({path: path.join(out, 'command-palette.png')});
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => document.activeElement === document.querySelector('.command-trigger'));
@@ -93,15 +98,15 @@ const server = http.createServer((req, res) => {
     assert.match(await page.locator('#command-hint').innerText(), /No matching ticker/);
     await page.keyboard.press('Enter');
     assert.equal(page.url(), `${base}/growth.html`);
-    await query.fill('NVDA');
+    await query.fill(profile.ticker);
     await page.keyboard.press('Enter');
-    await page.waitForURL('**/symbol/NVDA.html');
+    await page.waitForURL(`**/symbol/${profile.ticker}.html`);
     await page.keyboard.press('Meta+k');
     assert.equal(await page.locator('#ticker-command').isVisible(), true);
-    await query.fill('NVDA');
+    await query.fill(profile.ticker);
     await page.keyboard.press('Enter');
     await page.waitForLoadState('networkidle');
-    assert.equal(page.url(), `${base}/symbol/NVDA.html`); // nested-page base is preserved
+    assert.equal(page.url(), `${base}/symbol/${profile.ticker}.html`); // nested-page base is preserved
 
     await page.goto(`${base}/growth.html`);
     const table = page.locator('#t-scan'), wrap = table.locator('..');
@@ -154,7 +159,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('.daily-status.warn').count(), 1);
     assert.equal(await page.locator('.refresh-missing').getAttribute('open'), null);
     await page.locator('.refresh-missing summary').click();
-    assert.match(await page.locator('.refresh-missing').innerText(), /COCO.*stale chain/);
+    assert.ok((await page.locator('.refresh-missing').innerText()).includes(`${profile.dailyMissingTicker}: stale chain`));
     assert.equal(await page.locator('.data-notice', {hasText: 'Macro inputs unavailable'}).count(), 1);
     await page.emulateMedia({reducedMotion: 'reduce'});
     await page.keyboard.press('Control+k');
@@ -172,7 +177,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await fallback.locator('#ticker-command').isVisible(), false);
     assert.equal(await fallback.locator('#t-scan').locator('..').getAttribute('tabindex'), '0');
     await nojs.close();
-    const ai = await require('./dashboard_ai_browser.cjs').checkAiPage(page, base);
+    const ai = await require('./dashboard_ai_browser.cjs').checkAiPage(page, base, profile);
     assert.deepEqual(errors, []);
     const result = {checks, errors, sticky, ai, maxLayoutShift: Math.max(...checks.map(c => c.cls)),
       interactions: 'palette, nested navigation, empty search, Escape/focus, sticky axes, sorting, 503 retry, partial data, theme, reduced motion, print, no JavaScript'};

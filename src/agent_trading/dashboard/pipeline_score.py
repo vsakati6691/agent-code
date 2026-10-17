@@ -73,7 +73,9 @@ def failed_gate(band: spec.Band, m: dict) -> str | None:
     return None
 
 
-def evaluate(ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, str]], bench: pd.Series) -> list[dict]:
+def evaluate(
+    ctx: Context, band: spec.Band, tickers: list[tuple[str, int, str, str | None]], bench: pd.Series
+) -> list[dict]:
     """Score each (ticker, cik, name, sector) for `band`; exclusions are recorded on ctx."""
     out = []
     for i, (t, cik, name, sector) in enumerate(tickers, 1):

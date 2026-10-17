@@ -1,5 +1,11 @@
 # Automated execution: audit, gaps and plan (2026-10-12)
 
+> Historical proposal, not current authorization. The automated-execution and
+> credential-storage proposals below are superseded by [CLAUDE.md](../CLAUDE.md):
+> brokerage access is read-only, all live tickets are placed manually by the
+> owner, and secrets stay in `.env`. Retained for the audit trail; do not
+> implement those proposals. See [the 2026-10-17 fixes](AUDIT_FIXES_2026-10-17.md).
+
 Scope: can `agent-code` become an unattended trading system on the existing
 Robinhood Agent-trading account (the configured account)? No order was placed, reviewed,
 modified or cancelled during this audit. Every Robinhood call was read-only:

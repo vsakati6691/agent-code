@@ -102,4 +102,6 @@ def test_all_publish_workflows_guard_main_check_links_and_pin_actions():
         assert any('--data-commit "$(git -C research-data rev-parse HEAD)"' in s.get("run", "") for s in steps)
         for step in steps:
             if "uses" in step:
-                assert len(step["uses"].split("@")[1]) == 40
+                from tests.workflow_checks import assert_pinned_action
+
+                assert_pinned_action(root.parent.parent, step["uses"])

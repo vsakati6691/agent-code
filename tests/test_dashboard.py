@@ -181,7 +181,7 @@ def test_scenario_math_matches_hand_calculation():
     rev1 = 100 * (1 + path[0])
     exit_mult = 10 * 0.75
     mult1 = 10 + (exit_mult - 10) / 5
-    assert sc["base"]["years"]["1" if False else 1]["value_per_share"] == pytest.approx(rev1 * mult1 / 100)
+    assert sc["base"]["years"][1]["value_per_share"] == pytest.approx(rev1 * mult1 / 100)
     for y in spec.SCENARIO_YEARS:
         assert (
             sc["bear"]["years"][y]["value_per_share"]

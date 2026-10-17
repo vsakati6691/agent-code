@@ -7,9 +7,12 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
+import pandas as pd
+
 from ..market_calendar import is_trading_day, previous_trading_day
 from . import spec
-from .providers import Providers
+from .fundamentals import Fundamentals
+from .providers import Providers, Quote
 
 log = logging.getLogger("agent_trading.dashboard.pipeline")
 
@@ -47,9 +50,11 @@ class Context:
     budget_hit: set[str] = field(default_factory=set)
     transient_failures: int = 0  # requests that still failed after their retries (429/5xx/timeouts)
     limit: int | None = None
-    quotes: dict = field(default_factory=dict)
-    histories: dict = field(default_factory=dict)
-    facts: dict = field(default_factory=dict)
+    quotes: dict[str, tuple[Quote | None, str | None]] = field(default_factory=dict)
+    histories: dict[str | tuple[str, int], tuple[pd.DataFrame | None, str | None, list[str]]] = field(
+        default_factory=dict
+    )
+    facts: dict[int, tuple[Fundamentals | None, str | None]] = field(default_factory=dict)
     decision_extras: dict = field(default_factory=dict)
     earnings_reason: str | None = None
 

@@ -180,7 +180,7 @@ def test_import_robinhood_merges_into_cache(settings, tmp_path):
     assert import_robinhood(settings, path) == {"SPY": 2}
 
 
-def test_api_key_never_logged(caplog):
+def test_api_key_never_logged():
     register_secret("SUPERSECRETKEY123")
     assert "SUPERSECRETKEY123" not in redact("GET https://x/query?symbol=A&apikey=SUPERSECRETKEY123")
     assert "abcd1234" not in redact("url?apikey=abcd1234&x=1")

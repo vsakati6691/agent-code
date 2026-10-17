@@ -191,6 +191,9 @@ def watchlist_entry(e: dict, as_of: str) -> dict:
 
 def payload(snap: dict, profile_names: dict[str, str]) -> dict:
     """Every company that can be compared in this snapshot, one entry per ticker."""
+    from .pipeline_external import subjects
+
+    ownership = subjects(snap.get("bands", {}), snap.get("watchlist") or {})
     as_of = str(snap["as_of"])
     seen: dict[str, dict] = {}
     bands = snap.get("bands") or {}
@@ -209,7 +212,7 @@ def payload(snap: dict, profile_names: dict[str, str]) -> dict:
     return {
         "as_of": as_of,
         "spec_version": snap.get("spec_version"),
-        "entries": [_with_ownership(entry, snap) for entry in seen.values()],
+        "entries": [_with_ownership(entry, ownership) for entry in seen.values()],
         "groups": [
             {"title": t, "rows": [{"key": k, "label": lab, "kind": kind} for k, lab, kind in rows]}
             for t, rows in GROUPS
@@ -219,10 +222,10 @@ def payload(snap: dict, profile_names: dict[str, str]) -> dict:
     }
 
 
-def _with_ownership(entry: dict, snap: dict) -> dict:
-    from .pipeline_external import OLD, subjects
+def _with_ownership(entry: dict, ownership: dict[str, list[dict]]) -> dict:
+    from .pipeline_external import OLD
 
-    records = subjects(snap.get("bands", {}), snap.get("watchlist") or {}).get(entry["ticker"], [])
+    records = ownership.get(entry["ticker"], [])
     row = ((records[0].get("external") or {}).get("institutions") or {}) if records else {}
     return {
         **entry,

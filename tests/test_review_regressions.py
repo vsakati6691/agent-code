@@ -137,7 +137,11 @@ def _stop_snapshot(orders):
 def _warnings(settings, orders):
     ledger = LiveLedger(settings.resolve(settings.paths.journal_db))
     ledger.replace_tickets(date(2026, 10, 9), [buy("SPY", 0.15, 603, 580)])
-    return [w for w in prepare(settings, ledger, _stop_snapshot(orders), AS_OF).warnings if w.startswith("SPY")]
+    warnings = [w for w in prepare(settings, ledger, _stop_snapshot(orders), AS_OF).warnings if w.startswith("SPY")]
+    assert warnings[0] == (
+        "SPY: entry date 2026-10-12 is inferred from the next NYSE session after the ticket; actual fill date is unknown"
+    )
+    return warnings[1:]  # retain the exact stop-coverage assertions below, apart from the checked date disclosure
 
 
 SELL = {"symbol": "SPY", "side": "sell", "state": "confirmed"}

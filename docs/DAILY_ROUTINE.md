@@ -19,7 +19,9 @@ invent data.
 
 ## Is the market open?
 
-US exchange holidays are not modelled. If `get_equity_quotes` for SPY shows
+`market_calendar.py` models regular NYSE holidays and recorded exceptional
+closures. The CLI's default date uses America/New_York. Confirm current status
+from read-only market data as well: if `get_equity_quotes` for SPY shows
 `previous_close_date` unchanged from the last run and no trade today during
 regular hours, treat the day as closed: skip the paper broker and write a
 one-line note.
@@ -39,6 +41,11 @@ one-line note.
    full quantity (a limit sell does not count). Take the
    snapshot **after 16:00 ET**: tickets need a snapshot from the ticket day
    that is under 6 hours old.
+   Both `positions` and `orders` must be explicitly present as complete lists;
+   `[]` means a verified empty result, while missing/null fields are rejected.
+   After the 2026-10-17 audit fixes, re-import a fresh read-only snapshot:
+   saved files without the collection-completeness marker are rejected.
+   Never add that marker by hand or convert a failed tool response to `[]`.
 2. **Constituents** (Mondays, or when `universe show` warns it is old):
    Financial Datasets `get_index_fund` (ticker `SPY`, limit `1000`) →
    `& $py -m agent_trading universe import <file>`.
@@ -81,6 +88,10 @@ and fails closed:
 - no open buy order at the broker.
 
 Rejected tickets are listed as "Not ticketed: … order gate: …".
+
+Reruns preserve already-issued tickets and their daily budget reservations.
+The replacement behavior described in the historical 2026-10-12 final report
+is superseded; do not clear the ledger to make a rerun fit the limits.
 
 A 5% drawdown from the account's high-water mark **engages the kill switch**.
 While engaged, no tickets of any kind are written, including after a restart.
