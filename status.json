@@ -1,6 +1,6 @@
 {
  "status": "failed",
- "message": "benchmark IJH unavailable: price data rejected: IJH: open outside high/low range",
+ "message": "unexpected error (ZeroDivisionError)",
  "as_of": "2026-10-16",
- "at": "2026-10-17T17:11:18+00:00"
+ "at": "2026-10-17T23:41:57+00:00"
 }
