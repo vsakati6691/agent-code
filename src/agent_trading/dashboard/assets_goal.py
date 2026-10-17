@@ -66,8 +66,8 @@ JS = (
     const weights={}, rates={};
     data.assets.forEach((a,i)=>{
       weights[a.ticker]=number('goal-weight-'+i)/100; rates[a.ticker]=a.rates;
-      const r=el('goal-rate-'+i); if(r)r.textContent=pct(rate);
-      const flag=el('goal-meets-'+i); if(flag)flag.textContent=rate===null?'Required rate unavailable':Number.isFinite(a.rates?.base)?(a.rates.base>=rate?'Meets required rate':'Below required rate'):'Stored scenario unavailable';
+      const r=el('goal-rate-'+i); if(r){r.textContent=pct(rate);r.dataset.v=Number.isFinite(rate)?String(rate):'';}
+      const flag=el('goal-meets-'+i); if(flag){flag.textContent=rate===null?'Required rate unavailable':Number.isFinite(a.rates?.base)?(a.rates.base>=rate?'Meets required rate':'Below required rate'):'—';flag.dataset.v=flag.textContent;}
     });
     const portfolio=valid?GoalMath.weighted(capital,monthly,years,weights,rates):{values:{bear:null,base:null,bull:null},reason:'Inputs invalid.'};
     el('goal-portfolio-reason').textContent=portfolio.reason;

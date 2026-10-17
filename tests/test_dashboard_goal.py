@@ -1,5 +1,6 @@
 import json
 import math
+import re
 import shutil
 import subprocess
 from datetime import date
@@ -92,6 +93,75 @@ def test_goal_render_and_stress_defaults_use_stored_observations():
     assert 'href="evidence.html"' in text and 'id="goal-stress-ending"' in text
     assert spec.PROBABILITY_STATEMENT in text and spec.DISCLAIMER in text
     assert "fetch(" not in assets_goal.JS and "XMLHttpRequest" not in assets_goal.JS
+
+
+def price_entry(ticker="AAA"):
+    return {
+        "ticker": ticker,
+        "price": 123.45,
+        "price_date": "2026-10-09",
+        "scenarios": {
+            case: {"price": price, "annualized": rate, "assumptions": {}}
+            for case, price, rate in (("bear", 91.23, -0.05), ("base", 234.56, 0.07), ("bull", 345.67, 0.12))
+        },
+    }
+
+
+def test_goal_prices_reuse_stored_values_without_recalculation(monkeypatch):
+    monkeypatch.setattr("agent_trading.dashboard.site_goal._assumptions", lambda entry: "")
+    entry = price_entry()
+    snap = {"watchlist": {"entries": [entry]}}
+    data = payload(snap, date(2026, 10, 15))
+    assert data["assets"][0]["prices"] == {"bear": 91.23, "base": 234.56, "bull": 345.67}
+    assert data["assets"][0]["price"] == 123.45
+    daily = {"data": {"as_of": "2026-10-14", "quotes": {"AAA": {"status": "available", "close": 199.99}}}}
+    text = goal_page(snap, date(2026, 10, 15), daily=daily)
+    table = text.split('<table id="t-goal"', 1)[1].split("</table>", 1)[0]
+    for label in (
+        "Current price (date)",
+        "2030 Bear",
+        "2030 Base",
+        "2030 Bull",
+        "Base %/yr",
+        "Required %/yr",
+        "Base vs required",
+    ):
+        assert label in table
+    for value in ("$123.45", "2026-10-09", "$91.23", "$234.56", "$345.67", "7.00%/yr"):
+        assert value in table
+    assert "Latest close $199.99 (2026-10-14)" in table
+    assert 'data-v="123.45"' in table and 'data-v="199.99"' not in table
+    assert "2030 price scenarios (conditional, not predictions)" in table
+    assert "How this is calculated" in text
+    # Daily prices are display context; calculator payload and stored input remain untouched.
+    assert payload(snap, date(2026, 10, 15)) == data
+    assert entry["price"] == 123.45
+    for stamp, status, close in (
+        ("2026-10-09", "available", 200),
+        ("2026-10-08", "available", 200),
+        ("invalid", "available", 200),
+        ("2026-10-14", "unavailable", 200),
+        ("2026-10-14", "available", -1),
+    ):
+        daily["data"].update(as_of=stamp, quotes={"AAA": {"status": status, "close": close}})
+        assert "Latest close" not in goal_page(snap, daily=daily)
+
+
+def test_goal_missing_rows_escape_and_keep_saved_weight_mapping(monkeypatch):
+    monkeypatch.setattr("agent_trading.dashboard.site_goal._assumptions", lambda entry: "")
+    missing = {"ticker": 'X<script>"', "unavailable_reason": 'No SEC <financials> "available"'}
+    snap = {"watchlist": {"entries": [missing, price_entry()]}}
+    text = goal_page(snap, date(2026, 10, 15))
+    body = text.split("<tbody>", 1)[1].split("</tbody>", 1)[0]
+    rows = re.findall(r"<tr>(.*?)</tr>", body)
+    assert len(rows) == 2 and "AAA" in rows[0]
+    assert all(len(re.findall(r"<td\b", row)) == 8 for row in rows)
+    assert 'id="goal-rate-1"' in rows[0] and 'id="goal-rate-0"' in rows[1]
+    assert 'X&lt;script&gt;&quot; weight (%) <input id="goal-weight-0"' in text
+    assert 'AAA weight (%) <input id="goal-weight-1"' in text
+    assert "No SEC &lt;financials&gt; &quot;available&quot;" in rows[1]
+    assert "Unavailable" not in rows[1] and '<script>"' not in text
+    assert payload(snap)["assets"][0]["ticker"] == missing["ticker"]
 
 
 def test_evidence_reads_source_tables_and_omits_operational_columns(tmp_path):

@@ -5,7 +5,7 @@ from datetime import date
 from html import escape
 
 from . import spec
-from .fmt import pct
+from .fmt import money, pct, sval
 from .goal import finite, required_rate
 from .site_watchlist import _assumptions
 
@@ -27,7 +27,18 @@ def payload(snap: dict, start: date | None = None) -> dict:
             cls["basis"].append(f"{ticker}: {pct(observed, 1)} over available history (up to five years)")
         scenarios = entry.get("scenarios") or {}
         rates = {key: scenarios.get(key, {}).get("annualized") for key in ("bear", "base", "bull")}
-        assets.append({"ticker": ticker, "asset_class": asset_class, "rates": rates, "watchlist": True})
+        assets.append(
+            {
+                "ticker": ticker,
+                "asset_class": asset_class,
+                "rates": rates,
+                "watchlist": True,
+                "price": entry.get("price"),
+                "price_date": entry.get("price_date"),
+                "prices": {key: scenarios.get(key, {}).get("price") for key in ("bear", "base", "bull")},
+                "reason": entry.get("unavailable_reason") or "No scenario stored",
+            }
+        )
     for ticker in ("SPY", "QQQ"):
         if not any(a["ticker"] == ticker for a in assets):
             assets.append(
@@ -52,29 +63,64 @@ def payload(snap: dict, start: date | None = None) -> dict:
     }
 
 
-def goal_page(snap: dict, start: date | None = None) -> str:
+def _latest_close(asset: dict, daily: dict | None) -> str:
+    """Show a newer verified delayed close as context, never as a calculator input."""
+    data = (daily or {}).get("data") or {}
+    quote = (data.get("quotes") or {}).get(asset["ticker"]) or {}
+    try:
+        newer = date.fromisoformat(data["as_of"]) > date.fromisoformat(asset["price_date"])
+    except (KeyError, TypeError, ValueError):
+        return ""
+    if not newer or quote.get("status") != "available" or not finite(quote.get("close")) or quote["close"] <= 0:
+        return ""
+    return f'<div class="small muted">Latest close {money(quote["close"])} ({escape(data["as_of"])})</div>'
+
+
+def _scenario_row(asset: dict, index: int, required: float | None, daily: dict | None) -> str:
+    rates, prices = asset["rates"], asset["prices"]
+    reason = str(asset["reason"])
+    short_reason = reason if len(reason) <= 72 else reason[:69].rstrip() + "…"
+    missing = f'<span title="{escape(reason)}">—</span>'
+    cells = []
+    for case in ("bear", "base", "bull"):
+        value = prices.get(case)
+        label = money(value) if finite(value) else missing
+        if finite(rates.get(case)):
+            label += f'<div class="small muted">{pct(rates[case], 2)}/yr</div>'
+        elif case == "bear" and not any(finite(v) for v in prices.values()):
+            label += f'<div class="small muted" title="{escape(reason)}">{escape(short_reason)}</div>'
+        cells.append(f'<td class="num" data-v="{sval(value)}">{label}</td>')
+    flag = "—"
+    if finite(rates.get("base")) and required is not None:
+        flag = "Meets required rate" if rates["base"] >= required else "Below required rate"
+    current = money(asset["price"]) if finite(asset["price"]) else "—"
+    stamp = escape(str(asset["price_date"] or "Date not stored"))
+    base = f"{pct(rates['base'], 2)}/yr" if finite(rates.get("base")) else missing
+    return (
+        f'<tr><td>{escape(asset["ticker"])}</td><td class="num" data-v="{sval(asset["price"])}">'
+        f'{current}<div class="small muted">{stamp}</div>{_latest_close(asset, daily)}</td>{"".join(cells)}'
+        f'<td class="num" data-v="{sval(rates.get("base"))}">{base}</td>'
+        f'<td id="goal-rate-{index}" data-v="{sval(required)}">{pct(required, 2)}/yr</td>'
+        f'<td id="goal-meets-{index}" data-v="{escape(flag)}">{flag}</td></tr>'
+    )
+
+
+def goal_page(snap: dict, start: date | None = None, *, daily: dict | None = None) -> str:
     data = payload(snap, start)
     years = (date(2030, 12, 31) - date.fromisoformat(data["start_date"])).days / 365.25
     required = required_rate(10000, 20000, 0, years)
-    rows, weights, stress = [], [], []
+    weights, stress = [], []
     for i, asset in enumerate(data["assets"]):
         ticker = escape(asset["ticker"])
         weights.append(
             f'<label>{ticker} weight (%) <input id="goal-weight-{i}" type="number" min="0" max="100" step="0.01" value="0" required></label>'
         )
-        if asset["watchlist"]:
-            rates = asset["rates"]
-            flag = "Stored scenario unavailable"
-            if finite(rates.get("base")) and required is not None:
-                flag = "Meets required rate" if rates["base"] >= required else "Below required rate"
-            cells = "".join(
-                f"<td>{pct(rates.get(key), 2)}/yr</td>" if finite(rates.get(key)) else "<td>Unavailable</td>"
-                for key in ("bear", "base", "bull")
-            )
-            rows.append(
-                f'<tr><td>{ticker}</td>{cells}<td id="goal-rate-{i}">{pct(required, 2)}/yr</td>'
-                f'<td id="goal-meets-{i}">{flag}</td></tr>'
-            )
+    # Sort display rows only: saved allocation input IDs retain their original ticker mapping.
+    ordered = sorted(
+        ((i, asset) for i, asset in enumerate(data["assets"]) if asset["watchlist"]),
+        key=lambda item: not finite(item[1]["prices"].get("base")),
+    )
+    rows = [_scenario_row(asset, i, required, daily) for i, asset in ordered]
     for i, cls in enumerate(data["classes"]):
         value = f"{cls['drawdown'] * 100:.2f}" if cls["drawdown"] is not None else ""
         basis = (
@@ -91,10 +137,7 @@ def goal_page(snap: dict, start: date | None = None) -> str:
         for e in (snap.get("watchlist") or {}).get("entries", [])
     )
     encoded = json.dumps(data, allow_nan=False).replace("<", "\\u003c")
-    return f"""<h1>Plan 2030</h1><p class="lede">What would have to be true for the arithmetic to reach a stated target?</p>
-<p>Plan start: {data["start_date"]}. Stored scenario snapshot: {escape(str(data["snapshot_date"] or "unavailable"))}.
-Changing the target date holds each stored annualised price rate constant; it does not recompute a company valuation.
-Distributions, taxes, inflation and transaction costs are excluded. Cash earns 0%.</p>
+    return f"""<h1>Plan 2030</h1><p>Compare stored 2030 prices with the return your plan requires.</p>
 <form id="goal-form"><fieldset><legend>Target and contributions</legend><div class="controls">
 <label>Starting capital ($) <input id="goal-capital" type="number" min="0.01" max="1000000000000" step="0.01" value="10000" required></label>
 <label>Target ($) <input id="goal-target" type="number" min="0.01" max="1000000000000" step="0.01" value="20000" required></label>
@@ -104,11 +147,21 @@ Distributions, taxes, inflation and transaction costs are excluded. Cash earns 0
 <p id="goal-error" role="status"></p><section id="required-rate"><h2>Required compound annual return</h2>
 <p>With contributions: <strong id="goal-required">{pct(required, 2)}/yr</strong>.
 Without contributions: <strong id="goal-no-contributions">{pct(required, 2)}/yr</strong>.</p>
-<p id="goal-horizon">{years:.2f} years; {int(years * 12 + 1e-9)} end-of-month contributions.</p><p>Contributions arrive at the end of each completed month. A fractional final month adds growth, but no extra contribution.</p>
+<p id="goal-horizon">{years:.2f} years; {int(years * 12 + 1e-9)} end-of-month contributions.</p>
 <p><a href="evidence.html">Compare this required rate with what the evidence says</a>.</p></section>
-<h2>Stored scenarios beside the requirement</h2><p>Original watchlist order. The flag compares only the stored base price rate
-with the requirement including contributions; it does not establish feasibility or recommend a holding.</p>
-<div class="table-wrap"><table><caption>Annualised price scenarios and required return</caption><thead><tr><th>Ticker</th><th>Bear</th><th>Base</th><th>Bull</th><th>Required</th><th>Base case comparison</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>
+<div class="controls"><span class="count" data-count="t-goal"></span><button type="button" data-reset="t-goal">Reset sort</button></div>
+<div class="table-wrap"><table id="t-goal" data-table><caption>2030 price scenarios (conditional, not predictions)</caption>
+<thead><tr><th data-sort="text">Ticker</th><th data-sort="num">Current price (date)</th><th data-sort="num">2030 Bear</th>
+<th data-sort="num">2030 Base</th><th data-sort="num">2030 Bull</th><th data-sort="num">Base %/yr</th>
+<th data-sort="num">Required %/yr</th><th data-sort="text">Base vs required</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>
+<details><summary>How this is calculated</summary>
+<p>Plan start: {data["start_date"]}. Stored scenario snapshot: {escape(str(data["snapshot_date"] or "unavailable"))}.
+Current price and date are the stored scenario inputs. A newer delayed close is context only and never changes the calculation.
+Changing the target date holds each stored annualised price rate constant; it does not recompute a company valuation or the displayed 2030 price.
+Distributions, taxes, inflation and transaction costs are excluded. Cash earns 0%.</p>
+<p>Contributions arrive at the end of each completed month. A fractional final month adds growth, but no extra contribution.
+Rows with stored scenarios appear first. The flag compares only the stored base price rate with the requirement including contributions;
+it does not establish feasibility or recommend a holding.</p></details>
 <fieldset><legend>Optional allocation weights</legend><p>Enter weights totalling 100%. No allocation is selected by default.
 Weights split the starting capital and every contribution; holdings compound separately without rebalancing.
 Any weighted ticker without all three stored scenarios makes the result unavailable. SPY or QQQ may lack a stored watchlist scenario.</p>
