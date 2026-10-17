@@ -14,6 +14,7 @@ were added.
 | `dashboard/site_command.py` | Escaped inline ticker catalog, fallback search, and native dialog markup. |
 | `dashboard/assets_command.py` | Search by ticker or company name, Ctrl+K / Cmd+K, arrow-key selection, Enter navigation, Escape, and focus restoration. Built as `assets/command.js`, independently of page-specific scripts. |
 | `dashboard/site_status.py` | Compact, escaped notices with expandable dataset-level reasons. |
+| `dashboard/site_ai_context.py` | AI section links, recorded price basis, and display-only explanations of scoring and scenario limits. |
 | `dashboard/assets.py` | Existing table interaction engine and evidence-fragment loader, including a 15-second timeout, response validation, retry, and full-page fallback. |
 
 The existing public builder functions and symbol URLs are unchanged. The command
@@ -78,3 +79,11 @@ retry, theme persistence, reduced motion, print, and the JavaScript-disabled she
 Screenshots and JSON results stay in the ignored report directory. Layout-shift
 measurements describe those tested loads, not every possible saved state, browser,
 connection, or user interaction.
+
+The AI page keeps its existing lists and models. Its section links work without
+JavaScript; scoring notes and eligibility details use native disclosures. Ranked
+universe names link to company research, and unavailable reasons can be opened
+with touch or keyboard. The scenario table uses recorded numeric values for
+sorting, including a reset control and the shared saved-view behavior. The
+optional `dashboard_ai_browser.cjs` checks these interactions as part of the main
+browser regression pass. Navigation tabs have not been removed or regrouped.
