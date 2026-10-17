@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from . import changes as changes_mod
-from . import evidence, spec
+from . import earnings_verdicts, evidence, spec
 from .changes import KIND_LABELS
 from .earnings_cadence import display as cadence_display
+from .earnings_cadence import schedule_note
 from .fmt import pct, tracking_schedule
 from .site_list_common import E, band_title, ordered
 from .site_research import datasets_line
@@ -67,15 +68,24 @@ def _flag_item(group: str, tickers: list[str], total: int) -> str:
     )
 
 
-def _last_results(i: dict) -> str:
+def _last_results(i: dict, verdict: dict | None = None) -> str:
     if i.get("last_results"):
+        cadence = "; " + E(cadence_display(i, schedule_note(verdict))) if i.get("cadence_check") else ""
         return (
             f'<br><span class="small">last results {E(i["last_results"])}, {E(i.get("last_results_status") or "")}'
-            f"{'; ' + E(cadence_display(i)) if i.get('cadence_check') else ''}</span>"
+            f"{cadence}</span>"
         )
     if i.get("last_results_status"):
         return f'<br><span class="small muted">{E(i["last_results_status"])}</span>'
     return ""
+
+
+def _earnings_row(snap: dict, i: dict) -> str:
+    verdict = earnings_verdicts.verdict_for(snap, i["ticker"], i["date"])
+    return (
+        f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">(scheduled; '
+        f"{E(earnings_verdicts.label(verdict))}; {E(i['list'])})</span>{_last_results(i, verdict)}</li>"
+    )
 
 
 def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, prev_snap: dict | None = None) -> str:
@@ -91,11 +101,7 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
             f'<p class="small muted">{E(ev.get("note", ""))}</p>'
         )
     else:
-        rows = [
-            f'<li><strong>{E(i["ticker"])}</strong> {E(i["date"])} <span class="muted">(scheduled, unverified; '
-            f"{E(i['list'])})</span>{_last_results(i)}</li>"
-            for i in items
-        ]
+        rows = [_earnings_row(snap, i) for i in items]
         earn = "".join(rows[:EARNINGS_SHOWN]) or '<li class="muted">No earnings scheduled in the next 45 days.</li>'
         more = (
             f'<details class="small"><summary>{len(rows) - EARNINGS_SHOWN} more</summary><ul class="tight">'
@@ -103,7 +109,10 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
             if len(rows) > EARNINGS_SHOWN
             else ""
         )
-        earn = f'<ul class="tight small">{earn}</ul>{more}<p class="small muted">{E(ev.get("note", ""))}</p>'
+        earn = (
+            f'<ul class="tight small">{earn}</ul>{more}<p class="small muted">{E(ev.get("note", ""))} '
+            f"{E(earnings_verdicts.summary_text(snap))}</p>"
+        )
     new, gone, moves = [], [], []
     methodology_note = ""
     if prev_snap and prev_snap.get("spec_version") != snap.get("spec_version"):

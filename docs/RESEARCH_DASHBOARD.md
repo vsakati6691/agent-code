@@ -16,7 +16,7 @@ A static website, rebuilt every weekend by GitHub Actions, that compares US grow
 | Growth Stocks (`growth.html`) | Search, filters and device-local pins across the growth lists. Large-, mid- and small-cap shortcuts open each full table with financial trends, evidence, thesis, bear case, assumptions, invalidation and CSV downloads. The large-cap universe is S&P 500 members only. Multibagger candidates are kept on their own page. |
 | Multibaggers (`multibaggers.html`) | Up to 5 speculative candidates with a 5–10 year research horizon: growth evidence, cash/runway, debt/dilution/valuation risk, conditional bear/base/bull scenarios, what must happen and what would invalidate the thesis. Pins are shared across research pages. Older snapshots explain when this list is unavailable. |
 | Compare (`compare.html`) | Pick 2-4 companies (ranked names and watchlist operating companies) and see growth, margins and cash flow, valuation, debt and dilution, returns and drawdowns with their exact windows, score components and evidence quality side by side. A banner flags anything that does not line up (TTM windows ending more than 45 days apart, different scoring profiles or benchmarks, watchlist names that are not scored), and each missing cell says why. Price paths are rebased to 100 on the dates every selected name shares, never interpolated. Every column links to its SEC sources. Selection is kept in the URL hash, e.g. `compare.html#MU,FIX` |
-| Stock detail (one per candidate) | **What changed since the previous snapshot** (new filings with EDGAR links, deterioration, dilution, thesis-condition breaches, data-availability changes, or why no comparison is possible); a **company research panel** (observed quarterly trends, supporting and counter-evidence, two earnings-quality checks, assumptions, verified/scheduled/estimated events, the thesis conditions recorded when the name first appeared with their current status, missing information, sources and dates); an **evidence-quality** check (passed checks, warnings, next checks); then price, market cap, sector, sources, timestamps; earnings dates (next: scheduled, unverified; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; a **scenario calculator** (your own starting growth, exit EV/Sales, dilution and FCF margin through the published formula, with a reset to the published assumptions; nothing is stored or published); risks; invalidation conditions; "probability not established" |
+| Stock detail (one per candidate) | **What changed since the previous snapshot** (new filings with EDGAR links, deterioration, dilution, thesis-condition breaches, data-availability changes, or why no comparison is possible); a **company research panel** (observed quarterly trends, supporting and counter-evidence, two earnings-quality checks, assumptions, verified/scheduled/estimated events, the thesis conditions recorded when the name first appeared with their current status, missing information, sources and dates); an **evidence-quality** check (passed checks, warnings, next checks); then price, market cap, sector, sources, timestamps; earnings dates (next: scheduled from Alpha Vantage, labelled against the owner's stored Robinhood calendar check when one exists; last results: verified from SEC 8-K item 2.02 when found); thesis and strongest bear case; component inputs; price vs benchmark chart and 1m-5y return table; drawdowns; fundamentals (8 quarters) and valuation; bear/base/bull values at 1, 3 and 5 years with every assumption; a **scenario calculator** (your own starting growth, exit EV/Sales, dilution and FCF margin through the published formula, with a reset to the published assumptions; nothing is stored or published); risks; invalidation conditions; "probability not established" |
 | AI stocks (`ai.html`) | Spec 2026-10-14.7. Top 5 AI-exposed large-cap and top 5 mid-cap stocks (same fixed scoring as the growth lists, from a curated AI universe with each company's role in the AI chain); a **top-20 market-cap scenario test** against today's 20th-largest S&P 500 market cap (conditional, never a probability, which the page states is not established); the universe by role with the reason any name was not ranked; and **private AI companies** (OpenAI, Anthropic, Databricks, Mistral...) for context, with reported valuations shown only with a dated source link and an "unverified" label |
 | Options (`options.html`) | **Options watchlist**: a Calls/Puts control x 3M/6M/1Y tabs, six independently ranked lists of **up to 5** contracts each (spec 2026-10-14.6; 10 before), at most 2 per underlying, on the week's large-cap candidates only. The page is always linked and opens with a plain-language status (not collected / collection failed / stale / partial / available) and the owner setup step when collection is off. Each list shows how many qualified, why it is short, and why other contracts were left out. A compact row shows the underlying, contract symbol, expiry date and days remaining, strike, premium (ask x 100), breakeven with the required move, **maximum loss (visible on phones)**, spread, volume, open interest, IV, delta, theta, earnings status (scheduled / none scheduled / **unknown** when the calendar was not collected), the research score with its three parts, and the probability verdict. Expanding a row separates **observed facts** (delayed quote, snapshot time in UTC, source, delay, the underlying's and the contract's own last trade), **assumptions** (ask premium, breakeven, implied move, no fees, model notes), **unknown or missing** items, the **research score**, plain-language liquidity / time-decay / volatility / event risks, exact payoffs at expiration (before fees), a labelled 30-day Black-Scholes estimate, and "Probability not established". The page names the snapshot's methodology version next to the renderer's. CSV per list |
 | Leaders 2030 (`leaders.html`) | Current S&P 500 size versus conditional 2030 caps and ranks, with dated diluted shares, partial-coverage warnings, sourced curated assumptions (initially none), device-local pins and CSV. [Rules and config](LEADERS_2030.md). |
@@ -519,6 +519,44 @@ Claude session:
 
 If no verdicts are stored at all, the run fails visibly instead of publishing unverified stocks.
 
+## Robinhood earnings-calendar checks (Claude session, read-only)
+
+Scheduled report dates come from Alpha Vantage and are labelled "not independently verified" because no second
+calendar is reachable from CI. A session can compare them with Robinhood's calendar (read-only
+`get_earnings_calendar`, windows of at most 31 days) and store the verdicts on `research-data` in
+`robinhood_earnings_calendar.json`: symbols, report dates, timing, the broker's own confirmed flag and check dates;
+no EPS figures and no account data. The site build (`build`) reads the file and labels each scheduled date:
+
+- both sources name the same day: "verified (broker calendar, checked <date>)", with "the broker lists the date as
+  tentative" when Robinhood's own `verified` flag is false;
+- they differ: both dates are shown ("differs from the broker calendar, which lists <date>");
+- the name is missing from a window that was checked: "not listed in the broker calendar for <window>";
+- no check, or one older than 14 days (`earnings_verdicts.MAX_AGE_DAYS`): the date stays "not independently verified".
+
+Stored snapshots are not changed: the comparison is attached in memory at build time and left out of `data/*.json`.
+The overview's earnings panel, each stock page's earnings card and research panel, and the audit page's data status
+row "Broker earnings calendar" show the state; the import is recorded in `audit.jsonl`. Options rows keep their
+Alpha-Vantage-only status. No rank, gate or score changes, so there is no new spec version. To refresh, in a Claude
+session:
+
+1. Update a `research-data` worktree with `git pull`, or create one with `git worktree add <folder> research-data`
+   (on the owner's machine `..\agent-code-research-data` is a plain folder from a local run, not a checkout; the
+   2026-10-17 import used `C:\Users\vsaka\.claude\worktrees\agent-code\research-data`). `<data>` below is that folder.
+2. Run `python -m agent_trading.dashboard earnings-calendar todo --data <data>`. It lists every
+   scheduled date in the latest snapshot with its current verdict and prints the one or two `get_earnings_calendar`
+   calls (start date, days, filter) that cover them.
+3. Make those calls with the read-only Robinhood tool and save each JSON response to the scratchpad. The default
+   `high_market_cap` filter covers names above $1B; call without the filter for smaller names and import that file
+   with `--filter all`.
+4. Run `python -m agent_trading.dashboard earnings-calendar import --data <data> <files>`.
+   `--checked-at` defaults to today; `--start` and `--days` record the exact window of a single file, otherwise the
+   window is the first to the last report date in the response. Payloads with account fields are rejected.
+5. Commit and push `research-data`. The next site build shows the verdicts: the daily refresh (22:17 UTC on
+   weekdays) or a manual run of the publish workflow. The weekly run is not needed, and checks expire after 14 days.
+
+Robinhood's calendar is a second calendar, not the company's own notice: a date "verified (broker calendar)" can
+still move, and the two sources may share an upstream.
+
 ## Commands
 
 ```powershell
@@ -534,6 +572,8 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 ## Owner actions (required before the first deployment)
 
 0. **Robinhood tradability verdicts:** run the refresh above at least monthly, or when the to-check list grows.
+   **Robinhood earnings-calendar verdicts:** optional; run the earnings-calendar refresh when the scheduled dates
+   matter to you (checks expire after 14 days).
 1. **Merge the pull request into `main`.** Scheduled workflows only run from the default branch.
 2. **GitHub Pages and the private repository.**
    - On GitHub Free, Pages needs a public repository.
@@ -565,7 +605,7 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 - **Sectors:** S&P 500 sectors are GICS (Wikipedia). Others are mapped coarsely from SEC SIC codes.
 - **Not scored:** competitive position, catalysts and customer concentration have no reliable structured source. They are listed as not scored.
 - **Debt:** total debt can be overstated when a filer's `LongTermDebt` tag already includes the current portion (conservative).
-- **Option events:** only scheduled earnings dates are checked, from Alpha Vantage, and they are labelled unverified because no verified calendar is reachable from CI. Ex-dividend dates and other corporate events before expiry are not.
+- **Option events:** only scheduled earnings dates are checked, from Alpha Vantage, and they are labelled unverified because no verified calendar is reachable from CI. The owner's stored Robinhood calendar check (see the earnings-calendar section) labels the overview and stock pages at build time; it does not change option rows. Ex-dividend dates and other corporate events before expiry are not.
 - **Thesis and invalidation text:** these are template-generated from the numbers. They summarize evidence; they are not analyst judgement.
 
 

@@ -59,7 +59,7 @@ def research_section(p: dict) -> str:
     )
     ev = "".join(
         f"<tr><td>{E(e['date'] or 'unknown')}</td><td>{E(e['event'])}</td>"
-        f'<td><span class="pill {"ok" if e["status"] == "verified" else "warn" if e["status"] in ("unverified", "estimated") else "muted"}">'
+        f'<td><span class="pill {"ok" if e["status"].startswith("verified") else "warn" if e["status"] in ("unverified", "estimated") else "muted"}">'
         f'{E(e["status"])}</span></td><td class="small">{E(e["source"])}{(" · " + E(e["note"])) if e["note"] else ""}</td></tr>'
         for e in p["events"]
     )

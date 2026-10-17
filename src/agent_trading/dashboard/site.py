@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shutil
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from . import (
@@ -14,6 +15,7 @@ from . import (
     assets_goal,
     assets_research,
     compare,
+    earnings_verdicts,
     leaders,
     site_basics,
     site_bets,
@@ -83,7 +85,13 @@ def scan_for_secrets(out: Path, env_names: tuple[str, ...]) -> list[str]:
 
 
 def build_site(
-    data_dir: Path, out: Path, secret_env: tuple[str, ...] = (), *, code_commit: str = "", data_commit: str = ""
+    data_dir: Path,
+    out: Path,
+    secret_env: tuple[str, ...] = (),
+    *,
+    code_commit: str = "",
+    data_commit: str = "",
+    today: date | None = None,
 ) -> dict:
     store = Store(data_dir)
     challengers = leaders.load_challengers()
@@ -91,6 +99,9 @@ def build_site(
     bad = {p.split()[1] for p in integrity if p.startswith("snapshot ")}
     dates = [d for d in store.dates() if d not in bad]
     snap = store.load(dates[-1]) if dates else None
+    if snap is not None:  # display-only comparison with the owner's stored Robinhood calendar check (never stored)
+        verdicts = earnings_verdicts.EarningsVerdicts.load(data_dir)
+        earnings_verdicts.attach(snap, verdicts, today or datetime.now(UTC).date())
     build_info = site_build.metadata(code_commit, data_commit, snap)
     if out.exists():
         shutil.rmtree(out)
@@ -280,9 +291,10 @@ def build_site(
                 )
         if s.get("watchlist"):
             (out / "downloads" / f"{d}_watchlist_2030.csv").write_text(watchlist_csv(s), encoding="utf-8")
-    (out / "data" / "latest.json").write_text(json.dumps(snap, default=str), encoding="utf-8")
+    public = earnings_verdicts.without_overlay  # the build-time comparison is not part of the stored data
+    (out / "data" / "latest.json").write_text(json.dumps(public(snap), default=str), encoding="utf-8")
     for s in history:
-        (out / "data" / f"{s['as_of']}.json").write_text(json.dumps(s, default=str), encoding="utf-8")
+        (out / "data" / f"{s['as_of']}.json").write_text(json.dumps(public(s), default=str), encoding="utf-8")
     from .schema import SCHEMA
 
     (out / "data" / "schema.json").write_text(json.dumps(SCHEMA, indent=1), encoding="utf-8")
