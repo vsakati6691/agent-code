@@ -10,7 +10,7 @@ Periods (chronological, fixed before any result was seen):
 Selection uses TRAIN and VALIDATION only. TEST is evaluated once, in the
 final stage, for the benchmarks, the incumbent (GTAA = live Strategy C) and
 candidates that passed. Each test evaluation is recorded in the registry,
-so repeated peeking is visible.
+and the consumed 2022+ holdout is sealed against further evaluation.
 
 Acceptance rules (ACCEPTANCE) are fixed in code before running.
 """
@@ -112,10 +112,12 @@ def load_market(settings: Settings, symbols: list[str] = DATA_SYMBOLS) -> tuple[
     spy = read_cache(cache, "SPY")
     if spy is None:
         raise FileNotFoundError("SPY is not in the price cache")
-    cal = spy.index
+    cal = spy.index[spy.index <= pd.Timestamp(SELECTION[1])]
     h = hashlib.sha256()
     for sym in symbols:
         df = read_cache(cache, sym)
+        if df is not None:
+            df = df.loc[: SELECTION[1]].copy()
         if df is None or df.empty:
             rep.problems.append(f"{sym}: not in the cache (candidates using it are affected)")
             continue
@@ -125,7 +127,12 @@ def load_market(settings: Settings, symbols: list[str] = DATA_SYMBOLS) -> tuple[
         if len(bad):
             rep.problems.append(f"{sym}: {len(bad)} bars with missing or non-positive prices dropped")
             df = df.drop(bad.index)
+        if df.empty:
+            rep.problems.append(f"{sym}: no valid selection-period bars")
+            continue
         divs = load_dividends(settings, sym)
+        if divs is not None:
+            divs = divs.loc[: SELECTION[1]]
         if divs is not None and not divs.empty:
             df = total_return_bars(df, divs)
             tr.add(sym)
@@ -236,7 +243,9 @@ class Entry:
 class Tournament:
     def __init__(self, settings: Settings, mkt: Market, data: DataReport, cands: list[Candidate] | None = None):
         self.settings = settings
-        self.mkt = mkt
+        self.mkt = Market(
+            mkt.opens.loc[: SELECTION[1]].copy(), mkt.closes.loc[: SELECTION[1]].copy(), set(mkt.total_return)
+        )
         self.data = data
         self.cost = settings.costs.per_side
         self.entries = {c.name: Entry(c) for c in (cands or candidates())}
@@ -351,25 +360,11 @@ class Tournament:
         e.decision = "ACCEPTED (paper candidate)" if not e.reasons else "REJECTED"
 
     def run_test(self, names: list[str]) -> None:
-        """Final, one-time out-of-sample evaluation on the test period."""
-        spy = self._excess(self._sim(self.entries["BENCH_SPY"], None).returns, PERIODS["test"])
-        for n in names:
-            e = self.entries[n]
-            s = self._sim(e, e.cand.default)
-            e.test = metrics(_slice(s.returns, PERIODS["test"]), _slice(self.cash, PERIODS["test"]), s)
-            acct = self._sim(e, e.cand.default, 1, ACCOUNT_CONSTRAINTS)
-            e.test_account = metrics(_slice(acct.returns, PERIODS["test"]), _slice(self.cash, PERIODS["test"]), acct)
-            e.test_vs_spy = sharpe_diff_ci(self._excess(s.returns, PERIODS["test"]), spy)
-            for name, rng in REGIMES.items():
-                if "(test)" in name:
-                    r = s.returns.loc[rng[0] : rng[1]]
-                    e.regimes[name] = {"return": float((1 + r).prod() - 1), "max_drawdown": max_drawdown(r)}
-            if not e.cand.benchmark and e.decision.startswith("ACCEPTED"):
-                ok = (
-                    e.test["sharpe"] > TEST_PASS["min_sharpe"]
-                    and e.test["max_drawdown"] >= TEST_PASS["max_drawdown_floor"]
-                )
-                e.decision = "ACCEPTED for paper trading (passed test)" if ok else "REJECTED at test"
+        """Compatibility entry point: the registered 2022+ holdout was consumed on 2026-10-12."""
+        raise HoldoutConsumedError(
+            "The 2022+ holdout is already consumed and sealed. New evaluation requires a separately "
+            "preregistered holdout and owner authorization; use selection-only research."
+        )
 
 
 # ---------------------------------------------------------------- registry
@@ -449,29 +444,40 @@ def append_registry(path: Path, records: list[dict]) -> int:
     return len(records)
 
 
+class HoldoutConsumedError(ValueError):
+    """The current holdout cannot be evaluated again."""
+
+
 def prior_test_evaluations(path: Path) -> dict[str, int]:
     counts: dict[str, int] = {}
     if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             try:
                 r = json.loads(line)
             except ValueError:
-                continue
-            if r.get("test_evaluated"):
+                raise ValueError(
+                    f"registry line {number} is malformed; history must be reviewed, never rewritten"
+                ) from None
+            if (
+                not isinstance(r, dict)
+                or not isinstance(r.get("test_evaluated"), bool)
+                or not isinstance(r.get("strategy"), str)
+                or not r["strategy"]
+            ):
+                raise ValueError(f"registry line {number} has an invalid evaluation record")
+            if r["test_evaluated"]:
                 counts[r["strategy"]] = counts.get(r["strategy"], 0) + 1
     return counts
 
 
-def run(settings: Settings, registry: Path, run_test: bool = True) -> tuple[Tournament, list[str], dict]:
+def run(settings: Settings, registry: Path, run_test: bool = False) -> tuple[Tournament, list[str], dict]:
+    prior = prior_test_evaluations(registry)
+    if run_test:
+        raise HoldoutConsumedError("The 2022+ holdout is already consumed and sealed; use selection-only research")
     mkt, data = load_market(settings)
     t = Tournament(settings, mkt, data)
     t.run_selection()
     tested = []
-    if run_test:
-        passed = [n for n, e in t.entries.items() if e.decision.startswith("ACCEPTED")]
-        tested = ["BENCH_SPY", "BENCH_CASH", "BENCH_6040", "BENCH_EW7", "GTAA", *[p for p in passed if p != "GTAA"]]
-        t.run_test(tested)
-    prior = prior_test_evaluations(registry)
     when = datetime.now(UTC).isoformat(timespec="seconds")
     code = code_version(settings.base_dir)
     run_id = hashlib.sha256(f"{when}{code}".encode()).hexdigest()[:10]

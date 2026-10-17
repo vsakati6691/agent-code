@@ -15,6 +15,7 @@ import pandas as pd
 import requests
 
 from ..logging_setup import redact, register_secret
+from ..provider_budget import DailyBudgetExceeded, DailyRequestBudget, quota_notice
 
 BASE_URL = "https://www.alphavantage.co/query"
 SOURCE_NAME = "Alpha Vantage"
@@ -32,10 +33,15 @@ class AlphaVantageError(RuntimeError):
         super().__init__(redact(str(message)))
 
 
+class AlphaVantageQuotaError(AlphaVantageError):
+    """Provider-wide quota or entitlement failure: stop subsequent requests."""
+
+
 def parse_daily_json(data: dict[str, Any], symbol: str) -> pd.DataFrame:
     for key in ("Error Message", "Information", "Note"):
         if key in data:
-            raise AlphaVantageError(f"{symbol}: {data[key]}")
+            error = AlphaVantageQuotaError if key in {"Information", "Note"} else AlphaVantageError
+            raise error(f"{symbol}: {data[key]}")
     series = data.get("Time Series (Daily)")
     if not series:
         raise AlphaVantageError(f"{symbol}: response has no daily time series")
@@ -57,7 +63,8 @@ def parse_daily_json(data: dict[str, Any], symbol: str) -> pd.DataFrame:
 def parse_earnings_csv(text: str) -> pd.DataFrame:
     stripped = text.lstrip()
     if stripped.startswith("{"):
-        raise AlphaVantageError(f"earnings calendar: {stripped[:200]}")
+        error = AlphaVantageQuotaError if quota_notice(stripped.encode()) else AlphaVantageError
+        raise error(f"earnings calendar: {stripped[:200]}")
     df = pd.read_csv(io.StringIO(text))
     expected = {"symbol", "reportDate", "fiscalDateEnding"}
     if not expected.issubset(df.columns):
@@ -106,6 +113,7 @@ class AlphaVantageClient:
         session: requests.Session | None = None,
         pause_seconds: float = 12.5,
         timeout: float = 30.0,
+        budget: DailyRequestBudget | None = None,
     ) -> None:
         register_secret(api_key)
         self._key = api_key
@@ -114,8 +122,13 @@ class AlphaVantageClient:
         self._timeout = timeout
         self._last_call = 0.0
         self.calls_made = 0
+        self.budget = budget if budget is not None else DailyRequestBudget()
 
     def _get(self, params: dict[str, str]) -> requests.Response:
+        try:
+            self.budget.reserve()
+        except DailyBudgetExceeded as exc:
+            raise AlphaVantageQuotaError(str(exc)) from None
         wait = self._pause - (time.monotonic() - self._last_call)
         if self.calls_made and wait > 0:
             time.sleep(wait)
@@ -126,6 +139,9 @@ class AlphaVantageClient:
             resp = self._session.get(BASE_URL, params={**params, "apikey": self._key}, timeout=self._timeout)
         except requests.RequestException as exc:
             raise AlphaVantageError(f"network error ({type(exc).__name__})") from None
+        if resp.status_code in {402, 403, 429} or (resp.status_code == 200 and quota_notice(resp.content)):
+            self.budget.stop()
+            raise AlphaVantageQuotaError("Alpha Vantage quota or entitlement response; stopped for today")
         if resp.status_code != 200:
             raise AlphaVantageError(f"HTTP {resp.status_code}")
         return resp

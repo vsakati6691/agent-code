@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -52,13 +53,39 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     build = commands.add_parser("build")
     build.add_argument("--root", type=Path, required=True)
+    build.add_argument("--frozen", action="store_true", help="freeze fixture timestamps for exact comparisons")
+    repeat = commands.add_parser("determinism")
+    repeat.add_argument("--root", type=Path, required=True)
     check = commands.add_parser("check")
     check.add_argument("--site", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "build":
+    if args.command == "determinism":
+        from tests.dashboard_clock import file_hashes, frozen_dashboard_clock
         from tests.dashboard_fixtures import demo_site
 
-        data, site = demo_site(args.root)
+        roots = [args.root / name for name in ("first", "second")]
+        if any(root.exists() for root in roots):
+            parser.error("determinism needs a new output directory")
+        with frozen_dashboard_clock():
+            for root in roots:
+                demo_site(root)
+        manifests = [file_hashes(root) for root in roots]
+        different = sorted(
+            key for key in manifests[0].keys() | manifests[1].keys() if manifests[0].get(key) != manifests[1].get(key)
+        )
+        (args.root / "manifest.json").write_text(json.dumps(manifests[0], indent=2), encoding="utf-8")
+        print(f"Compared {len(manifests[0])} fixture files; {len(different)} differences")
+        for key in different:
+            print(key)
+        return int(bool(different))
+    if args.command == "build":
+        from contextlib import nullcontext
+
+        from tests.dashboard_clock import frozen_dashboard_clock
+        from tests.dashboard_fixtures import demo_site
+
+        with frozen_dashboard_clock() if args.frozen else nullcontext():
+            data, site = demo_site(args.root)
         print(f"Built synthetic fixture data at {data} and site at {site}")
         return 0
     from agent_trading.dashboard.site_performance import budget_problems

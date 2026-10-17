@@ -350,22 +350,12 @@ def parse_cboe_history(raw: dict) -> pd.DataFrame:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df = df.set_index("date").sort_index()[["open", "high", "low", "close", "volume"]]
     df = df[~df.index.duplicated(keep="last")]
-    # Cboe pads some rows with a zero open, and a few bars have an open or close slightly outside the
-    # day's high-low range (vendor glitches). Repair them so the OHLC checks stay meaningful, and count
-    # the repairs: research uses closes, and a series needing many repairs is flagged.
-    valid = (df["close"] > 0) & df[["high", "low", "close"]].notna().all(axis=1)
+    # Discard wholly unusable padding, but never invent open/range/volume values.
+    # Malformed observed bars remain visible to the downstream quality validator.
+    valid = df["close"].notna() & (df["close"] > 0)
     dropped = int((~valid).sum())
     df = df[valid].copy()
-    df["volume"] = df["volume"].fillna(0.0)
-    df.loc[~(df["open"] > 0), "open"] = df["close"]
-    df.loc[~(df["low"] > 0), "low"] = df[["open", "close"]].min(axis=1)
-    hi, lo = df[["open", "close"]].max(axis=1), df[["open", "close"]].min(axis=1)
-    bad = (df["high"] < hi - 1e-9) | (df["low"] > lo + 1e-9)
-    df.loc[bad, "high"] = df.loc[bad, ["high"]].join(hi[bad].rename("x")).max(axis=1)
-    df.loc[bad, "low"] = df.loc[bad, ["low"]].join(lo[bad].rename("x")).min(axis=1)
     df.attrs["dropped_bars"] = dropped
-    df.attrs["repaired_bars"] = int(bad.sum())
-    df.attrs["repaired_recent"] = int(bad.iloc[-252:].sum())
     return df
 
 

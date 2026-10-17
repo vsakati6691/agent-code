@@ -32,6 +32,7 @@ from .config import Settings
 
 SNAPSHOT_FILE = "account_snapshot.json"
 OPEN_ORDER_STATES = {"new", "queued", "confirmed", "unconfirmed", "partially_filled"}
+CLOSED_ORDER_STATES = {"filled", "canceled", "cancelled", "rejected", "failed", "expired", "voided"}
 
 
 class SnapshotError(ValueError):
@@ -50,6 +51,7 @@ class AccountSnapshot:
     open_orders: list[dict] = field(default_factory=list)
     unsettled_funds: float | None = None  # None = not captured (live buys are then blocked)
     account_type: str = ""
+    collections_complete: bool = False  # only set after both successful collection reads
 
     @property
     def settled_cash(self) -> float | None:
@@ -64,6 +66,8 @@ class AccountSnapshot:
 
 
 def _num(value, name: str) -> float:
+    if isinstance(value, bool):
+        raise SnapshotError(f"{name} must be a number, not a boolean")
     try:
         out = float(value)
     except (TypeError, ValueError):
@@ -82,6 +86,8 @@ def _price(value, name: str) -> float | None:
 
 
 def parse_snapshot(raw: dict) -> AccountSnapshot:
+    if not isinstance(raw, dict):
+        raise SnapshotError("snapshot must be an object")
     try:
         fetched = datetime.fromisoformat(str(raw["fetched_at"]))
     except (KeyError, ValueError):
@@ -89,31 +95,50 @@ def parse_snapshot(raw: dict) -> AccountSnapshot:
     if fetched.tzinfo is None:
         raise SnapshotError("fetched_at must include a timezone")
     acct = str(raw.get("account_number", "")).strip()
-    if len(acct) < 4:
+    if len(acct) < 4 or not acct[-4:].isascii() or not acct[-4:].isdigit():
         raise SnapshotError("account_number is missing")
     portfolio = raw.get("portfolio") or {}
+    if not isinstance(portfolio, dict):
+        raise SnapshotError("portfolio must be an object")
+    for name in ("positions", "orders"):
+        if not isinstance(raw.get(name), list) or not all(isinstance(row, dict) for row in raw[name]):
+            raise SnapshotError(f"{name} must be an explicit, complete list; reimport successful broker reads")
+    if raw.get("collections_complete", True) is not True:
+        raise SnapshotError("snapshot collections are incomplete")
+    for row in [*raw["positions"], *raw["orders"]]:
+        if not isinstance(row.get("symbol"), str) or not row["symbol"].strip():
+            raise SnapshotError("position/order symbol is missing")
+    for order in raw["orders"]:
+        if str(order.get("state", "")).lower() not in OPEN_ORDER_STATES | CLOSED_ORDER_STATES:
+            raise SnapshotError("unknown order state; reimport a complete order read")
+        if str(order.get("side", "")).lower() not in {"buy", "sell"}:
+            raise SnapshotError("unknown order side")
+        if _num(order.get("quantity"), "order quantity") <= 0:
+            raise SnapshotError("order quantity must be positive")
     bp = portfolio.get("buying_power")
     bp_value = bp.get("buying_power") if isinstance(bp, dict) else bp
     positions = [
         {
-            "symbol": str(p["symbol"]).upper(),
+            "symbol": p["symbol"].strip().upper(),
             "quantity": _num(p.get("quantity"), "position quantity"),
             "average_buy_price": _price(p.get("average_buy_price"), "average_buy_price"),
         }
-        for p in raw.get("positions") or []
+        for p in raw["positions"]
     ]
+    if len({p["symbol"] for p in positions}) != len(positions):
+        raise SnapshotError("duplicate position symbols")
     # type/trigger/stop_price decide whether an open sell protects a position (live.stop_coverage)
     orders = [
         {
-            "symbol": str(o.get("symbol", "")).upper(),
-            "side": o.get("side"),
-            "state": o.get("state"),
-            "quantity": o.get("quantity"),
+            "symbol": o["symbol"].strip().upper(),
+            "side": o["side"].lower(),
+            "state": o["state"].lower(),
+            "quantity": _num(o["quantity"], "order quantity"),
             "type": str(o.get("type") or "").lower(),
             "trigger": str(o.get("trigger") or "").lower(),
             "stop_price": _price(o.get("stop_price"), "stop_price"),
         }
-        for o in raw.get("orders") or []
+        for o in raw["orders"]
         if str(o.get("state", "")).lower() in OPEN_ORDER_STATES
     ]
     return AccountSnapshot(
@@ -129,6 +154,21 @@ def parse_snapshot(raw: dict) -> AccountSnapshot:
         if raw.get("unsettled_funds") in (None, "")
         else _num(raw["unsettled_funds"], "unsettled_funds"),
         account_type=str(raw.get("account_type", "")),
+        collections_complete=True,
+    )
+
+
+def _validate_saved(raw: dict) -> AccountSnapshot:
+    """Revalidate persisted or in-memory snapshots; legacy completeness is unknown."""
+    if not isinstance(raw, dict) or raw.get("collections_complete") is not True:
+        raise SnapshotError("snapshot completeness is unknown; reimport positions and orders")
+    return parse_snapshot(
+        {
+            **raw,
+            "account_number": raw.get("account_last4"),
+            "portfolio": {k: raw.get(k) for k in ("total_value", "cash", "buying_power")},
+            "orders": raw.get("open_orders"),
+        }
     )
 
 
@@ -137,6 +177,10 @@ def verify_snapshot(snap: AccountSnapshot, settings: Settings, now: datetime | N
     now = now or datetime.now(UTC)
     cfg = settings.broker
     problems = []
+    try:
+        _validate_saved(asdict(snap))
+    except (SnapshotError, TypeError, ValueError):
+        return ["account snapshot is invalid or incomplete; reimport successful positions and orders reads"]
     if cfg.account_last4 and snap.account_last4 != cfg.account_last4:
         problems.append(f"account ••{snap.account_last4} is not the configured agent account ••{cfg.account_last4}")
     age_h = (now - snap.fetched).total_seconds() / 3600
@@ -148,6 +192,7 @@ def verify_snapshot(snap: AccountSnapshot, settings: Settings, now: datetime | N
 
 
 def save_snapshot(settings: Settings, snap: AccountSnapshot) -> Path:
+    snap = _validate_saved(asdict(snap))
     path = settings.resolve(settings.data.cache_dir).parent / SNAPSHOT_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(snap), indent=2), encoding="utf-8")
@@ -158,7 +203,10 @@ def load_saved_snapshot(settings: Settings) -> AccountSnapshot | None:
     path = settings.resolve(settings.data.cache_dir).parent / SNAPSHOT_FILE
     if not path.exists():
         return None
-    return AccountSnapshot(**json.loads(path.read_text(encoding="utf-8")))
+    try:
+        return _validate_saved(json.loads(path.read_text(encoding="utf-8")))
+    except (ValueError, TypeError, KeyError):
+        raise SnapshotError("saved snapshot is invalid or incomplete; reimport positions and orders") from None
 
 
 def import_snapshot(settings: Settings, source: Path) -> tuple[AccountSnapshot, list[str]]:

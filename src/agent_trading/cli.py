@@ -108,7 +108,12 @@ def build_parser() -> argparse.ArgumentParser:
     a.set_defaults(func=cmd_account)
 
     tn = sub.add_parser("tournament", help="strategy tournament: candidates vs benchmarks, walk-forward, registry")
-    tn.add_argument("--no-test", action="store_true", help="selection only; leave the test period untouched")
+    tn.add_argument(
+        "--no-test",
+        action="store_true",
+        default=True,
+        help="selection only (the default; the consumed holdout is sealed)",
+    )
     tn.set_defaults(func=cmd_tournament)
 
     k = sub.add_parser("kill-switch", help="persistent block on all live tickets (status | engage | release)")

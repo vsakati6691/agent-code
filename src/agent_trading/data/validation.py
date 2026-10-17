@@ -110,6 +110,15 @@ def validate_bars(
     values = df[list(REQUIRED_COLUMNS)]
     if values.isna().any().any():
         raise DataQualityError(f"{symbol}: missing values")
+    try:
+        finite = np.isfinite(values.to_numpy(dtype=float)).all()
+        numeric = all(
+            pd.api.types.is_numeric_dtype(dtype) and not pd.api.types.is_bool_dtype(dtype) for dtype in values.dtypes
+        )
+    except (TypeError, ValueError, OverflowError):
+        finite, numeric = False, False
+    if not finite or not numeric:
+        raise DataQualityError(f"{symbol}: OHLCV must contain finite numeric values")
     prices = df[["open", "high", "low", "close"]]
     if (prices <= 0).any().any():
         raise DataQualityError(f"{symbol}: non-positive prices")

@@ -15,7 +15,18 @@ AS_OF = date(2026, 10, 12)
 
 def snap(total=1000.0, cash=1000.0, positions=(), orders=(), last4="1234", age_h=1.0, unsettled=0.0):
     fetched = (datetime.now(UTC) - timedelta(hours=age_h)).isoformat(timespec="seconds")
-    return AccountSnapshot(fetched, last4, "Agent-trading", total, cash, cash, list(positions), list(orders), unsettled)
+    return AccountSnapshot(
+        fetched,
+        last4,
+        "Agent-trading",
+        total,
+        cash,
+        cash,
+        list(positions),
+        list(orders),
+        unsettled,
+        collections_complete=True,
+    )
 
 
 @pytest.fixture

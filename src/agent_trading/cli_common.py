@@ -12,10 +12,15 @@ log = logging.getLogger("agent_trading")
 def _service(settings: Settings, with_client: bool):
     from .data.alphavantage import AlphaVantageClient
     from .data.service import MarketDataService
+    from .provider_budget import DAILY_CEILING, DailyRequestBudget
 
     client = None
     if with_client:
-        client = AlphaVantageClient(get_api_key(), pause_seconds=settings.data.request_pause_seconds)
+        client = AlphaVantageClient(
+            get_api_key(),
+            pause_seconds=settings.data.request_pause_seconds,
+            budget=DailyRequestBudget(limit=min(DAILY_CEILING, settings.data.daily_request_budget)),
+        )
     return MarketDataService(settings, client)
 
 

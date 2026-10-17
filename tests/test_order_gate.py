@@ -36,6 +36,7 @@ def snap(total=1000.0, cash=1000.0, positions=(), orders=(), fetched=NOW - timed
         list(positions),
         list(orders),
         unsettled,
+        collections_complete=True,
     )
 
 
@@ -105,7 +106,12 @@ def test_unsettled_cash_and_open_buy_block_buys_but_not_sells(settings):
     s = snap(total=1000, cash=950, positions=held, unsettled=None)
     res = check(settings, [sell, buy()], s=s)
     assert res.approved == [sell] and "settled cash unknown" in res.rejected[0][1]
-    s = snap(total=1000, cash=950, positions=held, orders=[{"symbol": "EFA", "side": "buy", "state": "queued"}])
+    s = snap(
+        total=1000,
+        cash=950,
+        positions=held,
+        orders=[{"symbol": "EFA", "side": "buy", "state": "queued", "quantity": 1}],
+    )
     res = check(settings, [sell, buy()], s=s)
     assert res.approved == [sell] and "open buy order" in res.rejected[0][1]
     # unsettled sale proceeds are not spendable

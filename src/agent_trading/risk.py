@@ -278,8 +278,13 @@ def check_order(order: ProposedOrder, settings: Settings, cash: float) -> None:
         raise RiskViolation("only paper trading is enabled")
     if order.asset_type not in ("equity", "etf"):
         raise RiskViolation(f"asset type {order.asset_type!r} is not allowed (stocks/ETFs only)")
-    if order.quantity <= 0 or order.price <= 0:
-        raise RiskViolation("quantity and price must be positive")
+    values = (order.quantity, order.price, order.held_quantity, cash)
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in values):
+        raise RiskViolation("order values and cash must be finite numbers")
+    if order.quantity <= 0 or order.price <= 0 or order.held_quantity < 0 or cash < 0:
+        raise RiskViolation("quantity and price must be positive; cash and holdings must be non-negative")
+    if not math.isfinite(order.quantity * order.price):
+        raise RiskViolation("order notional must be finite")
     if order.side == "buy":
         if order.quantity * order.price > cash + 1e-9:
             raise RiskViolation("order exceeds available cash (margin is not allowed)")
@@ -294,6 +299,11 @@ def check_new_trade_risk(
     equity: float, open_risk: float, quantity: float, entry: float, stop: float, cfg: RiskConfig
 ) -> float:
     """Validate a manually entered paper trade against the risk limits. Returns its planned risk."""
+    values = (equity, open_risk, quantity, entry, stop)
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in values):
+        raise RiskViolation("trade risk inputs must be finite numbers")
+    if min(equity, quantity, entry, stop) <= 0 or open_risk < 0:
+        raise RiskViolation("trade risk inputs must be positive; open risk must be non-negative")
     if stop >= entry:
         raise RiskViolation("stop must be below entry (long-only)")
     risk = planned_risk(quantity, entry, stop, cfg.stop_risk_buffer)

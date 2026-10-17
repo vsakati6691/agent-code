@@ -18,6 +18,12 @@ def synthetic_broker_identity(monkeypatch):
     monkeypatch.setenv("BROKER_ACCOUNT_LAST4", "1234")
 
 
+@pytest.fixture(autouse=True)
+def isolated_provider_budget(monkeypatch, tmp_path):
+    """Mock requests must never consume the owner's persisted request budget."""
+    monkeypatch.setenv("AGENT_PROVIDER_BUDGET_PATH", str(tmp_path / "provider-budget.sqlite3"))
+
+
 def make_bars(
     n: int = 300,
     start: float = 100.0,

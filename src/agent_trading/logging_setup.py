@@ -30,6 +30,32 @@ def redact(text: str) -> str:
     return text
 
 
+def redact_details(value):
+    """Redact diagnostics before serialization, without changing non-secret data types."""
+    if isinstance(value, dict):
+        return {
+            redact(str(key)): "***"
+            if str(key).lower() in {"apikey", "api_key", "token", "secret", "password"}
+            else redact_details(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [redact_details(item) for item in value]
+    if isinstance(value, str):
+        return redact(value)
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    return redact(str(value))
+
+
+def protect_log_handlers() -> None:
+    """Also protect handlers supplied by an embedding application or pytest."""
+    for handler in logging.getLogger().handlers:
+        if not any(isinstance(f, RedactingFilter) for f in handler.filters):
+            handler.addFilter(RedactingFilter())
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+
 class RedactingFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = redact(record.getMessage())

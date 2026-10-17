@@ -16,13 +16,14 @@ import pandas as pd
 
 from ..config import Settings
 from .alphavantage import AlphaVantageClient, AlphaVantageError
+from .cache import cache_path
 
 log = logging.getLogger(__name__)
 DIV_DIR = "dividends"
 
 
 def _path(settings: Settings, symbol: str) -> Path:
-    return settings.resolve(settings.data.cache_dir) / DIV_DIR / f"{symbol.upper()}.csv"
+    return cache_path(settings.resolve(settings.data.cache_dir) / DIV_DIR, symbol)
 
 
 def save_dividends(settings: Settings, symbol: str, divs: pd.Series) -> Path:

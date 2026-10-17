@@ -198,7 +198,7 @@ def test_sp500_table_parse_and_size_check():
         pv.parse_sp500({"parse": {"text": html.replace(rows, "")}})
 
 
-def test_cboe_history_drops_padding_and_repairs_ranges():
+def test_cboe_history_drops_padding_without_fabricating_ranges():
     raw = {
         "data": [
             {"date": "2026-01-02", "open": 0, "high": 10, "low": 9, "close": 9.5, "volume": 1},
@@ -207,8 +207,8 @@ def test_cboe_history_drops_padding_and_repairs_ranges():
         ]
     }
     df = pv.parse_cboe_history(raw)
-    assert len(df) == 2 and df.attrs["dropped_bars"] == 1 and df.attrs["repaired_bars"] == 1
-    assert df.loc["2026-01-02", "open"] == 9.5 and df.loc["2026-01-05", "high"] == 10.6
+    assert len(df) == 2 and df.attrs["dropped_bars"] == 1
+    assert df.loc["2026-01-02", "open"] == 0 and df.loc["2026-01-05", "high"] == 10.5
 
 
 def test_cboe_chain_and_occ_parse():

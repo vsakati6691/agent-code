@@ -11,8 +11,8 @@ from pathlib import Path
 import pandas as pd
 
 from ..config import Settings
-from .alphavantage import SOURCE_NAME, AlphaVantageClient, AlphaVantageError
-from .cache import cache_path, last_cached_date, merge_bars, read_cache, write_cache
+from .alphavantage import SOURCE_NAME, AlphaVantageClient, AlphaVantageError, AlphaVantageQuotaError
+from .cache import cache_path, merge_bars, read_cache, write_cache
 from .validation import DataQualityError, trim_bad_history, validate_bars
 
 log = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ class MarketDataService:
         self.settings = settings
         self.client = client
         self.cache_dir = settings.resolve(settings.data.cache_dir)
+        self.provider_stopped = False
 
     @property
     def _budget_left(self) -> int:
@@ -55,17 +56,22 @@ class MarketDataService:
             raise RuntimeError("No data client configured")
         as_of_ts = pd.Timestamp(as_of)
 
-        def staleness(sym: str) -> pd.Timestamp:
-            last = last_cached_date(self.cache_dir, sym)
-            return last if last is not None else pd.Timestamp.min
+        cached = {sym: read_cache(self.cache_dir, sym) for sym in symbols}
+        dates = {
+            sym: frame.index[-1] if frame is not None and not frame.empty else pd.Timestamp.min
+            for sym, frame in cached.items()
+        }
 
         status: dict[str, str] = {}
-        for sym in sorted(symbols, key=staleness):
-            last = last_cached_date(self.cache_dir, sym)
+        for sym in sorted(symbols, key=dates.__getitem__):
+            last = dates[sym]
             path = cache_path(self.cache_dir, sym)
             fetched_today = path.exists() and date.fromtimestamp(path.stat().st_mtime) >= as_of
-            if last is not None and (last >= as_of_ts or fetched_today):
+            if last != pd.Timestamp.min and (last >= as_of_ts or fetched_today):
                 status[sym] = "up to date"
+                continue
+            if self.provider_stopped:
+                status[sym] = "skipped (provider quota or entitlement failure)"
                 continue
             if self._budget_left <= 1:  # keep one call for the earnings calendar
                 status[sym] = "skipped (request budget exhausted)"
@@ -73,10 +79,12 @@ class MarketDataService:
             try:
                 new = self.client.daily_bars(sym, self.settings.data.outputsize)
             except AlphaVantageError as exc:
+                if isinstance(exc, AlphaVantageQuotaError):
+                    self.provider_stopped = True
                 log.warning("Fetch failed: %s", exc)
                 status[sym] = f"fetch failed: {exc}"
                 continue
-            merged = merge_bars(read_cache(self.cache_dir, sym), new)
+            merged = merge_bars(cached[sym], new)
             write_cache(self.cache_dir, sym, merged)
             status[sym] = f"updated ({len(new)} bars fetched, {len(merged)} cached)"
         return status
@@ -102,12 +110,14 @@ class MarketDataService:
         meta = self._earnings_meta()
         if meta and meta.get("fetched_date") == as_of.isoformat():
             return
-        if self.client is None or self._budget_left <= 0:
+        if self.client is None or self.provider_stopped or self._budget_left <= 0:
             log.warning("Earnings calendar not refreshed (no client or budget)")
             return
         try:
             table = self.client.earnings_calendar("3month")
         except AlphaVantageError as exc:
+            if isinstance(exc, AlphaVantageQuotaError):
+                self.provider_stopped = True
             log.warning("Earnings calendar fetch failed: %s", exc)
             return
         self.cache_dir.mkdir(parents=True, exist_ok=True)

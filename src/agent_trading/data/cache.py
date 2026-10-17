@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -10,7 +11,22 @@ COLUMNS = ["open", "high", "low", "close", "volume"]
 
 
 def cache_path(cache_dir: Path, symbol: str) -> Path:
-    return cache_dir / f"{symbol.upper()}.csv"
+    """A supported ticker's contained CSV path, including Windows device-name guards."""
+    if (
+        not isinstance(symbol, str)
+        or not re.fullmatch(r"[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*", symbol)
+        or len(symbol) > 32
+    ):
+        raise ValueError("invalid ticker for cache path")
+    symbol = symbol.upper()
+    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+    if symbol.split(".")[0] in reserved:
+        raise ValueError("reserved ticker for cache path")
+    root = Path(cache_dir).resolve()
+    path = (root / f"{symbol}.csv").resolve()
+    if not path.is_relative_to(root):
+        raise ValueError("ticker cache path escapes its directory")
+    return path
 
 
 def read_cache(cache_dir: Path, symbol: str) -> pd.DataFrame | None:
@@ -22,8 +38,8 @@ def read_cache(cache_dir: Path, symbol: str) -> pd.DataFrame | None:
 
 
 def write_cache(cache_dir: Path, symbol: str, df: pd.DataFrame) -> Path:
-    cache_dir.mkdir(parents=True, exist_ok=True)
     path = cache_path(cache_dir, symbol)
+    path.parent.mkdir(parents=True, exist_ok=True)
     out = df[COLUMNS].sort_index()
     out.index.name = "date"
     out.to_csv(path, date_format="%Y-%m-%d")

@@ -6,8 +6,10 @@ object unless the configuration is paper-only, long-only, cash-only equities.
 
 from __future__ import annotations
 
+import math
 import os
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, is_dataclass
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -371,6 +373,7 @@ def _build(cls, raw: dict[str, Any] | None, section: str):
 
 
 def validate(settings: Settings) -> Settings:
+    _validate_numeric_fields(settings)
     if settings.mode != "paper":
         raise ConfigError(f"mode={settings.mode!r} is not allowed; only 'paper' is supported in this version")
     r = settings.risk
@@ -438,6 +441,35 @@ def validate(settings: Settings) -> Settings:
     return settings
 
 
+def _validate_numeric_fields(value, prefix: str = "") -> None:
+    """Reject malformed numeric/boolean settings before any policy comparisons."""
+    for f in fields(value):
+        item = getattr(value, f.name)
+        name = f"{prefix}.{f.name}" if prefix else f.name
+        if is_dataclass(item):
+            _validate_numeric_fields(item, name)
+        elif f.type in ("float", "int"):
+            _finite_config_number(item, name, integer=f.type == "int")
+        elif f.type == "bool" and not isinstance(item, bool):
+            raise ConfigError(f"{name} must be a boolean")
+        elif f.name in {"symbol_risk_pct", "max_holding_days", "weights"}:
+            if not isinstance(item, dict):
+                raise ConfigError(f"{name} must be a mapping")
+            for number in item.values():
+                _finite_config_number(number, name, integer=f.name == "max_holding_days")
+
+
+def _finite_config_number(value, name: str, *, integer: bool = False) -> None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, Real)
+        or not math.isfinite(value)
+        or value < 0
+        or (integer and not isinstance(value, int))
+    ):
+        raise ConfigError(f"{name} must be a finite, non-negative {'integer' if integer else 'number'}")
+
+
 def _validate_account_limits(al: AccountLimitsConfig) -> None:
     """Account limits may only be stricter than HARD_LIMITS."""
     h = HARD_LIMITS
@@ -501,7 +533,7 @@ def load_settings(path: str | Path = "config/settings.yaml") -> Settings:
     raw["broker"]["account_last4"] = os.environ.get("BROKER_ACCOUNT_LAST4", "").strip()
     settings = Settings(
         mode=str(raw.get("mode", "")),
-        paper_starting_equity=float(raw.get("paper_starting_equity", 0)),
+        paper_starting_equity=raw.get("paper_starting_equity", 0),
         universe={k: [str(s).upper() for s in v] for k, v in (raw.get("universe") or {}).items()},
         base_dir=base_dir,
         **{name: _build(cls, raw.get(name), name) for name, cls in sections.items()},
