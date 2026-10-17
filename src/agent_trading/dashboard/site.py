@@ -243,7 +243,10 @@ def _build_site(
     write("history.html", "History", history_page(dates, tracking, history), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
     write(
-        "audit.html", "Audit trail", audit_page(store, snap, integrity) + site_build.section(build_info), "audit.html"
+        "audit.html",
+        "Audit trail",
+        audit_page(store, snap, integrity, daily, status) + site_build.section(build_info),
+        "audit.html",
     )
     profiles = {k: b.get("profile", "standard") for k, b in snap["bands"].items()}
     write(

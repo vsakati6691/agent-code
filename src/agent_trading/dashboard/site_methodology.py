@@ -62,13 +62,11 @@ def history_table(snapshots: list[dict]) -> str:
         rows.append("<tr>" + "".join(f"<td>{escape(c)}</td>" for c in cells) + "</tr>")
     return (
         '<section id="methodology-counts"><h2>Snapshots per methodology version</h2>'
-        '<p class="small">Counts are separate by version; multiple snapshots in one ISO week count once toward '
-        "52 weekly observations. Estimated dates assume one additional snapshot per week after the latest stored date "
-        "under that same version, with no gaps. Retired versions would have to resume. "
-        "These are collection dates, not validation or claim dates; outcomes also need time to mature.</p>"
         '<div class="table-wrap"><table><caption>Methodology continuity and conditional 52-week dates</caption>'
         "<thead><tr><th>Version</th><th>Stored snapshots</th><th>Distinct weeks</th><th>First</th><th>Latest</th>"
-        "<th>Estimated 52nd weekly observation</th></tr></thead><tbody>"
-        + "".join(rows)
-        + "</tbody></table></div></section>"
+        "<th>Estimated 52nd weekly observation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+        "<details><summary>Version counts and estimated collection dates</summary><p>Counts are separate by version; multiple snapshots in one ISO week count once toward "
+        "52 weekly observations. Estimated dates assume one additional snapshot per week after the latest stored date "
+        "under that same version, with no gaps. Retired versions would have to resume. "
+        "These are collection dates, not validation or claim dates; outcomes also need time to mature.</p></details></section>"
     )

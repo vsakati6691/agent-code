@@ -39,8 +39,9 @@ def compare_page(data: dict) -> str:
 <div id="cmp-chart" class="chart"></div>
 <p class="small muted" id="cmp-chart-note"></p>"""
     return f"""<h1>Compare companies</h1>
-<p class="lede">Choose 2 to 4 companies from the {E(data["as_of"])} snapshot. Every figure comes from that snapshot:
-prices at its close, fundamentals from SEC filings made by that date, in USD as reported.</p>
-<p class="small">{E(spec.COMPARE_RULES["note"])}</p>
+<p>Choose 2 to 4 companies from the {E(data["as_of"])} snapshot.</p>
 {body}
+<details><summary>Comparison basis and limits</summary><p>Every figure comes from that snapshot: prices at its close,
+fundamentals from SEC filings made by that date, in USD as reported.</p><p>{E(spec.COMPARE_RULES["note"])}</p></details>
+<noscript><p>For a comparison without JavaScript, use Browse tickers to open each company's stored research page.</p></noscript>
 <script type="application/json" id="cmp-data">{blob}</script>"""

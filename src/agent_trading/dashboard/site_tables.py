@@ -7,6 +7,17 @@ import re
 def enhance(markup: str) -> str:
     """Enhance only the site's known table wrappers; keep table data and order intact."""
 
+    def missing_cell(match: re.Match) -> str:
+        attributes, value = match.groups()
+        reason = html.escape(html.unescape(value.strip()), quote=True)
+        return f'<td{attributes}><span title="{reason}">—</span></td>'
+
+    markup = re.sub(
+        r"<td\b([^>]*)>\s*(n/a|Unavailable|unavailable|not enough history|not meaningful(?: \(negative base\))?)\s*</td>",
+        missing_cell,
+        markup,
+    )
+
     def region(match: re.Match) -> str:
         classes, table, attributes, caption = match.groups()
         label = re.search(r'\baria-label=[\'"]([^\'"]*)[\'"]', attributes)

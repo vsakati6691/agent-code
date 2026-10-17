@@ -109,7 +109,8 @@ JS = (
     main.appendChild(node('div','Strike ' + dollars(r.strike) + ' · underlying ' + dollars(r.spot),'small'));
     var use = node('button','Use in calculator','action'); use.type = 'button';
     use.setAttribute('aria-label','Use ' + name + ' in calculator');
-    use.addEventListener('click',function () { choice.value = String(index); updateSizing(); choice.focus(); });
+    use.addEventListener('click',function () { choice.value = String(index); updateSizing();
+      document.getElementById('bet-calculator').open = true; choice.focus(); });
     main.appendChild(use);
     cell(tr,'Premium · ask × 100',dollars(r.premium),r.premium,'num');
     cell(tr,'Maximum loss · before fees',dollars(r.premium),r.premium,'num crit');

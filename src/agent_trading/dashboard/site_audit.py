@@ -31,7 +31,13 @@ def _readable(d) -> str:
     return str(d)
 
 
-def audit_page(store: Store, snap: dict, integrity: list[str]) -> str:
+def audit_page(
+    store: Store, snap: dict, integrity: list[str], daily: dict | None = None, status: dict | None = None
+) -> str:
+    from .site_external import rate_note
+    from .site_options_status import status_html, version_line
+    from .site_refresh import audit_context
+
     rows = "".join(
         f'<tr><td class="small">{E(str(e.get("at")).replace("+00:00", ""))}</td><td>{E(str(e.get("event")).replace("_", " "))}</td>'
         f'<td class="small">{E(_readable({k: v for k, v in e.items() if k not in ("at", "event")})[:400])}</td></tr>'
@@ -50,16 +56,23 @@ def audit_page(store: Store, snap: dict, integrity: list[str]) -> str:
         else '<div class="banner bad"><strong>Integrity problems</strong>' + E("; ".join(integrity)) + "</div>"
     )
     usage = snap.get("usage", {})
-    return f"""<h1>Audit trail</h1>{ok}<h2 id="data-status">Data status</h2>
+    return f"""<h1>Audit trail</h1><p>Stored data coverage, integrity and collection history.</p>
+<section id="data-status">{datasets_table(evidence.datasets(snap))}</section>{ok}
 <p class="small">One state per dataset behind the {E(str(snap["as_of"]))} snapshot. Nothing falls back to sample or
-estimated data: anything not collected is shown as missing.</p>{datasets_table(evidence.datasets(snap))}<h2>Snapshots</h2><div class="table-wrap"><table aria-label="Stored snapshots"><thead><tr><th>As of</th><th>SHA-256</th>
+estimated data: anything not collected is shown as missing.</p><h2>Snapshots</h2><div class="table-wrap"><table aria-label="Stored snapshots"><thead><tr><th>As of</th><th>SHA-256</th>
 <th>Spec</th><th>Code</th><th>Status</th></tr></thead><tbody>{"".join(man)}</tbody></table></div>
-<h2>Latest run</h2><p class="small">Started {E(snap.get("run_started", ""))}, finished {E(snap.get("run_finished", ""))} UTC.
+<h2 id="latest-run">Latest run</h2><p>Snapshot methodology: {E(str(snap.get("spec_version") or "unavailable"))}.
+Status: {E(str(snap.get("status") or "unavailable"))}. Latest attempt: {E(_readable(status or {}))}.</p>
+<p class="small">Started {E(snap.get("run_started", ""))}, finished {E(snap.get("run_finished", ""))} UTC.
 Requests by provider: {E(", ".join(f"{k} {v}" for k, v in usage.get("requests", {}).items()) or "none (all answered from cache)")};
 cache hits {E(str(usage.get("cache_hits", 0)))}.
 Provider caps: {E(_readable(usage.get("budgets", {})))}. Dataset attempts: {E(_readable(usage.get("dataset_requests", {})))}.
 Dataset caps: {E(_readable(usage.get("dataset_budgets", {})))}.
 Problems: {E("; ".join(snap.get("problems", [])) or "none")}.</p>
+<p>Leaders index completion: {E(_readable(snap.get("leaders_2030_collection") or {})) or "Not stored in this snapshot"}.</p>
+{audit_context(snap, daily)}
+<section id="options-data"><h2>Options collection</h2>{status_html(snap)}{version_line(snap)}{rate_note(snap)}
+<p>{E(_readable((snap.get("options") or {}).get("chain_problems") or {}))}</p></section>
 <h2>Data sources and terms</h2><ul class="small">{"".join(f"<li><strong>{E(k)}</strong>: {E(v)}</li>" for k, v in snap.get("sources", {}).items())}</ul>
 <h2>Machine-readable data</h2><ul class="small"><li><a href="data/schema.json">data/schema.json</a>: what every field means
 (ratios are decimals, money is USD, times are UTC)</li><li><a href="data/latest.json">data/latest.json</a>: the latest snapshot</li>

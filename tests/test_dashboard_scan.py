@@ -36,7 +36,7 @@ def test_benchmark_return_uses_stored_return_not_candidate_performance():
     assert benchmark_return(s, "IWM", "1y") is None
     page = market_context(s)
     assert "$500.00" in page and "+10.0%" in page and "+30.0%" not in page
-    assert page.count("Unavailable") == 2
+    assert page.count('title="No dated benchmark close stored for this snapshot">—') == 2
 
 
 @pytest.mark.parametrize("change", ["conflicting", "wrong_date", "missing", "nonfinite"])

@@ -8,7 +8,6 @@ from .pipeline_external import OLD
 from .sec_insiders import CLASSIFICATION, LABEL
 from .short_interest import LABEL as SHORT_LABEL
 from .site_layout import E
-from .site_status import notice
 
 
 def source(url: str | None, label: str = "Source") -> str:
@@ -74,13 +73,45 @@ def company(c: dict) -> str:
             f"{E(risk.get('accession') or 'accession unavailable')} · {E(location)}. "
             f"{E(risk.get('range_basis') or '')} Issuer quotation, not independent analysis.</p>"
         )
-    return f"""<section class="external-research"><h2>Insider activity</h2><p>{E(LABEL)}</p>
+    insider_body = f"""<p>{E(LABEL)}</p>
 <p class="small">{E(insider.get("classification_basis") or CLASSIFICATION)}. Latest transaction: {E(insider.get("latest_transaction_date") or "unavailable")}.</p>
 <div class="table-wrap"><table aria-label="Dated insider P/S activity"><thead><tr><th>Window</th><th>Net shares</th><th>Net dollars</th><th>Distinct buyers / sellers</th></tr></thead><tbody>{"".join(activity)}</tbody></table></div>
-<p class="small">{gap(insider) if insider.get("state") != "available" else "Complete retrieved filing window."} {insider_sources}</p>
-<h2>Institutional holders</h2><p class="small">Status: {E(holders.get("state") or "missing")} · {E(holders.get("reason") or "")}</p>{holders_body}
-<h2>Short interest</h2>{short_body}
-<h2>Risk-factor quotation</h2><p class="small">{E(risk.get("reason") or "")}</p>{risk_body}</section>"""
+<p class="small">{gap(insider) if insider.get("state") != "available" else "Complete retrieved filing window."} {insider_sources}</p>"""
+    sections = [
+        (
+            "Insider activity",
+            insider_body,
+            any(r.get("net_shares") is not None for r in insider.get("windows", {}).values()),
+        ),
+        (
+            "Institutional holders",
+            f'<p class="small">Status: {E(holders.get("state") or "missing")} · {E(holders.get("reason") or "")}</p>'
+            + holders_body,
+            holders.get("holder_count") is not None,
+        ),
+        ("Short interest", short_body, short.get("shares_short") is not None),
+        (
+            "Risk-factor quotation",
+            f'<p class="small">{E(risk.get("reason") or "")}</p>' + risk_body,
+            bool(risk.get("excerpt")),
+        ),
+    ]
+    if not any(available for _, _, available in sections):
+        return (
+            '<details class="empty-data"><summary>Additional public datasets unavailable this week</summary>'
+            + "".join(f"<h3>{label}</h3>{body}" for label, body, _ in sections)
+            + "</details>"
+        )
+    return (
+        '<section class="external-research">'
+        + "".join(
+            f"<h2>{label}</h2>{body}"
+            if available
+            else f'<details class="empty-data"><summary>{label} unavailable</summary>{body}</details>'
+            for label, body, available in sections
+        )
+        + "</section>"
+    )
 
 
 def macro_context(snap: dict) -> str:
@@ -100,20 +131,22 @@ def macro_context(snap: dict) -> str:
         reason = (r.get("yoy_reason") if key == "CPIAUCSL" else r.get("reason")) or OLD
         if value is None:
             gaps.append(f"{label}: {reason}")
+            continue
         items.append(
             f'<div class="card macro-card"><strong>{source(f"https://fred.stlouisfed.org/series/{key}", label)}</strong><div>{value_text}</div>'
             f"<small>{E(r.get('observation_date') or 'No observation stored')}</small></div>"
         )
-    warning = (
-        notice(
-            "Macro inputs unavailable",
-            f"{len(gaps)} of {len(items)} displayed series lack a usable observation. Available values retain their recorded dates.",
-            gaps,
+    download = f'<p class="small"><a href="downloads/{E(str(snap["as_of"]))}_macro.csv">Macro CSV</a></p>'
+    missing = "<ul>" + "".join(f"<li>{E(reason)}</li>" for reason in gaps) + "</ul>"
+    if not items:
+        return (
+            '<details class="empty-data"><summary>Macro data not collected this week</summary><p>6 of 6 displayed series lack a usable observation.</p>'
+            + missing
+            + download
+            + "</details>"
         )
-        if gaps
-        else ""
-    )
-    return f'<section><h2>Macro context</h2>{warning}<div class="grid">{"".join(items)}</div><p class="small"><a href="downloads/{E(str(snap["as_of"]))}_macro.csv">Macro CSV</a></p></section>'
+    warning = f"<details><summary>{len(gaps)} macro inputs unavailable</summary>{missing}</details>" if gaps else ""
+    return f'<section><h2>Macro context</h2><div class="grid">{"".join(items)}</div>{warning}{download}</section>'
 
 
 def rate_note(snap: dict) -> str:
@@ -127,10 +160,10 @@ def rate_note(snap: dict) -> str:
         if value is not None
         else "Unavailable · " + (rate.get("reason") or OLD)
     )
-    warning = notice("Treasury rate unavailable", rate.get("reason") or OLD) if value is None else ""
     return (
-        warning
-        + f'<p class="small">Dated Black-Scholes rate input: {E(text)}. {source(rate.get("source"), "FRED DGS1MO")}. Previously stored estimates retain their recorded assumptions.</p>'
+        '<details class="small"><summary>'
+        + ("Treasury rate unavailable" if value is None else "Treasury rate assumption")
+        + f"</summary><p>Dated Black-Scholes rate input: {E(text)}. {source(rate.get('source'), 'FRED DGS1MO')}. Previously stored estimates retain their recorded assumptions.</p></details>"
     )
 
 

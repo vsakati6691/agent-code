@@ -1,6 +1,6 @@
 from agent_trading.dashboard import spec
 from agent_trading.dashboard.site_methodology import history_table, progress, version_counts
-from agent_trading.dashboard.site_refresh import banner
+from agent_trading.dashboard.site_refresh import audit_context, banner
 
 
 def test_counts_are_per_version_and_distinct_week():
@@ -43,6 +43,8 @@ def test_partial_banner_lists_missing_datasets_reasons_and_budget():
         "usage": {"requests": {"cboe": 2}, "budgets": {"cboe": 2}, "cache_hits": 1},
     }
     text = banner({"as_of": "2026-10-09"}, {"data": daily})
+    assert 'href="audit.html#daily-context"' in text and "partial" in text
+    text = audit_context({"as_of": "2026-10-09"}, {"data": daily})
     assert "Quote AAA: request budget exhausted" in text
     assert "Options chain CCC: stale &lt;quote&gt;" in text
     assert "Earnings calendar: calendar failed" in text
@@ -50,6 +52,6 @@ def test_partial_banner_lists_missing_datasets_reasons_and_budget():
     assert "Total cache hits: 1" in text
     assert "Quote BBB" not in text
     daily["options"]["enabled"] = False
-    assert "Earnings calendar" not in banner({}, {"data": daily})
+    assert "Earnings calendar" not in audit_context({"as_of": "2026-10-09"}, {"data": daily})
     daily["status"] = "ok"
-    assert "Not refreshed" not in banner({}, {"data": daily})
+    assert "Not refreshed" not in audit_context({"as_of": "2026-10-09"}, {"data": daily})

@@ -185,8 +185,8 @@ JS = r"""
     var done = sessions.filter(function (s) { return s < today || (s === today && hour >= 16); }).length;
     var beyond = sessions.length > 0 && today > sessions[sessions.length - 1];
     var age = document.getElementById('age');
-    if (age) age.textContent = beyond ? 'more than ' + sessions.length + ' trading sessions old'
-      : done === 0 ? 'the latest completed session' : done + (done === 1 ? ' trading session' : ' trading sessions') + ' old';
+    if (age) age.textContent = beyond ? 'more than ' + sessions.length + ' sessions old'
+      : done === 0 ? 'latest session' : done + (done === 1 ? ' session' : ' sessions') + ' old';
     if (beyond || done > parseInt(fresh.dataset.staleAfter || '6', 10)) {
       var b = document.getElementById('stale-client');
       if (b) b.hidden = false;

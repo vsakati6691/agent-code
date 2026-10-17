@@ -44,9 +44,9 @@ def test_server_freshness_counts_sessions_before_and_after_close_without_js():
     zone = ZoneInfo("America/New_York")
     before = freshness_banner(snap, None, datetime(2026, 10, 12, 15, 59, tzinfo=zone))
     after = freshness_banner(snap, None, datetime(2026, 10, 12, 16, 0, tzinfo=zone))
-    assert "the latest completed session" in before and "1 trading session old" in after
+    assert "latest session" in before and "1 session old" in after
     old = freshness_banner(snap, None, datetime(2026, 10, 23, 17, tzinfo=zone))
-    assert "10 trading sessions old" in old
+    assert "10 sessions old" in old
     assert 'id="stale-client"><strong>This page may be out of date.' in old
     assert 'id="stale-client" hidden' in after
 

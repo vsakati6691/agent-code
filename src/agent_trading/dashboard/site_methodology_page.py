@@ -98,11 +98,12 @@ def methodology_page() -> str:
         f'<td class="num">{pct(r[5], 1)}</td></tr>'
         for r in spec.ETF_EXPOSURE_RULES
     )
-    return f"""<h1>Methodology</h1><p class="lede">Version {E(spec.SPEC_VERSION)} (hash {E(spec.spec_hash())}). All rules were fixed
-before any results were computed; a change creates a new version and results are tracked separately per version.</p>
-<h2>Universes</h2><p>{E(spec.UNIVERSE_DEFINITION)}</p><p>{E(spec.MARKET_CAP_DEFINITION)}</p>
+    return f"""<h1>Methodology</h1><p>Registered universes, scoring rules and conditional scenario assumptions.</p>
 <div class="table-wrap"><table aria-label="List definitions"><thead><tr><th>Category</th><th>Universe</th><th>Market cap</th><th>Min price</th>
 <th>Min 20-day median $ volume</th><th>Gate</th><th>Benchmark</th><th>Max shown</th></tr></thead><tbody>{bands}</tbody></table></div>
+<details><summary>Registration and universe definitions</summary><p>Version {E(spec.SPEC_VERSION)} (hash {E(spec.spec_hash())}). All rules were fixed
+before any results were computed; a change creates a new version and results are tracked separately per version.</p>
+<p>{E(spec.UNIVERSE_DEFINITION)}</p><p>{E(spec.MARKET_CAP_DEFINITION)}</p></details>
 <p>Limited operating history: fewer than {spec.LIMITED_HISTORY_QUARTERS} reported quarters. Limited trading history: fewer than
 {spec.LIMITED_HISTORY_DAYS} daily bars. Fundamentals older than {spec.MAX_FILING_AGE_DAYS} days exclude a stock. The as-of close
 must be present. Lists are never padded: fewer than ten qualifying stocks means fewer than ten shown.</p>

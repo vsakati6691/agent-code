@@ -44,18 +44,19 @@ def intro(snap: dict, bands: dict) -> str:
         links.append(("top20", "Scenario test"))
     links.extend((("universe", "AI universe"), ("private", "Private companies")))
     jumps = "".join(f'<a href="#{key}">{label}</a>' for key, label in links)
+    return (
+        '<header class="compact-heading"><h1>AI stocks</h1><p>Ranked public companies and conditional size scenarios.</p></header>'
+        f'<nav class="section-nav" aria-label="AI page sections">{jumps}</nav>'
+    )
+
+
+def guide(snap: dict, bands: dict) -> str:
     profiles = ", ".join(sorted({str(b.get("profile") or "not recorded") for b in bands.values()}))
     profile_note = f"Stored AI profile: {profiles}. " if bands else ""
     return (
-        '<header class="ai-heading"><p class="eyebrow">COMPANY RESEARCH / AI SUPPLY CHAIN</p>'
-        '<h1>AI stocks</h1><p class="lede">Compare ranked public companies, inspect their evidence, '
-        "then explore the scenario assumptions.</p>"
-        f'<p class="small muted">{E(snapshot_note(snap))}</p></header>'
-        f'<nav class="section-nav" aria-label="AI page sections">{jumps}</nav>'
-        '<aside class="ai-guide"><p class="small"><strong>This is not a forecast and not advice.</strong> '
-        "Probability not established; scenarios are conditional comparisons.</p>"
+        '<aside class="ai-guide">'
         '<details class="small"><summary>Scoring and scenario limits</summary>'
-        f"<p>{E(profile_note)}{E(scoring_note())}</p><p>{E(spec.AI_PROBABILITY_NOTE)}</p>"
-        "<p>Universe membership is a recorded judgement. A high score does not predict that a company will "
+        f"<p>{E(snapshot_note(snap))}</p><p>{E(profile_note)}{E(scoring_note())}</p><p>{E(spec.AI_PROBABILITY_NOTE)}</p>"
+        "<p>This is not a forecast and not advice. Universe membership is a recorded judgement. A high score does not predict that a company will "
         'become one of the largest. <a href="methodology.html#ai">Read the AI methodology</a>.</p></details></aside>'
     )

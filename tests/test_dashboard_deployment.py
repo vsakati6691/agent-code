@@ -35,8 +35,9 @@ def test_build_records_code_and_data_without_relabeling_or_mutating_snapshots(tm
     assert 'id="site-build"' in audit and 'href="build.json"' in audit
     assert "a" * 40 in audit and "b" * 40 in audit
     overview = (out / "index.html").read_text(encoding="utf-8")
-    assert f"Snapshot methodology: {stored_version}." in overview
-    assert "Current registered methodology future-renderer." in overview
+    assert 'href="audit.html#latest-run"' in overview
+    assert f"Snapshot methodology: {stored_version}." in audit
+    assert "page renderer <strong>future-renderer</strong>" in audit
     assert check_links(out) == []
 
 

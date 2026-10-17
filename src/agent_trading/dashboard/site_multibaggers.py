@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from . import spec
-from .fmt import SUMMARIES, cap, money, num, pct, summary_details
+from .fmt import cap, money, num, pct
 from .scenarios import implied_growth_text
 from .site_exclusions import excluded_summary
 from .site_list_common import E, definition_line
@@ -100,24 +100,23 @@ def multibagger_section(snap: dict) -> str:
         cards.append(f"""<article class="card mb"><header><span class="rank">#{c["rank"]}</span>
 {pin_button(c["ticker"])}<a href="stock/multibagger-{E(c["ticker"])}.html"><strong>{E(c["ticker"])}</strong></a> {E(c.get("name") or "")}
 <span class="small muted">{E(c.get("sector") or "")} · {cap(c.get("market_cap"))} · {money(c.get("price"))} · score {num(c.get("composite"), 1)}</span></header>
+<h4>Bear / base / bull (conditional values per share)</h4>{scen}
+<details><summary>Growth evidence, assumptions and risks</summary>
 <div class="mb-grid"><div><h4>Growth opportunity and evidence</h4><p class="small">{E(c.get("thesis", ""))}</p>
 <p class="small">Revenue {pct(m.get("revenue_growth_ttm"), 0, True)} TTM, {pct(m.get("revenue_cagr_3y"), 0, True)}/yr over 3 years ·
 gross margin {pct(m.get("gross_margin"))} · operating margin {pct(m.get("operating_margin"))} · {E(cash_txt)}</p></div>
 <div><h4>Debt, dilution and valuation risk</h4><p class="small">Net debt/EBITDA {num(m.get("net_debt_to_ebitda"), 1)} ·
 dilution {pct(m.get("dilution"), 1)}/yr · SBC {pct(m.get("sbc_to_revenue"))} of revenue · EV/Sales {num(m.get("ev_to_sales"), 1)}x;
 {E(implied_growth_text(m.get("implied_revenue_cagr"), m.get("revenue_growth_ttm")))}. {E(c.get("bear_case", ""))}</p></div></div>
-<h4>Bear / base / bull (conditional values per share)</h4>{scen}
 {scenario_flags_html(c, b)}
 <h4>What must happen for a multibagger outcome</h4><p class="small">{E(multibagger_needs(c))}</p>
-<h4>What would invalidate the thesis</h4><ul class="tight small">{inval}</ul></article>""")
-    return f"""<h2 id="multibagger">Speculative multibagger research candidates</h2>
-<div class="banner warn small"><strong>5-10 year research horizon</strong>These are long-horizon research candidates. Nothing
+<h4>What would invalidate the thesis</h4><ul class="tight small">{inval}</ul></details></article>""")
+    return f"""<section id="multibagger"><div class="mb-list">{"".join(cards) or '<p class="muted">No stock passed every gate this week.</p>'}</div>
+<details><summary>Selection rules and 5–10 year scenario limits</summary><p>These are long-horizon research candidates. Nothing
 here implies multibagger returns within 3-12 months.
-{summary_details(SUMMARIES["multibagger"], spec.MULTIBAGGER_DEFINITION)}
-{summary_details(SUMMARIES["probability"], spec.PROBABILITY_STATEMENT, "Why no probabilities")}</div>
+{E(spec.MULTIBAGGER_DEFINITION)} {E(spec.PROBABILITY_STATEMENT)}</p>
 <p class="small">{E(definition_line("multibagger", b))} Showing {len(b["candidates"])} of up to {b.get("max_results", 5)}.
 <a href="methodology.html#multibagger">Criteria and rationale</a> ·
 <a href="downloads/{E(snap["as_of"])}_multibagger.csv" download>CSV</a></p>
 {f'<div class="banner info small">{E(b["shortfall_note"])}</div>' if b.get("shortfall_note") else ""}
-<div class="mb-list">{"".join(cards) or '<p class="muted">No stock passed every gate this week.</p>'}</div>
-{excluded_summary("multibagger", b)}"""
+</details>{excluded_summary("multibagger", b)}</section>"""

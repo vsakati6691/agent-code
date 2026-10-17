@@ -112,7 +112,6 @@ def scenario_model_gap(snap: dict) -> str:
 def _scenario_row(asset: dict, index: int, required: float | None, daily: dict | None) -> str:
     rates, prices = asset["rates"], asset["prices"]
     reason = str(asset["reason"])
-    short_reason = reason if len(reason) <= 72 else reason[:69].rstrip() + "…"
     missing = f'<span title="{escape(reason)}">—</span>'
     cells = []
     for case in ("bear", "base", "bull"):
@@ -120,8 +119,6 @@ def _scenario_row(asset: dict, index: int, required: float | None, daily: dict |
         label = money(value) if finite(value) else missing
         if finite(rates.get(case)):
             label += f'<div class="small muted">{pct(rates[case], 2)}/yr</div>'
-        elif case == "bear" and not any(finite(v) for v in prices.values()):
-            label += f'<div class="small muted" title="{escape(reason)}">{escape(short_reason)}</div>'
         cells.append(f'<td class="num" data-v="{sval(value)}">{label}</td>')
     flag = "—"
     if finite(rates.get("base")) and required is not None:
@@ -171,6 +168,11 @@ def goal_page(snap: dict, start: date | None = None, *, daily: dict | None = Non
     )
     encoded = json.dumps(data, allow_nan=False).replace("<", "\\u003c")
     return f"""<h1>Plan 2030</h1><p>Compare stored 2030 prices with the return your plan requires.</p>
+<div class="controls"><span class="count" data-count="t-goal"></span><button type="button" data-reset="t-goal">Reset sort</button></div>
+<div class="table-wrap"><table id="t-goal" data-table><caption>2030 price scenarios (conditional, not predictions)</caption>
+<thead><tr><th data-sort="text">Ticker</th><th data-sort="num">Current price (date)</th><th data-sort="num">2030 Bear</th>
+<th data-sort="num">2030 Base</th><th data-sort="num">2030 Bull</th><th data-sort="num">Base %/yr</th>
+<th data-sort="num">Required %/yr</th><th data-sort="text">Base vs required</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <form id="goal-form"><fieldset><legend>Target and contributions</legend><div class="controls">
 <label>Starting capital ($) <input id="goal-capital" type="number" min="0.01" max="1000000000000" step="0.01" value="10000" required></label>
 <label>Target ($) <input id="goal-target" type="number" min="0.01" max="1000000000000" step="0.01" value="20000" required></label>
@@ -182,11 +184,6 @@ def goal_page(snap: dict, start: date | None = None, *, daily: dict | None = Non
 Without contributions: <strong id="goal-no-contributions">{pct(required, 2)}/yr</strong>.</p>
 <p id="goal-horizon">{years:.2f} years; {int(years * 12 + 1e-9)} end-of-month contributions.</p>
 <p><a href="evidence.html">Compare this required rate with what the evidence says</a>.</p></section>
-<div class="controls"><span class="count" data-count="t-goal"></span><button type="button" data-reset="t-goal">Reset sort</button></div>
-<div class="table-wrap"><table id="t-goal" data-table><caption>2030 price scenarios (conditional, not predictions)</caption>
-<thead><tr><th data-sort="text">Ticker</th><th data-sort="num">Current price (date)</th><th data-sort="num">2030 Bear</th>
-<th data-sort="num">2030 Base</th><th data-sort="num">2030 Bull</th><th data-sort="num">Base %/yr</th>
-<th data-sort="num">Required %/yr</th><th data-sort="text">Base vs required</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>
 <details><summary>How this is calculated</summary>
 <p>Plan start: {data["start_date"]}. Stored scenario snapshot: {escape(str(data["snapshot_date"] or "unavailable"))}.
 Current price and date are the stored scenario inputs. A newer delayed close is context only and never changes the calculation.
@@ -196,20 +193,20 @@ Distributions, taxes, inflation and transaction costs are excluded. Cash earns 0
 Rows with stored scenarios appear first. The flag compares only the stored base price rate with the requirement including contributions;
 it does not establish feasibility or recommend a holding.</p></details>
 {scenario_model_gap(snap)}
-<fieldset><legend>Optional allocation weights</legend><p>Enter weights totalling 100%. No allocation is selected by default.
+<details><summary>Optional allocation weights</summary><fieldset><legend>Allocation weights</legend><p>Enter weights totalling 100%. No allocation is selected by default.
 Weights split the starting capital and every contribution; holdings compound separately without rebalancing.
 Any weighted ticker without all three stored scenarios makes the result unavailable. SPY or QQQ may lack a stored watchlist scenario.</p>
 <div class="controls">{"".join(weights)}</div></fieldset>
 <h2>Portfolio ending values</h2><p id="goal-portfolio-reason">Weights must total 100%.</p>
 <ul><li>Bear: <strong id="goal-ending-bear">Unavailable</strong></li><li>Base: <strong id="goal-ending-base">Unavailable</strong></li><li>Bull: <strong id="goal-ending-bull">Unavailable</strong></li></ul>
-<fieldset><legend>Year-one drawdown stress</legend><p>Defaults use the largest observed drawdown among the stored watchlist members
+</details><details><summary>Year-one drawdown stress</summary><fieldset><legend>Stress assumptions</legend><p>Defaults use the largest observed drawdown among the stored watchlist members
 in each asset class with available observations, over at most five years. Missing observations require an explicit input.
 This stress assumes no growth in year one, applies the loss at its end to initial capital and the first twelve contributions,
 then compounds at the base price rate with continuing contributions. It requires at least a one-year horizon.</p>
 {"".join(stress)}<p>Stressed ending value: <strong id="goal-stress-ending">Unavailable</strong></p><p id="goal-stress-reason"></p></fieldset>
-<button id="goal-reset" type="button">Reset inputs</button></form><noscript><p>JavaScript is required to change inputs and calculate portfolio and stress values. The default required rate and stored scenarios above remain readable.</p></noscript>
+</details><button id="goal-reset" type="button">Reset inputs</button></form><noscript><p>JavaScript is required to change inputs and calculate portfolio and stress values. The default required rate and stored scenarios above remain readable.</p></noscript>
 <h2>What would have to be true</h2><p>The target requires the compound rate above, the stated contribution schedule and the selected
 scenario assumptions to hold. Company scenarios depend on revenue growth, exit multiples, margin paths and dilution.
 ETF scenarios depend on their stated exposure returns, fees and distribution assumptions.</p>{assumptions}
-<p>{escape(spec.PROBABILITY_STATEMENT)}</p><p>{escape(spec.DISCLAIMER)}</p>
+<details><summary>Research limitations</summary><p>{escape(spec.PROBABILITY_STATEMENT)}</p><p>{escape(spec.DISCLAIMER)}</p></details>
 <script id="goal-data" type="application/json">{encoded}</script>"""

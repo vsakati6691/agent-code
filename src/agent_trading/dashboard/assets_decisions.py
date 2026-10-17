@@ -53,13 +53,14 @@ JS = r"""
     var label=field.selectedOptions[0].textContent, kind='number';
     rows.forEach(function(row){
       var x=value(row), cell=row.querySelector('[data-research-value]'); kind=x.kind||kind;
-      cell.dataset.v=x.v===null||x.v===undefined?'':x.v; cell.dataset.label=label; cell.textContent=x.text||'n/a';
-      [x.reason,x.note,'Data as of '+(x.as_of||'n/a')].filter(Boolean).forEach(function(note){var s=document.createElement('small');s.textContent=note;cell.appendChild(s);});
+      var missing=x.v===null||x.v===undefined;
+      cell.dataset.v=missing?'':x.v; cell.dataset.label=label; cell.textContent=missing?'—':x.text;
+      cell.title=[x.reason,x.note,'Data as of '+(x.as_of||'not stored')].filter(Boolean).join(' · ');
     });
     heading.dataset.sort=kind==='text'?'text':'num';
     (heading.querySelector('button')||heading).textContent=label;
     min.disabled=max.disabled=kind==='text';
-    document.getElementById('research-units').textContent='Selected: '+label+'. '+(['pct','pp'].includes(kind)?'Range inputs use percentage points (20 means 20%). ':'')+'Data as of is shown in every row. Valuation percentile: higher numeric value, not necessarily better.';
+    document.getElementById('research-units').textContent='Selected: '+label+'. '+(['pct','pp'].includes(kind)?'Range inputs use percentage points (20 means 20%). ':'')+'Dates and missing-data reasons are in cell tooltips. Valuation percentile: higher numeric value, not necessarily better.';
     table.dispatchEvent(new Event('tabledatachange'));
   }
   table.acceptRow=function(row){

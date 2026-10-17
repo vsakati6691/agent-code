@@ -473,7 +473,9 @@ def test_site_has_compare_page_research_panels_and_data_status(demo):
         assert text in stock, text
     audit = (out / "audit.html").read_text(encoding="utf-8")
     assert 'id="data-status"' in audit and "Earnings calendar" in audit and "Option chains" in audit
-    assert "sample" not in re.sub(r"(?s)<[^>]+>", " ", audit).lower().replace("sample or", "")
+    assert "sample" not in re.sub(r"(?s)<[^>]+>", " ", audit).lower().replace("sample or", "").replace(
+        "out-of-sample", ""
+    )
 
 
 def test_lab_json_in_pages_contains_no_account_fields(demo):

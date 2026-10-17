@@ -213,6 +213,12 @@ score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confi
 <div class="card stat"><div class="label">Data timestamp</div><div class="value small">{E(str(c["data_timestamp"]).replace("+00:00", ""))} UTC</div>
 <div class="small muted">fundamentals: {E(fund.get("last_form") or "?")} filed {E(fund.get("last_filed") or "?")}</div></div></div>
 <p class="small">Flags: {flags}</p>
+<h2>Price vs benchmark</h2>{line_chart(c["chart"], c["ticker"], c["benchmark"])}
+<div class="table-wrap"><table aria-label="Trailing price returns vs benchmark"><thead><tr><th>Period</th><th class="num">{E(c["ticker"])}</th><th class="num">{E(c["benchmark"])}</th>
+<th class="num">Difference</th></tr></thead><tbody>{rets}</tbody></table></div>
+<p class="small">Max drawdown (5 years): <strong>{pct(dd["max_5y"]["value"])}</strong> ({E(str(dd["max_5y"]["peak"]))} to
+{E(str(dd["max_5y"]["trough"]))}) · from 52-week high: {pct(dd["from_52w_high"])} · worst 12-month return since
+{E(h["first_date"])}: {pct(dd.get("worst_1y_return"))}. Price returns exclude dividends. History starts {E(h["first_date"])}.</p>
 {site_decisions.detail(c)}
 {external_company(c)}
 {changes_section(changes.compare(c, snap, prev_snap))}
@@ -225,12 +231,6 @@ summary of evidence, not a recommendation.</p>
 <th class="num">Score</th><th></th><th>Inputs</th></tr></thead><tbody>{comp_rows}</tbody></table></div>
 <p class="small muted">Missing inputs score 0; weights are never redistributed.</p>
 <h3>Not scored</h3><ul class="tight small">{ns}</ul>
-<h2>Price vs benchmark</h2>{line_chart(c["chart"], c["ticker"], c["benchmark"])}
-<div class="table-wrap"><table aria-label="Trailing price returns vs benchmark"><thead><tr><th>Period</th><th class="num">{E(c["ticker"])}</th><th class="num">{E(c["benchmark"])}</th>
-<th class="num">Difference</th></tr></thead><tbody>{rets}</tbody></table></div>
-<p class="small">Max drawdown (5 years): <strong>{pct(dd["max_5y"]["value"])}</strong> ({E(str(dd["max_5y"]["peak"]))} to
-{E(str(dd["max_5y"]["trough"]))}) · from 52-week high: {pct(dd["from_52w_high"])} · worst 12-month return since
-{E(h["first_date"])}: {pct(dd.get("worst_1y_return"))}. Price returns exclude dividends. History starts {E(h["first_date"])}.</p>
 <h2>Fundamentals and valuation</h2>
 <div class="grid small">
 <div class="card">Revenue TTM {cap(m.get("revenue_ttm"))} · growth {pct(m.get("revenue_growth_ttm"))} · 3-yr CAGR {pct(m.get("revenue_cagr_3y"))}</div>

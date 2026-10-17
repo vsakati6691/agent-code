@@ -371,7 +371,9 @@ def test_options_page_is_linked_and_explains_every_unavailable_state(tmp_path):
         build_site(d, o)
         page = (o / "options.html").read_text(encoding="utf-8")
         assert f'data-state="{state}"' in page and phrase in page and "Options data unavailable" in page, state
-        assert "Snapshot methodology" in page and "page renderer" in page and "data-hz=" not in page
+        audit = (o / "audit.html").read_text(encoding="utf-8")
+        assert "Snapshot methodology" in audit and "page renderer" in audit and "data-hz=" not in page
+        assert 'href="audit.html#options-data"' in page
         assert evidence.options_state(dict(snap, options=options))[0] == state
         for name in ("index.html", "watchlist.html", "methodology.html", "history.html", "audit.html"):
             assert re.search(r'<nav\b[^>]*>.*href="options\.html"', (o / name).read_text(encoding="utf-8")), (
@@ -380,7 +382,7 @@ def test_options_page_is_linked_and_explains_every_unavailable_state(tmp_path):
             )
         index = (o / "index.html").read_text(encoding="utf-8")
         assert 'id="options-watchlist"' in index and f'data-state="{state}"' in index
-    assert "DASHBOARD_OPTIONS" in (tmp_path / "s-missing" / "options.html").read_text(encoding="utf-8")
+    assert "DASHBOARD_OPTIONS" in (tmp_path / "s-missing" / "audit.html").read_text(encoding="utf-8")
 
 
 def test_partial_state_names_the_unusable_chains():
@@ -429,9 +431,7 @@ def test_facts_assumptions_missing_data_and_scores_are_shown_apart(built):
         "Risks in plain language",
         "not when it was quoted",
         "UTC",
-        "Snapshot methodology",
-        "page renderer",
-        "What these lists are",
+        "Eligibility, pricing and probability limits",
         "Earnings before expiry",
         "none scheduled (collected calendar, unverified)",
         "5 of up to 5",
@@ -440,7 +440,8 @@ def test_facts_assumptions_missing_data_and_scores_are_shown_apart(built):
         assert h in page, h
     assert page.count("data-hz=") == 6 and page.count('role="tablist"') == 2
     assert re.search(
-        r'<section data-hz="6m" data-type="put"[^>]* hidden><h2>About 6 months · puts · 150-210 days', page
+        r'<section data-hz="6m" data-type="put"[^>]* hidden><h2 class="sr-only">About 6 months · puts · 150-210 days',
+        page,
     )
 
 
@@ -452,10 +453,15 @@ def test_short_lists_say_why_on_the_page(tmp_path):
     Store(d).write_snapshot(snap, "test")
     build_site(d, o)
     page = (o / "options.html").read_text(encoding="utf-8")
-    assert "4 of up to 5" in page and "Fewer than 5" in page and "Only 4 of up to 5 calls met every rule" in page
+    assert (
+        "4 of up to 5" in page
+        and "Why fewer than 5 qualified" in page
+        and "Only 4 of up to 5 calls met every rule" in page
+    )
     assert "left out by the per-underlying limit" in page and "not padded" in page
     index = (o / "index.html").read_text(encoding="utf-8")
-    assert "4 of up to 5:" in index and "Lists with fewer than the limit" in index
+    assert "4 of up to 5:" in index and 'href="audit.html#options-data"' in index
+    assert "Lists with fewer than the limit" in (o / "audit.html").read_text(encoding="utf-8")
 
 
 def test_percentages_never_follow_the_probability_label(built):
@@ -582,8 +588,9 @@ def test_older_ten_contract_snapshot_renders_with_its_own_limit_and_without_new_
     Store(d).write_snapshot(snap, "test")
     build_site(d, o)
     page = (o / "options.html").read_text(encoding="utf-8")
-    assert "10 of up to 10" in page and "Snapshot methodology <strong>2026-10-14.5" in page
-    assert f"page renderer <strong>{spec.SPEC_VERSION}" in page and "never re-ranks" in page
+    audit = (o / "audit.html").read_text(encoding="utf-8")
+    assert "10 of up to 10" in page and "Snapshot methodology <strong>2026-10-14.5" in audit
+    assert f"page renderer <strong>{spec.SPEC_VERSION}" in audit and "never re-ranks" in audit
     assert len(list(o.glob("options-*.html"))) == 3
     assert len(list((o / "option").glob("*.html"))) == 60
     assert all(p.stat().st_size <= 150_000 for p in o.rglob("*.html"))

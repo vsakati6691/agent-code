@@ -306,15 +306,14 @@ def test_new_site_pages_panels_toggle_and_downloads(tmp_path, prov):
     for text in ("S&amp;P 500 members only", "rowtoggle", "vs bench"):
         assert text in growth, text
     multibaggers = (out / "multibaggers.html").read_text(encoding="utf-8")
-    assert (
-        "Speculative multibagger research candidates" in multibaggers and "5-10 year research horizon" in multibaggers
-    )
+    assert "<h1>Multibaggers</h1>" in multibaggers and "Selection rules and 5–10 year scenario limits" in multibaggers
+    assert "Growth evidence, assumptions and risks" in multibaggers
     opts = (out / "options.html").read_text(encoding="utf-8")
     assert 'data-dim="type" data-val="put"' in opts and opts.count("data-hz=") == 6
     assert "Premium assumption" in opts and "not predict profitability" in opts
     watch = (out / "watchlist.html").read_text(encoding="utf-8")
     assert (
-        "Conditional 2030 price scenarios" in watch and "not synchronized" in watch and "Scenario unavailable" in watch
+        "conditional 2030 price scenarios" in watch and "not synchronized" in watch and "Scenario unavailable" in watch
     )
     for f in (
         "2026-10-09_options_3m_calls.csv",
