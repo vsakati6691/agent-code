@@ -20,6 +20,8 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..logging_setup import redact_details
+
 PRIVATE_KEYS = {
     "account_number",
     "account_last4",
@@ -75,7 +77,7 @@ class Store:
 
     # --- audit and status ---------------------------------------------------------------------
     def audit(self, event: str, **details) -> None:
-        line = json.dumps({"at": _now(), "event": event, **details}, sort_keys=True, default=str)
+        line = json.dumps(redact_details({"at": _now(), "event": event, **details}), sort_keys=True, default=str)
         with open(self.root / "audit.jsonl", "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
 
@@ -88,7 +90,9 @@ class Store:
     def write_status(self, status: str, message: str, as_of: str | None = None, **extra) -> None:
         (self.root / "status.json").write_text(
             json.dumps(
-                {"status": status, "message": message, "as_of": as_of, "at": _now(), **extra}, indent=1, default=str
+                redact_details({"status": status, "message": message, "as_of": as_of, "at": _now(), **extra}),
+                indent=1,
+                default=str,
             ),
             encoding="utf-8",
         )

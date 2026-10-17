@@ -60,22 +60,10 @@ def latest_bars(
         )
     df = df[df.index <= pd.Timestamp(ctx.as_of)]
     if not df.empty and df.index[-1].date() < ctx.as_of:
-        # the history file can lag the close by a day; the end-of-session quote fills the as-of bar
+        # Keep the independently validated quote in ctx.quotes, but it is not an OHLCV observation.
         q, _ = _quote(ctx, symbol)
-        if q is not None and q.last_trade and q.last_trade.date() == ctx.as_of and q.close:
-            prev = float(df["close"].iloc[-1])
-            row = pd.DataFrame(
-                {
-                    "open": [q.close],
-                    "high": [max(q.close, prev)],
-                    "low": [min(q.close, prev)],
-                    "close": [q.close],
-                    "volume": [float(df["volume"].iloc[-20:].median())],
-                },
-                index=pd.DatetimeIndex([pd.Timestamp(ctx.as_of)]),
-            )
-            df = pd.concat([df, row])
-            flags.append("as-of close taken from the end-of-session quote (history file lagged)")
+        if q is not None:
+            flags.append("close-only quote available; daily OHLCV history is missing for the as-of session")
     try:
         df, trimmed = trim_bad_history(df, symbol)  # an old glitch drops older history, a recent one rejects
         if trimmed:

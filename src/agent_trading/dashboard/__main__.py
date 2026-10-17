@@ -24,12 +24,12 @@ import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from ..logging_setup import register_secret
+from ..logging_setup import protect_log_handlers, register_secret
 from . import earnings_verdicts, spec, tracking
 from .http import FetchError, HttpClient
 from .pipeline import RunFailed, as_of_for, run
 from .providers import Providers
-from .site import build_site
+from .site import build_site, scan_for_secrets
 from .store import IntegrityError, SnapshotExists, Store
 from .tradability import Tradability, TradabilityError, parse_results, read_todo, write_todo
 from .watchlist import WatchlistConfig
@@ -250,6 +250,9 @@ def cmd_verify(args) -> int:
     from .refresh_store import RefreshStore
 
     problems = Store(Path(args.data)).verify_all() + RefreshStore(Path(args.data)).verify_all()
+    problems += [
+        f"credential value found in data file: {path}" for path in scan_for_secrets(Path(args.data), SECRET_ENV)
+    ]
     for p in problems:
         print(p)
     return 1 if problems else 0
@@ -278,6 +281,9 @@ def cmd_refresh(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    for name in SECRET_ENV:
+        register_secret(os.environ.get(name, ""))
+    protect_log_handlers()
     p = argparse.ArgumentParser(prog="python -m agent_trading.dashboard")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="collect data, score, and store this week's immutable snapshot")

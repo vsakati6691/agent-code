@@ -96,3 +96,65 @@ def test_registry_is_append_only(tmp_path):
     assert text.startswith(first) and len(text.splitlines()) == 3
     assert T.prior_test_evaluations(path) == {"X": 2}
     assert all(json.loads(line) for line in text.splitlines())
+
+
+def test_tournament_defaults_to_selection_only():
+    from agent_trading.cli import build_parser
+
+    assert build_parser().parse_args(["tournament"]).no_test is True
+
+
+def test_consumed_holdout_is_blocked_before_loading_or_simulating(settings, tmp_path, monkeypatch):
+    path = tmp_path / "registry.jsonl"
+    T.append_registry(path, [{"strategy": "GTAA", "test_evaluated": True}])
+    before = path.read_bytes()
+    monkeypatch.setattr(T, "load_market", lambda *_: pytest.fail("must not load held-out data"))
+    with pytest.raises(T.HoldoutConsumedError):
+        T.run(settings, path, run_test=True)
+    assert path.read_bytes() == before
+    with pytest.raises(T.HoldoutConsumedError):
+        T.Tournament.run_test(None, ["GTAA"])
+
+
+@pytest.mark.parametrize("line", ["{broken", "null", '{"test_evaluated": "false", "strategy": "X"}'])
+def test_malformed_registry_fails_closed(tmp_path, line):
+    path = tmp_path / "registry.jsonl"
+    path.write_text(line, encoding="utf-8")
+    with pytest.raises(ValueError, match="registry line"):
+        T.prior_test_evaluations(path)
+    assert path.read_text(encoding="utf-8") == line
+
+
+def test_candidate_never_sees_holdout_rows(settings, monkeypatch):
+    from dataclasses import replace
+
+    idx = pd.bdate_range("2021-12-01", "2022-02-01")
+    prices = pd.DataFrame({"SPY": 100.0}, index=idx)
+    original = next(c for c in candidates() if c.name == "BENCH_SPY")
+
+    def weights(market, param):
+        assert market.opens.index.max() <= pd.Timestamp(T.SELECTION[1])
+        assert market.closes.index.max() <= pd.Timestamp(T.SELECTION[1])
+        return pd.DataFrame({"SPY": 1.0}, index=market.closes.index)
+
+    # Candidate is frozen; its weight method delegates to fn.
+    candidate = replace(original, fn=weights)
+    tournament = T.Tournament(settings, Market(prices, prices, {"SPY"}), T.DataReport(), [candidate])
+    result = tournament._sim(tournament.entries["BENCH_SPY"], None)
+    assert result.returns.index.max() <= pd.Timestamp(T.SELECTION[1])
+
+
+def test_loader_excludes_future_prices_and_dividends(settings, monkeypatch):
+    prices = pd.DataFrame(
+        {
+            "open": [100.0, 102.0, 999.0],
+            "close": [100.0, 102.0, 999.0],
+            "high": [101.0, 103.0, 1000.0],
+            "low": [99.0, 101.0, 998.0],
+        },
+        index=pd.to_datetime(["2021-12-30", "2021-12-31", "2022-01-03"]),
+    )
+    monkeypatch.setattr(T, "read_cache", lambda *_: prices)
+    monkeypatch.setattr(T, "load_dividends", lambda *_: pd.Series([10.0], index=pd.to_datetime(["2022-01-03"])))
+    market, _ = T.load_market(settings, ["SPY"])
+    assert market.closes["SPY"].tolist() == [100.0, 102.0]

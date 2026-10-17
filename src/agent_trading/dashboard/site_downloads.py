@@ -33,13 +33,7 @@ def leaders_csv(payload: dict) -> str:
             payload["current_cap_count"],
             payload["computed_count"],
         ]
-        # Prevent owner-supplied source/notes text from becoming a spreadsheet formula.
-        writer.writerow(
-            [
-                "'" + value if isinstance(value, str) and value.startswith(("=", "+", "-", "@")) else csv_value(value)
-                for value in values
-            ]
-        )
+        writer.writerow([csv_value(value) for value in values])
     return buf.getvalue()
 
 

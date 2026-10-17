@@ -105,6 +105,10 @@ def metric(name: str, v) -> str:
 
 def csv_value(v):
     """CSV cell: rounded floats without scientific notation; missing or non-finite values are empty."""
+    if isinstance(v, str):
+        # CSV quoting alone does not stop spreadsheet formula evaluation.
+        # Preserve signed numeric cells: only untrusted text is prefixed.
+        return "'" + v if v.startswith(("=", "+", "-", "@", "\t", "\r", "\n")) else v
     if isinstance(v, bool) or v is None:
         return "" if v is None else str(v)
     if isinstance(v, float):

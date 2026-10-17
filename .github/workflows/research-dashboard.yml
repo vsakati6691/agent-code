@@ -125,6 +125,10 @@ jobs:
           if [ "$code" != "0" ] && [ "$code" != "2" ]; then exit "$code"; fi
 
       - name: Verify snapshot integrity
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python -m agent_trading.dashboard verify --data research-data
 
       - name: Save snapshots and audit trail to the data branch

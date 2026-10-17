@@ -27,6 +27,8 @@ from urllib.parse import urlsplit
 
 import requests
 
+from ..provider_budget import DailyBudgetExceeded, DailyRequestBudget, quota_notice
+
 log = logging.getLogger(__name__)
 
 ALLOWED_HOSTS = {
@@ -54,6 +56,10 @@ class FetchError(RuntimeError):
 
 class BudgetExceeded(FetchError):
     """The provider's request budget for this run is spent."""
+
+
+class ProviderUnavailable(FetchError):
+    """A provider-wide quota or entitlement failure; further calls must stop."""
 
 
 @dataclass
@@ -98,6 +104,7 @@ class HttpClient:
     group_used: dict[str, int] = field(default_factory=dict)
     _group: str | None = None
     _scope_limits: list[tuple[str, int]] = field(default_factory=list)
+    daily_budget: DailyRequestBudget = field(default_factory=DailyRequestBudget)
 
     def __post_init__(self) -> None:
         self.session = self.session or requests.Session()
@@ -195,6 +202,11 @@ class HttpClient:
                 if self.group_used.get(group, 0) >= ceiling:
                     raise BudgetExceeded(f"{group}: request budget spent")
             self._pace(provider)
+            if provider == "alphavantage":
+                try:
+                    self.daily_budget.reserve()
+                except DailyBudgetExceeded as exc:
+                    raise BudgetExceeded(str(exc)) from None
             self.used[provider] = self.used.get(provider, 0) + 1
             if group:
                 self.group_used[group] = self.group_used.get(group, 0) + 1
@@ -211,6 +223,11 @@ class HttpClient:
             except requests.RequestException as exc:
                 raise FetchError(f"{host}: {type(exc).__name__}") from None
             else:
+                if provider == "alphavantage" and (
+                    resp.status_code in {402, 403, 429} or (resp.status_code == 200 and quota_notice(resp.content))
+                ):
+                    self.daily_budget.stop()
+                    raise ProviderUnavailable("Alpha Vantage quota or entitlement response; stopped for today")
                 if resp.status_code == 200:
                     self._recover(provider)
                     return resp.content
