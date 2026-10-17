@@ -1,7 +1,6 @@
 {
- "status": "ok",
- "message": "weekly update completed",
- "as_of": "2026-10-15",
- "at": "2026-10-15T16:52:09+00:00",
- "problems": []
+ "status": "failed",
+ "message": "benchmark IJH unavailable: price data rejected: IJH: open outside high/low range",
+ "as_of": "2026-10-16",
+ "at": "2026-10-17T14:35:48+00:00"
 }
