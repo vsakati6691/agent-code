@@ -75,11 +75,25 @@ issuer business/risk excerpts. Growth lists separate **fundamental quality from
 momentum**; scores should be compared within their original list and profile.
 Older snapshots retain their original methodology and missing fields.
 
-Plan 2030 shows the return required for the goal beside the stored scenarios and
-research evidence. Inputs stay in the browser's local storage. The overview
+Plan 2030 shows dated starting prices, conditional 2030 prices and the return
+required for the goal beside the stored scenarios and research evidence. Inputs
+stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
 the current methodology, frozen as of **2026-10-16**. The administrative freeze
-date is recorded separately from methodology version **2026-10-16.2** and its pinned hash. Versions retain separate evidence counts.
+date is recorded separately from methodology version **2026-10-17.2** and its pinned hash. Versions retain separate evidence counts.
+
+Version **2026-10-17.1** registers full S&P 500 collection for the current top-20
+Leaders view. Version **2026-10-17.2** anchors Leaders base growth in three-year
+revenue CAGR, accelerates the fade above $500B, permits revenue declines in bear
+cases and shows implied cap growth next to every scenario. A base above 25%/yr
+is labelled an aggressive assumption. See [Leaders rules](docs/LEADERS_2030.md).
+These rows still depend on a successful weekly import; code deployment does not
+fill missing data in older snapshots.
+
+All tabs now put data before longer explanations, with full operating details
+on Audit. [UI documentation](docs/DASHBOARD_UI.md) and the
+[browser test report](docs/ux/2026-10-17/BROWSER_TESTS.md) cover both viewport
+sizes/themes, no-JavaScript behavior, screenshots and before/after measurements.
 
 Every built HTML page has a 150 KB budget. Detail panels, scanner/comparison data
 and sparklines use separate assets; older larger options lists are split by
