@@ -93,10 +93,21 @@ def build_site(
     code_commit: str = "",
     data_commit: str = "",
     today: date | None = None,
+    private: bool = False,
 ) -> dict:
-    with rendering(RenderContext()) as context:
+    from .private_research import check_publication
+
+    restricted = check_publication(Store(data_dir), private)
+    with rendering(RenderContext(private=restricted)) as context:
         return _build_site(
-            data_dir, out, secret_env, code_commit=code_commit, data_commit=data_commit, today=today, context=context
+            data_dir,
+            out,
+            secret_env,
+            code_commit=code_commit,
+            data_commit=data_commit,
+            today=today,
+            context=context,
+            private=restricted,
         )
 
 
@@ -109,6 +120,7 @@ def _build_site(
     code_commit: str = "",
     data_commit: str = "",
     today: date | None = None,
+    private: bool = False,
 ) -> dict:
     store = Store(data_dir)
     challengers = leaders.load_challengers()
@@ -120,6 +132,8 @@ def _build_site(
         verdicts = earnings_verdicts.EarningsVerdicts.load(data_dir)
         earnings_verdicts.attach(snap, verdicts, today or datetime.now(UTC).date())
     build_info = site_build.metadata(code_commit, data_commit, snap)
+    if private:
+        build_info["publication"] = "private"
     if out.exists():
         shutil.rmtree(out)
     (out / "assets").mkdir(parents=True)
@@ -154,7 +168,8 @@ def _build_site(
 
     def write_fallback():
         fallback = page("Page not found", site_basics.NOT_FOUND, "")
-        fallback = fallback.replace("<head>", f'<head><base href="{site_basics.PAGES_BASE}">', 1)
+        base = "/" if private else site_basics.PAGES_BASE
+        fallback = fallback.replace("<head>", f'<head><base href="{base}">', 1)
         (out / "404.html").write_text(fallback, encoding="utf-8")
 
     status = store.status()

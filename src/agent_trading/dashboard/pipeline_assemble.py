@@ -53,6 +53,21 @@ def run(
     if as_of > as_of_for(started):
         raise RunFailed(f"{as_of}: as-of close is not yet available under the completed-session collection clock")
     ctx = Context(as_of, providers, started=started.isoformat(timespec="seconds"), limit=limit)
+    private_metadata = {}
+    private_source: str | None = None
+    if getattr(providers, "history_provider", "cboe") == "massive":
+        from .massive_history import SOURCE
+        from .private_research import require_local
+
+        require_local()
+        private_source = SOURCE
+        private_metadata = {
+            "publication": "private",
+            "price_history": {"provider": "massive", "source": SOURCE, "collected_at": ctx.started, "window_days": 730},
+        }
+        ctx.notes.append(
+            "Private personal research. Massive history covers at most two years; longer price windows remain unavailable."
+        )
     ref = build_reference(ctx)
 
     bench = collect_benchmarks(ctx)
@@ -136,6 +151,7 @@ def run(
     )
     return _clean(
         {
+            **private_metadata,
             "as_of": as_of,
             "run_started": ctx.started,
             "run_finished": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -144,7 +160,10 @@ def run(
             "notes": ctx.notes + ([earn_note] if earn_note else []),
             "spec_version": spec.SPEC_VERSION,
             "spec_hash": spec.spec_hash(),
-            "sources": SOURCES,
+            "sources": {
+                **SOURCES,
+                **({"massive": private_source} if private_source else {}),
+            },
             "usage": providers.http.usage(),
             "external_datasets": external_status,
             "macro": macro_payload,
@@ -166,7 +185,14 @@ def run(
                 "broad_exclusion_counts": broad_reasons,
                 "definitions": {"universe": spec.UNIVERSE_DEFINITION, "market_cap": spec.MARKET_CAP_DEFINITION},
             },
-            "benchmarks": {b: {"close": float(s.iloc[-1]), "date": as_of} for b, s in bench.items()},
+            "benchmarks": {
+                b: {
+                    "close": float(s.iloc[-1]),
+                    "date": as_of,
+                    **({"source": private_source} if private_source else {}),
+                }
+                for b, s in bench.items()
+            },
             "bands": payload_bands,
             "options": options_payload,
             "speculative": speculative_payload,

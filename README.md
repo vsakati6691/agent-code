@@ -25,6 +25,9 @@ and journals stay out of the dashboard. Sources include SEC EDGAR, Nasdaq
 Trader, Cboe delayed quotes, Alpha Vantage, FRED and FINRA; coverage and timestamps appear
 on the site.
 
+For personal-use Massive history on this PC, see the [private dashboard setup](docs/PRIVATE_DASHBOARD.md).
+Private data and generated pages stay in ignored local folders and cannot enter the public build.
+
 | Page | What you can explore |
 |---|---|
 | [Overview](https://vsakati6691.github.io/agent-code/index.html) | SPY/IJH/IWM market context, snapshot changes, scheduled earnings, concentration and downside flags, benchmark tracking and data coverage. |

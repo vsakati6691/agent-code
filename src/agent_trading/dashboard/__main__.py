@@ -35,10 +35,10 @@ from .tradability import Tradability, TradabilityError, parse_results, read_todo
 from .watchlist import WatchlistConfig
 
 log = logging.getLogger("agent_trading.dashboard")
-SECRET_ENV = ("ALPHAVANTAGE_API_KEY", "SEC_USER_AGENT", "FRED_API_KEY")
+SECRET_ENV = ("ALPHAVANTAGE_API_KEY", "SEC_USER_AGENT", "FRED_API_KEY", "MASSIVE_API_KEY")
 
 
-def _providers(cache: Path | None) -> Providers:
+def _providers(cache: Path | None, *, private_as_of: date | None = None) -> Providers:
     ua = os.environ.get("SEC_USER_AGENT", "").strip()
     if "@" not in ua or len(ua) < 8:
         raise SystemExit("SEC_USER_AGENT must be set to a name and contact email (SEC fair-access policy)")
@@ -46,10 +46,25 @@ def _providers(cache: Path | None) -> Providers:
     if key:
         register_secret(key)
     register_secret(ua)
-    return Providers(HttpClient(cache, ua), key, os.environ.get("FRED_API_KEY", "").strip() or None)
+    massive_key = os.environ.get("MASSIVE_API_KEY", "").strip() if private_as_of else None
+    if private_as_of and not massive_key:
+        raise SystemExit("MASSIVE_API_KEY must be set in .env for private research")
+    return Providers(
+        HttpClient(cache, ua),
+        key,
+        os.environ.get("FRED_API_KEY", "").strip() or None,
+        massive_key=massive_key,
+        history_as_of=private_as_of,
+    )
 
 
 def cmd_run(args) -> int:
+    if args.private:
+        from .private_research import mark_private
+
+        mark_private(Path(args.data))
+        if args.cache:
+            mark_private(Path(args.cache))
     store = Store(Path(args.data))
     as_of = date.fromisoformat(args.as_of) if args.as_of else as_of_for(datetime.now(UTC))
     if str(as_of) in store.dates():
@@ -58,7 +73,8 @@ def cmd_run(args) -> int:
         print(f"snapshot for {as_of} already exists; nothing to do")
         return 0
     store.audit("run_started", as_of=as_of, commit=args.commit, limit=args.limit, options=not args.no_options)
-    providers = _providers(Path(args.cache) if args.cache else None)
+    cache = Path(args.cache) if args.cache else None
+    providers = _providers(cache, private_as_of=as_of) if args.private else _providers(cache)
     if hasattr(providers.http, "limits"):
         providers.http.limits["alphavantage"].budget = spec.DECISION_RULES["weekly_av_attempts"]
     previous = store.latest(before=str(as_of))
@@ -134,7 +150,17 @@ def update_tracking(store: Store, providers: Providers, as_of: date) -> None:
     tickers = {c["ticker"] for s in snaps for b in s.get("bands", {}).values() for c in b.get("candidates", [])}
     tickers |= {b.benchmark for b in spec.BANDS}
     prices = {}
+    from .pipeline_collect import latest_bars
+    from .pipeline_context import Context
+
+    private = getattr(providers, "history_provider", "cboe") == "massive"
+    ctx = Context(as_of, providers)
     for t in sorted(tickers):
+        if private:
+            df, _, _ = latest_bars(ctx, t)
+            if df is not None:
+                prices[t] = df["close"]
+            continue
         try:
             df = providers.history(t)
         except FetchError:  # reported by tracking as unavailable, never dropped silently
@@ -240,7 +266,12 @@ def cmd_earnings_calendar(args) -> int:
 
 def cmd_build(args) -> int:
     info = build_site(
-        Path(args.data), Path(args.out), SECRET_ENV, code_commit=args.commit, data_commit=args.data_commit
+        Path(args.data),
+        Path(args.out),
+        SECRET_ENV,
+        code_commit=args.commit,
+        data_commit=args.data_commit,
+        private=args.private,
     )
     print(f"site built: {info}")
     return 0
@@ -250,6 +281,10 @@ def cmd_verify(args) -> int:
     from .refresh_store import RefreshStore
 
     problems = Store(Path(args.data)).verify_all() + RefreshStore(Path(args.data)).verify_all()
+    if not problems:
+        from .private_research import check_publication
+
+        check_publication(Store(Path(args.data)), args.private)
     problems += [
         f"credential value found in data file: {path}" for path in scan_for_secrets(Path(args.data), SECRET_ENV)
     ]
@@ -281,10 +316,8 @@ def cmd_refresh(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    for name in SECRET_ENV:
-        register_secret(os.environ.get(name, ""))
-    protect_log_handlers()
     p = argparse.ArgumentParser(prog="python -m agent_trading.dashboard")
+    p.add_argument("--env-file", type=Path, help="load dashboard credentials from a local .env file (never printed)")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="collect data, score, and store this week's immutable snapshot")
     r.add_argument("--data", required=True)
@@ -293,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--no-options", action="store_true")
     r.add_argument("--limit", type=int, default=None, help="process only N stocks per universe (smoke tests)")
     r.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
+    r.add_argument("--private", action="store_true", help="local personal research using Massive price history")
     r.set_defaults(func=cmd_run)
     f = sub.add_parser("refresh", help="refresh delayed prices without changing weekly snapshots or tracking")
     f.add_argument("--data", required=True)
@@ -308,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         "--commit", default=os.environ.get("GITHUB_SHA", ""), help="full site code commit for build metadata"
     )
     b.add_argument("--data-commit", default="", help="full stored-data commit for build metadata")
+    b.add_argument("--private", action="store_true", help="allow local rendering of private personal-use data")
     b.set_defaults(func=cmd_build)
     t = sub.add_parser("tradability", help="Robinhood tradability verdicts (checked in a read-only Claude session)")
     t.add_argument("action", choices=["todo", "import"])
@@ -331,8 +366,21 @@ def main(argv: list[str] | None = None) -> int:
     ec.set_defaults(func=cmd_earnings_calendar)
     v = sub.add_parser("verify", help="check every snapshot against its manifest hash")
     v.add_argument("--data", required=True)
+    v.add_argument("--private", action="store_true", help="verify local personal-use data without publication")
     v.set_defaults(func=cmd_verify)
     args = p.parse_args(argv)
+    if args.env_file:
+        from dotenv import dotenv_values
+
+        if args.env_file.name != ".env" or not args.env_file.is_file():
+            p.error("--env-file must name an existing .env file")
+        values = dotenv_values(args.env_file)
+        for name in SECRET_ENV:
+            if values.get(name):
+                os.environ.setdefault(name, values[name])
+    for name in SECRET_ENV:
+        register_secret(os.environ.get(name, ""))
+    protect_log_handlers()
     return args.func(args)
 
 

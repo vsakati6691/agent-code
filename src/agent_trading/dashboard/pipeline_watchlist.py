@@ -55,6 +55,7 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
         close = float(df["close"].iloc[-1])
         e.update(
             price=close,
+            price_source=df.attrs.get("price_source", SOURCES["cboe"]),
             price_date=ctx.as_of,
             price_flags=pflags,
             price_validation="as-of bar verified",
@@ -63,7 +64,7 @@ def evaluate_watchlist(ctx: Context, ref: dict, cfg: WatchlistConfig, earnings: 
         )
         if short_note:
             e["missing"].append(short_note)
-        e["sources"].append(SOURCES["cboe"])
+        e["sources"].append(e["price_source"])
         hist = scenarios.history_stats(df["close"], None)
         e["returns"] = {k: (v or {}).get("stock") for k, v in hist["returns"].items()}
         e["history_start"] = hist["first_date"]

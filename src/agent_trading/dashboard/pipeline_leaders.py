@@ -72,6 +72,8 @@ def retained_inputs(ctx, ref: dict) -> list[dict]:
         }
         if bars is not None and len(bars):
             row.update(price=float(bars["close"].iloc[-1]), price_date=str(bars.index[-1].date()))
+            if bars.attrs.get("price_source"):
+                row["price_source"] = bars.attrs["price_source"]
         if f is not None:
             row["fundamentals"] = {
                 "quarters": f.quarters,
