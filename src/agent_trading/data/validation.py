@@ -88,13 +88,28 @@ def trim_frozen_history(df: pd.DataFrame, symbol: str) -> tuple[pd.DataFrame, st
         raise DataQualityError(str(exc).replace("recent data anomaly", "feed frozen recently")) from None
 
 
+def range_breaks(df: pd.DataFrame, col: str) -> pd.Series:
+    """True for each bar whose `col` lies outside that day's high-low range."""
+    tol = 1e-6
+    return (df[col] > df["high"] + tol) | (df[col] < df["low"] - tol)
+
+
 def validate_bars(
     df: pd.DataFrame | None,
     symbol: str,
     as_of: date,
     max_staleness_days: int,
     min_bars: int,
+    *,
+    check_open_range: bool = True,
+    close_range_bars: int | None = None,
 ) -> pd.DataFrame:
+    """Return `df` unchanged if it is usable, else raise DataQualityError.
+
+    By default every bar's open and close must lie within its high-low range. A caller whose vendor
+    reports an open outside that range by convention, and which never reads the open, can skip that
+    test; `close_range_bars` limits the close test to the most recent bars.
+    """
     if df is None or df.empty:
         raise DataQualityError(f"{symbol}: no data")
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
@@ -124,12 +139,15 @@ def validate_bars(
         raise DataQualityError(f"{symbol}: non-positive prices")
     if (df["volume"] < 0).any():
         raise DataQualityError(f"{symbol}: negative volume")
-    tol = 1e-6
-    if (df["high"] < df["low"] - tol).any():
+    if (df["high"] < df["low"] - 1e-6).any():
         raise DataQualityError(f"{symbol}: high below low")
-    for col in ("open", "close"):
-        if ((df[col] > df["high"] + tol) | (df[col] < df["low"] - tol)).any():
-            raise DataQualityError(f"{symbol}: {col} outside high/low range")
+    if check_open_range and range_breaks(df, "open").any():
+        raise DataQualityError(f"{symbol}: open outside high/low range")
+    close_breaks = range_breaks(df, "close")
+    if close_range_bars is not None:
+        close_breaks = close_breaks.iloc[-close_range_bars:]
+    if close_breaks.any():
+        raise DataQualityError(f"{symbol}: close outside high/low range")
 
     suspects = split_suspects(df)
     if suspects:

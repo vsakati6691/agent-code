@@ -1,4 +1,4 @@
-"""Buy/Sell desk page (spec 2026-10-17.4): the rating table, one trace page per stock, the track record and CSV."""
+"""Buy/Sell desk page (spec 2026-10-17.5): the rating table, one trace page per stock, the track record and CSV."""
 
 from __future__ import annotations
 

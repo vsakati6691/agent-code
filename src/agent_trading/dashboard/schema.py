@@ -481,7 +481,7 @@ SCHEMA = {
             },
         ),
         "decision_desk": _obj(
-            "Optional from 2026-10-17.4: rule-based Buy/Sell desk ratings for every research-list stock "
+            "Optional from 2026-10-17.5: rule-based Buy/Sell desk ratings for every research-list stock "
             "(spec.DESK_RULE). Research labels, not advice; older snapshots have none and are never backfilled.",
             {
                 "entries": _f(

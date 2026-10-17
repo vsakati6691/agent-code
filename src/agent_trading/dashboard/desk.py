@@ -1,4 +1,4 @@
-"""Buy/Sell desk (spec 2026-10-17.4): TradingAgents' five stages as fixed rules over stored snapshot fields.
+"""Buy/Sell desk (spec 2026-10-17.5): TradingAgents' five stages as fixed rules over stored snapshot fields.
 
 TradingAgents (Apache-2.0, https://github.com/TauricResearch/TradingAgents; Xiao et al., arXiv 2412.20138) runs
 language-model agents: four analysts, bull and bear researchers, a trader, three risk reviewers and a portfolio

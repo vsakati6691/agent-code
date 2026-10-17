@@ -81,15 +81,34 @@ SOURCES.update(
 class Providers:
     """Thin fetch layer. Every method raises FetchError (or BudgetExceeded) on failure."""
 
-    def __init__(self, http: HttpClient, av_key: str | None = None, fred_key: str | None = None) -> None:
+    def __init__(
+        self,
+        http: HttpClient,
+        av_key: str | None = None,
+        fred_key: str | None = None,
+        *,
+        massive_key: str | None = None,
+        history_as_of: date | None = None,
+    ) -> None:
         self.http = http
         self.av_key = av_key
         self.fred_key = fred_key
+        self.massive_key = massive_key
+        self.history_provider = "massive" if massive_key else "cboe"
+        self.history_as_of = history_as_of
         self._submissions: dict[int, dict] = {}
         if fred_key:
             from ..logging_setup import register_secret
 
             register_secret(fred_key)
+        if massive_key:
+            from ..logging_setup import register_secret
+            from .private_research import require_local
+
+            require_local()
+            register_secret(massive_key)
+            if history_as_of is None:
+                raise ValueError("Private history requires an explicit completed session")
 
     def sec_tickers(self) -> pd.DataFrame:
         return parse_sec_tickers(self.http.get_json(SEC_TICKERS_URL, max_age_hours=24))
@@ -132,6 +151,11 @@ class Providers:
         return parse_cboe_quote(self._price_json(f"{CBOE_BASE}/quotes/{symbol}.json"))
 
     def history(self, symbol: str) -> pd.DataFrame:
+        if self.massive_key:
+            from .massive_history import fetch_history
+
+            assert self.history_as_of is not None
+            return fetch_history(self.http, self.massive_key, symbol, self.history_as_of)
         return parse_cboe_history(self._price_json(f"{CBOE_BASE}/charts/historical/{symbol}.json"))
 
     def option_chain(self, symbol: str) -> tuple[dict, list[dict]]:

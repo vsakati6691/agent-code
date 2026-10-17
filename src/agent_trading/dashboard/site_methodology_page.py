@@ -107,6 +107,7 @@ before any results were computed; a change creates a new version and results are
 <p>Limited operating history: fewer than {spec.LIMITED_HISTORY_QUARTERS} reported quarters. Limited trading history: fewer than
 {spec.LIMITED_HISTORY_DAYS} daily bars. Fundamentals older than {spec.MAX_FILING_AGE_DAYS} days exclude a stock. The as-of close
 must be present. Lists are never padded: fewer than ten qualifying stocks means fewer than ten shown.</p>
+<p id="price-bars">{E(spec.PRICE_BAR_RULE.replace("PRICE_RANGE_CHECK_BARS", str(spec.PRICE_RANGE_CHECK_BARS)))}</p>
 <h2 id="decision-research">Growth decision research · version 2026-10-14.9</h2>
 <p>New large, mid and small lists rank fundamental quality alone. Price momentum and benchmark-relative returns
 are displayed separately. Annual price returns over 150% are flagged extended. Existing snapshots retain their original ranks.</p>
@@ -170,13 +171,13 @@ at expiration): {E(", ".join(probability.DATA_CONTRACT["record_fields"]))}. {E(p
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
 {site_bets.methodology()}
 <h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
-<h2 id="buy-sell-desk">Buy/Sell desk · version 2026-10-17.4</h2><p>{E(spec.DESK_RULE)}</p><p>{E(spec.DESK_TRACKING)}</p>
+<h2 id="buy-sell-desk">Buy/Sell desk · version 2026-10-17.5</h2><p>{E(spec.DESK_RULE)}</p><p>{E(spec.DESK_TRACKING)}</p>
 {leaders_methodology()}
 <h2 id="display-rules">Data states, research panel and comparisons</h2>
 <p>These rules decide how evidence is labelled and compared. No score, gate or ranking uses them.</p>
 <ul>{"".join(f"<li><strong>{E(k.replace('_', ' '))}</strong>: {E(v)}</li>" for k, v in spec.DATASET_STATES.items())}</ul>
 <p>{E(spec.FRESHNESS_RULE.replace("FRESHNESS_STALE_SESSIONS", str(spec.FRESHNESS_STALE_SESSIONS)))}</p>
-<p>{E(spec.WATCHLIST_PRICE_RULE)}</p>
+<p>{E(spec.WATCHLIST_PRICE_RULE.replace("PRICE_BAR_RULE", "the daily price-bar rule"))}</p>
 <p>Earnings-quality checks: free cash flow / net income (clean at {spec.FORENSIC_RULES["fcf_to_net_income"]["clean_at_least"]:.2f}x
 or more, concerning below {spec.FORENSIC_RULES["fcf_to_net_income"]["concerning_below"]:.2f}x) and stock-based pay / revenue
 (clean below {pct(spec.FORENSIC_RULES["sbc_to_revenue"]["clean_below"])}, concerning above

@@ -542,7 +542,7 @@ from .assets_terminal import CSS as TERMINAL_CSS  # noqa: E402 - shared theme ov
 CSS += TERMINAL_CSS
 
 CSS += r"""
-/* Buy/Sell desk (2026-10-17.4): the label always carries the meaning; colour only reinforces it. */
+/* Buy/Sell desk (2026-10-17.5): the label always carries the meaning; colour only reinforces it. */
 .desk-flow { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); counter-reset: desk; }
 .desk-flow li { counter-increment: desk; background: var(--surface-1); border: 1px solid var(--border);
