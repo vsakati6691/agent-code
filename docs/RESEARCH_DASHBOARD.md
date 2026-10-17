@@ -539,14 +539,16 @@ row "Broker earnings calendar" show the state; the import is recorded in `audit.
 Alpha-Vantage-only status. No rank, gate or score changes, so there is no new spec version. To refresh, in a Claude
 session:
 
-1. Update the `research-data` worktree (`git pull` in `..\agent-code-research-data`).
-2. Run `python -m agent_trading.dashboard earnings-calendar todo --data ..\agent-code-research-data`. It lists every
+1. Update a `research-data` worktree with `git pull`, or create one with `git worktree add <folder> research-data`
+   (on the owner's machine `..\agent-code-research-data` is a plain folder from a local run, not a checkout; the
+   2026-10-17 import used `C:\Users\vsaka\.claude\worktrees\agent-code\research-data`). `<data>` below is that folder.
+2. Run `python -m agent_trading.dashboard earnings-calendar todo --data <data>`. It lists every
    scheduled date in the latest snapshot with its current verdict and prints the one or two `get_earnings_calendar`
    calls (start date, days, filter) that cover them.
 3. Make those calls with the read-only Robinhood tool and save each JSON response to the scratchpad. The default
    `high_market_cap` filter covers names above $1B; call without the filter for smaller names and import that file
    with `--filter all`.
-4. Run `python -m agent_trading.dashboard earnings-calendar import --data ..\agent-code-research-data <files>`.
+4. Run `python -m agent_trading.dashboard earnings-calendar import --data <data> <files>`.
    `--checked-at` defaults to today; `--start` and `--days` record the exact window of a single file, otherwise the
    window is the first to the last report date in the response. Payloads with account fields are rejected.
 5. Commit and push `research-data`. The next site build shows the verdicts: the daily refresh (22:17 UTC on
