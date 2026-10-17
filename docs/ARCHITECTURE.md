@@ -145,6 +145,6 @@ The daily report (`reports\daily_two_strategy_<date>_<label>.md`) has these sect
 - **Survivorship bias:** about 10% of historical S&P 500 members are missing from the scanner backtest, either because the filing omits the ticker or because the stock is delisted on Robinhood. No point-in-time lists are available after Sept 2023.
 - **Fundamentals:** current values only, so they can't be backtested.
 - **Dividends:** the GTAA backtest uses total return (dividend-adjusted), but the daily GTAA signals and the other backtests use price-only bars.
-- **Daily bars only:** intraday stop fills, partial fills, halts and taxes are not modelled, and exchange holidays aren't in code (the runbook checks them).
+- **Daily bars only:** intraday stop fills, partial fills, halts and taxes are not modelled. `market_calendar.py` models regular NYSE holidays and recorded exceptional closures; it is not a live exchange-status feed. Price-cache staleness remains conservatively measured in weekdays.
 - **News:** headlines are unverified until the article is read.
 

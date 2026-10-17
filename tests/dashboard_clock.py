@@ -14,9 +14,11 @@ MODULES = (
     "site",
     "earnings_verdicts",
     "pipeline_assemble",
+    "pipeline_phases",
     "pipeline_context",
     "pipeline_details",
     "providers",
+    "provider_parsers",
     "refresh",
     "tradability",
 )

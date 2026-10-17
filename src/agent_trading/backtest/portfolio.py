@@ -22,6 +22,7 @@ from ..config import Settings
 from ..indicators import atr
 from ..risk import Holding, PortfolioState, RiskEngine, _floor
 from .engine import BacktestResult, Trade
+from .fills import stop_fill
 from .metrics import compute_metrics
 
 WeightsFn = Callable[[pd.Timestamp, dict[str, pd.DataFrame]], dict[str, float]]
@@ -126,8 +127,9 @@ def run_allocation(
         # 2. protective stops
         for sym in list(positions):
             bar = rows[sym].get(d)
-            if bar is not None and bar["low"] <= positions[sym].stop:
-                close(sym, d, min(bar["open"], positions[sym].stop), "stop")
+            fill = stop_fill(bar["open"], bar["low"], positions[sym].stop) if bar is not None else None
+            if fill is not None:
+                close(sym, d, fill, "stop")
 
         # 3. mark to market and credit interest on idle cash
         for sym, r in rows.items():

@@ -22,6 +22,7 @@ import pandas as pd
 
 from ..config import Settings
 from ..risk import Holding, PortfolioState, RiskEngine
+from .fills import stop_fill
 from .metrics import compute_metrics
 
 
@@ -153,8 +154,9 @@ def run_backtest(
         # 3. protective stops
         for sym in list(positions):
             bar = rows[sym].get(d)
-            if bar is not None and bar["low"] <= positions[sym].stop:
-                close(sym, d, min(bar["open"], positions[sym].stop), "stop")
+            fill = stop_fill(bar["open"], bar["low"], positions[sym].stop) if bar is not None else None
+            if fill is not None:
+                close(sym, d, fill, "stop")
 
         # 4. mark to market
         for sym, r in rows.items():

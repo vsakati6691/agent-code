@@ -26,11 +26,10 @@ jobs:
       code: ${{ steps.refresh.outputs.code }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: ./.github/actions/setup-python-project
         with:
           python-version: "3.12"
-          cache: pip
-      - run: python -m pip install -e ".[dev]"
+          development: "true"
       - run: python -m pytest -q
       - name: Read existing weekly data
         run: |
@@ -38,6 +37,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch --no-tags --depth=1 origin research-data
           git worktree add --detach research-data FETCH_HEAD
+      - name: Restore daily provider budget
+        uses: ./.github/actions/provider-budget-cache
+        with:
+          operation: restore
       - name: Light refresh
         id: refresh
         timeout-minutes: 15
@@ -54,6 +57,12 @@ jobs:
           set -e
           echo "code=$code" >> "$GITHUB_OUTPUT"
           if [ "$code" != "0" ] && [ "$code" != "2" ]; then exit "$code"; fi
+      - name: Save daily provider budget even after collection failure
+        if: always()
+        uses: ./.github/actions/provider-budget-cache
+        with:
+          operation: save
+
       - name: Verify and save daily files and appended audit only
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}

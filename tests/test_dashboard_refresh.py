@@ -286,4 +286,6 @@ def test_workflow_is_guarded_pinned_and_serialized_with_weekly():
     for job in daily["jobs"].values():
         for step in job["steps"]:
             if "uses" in step:
-                assert len(step["uses"].split("@")[1]) == 40
+                from tests.workflow_checks import assert_pinned_action
+
+                assert_pinned_action(root, step["uses"])

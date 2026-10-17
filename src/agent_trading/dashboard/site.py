@@ -32,6 +32,7 @@ from .assets import CSS, JS
 from .fmt import (
     sval as sval,
 )
+from .render_context import RenderContext, rendering
 from .site_ai import ai_page
 from .site_audit import _readable as _readable
 from .site_audit import audit_page as audit_page
@@ -93,6 +94,22 @@ def build_site(
     data_commit: str = "",
     today: date | None = None,
 ) -> dict:
+    with rendering(RenderContext()) as context:
+        return _build_site(
+            data_dir, out, secret_env, code_commit=code_commit, data_commit=data_commit, today=today, context=context
+        )
+
+
+def _build_site(
+    data_dir: Path,
+    out: Path,
+    secret_env: tuple[str, ...] = (),
+    *,
+    context: RenderContext,
+    code_commit: str = "",
+    data_commit: str = "",
+    today: date | None = None,
+) -> dict:
     store = Store(data_dir)
     challengers = leaders.load_challengers()
     integrity = store.verify_all()
@@ -107,10 +124,10 @@ def build_site(
         shutil.rmtree(out)
     (out / "assets").mkdir(parents=True)
     (out / "build.json").write_text(json.dumps(build_info, indent=2) + "\n", encoding="utf-8")
-    _SYMBOLS.clear()
+    context.symbols.clear()
     (out / "assets" / "favicon.svg").write_text(site_basics.FAVICON_SVG, encoding="utf-8")
     # a content hash in every asset link, so a browser never pairs new pages with a cached old stylesheet or script
-    _SITE["v"] = (
+    context.asset_version = (
         "?v="
         + hashlib.sha256(
             (
@@ -161,8 +178,8 @@ def build_site(
         (out / "feed.xml").write_text(atom_feed([]), encoding="utf-8")
         write_fallback()
         return {"pages": len(list(out.rglob("*.html"))), "snapshot": None}
-    _SYMBOLS.clear()
-    _SYMBOLS.update(symbol_index(snap))
+    context.symbols.clear()
+    context.symbols.update(symbol_index(snap))
     write_fallback()
     hits = find_private_keys(snap)
     if hits:
@@ -261,7 +278,7 @@ def build_site(
         write(f"option/{rid}.html", "Contract research", body, "options.html", 1)
     for rel, text in evidence_fragments(snap["bands"]).items():  # evidence rows load on demand (see assets.JS)
         (out / rel).write_text(text, encoding="utf-8")
-    for t in _SYMBOLS:
+    for t in context.symbols:
         write(f"symbol/{t}.html", f"{t} · symbol", symbol_page(t, snap, history), "", 1)
     for key, band in snap["bands"].items():
         write(f"excluded-{key}.html", f"Excluded: {band_title(key, band)}", excluded_page(key, band), list_page(key))

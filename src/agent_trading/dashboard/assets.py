@@ -112,11 +112,11 @@ tr.detail > td { white-space: normal; }
 .ev-row { display: grid; grid-template-columns: 80px 1fr 32px; gap: 6px; align-items: center; font-size: 13px; margin: 2px 0; }
 .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 12px 0; }
 .panels .card { margin: 0; } .panels h3 { margin-top: 0; font-size: 15px; }
-/* phones: the ranked lists come first; the context panels follow them */
-.overview { display: flex; flex-direction: column; } .ov-panels, .ov-lists { min-width: 0; }
-.mb-list { display: grid; gap: 12px; }
+.overview { display: flex; flex-direction: column; }
+.mb-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.card.mb, .mb-grid > * { min-width: 0; }
 .card.mb header { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 4px; }
-.mb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 18px; }
+.mb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 0 18px; }
 .rank { font-weight: 700; color: var(--text-secondary); }
 /* the ticker column stays visible while a wide table scrolls sideways */
 .table-wrap td.tk, .table-wrap th.tk { position: sticky; left: 0; z-index: 2; background: var(--surface-1);
@@ -141,7 +141,6 @@ header.site .inner .symsearch { margin-left: auto; }
   nav a { flex: none; margin-right: 0; padding: 4px 0; }
   h1 { font-size: 20px; } h2 { font-size: 17px; } th, td { padding: 6px 5px; } .hide-sm { display: none; }
   table { font-size: 13px; } td.risk { min-width: 140px; } .tabs button { padding: 6px 9px; }
-  .ov-panels { order: 2; } .ov-lists { order: 1; }
 }
 """
 

@@ -27,12 +27,12 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from . import order_gate
 from .account import AccountSnapshot, verify_snapshot
 from .config import Settings
+from .market_calendar import next_trading_day
 from .paper import Intent, returns_frame
 from .risk import Holding, PortfolioState, RiskEngine, TradingStatus, _floor, planned_risk, trading_status
 from .strategies.desk import Position
@@ -269,7 +269,10 @@ def prepare(
             res.positions[sym] = Position(p["quantity"], entry, 0.0, as_of)
             continue
         entry = avg if avg else float(t["limit_price"])
-        filled = np.busday_offset(np.datetime64(t["created_date"]), 1, roll="forward").astype(date)
+        filled = next_trading_day(date.fromisoformat(t["created_date"]))
+        res.warnings.append(
+            f"{sym}: entry date {filled} is inferred from the next NYSE session after the ticket; actual fill date is unknown"
+        )
         res.positions[sym] = Position(p["quantity"], entry, float(t["stop_price"]), filled)
     covered = stop_coverage(snap.open_orders)
     for sym, pos in res.positions.items():

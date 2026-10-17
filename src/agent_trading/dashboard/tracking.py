@@ -102,7 +102,7 @@ def track(snapshots: list[dict], prices: dict[str, pd.Series], as_of: date) -> d
                         pending += 1
                     else:
                         unavailable.append({"ticker": t, "status": status})
-                b, b_status = forward_return(prices.get(cfg.benchmark), s_date, bars, as_of)
+                b, _ = forward_return(prices.get(cfg.benchmark), s_date, bars, as_of)
                 if pending or not rets:
                     row["horizons"][h] = {"status": "pending" if pending else "unavailable", "unavailable": unavailable}
                     continue

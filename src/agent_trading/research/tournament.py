@@ -477,7 +477,7 @@ def run(settings: Settings, registry: Path, run_test: bool = False) -> tuple[Tou
     mkt, data = load_market(settings)
     t = Tournament(settings, mkt, data)
     t.run_selection()
-    tested = []
+    tested: list[str] = []
     when = datetime.now(UTC).isoformat(timespec="seconds")
     code = code_version(settings.base_dir)
     run_id = hashlib.sha256(f"{when}{code}".encode()).hexdigest()[:10]

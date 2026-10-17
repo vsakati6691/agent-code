@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from .cli_common import _account as _account
 from .cli_common import _backtest_bars as _backtest_bars
@@ -37,7 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="agent-trading", description="Research and paper-trading toolkit (no live trading)."
     )
     p.add_argument("--config", default="config/settings.yaml")
-    p.add_argument("--as-of", type=date.fromisoformat, default=date.today(), help="YYYY-MM-DD (default: today)")
+    p.add_argument(
+        "--as-of",
+        type=date.fromisoformat,
+        default=datetime.now(ZoneInfo("America/New_York")).date(),
+        help="YYYY-MM-DD (default: today in New York)",
+    )
     p.add_argument("--log-level", default="INFO")
     sub = p.add_subparsers(dest="command", required=True)
 

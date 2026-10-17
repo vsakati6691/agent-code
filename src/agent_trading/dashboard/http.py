@@ -20,6 +20,7 @@ import hashlib
 import json
 import logging
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -92,8 +93,8 @@ class HttpClient:
     attempts: int = 3
     backoff: float = 2.0
     session: requests.Session | None = None
-    sleep: callable = time.sleep
-    clock: callable = time.monotonic
+    sleep: Callable[[float], None] = time.sleep
+    clock: Callable[[], float] = time.monotonic
     used: dict[str, int] = field(default_factory=dict)
     throttled: dict[str, int] = field(default_factory=dict)
     _streak: dict[str, int] = field(default_factory=dict)
@@ -189,6 +190,7 @@ class HttpClient:
         return ALLOWED_HOSTS[parts.hostname]
 
     def _fetch(self, provider: str, url: str, params: dict | None) -> bytes:
+        assert self.session is not None  # established in __post_init__
         host = urlsplit(url).hostname
         last_error = ""
         attempt, limit = 0, self.attempts

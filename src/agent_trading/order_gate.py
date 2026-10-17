@@ -22,8 +22,10 @@ Nothing here talks to a broker; the owner still places every ticket by hand.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -34,14 +36,17 @@ from .killswitch import status as kill_switch_status
 from .market_calendar import is_trading_day
 from .risk import TradingStatus
 
+if TYPE_CHECKING:
+    from .live import Ticket
+
 ET = ZoneInfo("America/New_York")
 LIMIT_SANITY_PCT = 0.02  # a limit more than 2% from the day's close is treated as a pricing error
 
 
 @dataclass
 class GateResult:
-    approved: list = field(default_factory=list)
-    rejected: list[tuple[object, str]] = field(default_factory=list)
+    approved: list[Ticket] = field(default_factory=list)
+    rejected: list[tuple[Ticket, str]] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)  # reasons every ticket was rejected
     buy_blockers: list[str] = field(default_factory=list)  # reasons every buy was rejected
     engage_kill_switch: str | None = None  # set when the drawdown review limit is reached
@@ -142,13 +147,13 @@ def _global_blockers(
 
 def check_tickets(
     settings: Settings,
-    tickets: list,
+    tickets: Sequence[Ticket],
     snap: AccountSnapshot | None,
     as_of: date,
     bars: dict[str, pd.DataFrame],
     status: TradingStatus | None,
     now: datetime | None = None,
-    issued_today: list | tuple = (),
+    issued_today: Sequence[Ticket] = (),
 ) -> GateResult:
     """Approve or reject each ticket. Sells are checked before buys.
 
@@ -162,6 +167,8 @@ def check_tickets(
         res.rejected = [(t, "; ".join(res.blockers)) for t in tickets]
         return res
 
+    assert snap is not None  # the explicit missing-snapshot blocker returned above
+    reason: str | None = None
     held = {p["symbol"]: p["quantity"] for p in snap.positions if p["quantity"] > 0}
     invested, _ = positions_value(snap, bars, as_of)
     if status is None:
@@ -233,6 +240,7 @@ def check_tickets(
         if reason is None and res.buy_blockers:
             reason = "; ".join(res.buy_blockers)
         if reason is None:
+            assert cash is not None  # unknown settled cash is an explicit buy blocker
             room = buy_headroom(al, cash, invested, bought, entries)
             if t.notional > room + 0.005:
                 reason = (
@@ -251,7 +259,7 @@ def check_tickets(
     return res
 
 
-def _ticket_value_problem(ticket) -> str | None:
+def _ticket_value_problem(ticket: Ticket) -> str | None:
     if ticket.side not in {"buy", "sell"}:
         return "invalid ticket side"
     for name in ("quantity", "limit_price"):
@@ -264,7 +272,7 @@ def _ticket_value_problem(ticket) -> str | None:
 
 
 def _buy_reason(
-    t,
+    t: Ticket,
     al: AccountLimitsConfig,
     allowed: set[str],
     held: dict,

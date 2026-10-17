@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff==0.17.1"]
+dev = ["pytest>=8", "ruff==0.17.1", "mypy==2.4.0"]
 
 [project.scripts]
 agent-trading = "agent_trading.cli:main"
@@ -28,6 +28,26 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+# Gradual coverage: enforce these validated boundaries without suppressing
+# diagnostics in the rest of the project when explicitly checking all of src.
+[tool.mypy]
+ignore_missing_imports = true
+follow_imports = "silent"
+files = [
+    "src/agent_trading/account.py",
+    "src/agent_trading/config.py",
+    "src/agent_trading/risk.py",
+    "src/agent_trading/order_gate.py",
+    "src/agent_trading/provider_budget.py",
+    "src/agent_trading/dashboard/http.py",
+    "src/agent_trading/dashboard/pipeline_context.py",
+    "src/agent_trading/dashboard/pipeline_collect.py",
+    "src/agent_trading/dashboard/pipeline_assemble.py",
+    "src/agent_trading/dashboard/pipeline_phases.py",
+    "src/agent_trading/research/tournament.py",
+    "src/agent_trading/daily_report.py",
+]
 
 [tool.ruff]
 line-length = 120

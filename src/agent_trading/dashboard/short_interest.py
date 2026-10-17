@@ -8,26 +8,10 @@ import math
 import re
 from datetime import date
 
+from .finra_schema import COLUMNS as COLUMNS
 from .http import FetchError
 from .providers import canonical
 
-# Verified against the complete public 2026-09-30 download on 2026-10-16.
-COLUMNS = (
-    "accountingYearMonthNumber",
-    "symbolCode",
-    "issueName",
-    "issuerServicesGroupExchangeCode",
-    "marketClassCode",
-    "currentShortPositionQuantity",
-    "previousShortPositionQuantity",
-    "stockSplitFlag",
-    "averageDailyVolumeQuantity",
-    "daysToCoverQuantity",
-    "revisionFlag",
-    "changePercent",
-    "changePreviousNumber",
-    "settlementDate",
-)
 LABEL = "Short interest as a percentage of XBRL diluted shares outstanding"
 
 

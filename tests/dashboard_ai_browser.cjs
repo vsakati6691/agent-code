@@ -1,7 +1,7 @@
-/* Optional browser checks against the real October 15 AI snapshot. */
+/* Browser checks against the offline fixture or the original October 15 snapshot. */
 const assert = require('node:assert/strict');
 
-exports.checkAiPage = async function (page, base) {
+exports.checkAiPage = async function (page, base, profile = {unavailableTicker:'ARM', unavailableReason:'not common stock', firstAiHref:'stock/ai_large-MU.html'}) {
   await page.emulateMedia({media:'screen'});
   await page.setViewportSize({width:390, height:1000});
   await page.goto(`${base}/ai.html`);
@@ -16,12 +16,12 @@ exports.checkAiPage = async function (page, base) {
     assert.equal(new URL(page.url()).hash, '#' + target);
     assert.equal(await page.locator('#' + target).isVisible(), true);
   }
-  const unavailable = page.locator('.ai-unavailable').filter({hasText:'ARM'});
+  const unavailable = page.locator('.ai-unavailable').filter({hasText:profile.unavailableTicker});
   await unavailable.locator('summary').focus();
   await page.keyboard.press('Enter');
-  assert.match(await unavailable.locator('p').innerText(), /not common stock/);
+  assert.ok((await unavailable.locator('p').innerText()).includes(profile.unavailableReason));
   assert.equal(await unavailable.locator('p').isVisible(), true);
-  assert.equal(await page.locator('.ai-page a.pill').first().getAttribute('href'), 'stock/ai_large-MU.html');
+  assert.equal(await page.locator('.ai-page a.pill').first().getAttribute('href'), profile.firstAiHref);
   const privateTable = page.locator('table[aria-label="Private AI companies with a reported valuation"]');
   assert.equal(await privateTable.locator('th').last().isVisible(), true);
   await page.setViewportSize({width:1440,height:1000});
@@ -49,7 +49,7 @@ exports.checkAiPage = async function (page, base) {
     await fallback.goto(`${base}/ai.html`);
     await fallback.locator('.section-nav a[href="#universe"]').click();
     assert.equal(new URL(fallback.url()).hash, '#universe');
-    const reason = fallback.locator('.ai-unavailable').filter({hasText:'ARM'});
+    const reason = fallback.locator('.ai-unavailable').filter({hasText:profile.unavailableTicker});
     await reason.locator('summary').click();
     assert.equal(await reason.locator('p').isVisible(), true);
   } finally {await nojs.close();}
