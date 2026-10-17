@@ -463,7 +463,10 @@ SCHEMA = {
         ),
         "leaders_2030_inputs": _f(
             "array",
-            "Prospectively retained S&P 500 company inputs already collected by the weekly run. No extra provider calls.",
+            "Prospectively retained S&P 500 inputs. From 2026-10-17.1, missing prices and SEC facts are attempted for every member within existing budgets; prior versions only reused collected inputs.",
+        ),
+        "leaders_2030_collection": _obj(
+            "Optional from 2026-10-17.1: members requested, total universe, development limit flag and additional_requests by provider during the index completion phase. Attempts include retries; cache hits consume no budget."
         ),
         "leaders_2030": _obj(
             "Conditional size comparison, with coverage and gap reasons. Code-only rebuilds export a separate derived JSON without rewriting the source snapshot.",

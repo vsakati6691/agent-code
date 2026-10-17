@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-16.2"
+SPEC_VERSION = "2026-10-17.1"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -52,6 +52,7 @@ SPEC_CHANGELOG = [
         "Add Leaders 2030 and explicit watchlist upside; prior version had zero snapshots. Existing rules and scenario math are unchanged.",
     ),
     ("2026-10-16.2", "additive datasets; zero weekly snapshots under 2026-10-16.1 at registration"),
+    ("2026-10-17.1", "owner requested a top-20 view; full S&P 500 coverage"),
 ]
 
 EXTERNAL_DATA_RULES = {
@@ -88,7 +89,7 @@ LEADERS_SHARE_RULE = (
     "Missing dilution or dated shares makes the calculation unavailable. These are issuer share-count proxies, "
     "not float-adjusted index weights."
 )
-LEADERS_RULE = (
+LEADERS_RULE_2026_10_16 = (
     "Current ranks use the snapshot's S&P 500 members, ranked by stored as-of close x dated diluted shares. "
     "Reuse the registered exact-date company scenario formula. Rank all available base caps, including dated "
     "curated assumptions; display the union of the current top 50, the conditional top 50 and all curated challengers. "
@@ -100,6 +101,16 @@ LEADERS_RULE = (
     "2030 index membership is unknown. Curated caps are the owner's sourced, dated assumptions, "
     "with evidence grade none and no computed price scenario. Assumptions dated after a snapshot are omitted. "
     "Probability is not established without documented out-of-sample calibration."
+)
+LEADERS_TOP_N = 20
+LEADERS_RULE = LEADERS_RULE_2026_10_16.replace("top 50", "top 20").replace("top-50", "top-20")
+LEADERS_COLLECTION_RULE = (
+    "Every weekly S&P 500 member is attempted after research-list screening, regardless of price, liquidity, "
+    "score or tradability gates. Reuse successful and failed cached lookups; collect missing as-of history "
+    "and SEC company facts through existing providers, pacing and budgets with SEC_USER_AGENT. "
+    "Only the registered short-history price fallback is allowed; other invalid or stale prices stay unavailable. "
+    "Retain dated diluted shares and the existing scenario inputs. Record incremental request attempts and "
+    "coverage gaps. Development --limit remains partial. No snapshot backfills or change to scenario math."
 )
 
 DECISION_RULES = {
@@ -1093,7 +1104,12 @@ def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
         "external_datasets": EXTERNAL_DATA_RULES,
-        "leaders_2030": {"rule": LEADERS_RULE, "shares": LEADERS_SHARE_RULE, "top_n": 50},
+        "leaders_2030": {
+            "rule": LEADERS_RULE,
+            "shares": LEADERS_SHARE_RULE,
+            "top_n": LEADERS_TOP_N,
+            "collection": LEADERS_COLLECTION_RULE,
+        },
         "decision_research": DECISION_RULES,
         "speculative_options": SPECULATIVE_RULES,
         "bands": [asdict(b) for b in BANDS],

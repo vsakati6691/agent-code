@@ -1,4 +1,4 @@
-"""Retain inputs the weekly run already holds, without invoking any provider."""
+"""Complete weekly index inputs within existing budgets, then retain them without I/O."""
 
 from __future__ import annotations
 
@@ -6,17 +6,54 @@ import pandas as pd
 
 from . import decisions, scoring, spec
 from .fmt import ok
+from .pipeline_collect import _facts, watchlist_bars
+from .pipeline_context import Context
 from .pipeline_details import _clean
 from .pipeline_score import market_cap
 from .watchlist import evidence_quality
 
 
+def _cik(ticker: str, identity, ref: dict) -> int | None:
+    cik = identity.get("cik")
+    if pd.notna(cik):
+        return int(cik)
+    sec = ref.get("sec")
+    return int(sec.loc[ticker, "cik"]) if sec is not None and ticker in sec.index else None
+
+
+def collect_inputs(ctx: Context, ref: dict) -> dict:
+    """Fill gaps after list screening, independently of price/liquidity/tradability gates.
+
+    Successful and failed lookups are memoized. A short-history fallback only
+    revalidates the HTTP-cached history; other rejected prices stay rejected.
+    Development --limit remains bounded and can never imply full coverage.
+    """
+    before = ctx.providers.http.usage().get("requests", {}).copy()
+    members = ref["sp500"]
+    selected = members.iloc[: ctx.limit] if ctx.limit else members
+    for ticker, identity in selected.iterrows():
+        watchlist_bars(ctx, ticker)
+        cik = _cik(ticker, identity, ref)
+        if cik is not None:
+            _facts(ctx, cik)
+    after = ctx.providers.http.usage().get("requests", {})
+    return {
+        "members_requested": len(selected),
+        "universe_count": len(members),
+        "limited": bool(ctx.limit),
+        "additional_requests": {
+            key: after.get(key, 0) - before.get(key, 0) for key in sorted(before.keys() | after.keys())
+        },
+    }
+
+
 def retained_inputs(ctx, ref: dict) -> list[dict]:
     rows = []
     for ticker, identity in ref["sp500"].iterrows():
-        cik = identity.get("cik")
-        cik = int(cik) if pd.notna(cik) else None
+        cik = _cik(ticker, identity, ref)
         f, why = ctx.facts.get(cik, (None, "SEC financial statements not collected for this member"))
+        if cik is None:
+            why = "No SEC registrant identifier for this member"
         bars, price_why, flags = ctx.histories.get(ticker, (None, "As-of price not collected for this member", []))
         if bars is None:
             bars, price_why, flags = ctx.histories.get(
