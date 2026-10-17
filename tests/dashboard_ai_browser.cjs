@@ -56,3 +56,9 @@ exports.checkAiPage = async function (page, base, profile = {unavailableTicker:'
   return {firstTableTop, jumpLinks:5, unavailableReason:'keyboard/touch disclosure',
     scenarioSorting:'numeric, persisted and reset', searchEmptyState:'passed', mobilePrivateColumns:'visible'};
 };
+
+// Also runnable on its own with the same <site-directory> <report-directory> arguments.
+if(require.main===module) {
+  process.env.DASHBOARD_AI_ONLY='1';
+  require('./dashboard_ui_browser.cjs');
+}

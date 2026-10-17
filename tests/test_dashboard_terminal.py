@@ -79,6 +79,7 @@ def test_partial_snapshot_reasons_are_escaped_and_all_recoverable(tmp_path):
     for reason in ("XBRL input unavailable", "Third reason", "Fourth reason", "&lt;script&gt;"):
         assert reason in audit
     assert "<script>" not in audit
+    assert '<details class="small" open><summary>Treasury rate unavailable</summary>' in audit
 
 
 def test_missing_cells_retain_reasons_without_repeating_them_inline():

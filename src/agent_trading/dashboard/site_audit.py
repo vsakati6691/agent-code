@@ -56,6 +56,7 @@ def audit_page(
         else '<div class="banner bad"><strong>Integrity problems</strong>' + E("; ".join(integrity)) + "</div>"
     )
     usage = snap.get("usage", {})
+    rate_details = rate_note(snap).replace('<details class="small">', '<details class="small" open>', 1)
     return f"""<h1>Audit trail</h1><p>Stored data coverage, integrity and collection history.</p>
 <section id="data-status">{datasets_table(evidence.datasets(snap))}</section>{ok}
 <p class="small">One state per dataset behind the {E(str(snap["as_of"]))} snapshot. Nothing falls back to sample or
@@ -71,7 +72,7 @@ Dataset caps: {E(_readable(usage.get("dataset_budgets", {})))}.
 Problems: {E("; ".join(snap.get("problems", [])) or "none")}.</p>
 <p>Leaders index completion: {E(_readable(snap.get("leaders_2030_collection") or {})) or "Not stored in this snapshot"}.</p>
 {audit_context(snap, daily)}
-<section id="options-data"><h2>Options collection</h2>{status_html(snap)}{version_line(snap)}{rate_note(snap)}
+<section id="options-data"><h2>Options collection</h2>{status_html(snap)}{version_line(snap)}{rate_details}
 <p>{E(_readable((snap.get("options") or {}).get("chain_problems") or {}))}</p></section>
 <h2>Data sources and terms</h2><ul class="small">{"".join(f"<li><strong>{E(k)}</strong>: {E(v)}</li>" for k, v in snap.get("sources", {}).items())}</ul>
 <h2>Machine-readable data</h2><ul class="small"><li><a href="data/schema.json">data/schema.json</a>: what every field means

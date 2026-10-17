@@ -1,0 +1,482 @@
+[
+  {
+    "name": "index",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "growth",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "multibaggers",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "ai",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "options",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "bets",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "watchlist",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "leaders",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "goal",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "evidence",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "compare",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "history",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "methodology",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "audit",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "company",
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "index",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "growth",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "multibaggers",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "ai",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "options",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "bets",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "watchlist",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "leaders",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "goal",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "evidence",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "compare",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "history",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "methodology",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "audit",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "company",
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "index",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "growth",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "multibaggers",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "ai",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "options",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "bets",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "watchlist",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "leaders",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "goal",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "evidence",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "compare",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "history",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "methodology",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "audit",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "company",
+    "width": 390,
+    "height": 844,
+    "theme": "light",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "index",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "growth",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "multibaggers",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "ai",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "options",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "bets",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "watchlist",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "leaders",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "goal",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "evidence",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "compare",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "history",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "methodology",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "audit",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  },
+  {
+    "name": "company",
+    "width": 390,
+    "height": 844,
+    "theme": "dark",
+    "readable": true,
+    "tickerLink": true
+  }
+]

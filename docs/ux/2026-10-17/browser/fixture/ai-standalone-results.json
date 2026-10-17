@@ -1,0 +1,11 @@
+{
+  "ai": {
+    "firstTableTop": 698.1875,
+    "jumpLinks": 5,
+    "unavailableReason": "keyboard/touch disclosure",
+    "scenarioSorting": "numeric, persisted and reset",
+    "searchEmptyState": "passed",
+    "mobilePrivateColumns": "visible"
+  },
+  "errors": []
+}
