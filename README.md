@@ -83,7 +83,7 @@ required for the goal beside the stored scenarios and research evidence. Inputs
 stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
 the current methodology, frozen as of **2026-10-16**. The administrative freeze
-date is recorded separately from methodology version **2026-10-17.4** and its pinned hash. Versions retain separate evidence counts.
+date is recorded separately from methodology version **2026-10-17.5** and its pinned hash. Versions retain separate evidence counts.
 
 Version **2026-10-17.1** registers full S&P 500 collection for the current top-20
 Leaders view. Version **2026-10-17.2** anchors Leaders base growth in three-year
@@ -96,6 +96,13 @@ lagging history file's as-of bar only from a verified post-close quote with its
 own open, high, low, close and volume. See [the changelog](docs/SPEC_CHANGELOG.md#2026-10-174).
 These rows still depend on a successful weekly import; code deployment does not
 fill missing data in older snapshots.
+
+Version **2026-10-17.5** adds the **Buy/Sell desk** tab: the five stages of
+[TradingAgents](https://github.com/TauricResearch/TradingAgents) (analysts, bull vs bear
+debate, trader, risk team, portfolio manager), each a fixed rule over stored fields
+instead of a language model, ending in Buy, Overweight, Hold, Underweight or Sell.
+Ratings are rule-based research labels, not advice; they are stored with each new
+weekly snapshot and tracked by rating. See the [desk rules](docs/SPEC_CHANGELOG.md#2026-10-175).
 
 All tabs now put data before longer explanations, with full operating details
 on Audit. [UI documentation](docs/DASHBOARD_UI.md) and the

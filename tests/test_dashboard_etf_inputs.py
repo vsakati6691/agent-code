@@ -16,7 +16,8 @@ XML = """<edgarSubmission xmlns="http://www.sec.gov/edgar/nport"><genInfo><serie
 
 def test_new_version_changes_only_input_registration():
     raw = spec.spec_dict()
-    # Remove later additive registrations to check the original ETF delta.
+    # Remove later additive registrations (Leaders, private history, Cboe bars, Buy/Sell desk) to check the ETF delta.
+    raw.pop("decision_desk")
     assert raw.pop("private_history") == spec.PRIVATE_HISTORY_RULE
     raw.pop("leaders_2030")
     raw.pop("external_datasets")

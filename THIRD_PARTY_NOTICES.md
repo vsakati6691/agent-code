@@ -50,3 +50,18 @@ Options remain off unless the owner enables them (see `DASHBOARD_OPTIONS`).
 was turned into fixed Python rules that work on stored SEC and Cboe figures. Nothing is generated, and no figure,
 probability or price target is produced beyond the stated deterministic calculations. No upstream text is
 reproduced.
+
+## TradingAgents
+
+- **Source:** https://github.com/TauricResearch/TradingAgents at commit `e8f5503e9b86d5c2710b0c76b1f686703968c9df` (2026-10-16), and its paper, Xiao, Sun, Luo and Wang, "TradingAgents: Multi-Agents LLM Financial Trading Framework", arXiv 2412.20138.
+- **License:** Apache License 2.0. Only the decision structure was adapted; no file, code or prompt was copied, so no upstream text is reproduced here.
+
+| Upstream concept | Adapted in | What was adapted |
+|---|---|---|
+| Analyst team (fundamentals, sentiment, news, technical) | `dashboard/desk.py` (`*_analyst`), `dashboard/spec.py` (`DESK_RULES`) | Four analysts, each giving a bullish, neutral or bearish view. Here each is a fixed rule over stored fields; sentiment uses SEC insider filings, FINRA short interest and an analyst target instead of social media, and news uses the latest 10-Q/10-K instead of headlines |
+| Bull and bear researchers, research manager | `dashboard/desk.py` (`assess`) | Evidence listed for each side; here the net analyst vote settles the debate in one round |
+| Trader, risk team (aggressive, neutral, conservative), portfolio manager | `dashboard/desk.py` (`trader`, `review`, `assess`) | A five-level proposal (Buy, Overweight, Hold, Underweight, Sell) reviewed by three risk profiles and settled by a manager; here as published thresholds, with no position sizing and no account data |
+| Decision log settled against a benchmark | `dashboard/tracking.py` (`track_desk`) | Stored ratings are later measured against the entry's benchmark; previews are never measured |
+
+**Changes from upstream.** TradingAgents runs language models, so two runs can differ. Here every stage is
+deterministic and reproducible from the published JSON; nothing is generated, and no probability or edge is claimed.

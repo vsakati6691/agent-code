@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const names = ['index','growth','multibaggers','ai','options','bets','watchlist','leaders',
+const names = ['index','growth','multibaggers','ai','desk','options','bets','watchlist','leaders',
   'goal','evidence','compare','history','methodology','audit'];
 
 async function reveal(page, locator) {
@@ -326,7 +326,7 @@ exports.checkMatrix=async function(browser,base,profile,out) {
         assert.ok(initial.numeric.includes('tabular-nums'));
         await page.screenshot({path:path.join(out,`${name}-${width}-${theme}.png`)});
         const nav=page.locator('nav[aria-label="Research sections"]');
-        assert.equal(await nav.locator('a').count(),14);
+        assert.equal(await nav.locator('a').count(),15);
         assert.equal(await nav.locator('[aria-current=page]').count(),1);
         assert.equal(await nav.locator('[aria-current=page]').getAttribute('href'),name==='company'?'../ai.html':name+'.html');
         assert.ok((await nav.locator('[aria-current=page]').evaluate(e=>getComputedStyle(e).textDecorationLine)).includes('underline'));

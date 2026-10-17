@@ -32,6 +32,7 @@ NAV = [
     ("growth.html", "Growth Stocks"),
     ("multibaggers.html", "Multibaggers"),
     ("ai.html", "AI stocks"),
+    ("desk.html", "Buy/Sell desk"),
     ("options.html", "Options"),
     ("bets.html", "Small bets"),
     ("watchlist.html", "Watchlist 2030"),

@@ -171,6 +171,7 @@ at expiration): {E(", ".join(probability.DATA_CONTRACT["record_fields"]))}. {E(p
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
 {site_bets.methodology()}
 <h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
+<h2 id="buy-sell-desk">Buy/Sell desk · version 2026-10-17.5</h2><p>{E(spec.DESK_RULE)}</p><p>{E(spec.DESK_TRACKING)}</p>
 {leaders_methodology()}
 <h2 id="display-rules">Data states, research panel and comparisons</h2>
 <p>These rules decide how evidence is labelled and compared. No score, gate or ranking uses them.</p>
