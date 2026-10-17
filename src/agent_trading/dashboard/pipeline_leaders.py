@@ -63,6 +63,7 @@ def retained_inputs(ctx, ref: dict) -> list[dict]:
             "ticker": ticker,
             "name": identity.get("name", ticker),
             "sector": identity.get("sector", "Unknown"),
+            "industry": identity.get("industry") if pd.notna(identity.get("industry")) else None,
             "cik": cik,
             "price": None,
             "price_date": None,
@@ -86,6 +87,7 @@ def retained_inputs(ctx, ref: dict) -> list[dict]:
                 for key in (
                     "revenue_ttm",
                     "revenue_growth_ttm",
+                    "revenue_cagr_3y",
                     "ev_to_sales",
                     "net_debt",
                     "dilution",

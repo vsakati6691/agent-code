@@ -167,13 +167,17 @@ LEADER_ENTRY = _obj(
         **{key: {"type": ["integer", "null"]} for key in ("current_rank", "rank_2030", "rank_delta")},
         **{key: {"type": ["number", "null"]} for key in ("current_market_cap_usd", "shares_outstanding")},
         "scenario_2030": _obj(
-            "USD caps and prices; each case uses its own projected shares. Curated records have only a base cap.",
+            "USD caps/prices and projected shares; implied_cagr is cap CAGR (decimal), not share-price return. Curated records have only a base cap.",
             {
                 f"{case}_{field}": {"type": ["number", "null"]}
                 for case in ("bear", "base", "bull")
-                for field in ("cap", "price", "shares")
+                for field in ("cap", "price", "shares", "implied_cagr")
             },
         ),
+        "scenario_assumptions": _obj(
+            "Per-case three-year growth basis, growth path, fade, valuation inputs, horizon, raw cap and explicit bear stress adjustment; empty if unavailable/curated."
+        ),
+        "aggressive_assumption": _f("boolean", "True when computed base cap CAGR strictly exceeds 25%/yr."),
         "growth_drivers": {"type": "array", "items": {"type": "string"}},
         "missing_inputs": {"type": "array", "items": {"type": "string"}},
         "is_scenario": {"const": True},

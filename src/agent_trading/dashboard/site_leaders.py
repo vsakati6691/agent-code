@@ -7,7 +7,7 @@ from html import escape as E
 
 from . import spec
 from .evidence import quality_level
-from .fmt import cap, money, num, ok, sval
+from .fmt import cap, money, num, ok, pct, sval
 from .site_list_common import filter_select
 from .site_research import quality_badge
 from .site_scan import pin_button
@@ -24,8 +24,9 @@ MOVEMENTS = {
 def methodology() -> str:
     return (
         f"<section><h2>How these ranks are computed and what they are not</h2><p>{E(spec.LEADERS_RULE)}</p>"
-        f"<p>{E(spec.LEADERS_SHARE_RULE)}</p><p>Scenario source: registered revenue × EV/Sales company model, "
-        f"version {E(spec.SPEC_VERSION)}, through 2030-12-31. Existing scenario math is unchanged. "
+        f"<p>{E(spec.LEADERS_SHARE_RULE)}</p><p>{E(spec.LEADERS_SCENARIO_RULES['growth_basis'])}</p>"
+        f"<p>{E(spec.LEADERS_SCENARIO_RULES['method'])}</p><p>Scenario source: Leaders model "
+        f"version {E(spec.SPEC_VERSION)}, through 2030-12-31. "
         "Growth drivers are dated reported figures and issuer excerpts. They do not establish future growth.</p></section>"
     )
 
@@ -42,8 +43,25 @@ def detail(row: dict, price_note: str = "") -> str:
     source_text = f"<p>Owner assumption source: {E(source)} · {E(row['assumption_date'])}.</p>" if source else ""
     scenario_rows = "".join(
         f"<tr><td>{case.title()}</td><td>{money(row['scenario_2030'][case + '_price'])}</td>"
-        f"<td>{num(row['scenario_2030'][case + '_shares'], 0)}</td><td>{cap(row['scenario_2030'][case + '_cap'])}</td></tr>"
+        f"<td>{num(row['scenario_2030'][case + '_shares'], 0)}</td><td>{cap(row['scenario_2030'][case + '_cap'])}</td>"
+        f"<td>{pct(row['scenario_2030'][case + '_implied_cagr'], 2) if ok(row['scenario_2030'][case + '_implied_cagr']) else '—'}</td></tr>"
         for case in ("bear", "base", "bull")
+    )
+    assumptions = []
+    for case, values in row["scenario_assumptions"].items():
+        path = " → ".join(pct(g, 1) for g in values["growth_path"])
+        assumptions.append(
+            f"<li><strong>{case.title()}</strong>: {E(values['growth_basis'])} {pct(values['observed_revenue_cagr_3y'], 1)}; "
+            f"revenue growth by year {path} (final year prorated); fade {pct(values['fade'], 0)} toward "
+            f"{pct(values['terminal_growth'], 0)}. Revenue 2030 {cap(values['revenue_2030'])}; exit EV/Sales "
+            f"{num(values['exit_ev_to_sales'], 2)}; net cash {cap(values['net_cash_held'])}; dilution "
+            f"{pct(values['annual_dilution'], 1)}/yr. Raw cap {cap(values['unconstrained_cap'])}; "
+            f"explicit bear stress reduction {cap(values['bear_stress_adjustment'])}.</li>"
+        )
+    aggressive = (
+        '<p class="warn">Base: aggressive assumption (above 25%/yr implied cap growth).</p>'
+        if row["aggressive_assumption"]
+        else ""
     )
     return (
         f'<h1>{E(row["company_name"])} · Leaders evidence</h1><p><a href="../leaders.html">Back to Leaders 2030</a></p>'
@@ -54,8 +72,14 @@ def detail(row: dict, price_note: str = "") -> str:
         f"<p>{E(row['shares_assumption'])}</p><p>Share basis: {E(row['shares_basis'] or 'not applicable')}; "
         f"{num(row['shares_outstanding'], 0)} shares, dated {E(row['shares_date'] or 'unavailable')}.</p>"
         f"{source_text}<p>{E(row['notes'])}</p><h2>Dated growth evidence</h2><ul>{drivers}</ul>"
-        '<div class="table-wrap"><table><caption>Conditional 2030 scenarios</caption><thead><tr><th>Case</th><th>Price</th><th>Projected shares</th><th>Market cap</th></tr></thead>'
+        f"<p>Current market cap: {cap(row['current_market_cap_usd'])}. Implied %/yr is market-cap CAGR, "
+        "not price return; dilution can make these differ. Curated caps without a current value have no implied rate.</p>"
+        f"{aggressive}"
+        '<div class="table-wrap"><table><caption>Conditional 2030 scenarios</caption><thead><tr><th>Case</th><th>Price</th><th>Projected shares</th><th>Market cap</th><th>Implied %/yr</th></tr></thead>'
         f"<tbody>{scenario_rows}</tbody></table></div>"
+        f"<h2>Scenario inputs and stress constraints</h2><ul>{''.join(assumptions)}</ul>"
+        "<p>Bear caps are constrained to at most 90% of today's cap; any reduction above is an explicit downside stress, "
+        "not a calibrated outcome. Registered cyclical names start with at least a 20% revenue decline.</p>"
         f"<h2>Missing inputs</h2><ul>{gaps}</ul><p>{E(row['unavailable_reason'] or '')}</p>"
     )
 
@@ -90,7 +114,12 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
                 ("Rank", ' data-sort="num"'),
                 ("Ticker / name", ' class="tk" data-sort="text"'),
                 ("Current market cap", ' class="num" data-sort="num"'),
-                ("2030 base cap (bear–bull)", ' class="num" data-sort="num"'),
+                ("2030 bear cap", ' class="num" data-sort="num"'),
+                ("Bear implied %/yr", ' class="num" data-sort="num"'),
+                ("2030 base cap", ' class="num" data-sort="num"'),
+                ("Base implied %/yr", ' class="num" data-sort="num"'),
+                ("2030 bull cap", ' class="num" data-sort="num"'),
+                ("Bull implied %/yr", ' class="num" data-sort="num"'),
                 ("2030 rank", ' data-sort="num"'),
                 ("Change", ' data-sort="num"'),
             ]
@@ -103,12 +132,26 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
         curated = row["scenario_basis"] == "curated assumption"
         path = f"leaders/{payload['as_of']}-{i}.html"
         details[path] = detail(row, price_note)
-        span = (
-            f'<div class="small muted">{cap(sc["bear_cap"])} – {cap(sc["bull_cap"])}</div>'
-            if not curated and ok(sc["base_cap"])
-            else ""
-        )
         reason = E(row["unavailable_reason"] or "No value in this stored comparison")
+        scenario_cells = []
+        for case in ("bear", "base", "bull"):
+            value, rate = sc[f"{case}_cap"], sc[f"{case}_implied_cagr"]
+            flag = (
+                '<div class="small warn">aggressive assumption</div>'
+                if case == "base" and row["aggressive_assumption"]
+                else ""
+            )
+            rate_reason = (
+                "Market-cap CAGR through 2030-12-31; excludes distributions and differs from price return"
+                if ok(rate)
+                else "No current cap for this curated assumption"
+                if curated
+                else reason
+            )
+            scenario_cells.append(
+                f'<td class="num" data-v="{sval(value)}" title="{reason if not ok(value) else "Conditional, not a prediction"}">{cap(value) if ok(value) else "—"}</td>'
+                f'<td class="num" data-v="{sval(rate)}" title="{rate_reason}">{pct(rate, 2) if ok(rate) else "—"}{flag}</td>'
+            )
         pin = pin_button(row["ticker"]) if row["ticker"] else ""
         delta = f"{row['rank_delta']:+d}" if row["rank_delta"] is not None else "—"
         out.append(
@@ -116,7 +159,7 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
             f'<td data-v="{sval(row["current_rank"])}">{num(row["current_rank"], 0) if ok(row["current_rank"]) else "—"}</td>'
             f'<td class="tk" data-v="{E(row["ticker"] or row["company_name"])}">{pin}<strong>{E(row["ticker"] or "Private / pre-IPO")}</strong><div class="small muted">{E(row["company_name"])}</div><a class="small" href="{E(path)}">Details</a></td>'
             f'<td class="num" data-v="{sval(row["current_market_cap_usd"])}" title="{reason if not ok(row["current_market_cap_usd"]) else "Dated close × diluted shares; see Details"}">{cap(row["current_market_cap_usd"]) if ok(row["current_market_cap_usd"]) else "—"}</td>'
-            f'<td class="num" data-v="{sval(sc["base_cap"])}" title="{reason if not ok(sc["base_cap"]) else "Conditional, not a prediction"}">{cap(sc["base_cap"]) if ok(sc["base_cap"]) else "—"}{span}</td>'
+            f"{''.join(scenario_cells)}"
             f'<td data-v="{sval(row["rank_2030"])}" title="{reason if not ok(row["rank_2030"]) else "Conditional base cap rank"}">{num(row["rank_2030"], 0) if ok(row["rank_2030"]) else "—"}</td>'
             f'<td data-v="{sval(row["rank_delta"])}"><span class="{color}">{delta}</span><div class="small {color}">{symbol} {E(label)}</div></td></tr>'
         )

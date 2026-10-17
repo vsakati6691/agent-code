@@ -2,12 +2,58 @@
 
 Initially registered as additive methodology `2026-10-16.1`; freeze date `2026-10-16`.
 Zero weekly snapshots existed under `2026-10-15.1` at registration. Evidence
-counts still group by exact version. Existing lists, scoring, gates, scenario
-math and tracking rules are unchanged.
+counts still group by exact version. Existing lists, scoring, gates, Watchlist
+scenario math and tracking rules are unchanged.
 
-The current rule is `2026-10-17.1` (hash `7878076b25e6eecd`): **owner requested
+The top-20 rule was registered in `2026-10-17.1` (hash `7878076b25e6eecd`): **owner requested
 a top-20 view; full S&P 500 coverage**. The former top-50 registration is retained
 verbatim in the changelog and `LEADERS_RULE_2026_10_16`. Freeze date is unchanged.
+
+The current version is **2026-10-17.2**, hash `48a72cddda547a92`, for the owner's
+scenario sanity request. It changes only the Leaders valuation assumptions and
+retains three-year CAGR and the already collected industry label prospectively.
+No extra provider calls are needed for this addition.
+
+## Scenario sanity assumptions
+
+Base starts with stored three-year revenue CAGR (TTM versus TTM three years
+earlier), or a dated matched fiscal-year three-year CAGR when the TTM metric is
+missing. One-year growth is never substituted. Missing both makes the scenario
+unavailable while retaining any dated current cap. Starting CAGR is bounded to
+-30% through +60%. All inputs must have been available by the snapshot date.
+
+Each subsequent year's growth closes 20% of the gap to the terminal rate; for
+current caps **strictly above $500B**, it closes 40%. Base and bull fade toward
+4%. Existing case multipliers/shifts apply, except bull cannot start below base.
+Bear starts at the lower of its shifted rate, base, or -5%, then fades toward 0%.
+For registered cyclical memory/storage/equipment names it starts at -20% or lower.
+The names and narrow sector/industry matches are explicit in
+`LEADERS_SCENARIO_RULES`; they reuse the AI-role taxonomy, with PSTG as P's older
+alias. A broad Technology classification alone is insufficient. The source
+industry is retained without making another request.
+
+Bear equity is the lesser of its revenue/exit-multiple valuation and **90% of
+today's cap**. This explicit downside stress constraint guarantees a bear cap
+below current even when net cash or a low-multiple floor would otherwise
+dominate. It is not a calibrated estimate. Each linked Details page and derived
+JSON retain raw equity, the stress reduction, revenue growth path, fade,
+terminal rate, exit multiple, net cash, dilution and exact horizon. These new
+assumptions were chosen for the owner's requested stress behavior, not fitted
+to backtests or holdout results.
+
+Every 2030 cap has an adjacent **implied %/yr** column:
+`(scenario cap / current cap) ** (1 / years to 2030-12-31) - 1`.
+A zero cap gives -100%. Base above 25%/yr is labelled **aggressive assumption**.
+This is market-cap CAGR, not per-share return; dilution changes the latter.
+Curated assumptions without current caps have no implied CAGR or invented bear
+case. CSV columns remain unchanged; derived JSON holds the additional fields.
+
+Plan 2030 keeps its stored Watchlist price scenarios. Its one-click “Why company
+and ETF scenarios differ (SMH, QQQ)” disclosure explains the original one-year
+company growth anchor versus the revised Leaders model and the ETF exposure
+return assumptions. It displays the stored ETF total return, fee, distribution
+yield and resulting price return. ETF values are not aggregated from the selected
+company scenarios; no holdings-weighted reconciliation is claimed.
 
 ## Weekly collection and request budget
 
@@ -73,9 +119,10 @@ This differs from the existing growth lists' cover-page-share basis; those lists
 are not changed. Each index ticker is a separate size proxy. Issuer shares are
 not allocated across share classes, so those proxies are not additive company values.
 
-The existing exact-date company formula now resides in `scenarios.py`, with the
-original public functions re-exported from `watchlist.py`. For each case, cap is
-the conditional 2030 price times that case's projected shares:
+The original Watchlist exact-date company formula resides in `scenarios.py`, with
+public functions re-exported from `watchlist.py`. Leaders now uses the separate
+registered model in `leaders_scenarios.py`. For each case, cap is the conditional
+2030 price times that case's projected shares:
 
 `shares_2030 = starting diluted shares × (1 + trailing dilution + scenario shift)^years`
 

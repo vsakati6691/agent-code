@@ -76,6 +76,39 @@ def _latest_close(asset: dict, daily: dict | None) -> str:
     return f'<div class="small muted">Latest close {money(quote["close"])} ({escape(data["as_of"])})</div>'
 
 
+def scenario_model_gap(snap: dict) -> str:
+    rows = []
+    entries = {e["ticker"]: e for e in (snap.get("watchlist") or {}).get("entries", [])}
+    for ticker in ("SMH", "QQQ"):
+        cases = entries.get(ticker, {}).get("scenarios") or {}
+        for case in ("bear", "base", "bull"):
+            a = cases.get(case, {}).get("assumptions") or {}
+            cells = "".join(
+                f"<td>{pct(a[key], 2) if finite(a.get(key)) else '—'}</td>"
+                for key in ("total_return_assumption", "assumed_fee", "assumed_distribution_yield", "price_return")
+            )
+            rows.append(f"<tr><td>{ticker}</td><td>{case.title()}</td>{cells}</tr>")
+    return (
+        '<details id="scenario-model-gap"><summary>Why company and ETF scenarios differ (SMH, QQQ)</summary>'
+        "<p>Company scenarios value one issuer's revenue at an assumed exit multiple, add net cash and divide by "
+        "projected shares. SMH and QQQ use separately registered exposure-class return assumptions, less fees and "
+        "distribution yield to produce price returns. They are not built from these individual company scenarios.</p>"
+        "<p>A selected set of high-growth companies is not an ETF portfolio: weights, other holdings, future membership, "
+        "rebalancing and distributions matter. No holdings-weighted reconciliation is stored, so a large company/ETF "
+        "gap reflects different assumptions, not evidence that the ETF is mispriced or that a company will outperform.</p>"
+        f"<p>This calculator retains Watchlist scenarios from snapshot methodology {escape(str(snap.get('spec_version') or 'not stored'))}, "
+        "including the original one-year revenue-growth anchor for company valuations. "
+        f'<a href="leaders.html">Leaders 2030</a> uses the separate {escape(spec.SPEC_VERSION)} three-year CAGR, '
+        "faster fade above $500B and bear stress constraints. It shows market-cap CAGR; this table uses per-share "
+        "price returns, which also reflect dilution. Stored prices and calculator inputs are not replaced with Leaders values.</p>"
+        '<div class="table-wrap"><table><caption>Stored ETF assumptions, annual percentages; dashes mean not stored</caption>'
+        "<thead><tr><th>ETF</th><th>Case</th><th>Exposure total return</th><th>Fee</th><th>Distribution yield</th>"
+        f"<th>Price return</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "<p>For these unleveraged exposure scenarios: price return = exposure total return − fee − distribution yield. "
+        "These are conditional assumptions, with no established probability.</p></details>"
+    )
+
+
 def _scenario_row(asset: dict, index: int, required: float | None, daily: dict | None) -> str:
     rates, prices = asset["rates"], asset["prices"]
     reason = str(asset["reason"])
@@ -162,6 +195,7 @@ Distributions, taxes, inflation and transaction costs are excluded. Cash earns 0
 <p>Contributions arrive at the end of each completed month. A fractional final month adds growth, but no extra contribution.
 Rows with stored scenarios appear first. The flag compares only the stored base price rate with the requirement including contributions;
 it does not establish feasibility or recommend a holding.</p></details>
+{scenario_model_gap(snap)}
 <fieldset><legend>Optional allocation weights</legend><p>Enter weights totalling 100%. No allocation is selected by default.
 Weights split the starting capital and every contribution; holdings compound separately without rebalancing.
 Any weighted ticker without all three stored scenarios makes the result unavailable. SPY or QQQ may lack a stored watchlist scenario.</p>
