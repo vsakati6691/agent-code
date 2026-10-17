@@ -57,9 +57,9 @@ const server = http.createServer((req, res) => {
     }
     const matrix=require('./dashboard_browser_matrix.cjs');
     checks.push(...await matrix.checkMatrix(browser,base,profile,out));
-    assert.equal(checks.length,60,'The complete 15-page × 2-size × 2-theme matrix must run');
+    assert.equal(checks.length,64,'The complete 16-page × 2-size × 2-theme matrix must run');
     const noJsMatrix=await matrix.checkNoJs(browser,base,profile,out);
-    assert.equal(noJsMatrix.length,60);
+    assert.equal(noJsMatrix.length,64);
     fs.writeFileSync(path.join(out, 'layout-results.json'), JSON.stringify(checks, null, 2));
     await page.setViewportSize({width: 1440, height: 1000});
     await page.goto(`${base}/growth.html`);

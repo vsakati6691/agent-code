@@ -120,6 +120,10 @@ def run(
             "errors); the affected stocks are listed as excluded with that reason"
         )
     ai_payload = ai_context(ctx, ai_pool, ai_rejects, roles, ladder, ai_private)
+    from . import desk
+
+    # after the external datasets, so the positioning analyst sees the stored insider and short-interest records
+    desk_payload = desk.build(payload_bands, as_of)
 
     status = "ok" if not ctx.problems and not ctx.budget_hit else "partial"
     from . import leaders
@@ -175,6 +179,7 @@ def run(
             "leaders_2030_collection": leader_collection,
             "leaders_2030": leader_payload,
             "ai": ai_payload,
+            "decision_desk": desk_payload,
             "events": {
                 "window_days": 45,
                 "items": upcoming,

@@ -92,8 +92,8 @@ snapshot, provide the appropriate ticker/company and unavailable-entry values
 in a test-only `browser-fixture.json` alongside the generated HTML.
 
 The UI script serves files on loopback and blocks external requests. Its matrix
-covers all 14 tabs and one company page at 1440 × 900 and 390 × 844, in light and
-dark themes: 60 interactive views plus 60 views without JavaScript per dataset.
+covers all 15 tabs and one company page at 1440 × 900 and 390 × 844, in light and
+dark themes: 64 interactive views plus 64 views without JavaScript per dataset.
 It checks nav links and active state, ticker navigation, every table search,
 filter option, visible sort control, pin/reset, CSV download, native disclosure
 and row evidence. It also checks initial-screen text overlap/AA contrast, page

@@ -480,6 +480,21 @@ SCHEMA = {
                 "gaps": _f("array", "Index members without sufficient stored inputs and their specific reasons."),
             },
         ),
+        "decision_desk": _obj(
+            "Optional from 2026-10-17.4: rule-based Buy/Sell desk ratings for every research-list stock "
+            "(spec.DESK_RULE). Research labels, not advice; older snapshots have none and are never backfilled.",
+            {
+                "entries": _f(
+                    "array",
+                    "One record per ticker: analysts (key, vote +1/0/-1 or null when abstaining, points, inputs, "
+                    "reason), debate (net vote, verdict, bull and bear evidence), trader proposal, risk (flags, "
+                    "unchecked, reviews by aggressive/neutral/conservative), manager (median, capped), rating "
+                    "(Buy, Overweight, Hold, Underweight, Sell or null when not rated), summary, lists and benchmark.",
+                ),
+                "counts": _f("object", "Number of stocks per rating, plus 'Not rated'."),
+                "spec_version": _f("string", "Methodology version the ratings were computed under."),
+            },
+        ),
         "events": _obj(
             "Upcoming scheduled earnings within 45 days (unverified source).",
             {

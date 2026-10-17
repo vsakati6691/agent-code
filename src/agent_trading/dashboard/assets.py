@@ -540,3 +540,19 @@ main, .grid > *, .facts > *, .mb-grid > * { min-width: 0; }
 from .assets_terminal import CSS as TERMINAL_CSS  # noqa: E402 - shared theme overrides legacy page styles.
 
 CSS += TERMINAL_CSS
+
+CSS += r"""
+/* Buy/Sell desk (2026-10-17.4): the label always carries the meaning; colour only reinforces it. */
+.desk-flow { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); counter-reset: desk; }
+.desk-flow li { counter-increment: desk; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; }
+.desk-flow li strong { display: block; } .desk-flow li strong::before { content: counter(desk) ". "; }
+.desk-counts { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.desk-counts .card { margin: 0; }
+.rating { font-weight: 650; white-space: nowrap; }
+.rating.buy, .rating.overweight { color: var(--good); }
+.rating.sell, .rating.underweight { color: var(--bad-border); }
+.rating.hold, .rating.none { color: var(--text-secondary); }
+.vote { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
+"""

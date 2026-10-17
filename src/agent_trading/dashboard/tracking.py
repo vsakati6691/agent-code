@@ -172,7 +172,51 @@ def track(snapshots: list[dict], prices: dict[str, pd.Series], as_of: date) -> d
         "Delisting returns are not available from the data sources; affected names are listed as unavailable.",
         "Friction is an assumption (bps per side), not measured execution cost.",
     ]
+    out["decision_desk"] = track_desk(snapshots, prices, as_of)
     return _finite(out)
+
+
+def track_desk(snapshots: list[dict], prices: dict[str, pd.Series], as_of: date) -> dict:
+    """Mean excess price return by Buy/Sell desk rating (spec.DESK_TRACKING). Only ratings stored in a snapshot
+    count; previews computed while building the site are never stored, so they can never enter this record."""
+    rated = [s for s in snapshots if (s.get("decision_desk") or {}).get("entries")]
+    by_rating = {}
+    for rating in reversed(spec.DESK_RATINGS):
+        by_rating[rating] = {}
+        for h, bars in spec.TRACK_HORIZONS.items():
+            excess, pending, unavailable = [], 0, 0
+            for snap in rated:
+                start = date.fromisoformat(str(snap["as_of"]))
+                for e in snap["decision_desk"]["entries"]:
+                    if e.get("rating") != rating:
+                        continue
+                    r, status = forward_return(prices.get(e["ticker"]), start, bars, as_of)
+                    b, _ = forward_return(prices.get(e.get("benchmark") or ""), start, bars, as_of)
+                    if r is not None and b is not None:
+                        excess.append(r - b)
+                    elif status == "pending":
+                        pending += 1
+                    else:
+                        unavailable += 1
+            by_rating[rating][h] = {
+                "measured": len(excess),
+                "pending": pending,
+                "unavailable": unavailable,
+                "mean_excess": float(np.mean(excess)) if excess else None,
+                "share_beating_benchmark": float(np.mean([x > 0 for x in excess])) if excess else None,
+            }
+    return {
+        "method": spec.DESK_TRACKING,
+        "snapshots_with_ratings": len(rated),
+        "first_rated": str(rated[0]["as_of"]) if rated else None,
+        "by_rating": by_rating,
+        "evidence_note": (
+            f"{len(rated)} snapshot(s) with stored ratings. No edge is claimed: at least "
+            f"{spec.MIN_SNAPSHOTS_FOR_EVIDENCE} are needed first."
+            if len(rated) < spec.MIN_SNAPSHOTS_FOR_EVIDENCE
+            else f"{len(rated)} snapshots with stored ratings; overlapping periods make these figures descriptive only."
+        ),
+    }
 
 
 def _finite(x):

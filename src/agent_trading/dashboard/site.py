@@ -20,6 +20,7 @@ from . import (
     site_basics,
     site_bets,
     site_build,
+    site_desk,
     site_evidence,
     site_goal,
     site_leaders,
@@ -212,6 +213,8 @@ def _build_site(
         "index.html",
     )
     write("ai.html", "AI stocks", ai_page(snap), "ai.html")
+    desk_payload, desk_stored = site_desk.payload_for(snap)
+    write("desk.html", "Buy/Sell desk", site_desk.desk_page(snap, tracking, desk_payload, desk_stored), "desk.html")
     write("growth.html", "Growth Stocks", growth_page(snap, daily), "growth.html")
     write("multibaggers.html", "Multibaggers", multibaggers_page(snap), "multibaggers.html")
     option_body = options_page(snap, daily, option_fragments)
@@ -266,6 +269,18 @@ def _build_site(
     (out / "leaders").mkdir()
     for rel, markup in leader_details.items():
         write(rel, "Leaders evidence", markup, "leaders.html", 1)
+    (out / "desk").mkdir()
+    for entry in desk_payload["entries"]:
+        write(
+            site_desk.trace_path(entry["ticker"]),
+            f"{entry['ticker']} · Buy/Sell desk",
+            site_desk.trace_page(entry, desk_payload, desk_stored),
+            "desk.html",
+            1,
+        )
+    (out / "downloads" / f"{snap['as_of']}_buy_sell_desk.csv").write_text(
+        site_desk.desk_csv(desk_payload), encoding="utf-8"
+    )
     (out / "downloads" / f"{snap['as_of']}_leaders_2030.csv").write_text(leaders_csv(leader_payload), encoding="utf-8")
     (out / "data" / f"{snap['as_of']}_leaders_2030.json").write_text(
         json.dumps(leader_payload, ensure_ascii=False), encoding="utf-8"

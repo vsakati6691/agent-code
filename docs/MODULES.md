@@ -56,3 +56,5 @@ and applies a dated XBRL denominator. `site_external.py` renders optional values
 and common CSV columns. `store.py` verifies immutable aggregate caches; all
 network pacing, retries and dataset subcaps stay in `http.py`. See
 [PUBLIC_DATASETS.md](PUBLIC_DATASETS.md) for source and field definitions.
+
+Buy/Sell desk (2026-10-17.4): `desk.py` holds the pure analyst, debate, trader, risk-review and manager rules over a stored candidate record; `pipeline_assemble.py` stores its output as `decision_desk` after the external datasets are attached; `tracking.track_desk` measures stored ratings only; `site_desk.py` renders `desk.html`, one trace page per stock and the CSV, and builds a labelled, untracked preview for snapshots collected before the desk existed.

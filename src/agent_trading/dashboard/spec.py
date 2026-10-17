@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-17.2"
+SPEC_VERSION = "2026-10-17.4"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -56,6 +56,10 @@ SPEC_CHANGELOG = [
     (
         "2026-10-17.2",
         "Owner requested Leaders scenario sanity: three-year growth, faster mega-cap fade, explicit bear stress and implied cap CAGR.",
+    ),
+    (
+        "2026-10-17.4",
+        "Owner-requested Buy/Sell desk: TradingAgents' five stages as fixed rules over stored fields; lists, scores and tracking unchanged.",
     ),
 ]
 
@@ -194,6 +198,72 @@ SPECULATIVE_RULES = {
     "loss_exit": -0.5,
     "exit_dte": 21,
 }
+
+# --- Buy/Sell desk (2026-10-17.4) --------------------------------------------------------------
+# The five stages of TradingAgents (arXiv 2412.20138; github.com/TauricResearch/TradingAgents): analysts, a bull
+# vs bear debate, a trader, a risk team and a portfolio manager. Here every stage is a fixed rule over fields the
+# snapshot already stores, so the same data always gives the same rating. No language model and no new source.
+DESK_RATINGS = ("Sell", "Underweight", "Hold", "Overweight", "Buy")  # worst to best
+DESK_RULES = {
+    "fundamentals": {"input": "stored fundamental quality / 100", "bullish_at_least": 60.0, "bearish_below": 40.0},
+    "technical": {
+        "min_closes": 200,
+        "sma_fast": 50,
+        "sma_slow": 200,
+        "macd": (12, 26, 9),
+        "rsi_period": 14,
+        "rsi_overbought": 70.0,
+        "rsi_oversold": 30.0,
+        "bullish_at_least": 2,
+        "bearish_at_most": -2,
+    },
+    "positioning": {
+        "insider_window": "90d",
+        "short_heavy_at_least": 0.10,
+        "target_upside_at_least": 0.15,
+        "target_downside_at_most": 0.0,
+        "bullish_at_least": 1,
+        "bearish_at_most": -1,
+    },
+    "events": {"bullish_at_least": 1, "bearish_at_most": -1},
+    "min_analysts": 3,
+    "debate": {"bull_at_least": 2, "bear_at_most": -2},
+    "trader": {"buy_at_least": 3, "overweight_at_least": 2, "underweight_at_most": -2, "sell_at_most": -3},
+    "risk": {"earnings_within_days": 10, "volatility_above": 0.60, "volatility_sessions": 252, "balance_below": 0.30},
+    # (risk flags at least, steps down): the largest matching step applies; never below Hold, never upward
+    "reviewers": {"aggressive": ((3, 1),), "neutral": ((2, 1),), "conservative": ((1, 1), (3, 2))},
+    "manager": "median of the three reviewers",
+    "low_confidence_cap": "Hold",
+}
+DESK_RULE = (
+    "Every stock on a research list is rated once (first list in registered order supplies its benchmark). "
+    "Four analysts each vote bullish (+1), neutral (0) or bearish (-1), or abstain when their inputs are missing. "
+    "Fundamentals: the stored fundamental quality score (0-100), bullish at 60 or more, bearish below 40. "
+    "Technical, from the stored 253 daily closes (needs 200): +1/-1 for the close above/below its 200-day average, "
+    "+1/-1 for the 50-day average above/below the 200-day, +1/-1 for MACD(12,26,9) above/below its signal line, "
+    "-1 when RSI(14) is above 70 and +1 when below 30; bullish at +2 or more, bearish at -2 or less. "
+    "Sentiment and positioning (filings, not social media): +1 when SEC Form 4 open-market insider purchases "
+    "exceed sales in the 90 days to the as-of date (Alpha Vantage six-month net shares when SEC data is missing; "
+    "net selling is not counted against), -1 when FINRA short interest is at least 10% of diluted shares, +1 when "
+    "the provider's analyst target is at least 15% above the price and -1 when it is at or below the price; "
+    "bullish at +1 or more, bearish at -1 or less. News and events (the latest 10-Q/10-K, no headlines): +1/-1 "
+    "for revenue growth accelerating/decelerating, operating margin improving/deteriorating and FCF margin "
+    "improving/deteriorating; bullish at +1 or more, bearish at -1 or less. Fewer than three voting analysts: "
+    "not rated. Bull and bear researchers list the bullish and bearish evidence; the net vote decides the "
+    "debate (bull at +2 or more, bear at -2 or less, otherwise balanced). Trader: net +3 or more Buy, +2 "
+    "Overweight, -2 Underweight, -3 or less Sell, otherwise Hold. Risk team flags: scheduled earnings within 10 "
+    "days (unverified date), the stored 'extended' timing flag, annualised volatility of the last 252 daily "
+    "returns above 60%, and a balance-sheet component below 0.30. Aggressive reviewer: one step down at 3+ flags; "
+    "neutral: one step at 2+; conservative: one step at 1+, two at 3+. Steps only lower Buy or Overweight and stop "
+    "at Hold. Portfolio manager: the median of the three reviews, capped at Hold when evidence confidence is low. "
+    "A rating is a rule-based research label, not advice; no probability or edge is established."
+)
+DESK_TRACKING = (
+    "Ratings stored in a weekly snapshot are tracked like the lists: price return from the as-of close over 1, 3, "
+    "6 and 12 months minus the entry's benchmark over the same sessions, before costs and dividends, averaged by "
+    "rating. Ratings computed when the site is built from an older snapshot are previews and are never tracked. "
+    "No edge is claimed before MIN_SNAPSHOTS_FOR_EVIDENCE snapshots."
+)
 
 # --- Definitions -------------------------------------------------------------------
 
@@ -1159,6 +1229,12 @@ def spec_dict() -> dict:
             "scenario": LEADERS_SCENARIO_RULES,
         },
         "decision_research": DECISION_RULES,
+        "decision_desk": {
+            "ratings": DESK_RATINGS,
+            "rules": DESK_RULES,
+            "rule": DESK_RULE,
+            "tracking": DESK_TRACKING,
+        },
         "speculative_options": SPECULATIVE_RULES,
         "bands": [asdict(b) for b in BANDS],
         "market_cap_definition": MARKET_CAP_DEFINITION,
