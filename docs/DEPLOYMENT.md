@@ -28,8 +28,11 @@ guidance](https://docs.github.com/en/pages/getting-started-with-github-pages/usi
    `data_commit` identifies the exact stored-data revision used for that build.
 3. Open the [audit page](https://vsakati6691.github.io/agent-code/audit.html#site-build)
    and check the build time, snapshot date and missing-data explanations.
-4. Smoke-check Overview, Growth Stocks, Options, Plan 2030 and Evidence, including
-   expanding a research panel and using the goal calculator.
+4. Check all 14 tabs and one company page at 1440 × 900 and 390 × 844 in both
+   themes, including ticker navigation from nested pages, downloads, disclosures
+   and readable no-JavaScript output. Use the [UI browser commands](DASHBOARD_UI.md#verification)
+   against fixture and public local builds before deployment; the [test report](ux/2026-10-17/BROWSER_TESTS.md)
+   records the full interaction checks and fixed calculator regression.
 
 The current registered methodology can be newer than the last stored snapshot.
 That is expected after a code-only deployment: immutable snapshots retain their
@@ -47,3 +50,8 @@ origin/research-data` for a new read-only preview checkout, as shown in README.
 Line-ending conversion changes hashed bytes. If a local checkout fails integrity,
 compare the exact Git blobs before treating it as a production-data failure; do
 not edit manifests or snapshots to make a check pass.
+
+Generated JavaScript/CSS can use CRLF on a Windows preview and LF on the Linux
+deployment runner. For source-parity diagnostics, compare those text assets
+after normalizing line endings. This exception applies only to generated asset
+text: snapshot, daily and manifest integrity always uses the exact stored bytes.
