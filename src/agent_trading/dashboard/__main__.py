@@ -5,6 +5,8 @@
     python -m agent_trading.dashboard verify --data research-data
     python -m agent_trading.dashboard tradability todo   --data research-data
     python -m agent_trading.dashboard tradability import --data research-data <saved MCP JSON files>
+    python -m agent_trading.dashboard earnings-calendar todo   --data research-data
+    python -m agent_trading.dashboard earnings-calendar import --data research-data <saved MCP JSON files>
 
 `run` exits 0 on success (status ok or partial), 2 when the run failed and the
 previous snapshot must stay up (status.json says why), 1 on a usage error.
@@ -23,12 +25,12 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from ..logging_setup import register_secret
-from . import spec, tracking
+from . import earnings_verdicts, spec, tracking
 from .http import FetchError, HttpClient
 from .pipeline import RunFailed, as_of_for, run
 from .providers import Providers
 from .site import build_site
-from .store import SnapshotExists, Store
+from .store import IntegrityError, SnapshotExists, Store
 from .tradability import Tradability, TradabilityError, parse_results, read_todo, write_todo
 from .watchlist import WatchlistConfig
 
@@ -164,6 +166,78 @@ def cmd_tradability(args) -> int:
     return 0
 
 
+def cmd_earnings_calendar(args) -> int:
+    """Owner step: compare scheduled (Alpha Vantage) dates with saved read-only Robinhood calendar responses."""
+    data = Path(args.data)
+    today = date.fromisoformat(args.today) if args.today else datetime.now(UTC).date()
+    verdicts = earnings_verdicts.EarningsVerdicts.load(data)
+    if args.action == "todo":
+        store = Store(data)
+        try:
+            snap = store.latest()
+        except IntegrityError:  # a CRLF checkout changes the hash; this list is read-only and CI verifies the branch
+            print(
+                "warning: the latest snapshot does not match its manifest hash (line endings?); read unverified",
+                file=sys.stderr,
+            )
+            snap = store.load(store.dates()[-1], verify=False)
+        if snap is None:
+            print("no weekly snapshot is stored, so there are no scheduled dates to check", file=sys.stderr)
+            return 1
+        summary = earnings_verdicts.attach(snap, verdicts, today)["summary"]  # in memory only; nothing is written
+        items = (snap.get("events") or {}).get("items") or []
+        print(
+            f"{snap['as_of']} snapshot, {summary['total']} scheduled date(s) as of {today}: {summary['verified']} "
+            f"verified, {summary['differs']} differ, {summary['not_listed']} not listed, {summary['unchecked']} unchecked"
+        )
+        for i in items:
+            v = earnings_verdicts.verdict_for(snap, i["ticker"], i["date"])
+            print(f"  {i['ticker']:<6} {i['date']}  {earnings_verdicts.label(v)}")
+        last = max((date.fromisoformat(i["date"]) for i in items), default=None)
+        if last is not None and last >= today:
+            print("Read-only Robinhood calls that cover these dates (save each JSON response, then import):")
+            for w in earnings_verdicts.fetch_windows(today, last):
+                print(
+                    f'  get_earnings_calendar(start_date="{w["start_date"]}", days={w["days"]}, filter="{w["filter"]}")'
+                )
+            print(f"  python -m agent_trading.dashboard earnings-calendar import --data {args.data} <files>")
+        return 0
+    if not args.files:
+        print("nothing to import: pass the saved get_earnings_calendar JSON file(s)", file=sys.stderr)
+        return 1
+    if (args.start or args.days) and len(args.files) != 1:
+        print("--start/--days describe one response; import one file at a time with them", file=sys.stderr)
+        return 1
+    checked_at = args.checked_at or today.isoformat()
+    changed, windows = 0, []
+    for f in args.files:
+        try:
+            symbols, window = earnings_verdicts.parse_calendar(
+                json.loads(Path(f).read_text(encoding="utf-8")),
+                checked_at,
+                start=args.start,
+                days=args.days,
+                calendar_filter=args.filter,
+            )
+        except (earnings_verdicts.EarningsVerdictError, ValueError, KeyError, TypeError) as exc:
+            print(f"{f}: rejected ({exc})", file=sys.stderr)
+            return 1
+        changed += verdicts.merge(symbols, window)
+        windows.append(f"{window['start']}..{window['end']}")
+    verdicts.save(data)
+    Store(data).audit(
+        "earnings_calendar_imported",
+        files=len(args.files),
+        symbols_updated=changed,
+        checked_at=checked_at,
+        windows=windows,
+    )
+    print(
+        f"{changed} symbol(s) updated; {len(verdicts.symbols)} symbol(s) and {len(verdicts.windows)} window(s) stored"
+    )
+    return 0
+
+
 def cmd_build(args) -> int:
     info = build_site(
         Path(args.data), Path(args.out), SECRET_ENV, code_commit=args.commit, data_commit=args.data_commit
@@ -235,6 +309,20 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--checked-at", default=None, help="date of the check (default today, UTC)")
     t.add_argument("files", nargs="*")
     t.set_defaults(func=cmd_tradability)
+    ec = sub.add_parser(
+        "earnings-calendar", help="Robinhood earnings-calendar verdicts for scheduled dates (read-only Claude session)"
+    )
+    ec.add_argument("action", choices=["todo", "import"])
+    ec.add_argument("--data", required=True)
+    ec.add_argument("--today", default=None, help="comparison date (default today, UTC)")
+    ec.add_argument("--checked-at", default=None, help="date of the calendar check (default today, UTC)")
+    ec.add_argument("--start", default=None, help="start_date of the saved call (with --days; one file at a time)")
+    ec.add_argument("--days", type=int, default=None, help="days of the saved call (positive = forward window)")
+    ec.add_argument(
+        "--filter", default=earnings_verdicts.DEFAULT_FILTER, help="the call's filter: high_market_cap (default) or all"
+    )
+    ec.add_argument("files", nargs="*")
+    ec.set_defaults(func=cmd_earnings_calendar)
     v = sub.add_parser("verify", help="check every snapshot against its manifest hash")
     v.add_argument("--data", required=True)
     v.set_defaults(func=cmd_verify)

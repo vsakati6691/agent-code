@@ -201,6 +201,23 @@ def datasets(snap: dict) -> list[dict]:
         )
     )
 
+    from .earnings_verdicts import BUILD_KEY, dataset_state
+
+    bc = snap.get(BUILD_KEY)
+    if bc:  # attached by the site build from the owner's stored Robinhood calendar check (display only)
+        b_state, b_detail, b_cov = dataset_state(bc)
+        out.append(
+            record(
+                "Broker earnings calendar",
+                bc.get("source", "Robinhood MCP get_earnings_calendar (read-only)"),
+                b_state,
+                b_detail,
+                b_cov,
+                as_of,
+                bc.get("newest_check"),
+            )
+        )
+
     w = snap.get("watchlist") or {}
     if w.get("entries"):
         listed = [e for e in w["entries"] if e.get("status") == "listed"]

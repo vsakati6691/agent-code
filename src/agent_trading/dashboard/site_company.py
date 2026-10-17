@@ -209,7 +209,7 @@ score {num(c["composite"], 1)} / 100 · confidence <span class="pill {E(c["confi
 <div class="card stat"><div class="label">Market cap</div><div class="value">{cap(c["market_cap"])}</div>
 <div class="small muted">{E(spec.MARKET_CAP_DEFINITION[:90])}…</div></div>
 <div class="card stat"><div class="label">Earnings dates</div><div class="value">{E(earn or "unknown")}</div>
-<div class="small muted">next: scheduled, Alpha Vantage, unverified</div>{_earnings_check(c)}</div>
+<div class="small muted">{E(_next_status(c, snap))}</div>{_earnings_check(c, snap)}</div>
 <div class="card stat"><div class="label">Data timestamp</div><div class="value small">{E(str(c["data_timestamp"]).replace("+00:00", ""))} UTC</div>
 <div class="small muted">fundamentals: {E(fund.get("last_form") or "?")} filed {E(fund.get("last_filed") or "?")}</div></div></div>
 <p class="small">Flags: {flags}</p>
@@ -251,12 +251,23 @@ facts filed on or before {E(snap["as_of"])} only.</p>
 <h2>What would invalidate the thesis</h2><ul class="tight">{"".join(f"<li>{E(r)}</li>" for r in c["invalidation"])}</ul>"""
 
 
-def _earnings_check(c: dict) -> str:
+def _next_status(c: dict, snap: dict | None) -> str:
+    from .earnings_verdicts import label, verdict_for
+
+    if not c.get("next_earnings"):
+        return "next: no scheduled date from the data source"
+    return f"next: scheduled, Alpha Vantage, {label(verdict_for(snap, c.get('ticker', ''), c['next_earnings']))}"
+
+
+def _earnings_check(c: dict, snap: dict | None = None) -> str:
     from .earnings_cadence import display as cadence_display
+    from .earnings_cadence import schedule_note
+    from .earnings_verdicts import verdict_for
 
     ec = c.get("earnings_check") or {}
     if ec.get("last_results"):
-        tail = f" · {E(cadence_display(ec))}" if ec.get("cadence_check") else ""
+        note = schedule_note(verdict_for(snap, c.get("ticker", ""), c.get("next_earnings")))
+        tail = f" · {E(cadence_display(ec, note))}" if ec.get("cadence_check") else ""
         return f'<div class="small">last results {E(ec["last_results"])}: <strong>verified (8-K)</strong>{tail}</div>'
     if ec.get("last_results_status"):
         return f'<div class="small muted">{E(ec["last_results_status"])}</div>'

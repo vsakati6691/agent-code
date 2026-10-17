@@ -50,7 +50,7 @@ def verdict_from_result(r: dict) -> tuple[bool, str]:
 
 def parse_results(raw: dict, checked_at: str) -> dict[str, dict]:
     """Verdicts from one saved get_equity_tradability response (results + not_found)."""
-    if _has_account_keys(raw):
+    if has_account_keys(raw):
         raise TradabilityError("payload contains account fields; save only the tool's `data` results")
     data = raw.get("data", raw)
     if not isinstance(data, dict) or "results" not in data:
@@ -64,11 +64,11 @@ def parse_results(raw: dict, checked_at: str) -> dict[str, dict]:
     return out
 
 
-def _has_account_keys(obj) -> bool:
+def has_account_keys(obj) -> bool:
     if isinstance(obj, dict):
-        return any(str(k).lower() in ACCOUNT_KEYS for k in obj) or any(_has_account_keys(v) for v in obj.values())
+        return any(str(k).lower() in ACCOUNT_KEYS for k in obj) or any(has_account_keys(v) for v in obj.values())
     if isinstance(obj, list):
-        return any(_has_account_keys(v) for v in obj)
+        return any(has_account_keys(v) for v in obj)
     return False
 
 

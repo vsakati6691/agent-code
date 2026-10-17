@@ -206,13 +206,23 @@ def events(c: dict, as_of: str, snap: dict | None = None) -> list[dict]:
     lookup_ok = snap is None or evidence_mod.earnings_state(snap)[0] == "available"
     ec = c.get("earnings_check") or {}
     if c.get("next_earnings"):
+        from .earnings_cadence import BROKER_NOTE
+        from .earnings_cadence import display as cadence_display
+        from .earnings_verdicts import label, verdict_for
+
+        v = verdict_for(snap, c.get("ticker", ""), c["next_earnings"])
+        agreed = v is not None and v["status"] == "verified"
+        cadence = (
+            cadence_display(ec, BROKER_NOTE) if agreed and ec.get("cadence_check") else (ec.get("cadence_check") or "")
+        )
+        notes = ([] if v is None or agreed else [label(v)]) + [cadence]
         out.append(
             {
                 "date": c["next_earnings"],
                 "event": "Earnings report (scheduled)",
-                "status": "unverified",
-                "source": "Alpha Vantage earnings calendar",
-                "note": ec.get("cadence_check") or "",
+                "status": "verified (broker calendar)" if agreed else "unverified",
+                "source": "Alpha Vantage earnings calendar" + (" + Robinhood calendar (read-only)" if agreed else ""),
+                "note": "; ".join(n for n in notes if n),
             }
         )
     else:
