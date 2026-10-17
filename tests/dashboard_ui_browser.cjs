@@ -15,8 +15,6 @@ const profile = fs.existsSync(profilePath) ? JSON.parse(fs.readFileSync(profileP
 };
 const out = path.resolve(process.argv[3] || 'reports/dashboard-ui');
 fs.mkdirSync(out, {recursive: true});
-const pages = ['index', 'growth', 'multibaggers', 'ai', 'options', 'bets', 'watchlist', 'leaders',
-  'goal', 'evidence', 'compare', 'history', 'methodology', 'audit'];
 const server = http.createServer((req, res) => {
   let file;
   try { file = path.resolve(root, '.' + decodeURIComponent(req.url.split('?')[0])); }
@@ -51,30 +49,17 @@ const server = http.createServer((req, res) => {
     });
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
-    for (const width of [390, 768, 1440]) {
-      for (const theme of ['light', 'dark']) {
-        await page.setViewportSize({width, height: 1000});
-        await page.emulateMedia({colorScheme: theme, reducedMotion: 'reduce'});
-        for (const name of pages) {
-          await page.goto(`${base}/${name}.html`);
-          await page.waitForLoadState('networkidle');
-          const dimensions = await page.evaluate(() => ({
-            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-            cls: window.__layoutShift,
-            shifts: window.__shiftSources,
-            numeric: getComputedStyle(document.body).fontVariantNumeric
-          }));
-          checks.push({name, width, theme, ...dimensions});
-          assert.ok(dimensions.overflow <= 1, `${name} ${width} ${theme}: page overflow ${dimensions.overflow}px`);
-          assert.ok(dimensions.numeric.includes('tabular-nums'));
-          if ((name === 'index' && width === 1440) || (name === 'watchlist' && width === 390) ||
-              (name === 'ai' && [390, 1440].includes(width))) {
-            await page.screenshot({path: path.join(out, `${name}-${width}-${theme}.png`)});
-          }
-        }
-        console.log(`Checked ${width}px ${theme}`);
-      }
+    if(process.env.DASHBOARD_AI_ONLY==='1') {
+      const ai=await require('./dashboard_ai_browser.cjs').checkAiPage(page,base,profile);
+      assert.deepEqual(errors,[]);
+      fs.writeFileSync(path.join(out,'ai-results.json'),JSON.stringify({ai,errors},null,2));
+      console.log(JSON.stringify({ai,errors}));return;
     }
+    const matrix=require('./dashboard_browser_matrix.cjs');
+    checks.push(...await matrix.checkMatrix(browser,base,profile,out));
+    assert.equal(checks.length,60,'The complete 15-page × 2-size × 2-theme matrix must run');
+    const noJsMatrix=await matrix.checkNoJs(browser,base,profile,out);
+    assert.equal(noJsMatrix.length,60);
     fs.writeFileSync(path.join(out, 'layout-results.json'), JSON.stringify(checks, null, 2));
     await page.setViewportSize({width: 1440, height: 1000});
     await page.goto(`${base}/growth.html`);
@@ -157,10 +142,15 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('html').getAttribute('data-theme'), chosen);
     await page.goto(`${base}/index.html`);
     assert.equal(await page.locator('.daily-status.warn').count(), 1);
-    assert.equal(await page.locator('.refresh-missing').getAttribute('open'), null);
-    await page.locator('.refresh-missing summary').click();
+    assert.equal(await page.locator('.empty-data', {hasText:'Macro data not collected this week'}).count(),1);
+    const refreshLink=page.locator('.daily-status a').first();
+    for(const detail of await refreshLink.locator('xpath=ancestor::details').all()) {
+      if(!await detail.evaluate(e=>e.open)) await detail.locator(':scope > summary').click();
+    }
+    await refreshLink.click();
+    assert.equal(new URL(page.url()).pathname,'/audit.html');
+    assert.equal(await page.locator('.refresh-missing').getAttribute('open'), '');
     assert.ok((await page.locator('.refresh-missing').innerText()).includes(`${profile.dailyMissingTicker}: stale chain`));
-    assert.equal(await page.locator('.data-notice', {hasText: 'Macro inputs unavailable'}).count(), 1);
     await page.emulateMedia({reducedMotion: 'reduce'});
     await page.keyboard.press('Control+k');
     assert.equal(await page.locator('#ticker-command').evaluate(e => getComputedStyle(e).animationName), 'none');
@@ -179,10 +169,10 @@ const server = http.createServer((req, res) => {
     await nojs.close();
     const ai = await require('./dashboard_ai_browser.cjs').checkAiPage(page, base, profile);
     assert.deepEqual(errors, []);
-    const result = {checks, errors, sticky, ai, maxLayoutShift: Math.max(...checks.map(c => c.cls)),
-      interactions: 'palette, nested navigation, empty search, Escape/focus, sticky axes, sorting, 503 retry, partial data, theme, reduced motion, print, no JavaScript'};
+    const result = {checks, noJsMatrix, errors, sticky, ai,
+      interactions: 'Full page/control matrix, CSVs, disclosures, contrast/overlap, fixed Plan regression, palette, nested navigation, empty search, Escape/focus, sticky axes, sorting, injected 503/invalid-response retry, partial data, theme, reduced motion, print, no JavaScript'};
     fs.writeFileSync(path.join(out, 'browser-results.json'), JSON.stringify(result, null, 2));
-    console.log(JSON.stringify({pagesChecked: checks.length, maxLayoutShift: result.maxLayoutShift, errors, sticky}));
+    console.log(JSON.stringify({pagesChecked: checks.length,noJsPagesChecked:noJsMatrix.length,errors,sticky}));
   } finally {
     await browser.close();
     server.close();

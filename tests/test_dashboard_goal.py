@@ -27,6 +27,16 @@ def test_required_rate_and_contribution_timing():
     assert required_rate(10000, 50, 100, 1) is None
 
 
+def test_fixed_plan_regression_values_from_before_the_layout_change():
+    # Literal reference results, rather than deriving expected values with the function under test.
+    rates = {"AAA": {"bear": -0.1, "base": 0.1, "bull": 0.2}, "Cash": {k: 0 for k in ("bear", "base", "bull")}}
+    assert required_rate(10000, 20000, 100, 4) == pytest.approx(0.09276041407446212)
+    assert weighted_endings(10000, 100, 4, {"AAA": 0.5, "Cash": 0.5}, rates)["values"] == pytest.approx(
+        {"bear": 12647.528742083454, "base": 17630.531520875807, "bull": 21274.32636190405}
+    )
+    assert stressed_ending(10000, 100, 4, 0.1, 0.4) == pytest.approx(13095.237618659308)
+
+
 @pytest.mark.parametrize(
     "args",
     [(0, 100, 0, 4), (100, 0, 0, 4), (100, 200, -1, 4), (100, 200, 0, 0), (100, 200, 0, 101), (math.nan, 200, 0, 4)],
