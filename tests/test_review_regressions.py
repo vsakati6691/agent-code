@@ -51,6 +51,7 @@ def snap(total=1000.0, cash=1000.0, positions=(), orders=(), fetched=NOW - timed
         list(positions),
         list(orders),
         0.0,
+        collections_complete=True,
     )
 
 

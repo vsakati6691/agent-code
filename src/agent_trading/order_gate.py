@@ -29,7 +29,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from .account import AccountSnapshot, verify_snapshot
-from .config import LEVERAGED_INVERSE_ETFS, AccountLimitsConfig, Settings
+from .config import LEVERAGED_INVERSE_ETFS, AccountLimitsConfig, ConfigError, Settings, validate
 from .killswitch import status as kill_switch_status
 from .market_calendar import is_trading_day
 from .risk import TradingStatus
@@ -101,6 +101,10 @@ def _global_blockers(
 ) -> list[str]:
     al = settings.account_limits
     out = []
+    try:
+        validate(settings)
+    except ConfigError:
+        return ["invalid safety configuration"]
     if not settings.live.enabled:
         out.append("live tickets are disabled (live.enabled: false)")
     ks = kill_switch_status(settings)
@@ -114,7 +118,9 @@ def _global_blockers(
     if snap is None:
         out.append("no account snapshot")
         return out
-    out += verify_snapshot(snap, settings, now)
+    problems = verify_snapshot(snap, settings, now)
+    if problems:
+        return out + problems
     age_h = (now - snap.fetched).total_seconds() / 3600
     if age_h > al.ticket_snapshot_max_age_hours:
         out.append(f"account snapshot is {age_h:.1f} h old (tickets need < {al.ticket_snapshot_max_age_hours:g} h)")
@@ -160,6 +166,8 @@ def check_tickets(
     invested, _ = positions_value(snap, bars, as_of)
     if status is None:
         res.buy_blockers.append("live loss-limit status unknown")
+    elif not all(math.isfinite(v) for v in (status.peak_equity, status.drawdown, status.day_pnl)):
+        res.buy_blockers.append("live loss-limit status is non-finite")
     else:
         if not status.new_entries_allowed:
             res.buy_blockers.append(status.reason)
@@ -182,6 +190,18 @@ def check_tickets(
         res.buy_blockers.append("an open buy order exists at the broker; reconcile it before new buys")
 
     allowed = {s.upper() for s in al.live_allowed_symbols}
+    valid_tickets = []
+    for t in tickets:
+        reason = _ticket_value_problem(t)
+        if reason:
+            res.rejected.append((t, reason))
+        else:
+            valid_tickets.append(t)
+    tickets = valid_tickets
+    if any(_ticket_value_problem(t) for t in issued_today):
+        res.blockers.append("invalid previously issued ticket; reconcile before issuing more")
+        res.rejected.extend((t, res.blockers[-1]) for t in tickets)
+        return res
     ticketed = {(t.symbol.upper(), t.side) for t in issued_today}
     selling: set[str] = set()
     for t in [t for t in tickets if t.side == "sell"]:
@@ -229,6 +249,18 @@ def check_tickets(
         bought += t.notional
         entries += 1
     return res
+
+
+def _ticket_value_problem(ticket) -> str | None:
+    if ticket.side not in {"buy", "sell"}:
+        return "invalid ticket side"
+    for name in ("quantity", "limit_price"):
+        value = getattr(ticket, name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            return f"invalid {name}: must be finite and positive"
+    if not math.isfinite(ticket.quantity * ticket.limit_price):
+        return "invalid ticket notional"
+    return None
 
 
 def _buy_reason(
