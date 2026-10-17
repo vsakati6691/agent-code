@@ -10,6 +10,7 @@ from . import spec
 from .pipeline_collect import build_reference
 from .pipeline_context import MIN_SP500_COVERAGE, Context, RunFailed, as_of_for
 from .pipeline_details import _clean
+from .pipeline_leaders import collect_inputs, retained_inputs
 from .pipeline_phases import (
     ai_context,
     collect_benchmarks,
@@ -63,6 +64,7 @@ def run(
     payload_bands, ai_pool, ai_rejects, roles, ladder = score_bands(
         ctx, ref, sp, sec, sp_list, prelim, bench, previous, trad, todo, earnings
     )
+    leader_collection = collect_inputs(ctx, ref)
 
     sp_ok = sum(1 for t, *_ in sp_list if ctx.histories.get(t, (None,))[0] is not None)
     coverage = sp_ok / max(1, len(sp_list))
@@ -121,7 +123,6 @@ def run(
 
     status = "ok" if not ctx.problems and not ctx.budget_hit else "partial"
     from . import leaders
-    from .pipeline_leaders import retained_inputs
 
     leader_inputs = retained_inputs(ctx, ref)
     leader_payload = leaders.build(
@@ -171,6 +172,7 @@ def run(
             "speculative": speculative_payload,
             "watchlist": _clean(watch_payload),
             "leaders_2030_inputs": leader_inputs,
+            "leaders_2030_collection": leader_collection,
             "leaders_2030": leader_payload,
             "ai": ai_payload,
             "events": {

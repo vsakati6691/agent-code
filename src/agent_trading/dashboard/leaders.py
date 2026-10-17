@@ -227,9 +227,9 @@ def movement(current: int | None, future: int | None, curated: bool = False) -> 
         return "curated_challenger"
     if future is None:
         return "unavailable"
-    if current is not None and current <= 50:
-        return "stays_in_top_50" if future <= 50 else "drops_out_of_top_50"
-    return "rises_into_top_50" if future <= 50 else "unavailable"
+    if current is not None and current <= spec.LEADERS_TOP_N:
+        return "stays_in_top_20" if future <= spec.LEADERS_TOP_N else "drops_out_of_top_20"
+    return "rises_into_top_20" if future <= spec.LEADERS_TOP_N else "unavailable"
 
 
 def build(snap: dict, challengers: list[dict]) -> dict:
@@ -278,7 +278,11 @@ def build(snap: dict, challengers: list[dict]) -> dict:
     for row in rows:
         curated = row["scenario_basis"] == "curated assumption"
         row["movement"] = movement(row["current_rank"], row["rank_2030"], curated)
-        if curated or (row["current_rank"] or 999999) <= 50 or (row["rank_2030"] or 999999) <= 50:
+        if (
+            curated
+            or (row["current_rank"] or 999999) <= spec.LEADERS_TOP_N
+            or (row["rank_2030"] or 999999) <= spec.LEADERS_TOP_N
+        ):
             candidates.append(row)
         elif row["unavailable_reason"]:
             gaps.append({"ticker": row["ticker"], "reason": row["unavailable_reason"]})
@@ -298,4 +302,5 @@ def build(snap: dict, challengers: list[dict]) -> dict:
         "snapshot_methodology_version": snap.get("spec_version"),
         "snapshot_id": snap.get("snapshot_id") or snap["as_of"],
         "registered_challengers": len(challengers),
+        "top_n": spec.LEADERS_TOP_N,
     }

@@ -10,7 +10,7 @@ import pytest
 
 from agent_trading.dashboard import leaders, scenarios, spec, watchlist
 from agent_trading.dashboard.pipeline_context import Context
-from agent_trading.dashboard.pipeline_leaders import retained_inputs
+from agent_trading.dashboard.pipeline_leaders import collect_inputs, retained_inputs
 from agent_trading.dashboard.schema import LEADER_ENTRY
 from agent_trading.dashboard.site import build_site
 from agent_trading.dashboard.site_downloads import leaders_csv, watchlist_csv
@@ -129,29 +129,31 @@ def test_model_is_the_existing_function_and_cap_uses_matching_projected_shares()
 
 
 def test_ties_candidate_union_and_curated_displacement():
-    rows = [company(f"T{i:03}", 100, 0.1) for i in range(52)]
+    rows = [company(f"T{i:03}", 100, 0.1) for i in range(22)]
     snap = snapshot(list(reversed(rows)))
     result = leaders.build(snap, [challenger()])
     indexed = {r["ticker"]: r for r in result["entries"]}
     assert indexed["T000"]["current_rank"] == 1
     assert indexed["T000"]["rank_2030"] == 2
-    assert indexed["T049"]["movement"] == "drops_out_of_top_50"
-    assert "T050" not in indexed
+    assert indexed["T019"]["movement"] == "drops_out_of_top_20"
+    assert "T020" not in indexed
+    assert len(indexed) == 21  # current top 20 plus the curated challenger
     assert indexed[None]["rank_2030"] == 1
     assert indexed[None]["evidence_grade"] == "none"
     assert indexed[None]["scenario_2030"]["base_price"] is None
     assert indexed[None]["scenario_basis"] == "curated assumption"
     rows[-1]["metrics"]["revenue_growth_ttm"] = 0.6
     rising = leaders.build(snapshot(rows), [])
-    assert next(r for r in rising["entries"] if r["ticker"] == "T051")["movement"] == "rises_into_top_50"
+    assert next(r for r in rising["entries"] if r["ticker"] == "T021")["movement"] == "rises_into_top_20"
+    assert len(rising["entries"]) == 21
 
 
 @pytest.mark.parametrize(
     "current,future,curated,want",
     [
-        (1, 50, False, "stays_in_top_50"),
-        (50, 51, False, "drops_out_of_top_50"),
-        (51, 50, False, "rises_into_top_50"),
+        (1, 20, False, "stays_in_top_20"),
+        (20, 21, False, "drops_out_of_top_20"),
+        (21, 20, False, "rises_into_top_20"),
         (1, None, False, "unavailable"),
         (None, 100, True, "curated_challenger"),
     ],
@@ -186,8 +188,9 @@ def test_missing_inputs_are_not_guessed_and_future_assumptions_are_omitted():
     assert result["omitted_challengers"]
     text = leaders_page(result, {})
     assert "future weekly collection must retain the missing inputs" in text
-    assert text.count("<tr data-ticker=") == 0
-    assert "trailing dilution unavailable" in text
+    assert text.count("<tr data-ticker=") == 1  # preserve the known current cap even without a scenario
+    assert "trailing dilution unavailable" in text  # tooltip; full evidence is one click away
+    assert "Ranks among 1 of 2 members with data" in text
 
 
 def test_growth_drivers_are_dated_stored_evidence():
@@ -311,9 +314,9 @@ def test_build_smoke_old_snapshot_immutability_and_page_budgets(tmp_path):
 def test_full_candidate_union_fits_budget_and_no_data_config_is_validated(tmp_path, monkeypatch):
     from agent_trading.dashboard.site_layout import page
 
-    rows = [company(f"T{i:03}", 1000 - i, -0.3 if i < 50 else 0.6) for i in range(100)]
+    rows = [company(f"T{i:03}", 1000 - i, -0.3 if i < 20 else 0.6) for i in range(40)]
     result = leaders.build(snapshot(rows), [])
-    assert len(result["entries"]) == 100
+    assert len(result["entries"]) == 40
     markup = page("Leaders", leaders_page(result, {}), "leaders.html")
     assert len(markup.encode()) < 150_000
 
@@ -323,3 +326,81 @@ def test_full_candidate_union_fits_budget_and_no_data_config_is_validated(tmp_pa
     monkeypatch.setattr(leaders, "load_challengers", invalid)
     with pytest.raises(ValueError, match="missing source"):
         build_site(tmp_path / "data", tmp_path / "site")
+
+
+def test_twenty_rows_and_compact_columns_with_complete_data():
+    rows = [company(f"T{i:03}", 1000 - i) for i in range(25)]
+    original = snapshot(rows)
+    saved = copy.deepcopy(original)
+    result = leaders.build(original, [])
+    assert len(result["entries"]) == 20
+    assert [r["current_rank"] for r in result["entries"]] == list(range(1, 21))
+    assert result["current_cap_count"] == result["computed_count"] == 25
+    details = {}
+    markup = leaders_page(result, details)
+    assert markup.count("<tr data-ticker=") == 20
+    assert markup.count("<th ") == 6
+    assert "Ranks among" not in markup and "2030 base cap (bear–bull)" in markup
+    assert len(details) == 20 and all("Price date:" in page and "Share basis:" in page for page in details.values())
+    assert original == saved and result["snapshot_methodology_version"] == "2026-10-14.9"
+    assert result["methodology_version"] == spec.SPEC_VERSION
+
+
+def test_index_completion_ignores_research_gates_reuses_failures_and_records_usage():
+    from collections import Counter
+
+    from agent_trading.dashboard.pipeline_collect import _facts, latest_bars
+    from tests.dashboard_fixtures import AS_OF
+
+    p = FakeProviders()
+    p.add("LIQUID", 1)
+    p.add("ILLIQUID", 2, volume=1)
+    p.add("NOHISTORY", 3)
+    p.add("NOFACTS", 4)
+    p.fail.update({"history:NOHISTORY", "facts:4"})
+    ctx = Context(AS_OF, p)
+    ref = {"sp500": p.sp500(), "sec": p.sec_tickers()}
+    # The normal list screen already fetched one company and cached two failures.
+    latest_bars(ctx, "LIQUID")
+    _facts(ctx, 1)
+    latest_bars(ctx, "NOHISTORY")
+    _facts(ctx, 4)
+    p.http.usage = lambda: {
+        "requests": {
+            "sec": sum(c.startswith("facts:") for c in p.calls),
+            "cboe": sum(c.startswith("history:") for c in p.calls),
+        }
+    }
+    result = collect_inputs(ctx, ref)
+    assert result["members_requested"] == result["universe_count"] == 4
+    assert result["additional_requests"] == {"sec": 2, "cboe": 2}
+    counts = Counter(p.calls)
+    assert all(counts[f"facts:{i}"] == 1 for i in range(1, 5))
+    assert all(counts[f"history:{t}"] == 1 for t in ref["sp500"].index)
+    retained = {r["ticker"]: r for r in retained_inputs(ctx, ref)}
+    assert retained["ILLIQUID"]["fundamentals"]["diluted_shares"] and retained["ILLIQUID"]["metrics"]
+    assert retained["NOHISTORY"]["price"] is None and "503" in retained["NOHISTORY"]["unavailable_reason"]
+    assert "503" in retained["NOFACTS"]["unavailable_reason"]
+    assert collect_inputs(ctx, ref)["additional_requests"] == {"sec": 0, "cboe": 0}
+
+
+def test_index_completion_budget_limit_cik_fallback_and_invalid_prices_stay_missing():
+    from agent_trading.dashboard.pipeline_collect import latest_bars
+    from tests.dashboard_fixtures import AS_OF
+
+    p = FakeProviders()
+    for i in range(3):
+        p.add(f"T{i}", i + 1)
+    ctx = Context(AS_OF, p, limit=2)
+    ref = {"sp500": p.sp500(), "sec": p.sec_tickers()}
+    ref["sp500"].loc["T0", "cik"] = float("nan")
+    p.bars["T0"].iloc[-1, p.bars["T0"].columns.get_loc("close")] = -1
+    latest_bars(ctx, "T0")
+    ctx.budget_hit.add("sec")
+    result = collect_inputs(ctx, ref)
+    assert result["limited"] and result["members_requested"] == 2
+    assert not any(c.startswith("facts:") for c in p.calls)
+    records = {r["ticker"]: r for r in retained_inputs(ctx, ref)}
+    assert records["T0"]["cik"] == 1 and records["T0"]["price"] is None
+    assert "budget spent" in records["T0"]["unavailable_reason"]
+    assert records["T2"]["price"] is None and "history:T2" not in p.calls

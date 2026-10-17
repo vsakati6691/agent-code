@@ -1,9 +1,61 @@
 # Leaders 2030
 
-Registered as additive methodology `2026-10-16.1`; freeze date `2026-10-16`.
+Initially registered as additive methodology `2026-10-16.1`; freeze date `2026-10-16`.
 Zero weekly snapshots existed under `2026-10-15.1` at registration. Evidence
 counts still group by exact version. Existing lists, scoring, gates, scenario
 math and tracking rules are unchanged.
+
+The current rule is `2026-10-17.1` (hash `7878076b25e6eecd`): **owner requested
+a top-20 view; full S&P 500 coverage**. The former top-50 registration is retained
+verbatim in the changelog and `LEADERS_RULE_2026_10_16`. Freeze date is unchanged.
+
+## Weekly collection and request budget
+
+The public 2026-10-15 snapshot has 503 members, 10 dated caps and no retained
+full-universe input array. The current collector already attempts each member's
+price during S&P screening, but skips SEC facts when price/liquidity gates fail.
+The old snapshot's 493 missing rendered rows therefore do **not** establish
+that a current run needs 493 additional price requests.
+
+From this version, a completion phase after list screening attempts as-of history
+and company facts for every member, reusing both successful and failed lookups.
+It does not require a research score or tradability verdict. Missing CIKs use the
+existing SEC ticker mapping when available, otherwise remain missing. Only the
+existing short-history fallback is allowed; invalid/stale OHLCV remains rejected.
+The same point-in-time SEC builder supplies diluted shares and every existing
+scenario input. Retention itself remains a pure operation. A development
+`--limit` still limits collection and cannot imply complete coverage.
+
+For 503 members, the normal incremental upper bound is **503 SEC company-facts
+fetches**, fewer when facts were already fetched or CIKs are shared. Normal
+history requests add zero because S&P screening already attempted them; the
+short-history fallback reuses the HTTP response cache. Members skipped for a
+missing CIK can additionally need a history fetch (and the existing quote lookup
+if history is stale). Failures are memoized; there is no new retry loop.
+
+Unchanged limits: SEC 6,000 attempts total, core 4,000; Cboe 7,000. The 503-facts
+increment alone uses 12.6% of the core cap (up to 1,509 attempts at three attempts
+per fetch). It shares remaining capacity with the rest of the run; it is not a
+reservation or a guarantee of full data. SEC pacing stays 0.15 seconds, with the
+existing `SEC_USER_AGENT` header supplied through `HttpClient`. No extra Alpha
+Vantage calls or new paid data source is used. Exhausted budgets stay exhausted.
+
+Planning runtime: zero when all inputs are cached; at 0.5–2 seconds of fetch and
+parse time per missing facts file, 503 files add roughly **4–17 minutes**. Pacing
+alone has a 75-second floor for uncached requests; retries, transfer sizes and
+provider outages can take longer. This is an estimate, not a production timing.
+The workflow's existing 240-minute timeout is unchanged. Actual additional
+attempts are recorded by provider in `leaders_2030_collection.additional_requests`
+and total attempts remain in `usage`; cache hits consume no request budget.
+
+New data arrives only in the next weekly snapshot. After reviewing/merging the
+new registration, the owner can open **Actions → research-dashboard → Run
+workflow**, select **main**, leave the as-of date blank for the latest completed
+session, and run `research-dashboard.yml` with `dry_run` false for publication.
+Use a new, not-yet-recorded session; an existing snapshot is never overwritten.
+The existing publication variable and SEC identification secret must already be
+configured. `dry_run` true creates a scratch artifact only. No production run
+was dispatched to validate this change.
 
 ## Data and shares
 
@@ -38,17 +90,18 @@ growth evidence. Absent business excerpts never trigger new SEC requests.
 Ranks sort by cap descending, then ticker and company name ascending (null
 tickers first), assigning consecutive ranks. Current ranks cover available S&P
 500 records. Conditional ranks cover all computable members plus eligible curated
-assumptions. Display the union of current top 50, conditional top 50 and all
+assumptions. Display the union of current top 20, conditional top 20 and all
 curated challengers. Rank change is current rank minus conditional rank.
 Unavailable scenarios retain their current rank and visible reason.
 
 Partial coverage is prominent: these are ranks among available stored records,
 and missing members could change every rank or movement. The page does not claim
-full-index top-50 membership when coverage is partial. Missing members are grouped
+full-index top-20 membership when coverage is partial. Missing members are grouped
 by specific reason in an expandable, server-rendered coverage section and recorded
 in the derived JSON. If no company scenario is computable, one sentence at the top
 explains that future weekly collection must retain the missing inputs. No fictitious
-50-row list is generated. The core table and linked evidence pages work without JS;
+20-row list is generated. Known current caps remain visible even when no scenarios
+can be computed. The core table and linked evidence pages work without JS;
 sorting, filters and device-local pins enhance them. Detailed evidence has separate
 HTML pages so the main comparison remains under 150,000 UTF-8 bytes.
 

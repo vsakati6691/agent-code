@@ -4,9 +4,9 @@ from agent_trading.dashboard import spec
 
 
 def test_registered_spec_hash_is_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-16.2"
+    assert spec.SPEC_VERSION == "2026-10-17.1"
     assert spec.SPEC_FREEZE_DATE == "2026-10-16"
-    assert spec.spec_hash() == "ed13539391c855db"
+    assert spec.spec_hash() == "7878076b25e6eecd"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():
@@ -37,6 +37,13 @@ def test_addition_preserves_every_prior_registered_rule():
     import json
 
     previous = spec.spec_dict()
+    assert previous["leaders_2030"]["top_n"] == 20
+    assert previous["leaders_2030"].pop("collection") == spec.LEADERS_COLLECTION_RULE
+    previous["leaders_2030"]["top_n"] = 50
+    previous["leaders_2030"]["rule"] = spec.LEADERS_RULE_2026_10_16
+    previous["version"] = "2026-10-16.2"
+    digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    assert digest == "ed13539391c855db"
     previous.pop("external_datasets")
     previous["version"] = "2026-10-16.1"
     digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
