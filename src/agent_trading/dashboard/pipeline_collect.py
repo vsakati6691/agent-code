@@ -9,14 +9,14 @@ from typing import ParamSpec, TypeVar
 
 import pandas as pd
 
-from ..data.validation import DataQualityError, trim_bad_history, validate_bars
+from ..data.validation import DataQualityError, range_breaks, trim_bad_history, validate_bars
 from . import spec
 from .earnings_cadence import label as cadence_label
 from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
 from .http import BudgetExceeded, FetchError, ProviderUnavailable
 from .pipeline_context import Context, RunFailed
-from .price_integrity import quote_close_reason
+from .price_integrity import quote_close_reason, quote_session_bar
 from .providers import Quote, common_stock_reason
 
 P = ParamSpec("P")
@@ -60,25 +60,37 @@ def latest_bars(
     if df is None:
         ctx.histories[key] = (None, why, flags)
         return ctx.histories[key]
-    if df.attrs.get("repaired_recent", 0) > 2:
-        flags.append(
-            f"{df.attrs['repaired_recent']} price bars in the last year had an open/close outside the "
-            "day's range and were repaired"
-        )
     df = df[df.index <= pd.Timestamp(ctx.as_of)]
     if not df.empty and df.index[-1].date() < ctx.as_of:
-        # Keep the independently validated quote in ctx.quotes, but it is not an OHLCV observation.
+        # The history file can lag the close by a session; only a full post-close quote bar fills it (PRICE_BAR_RULE).
         q, _ = _quote(ctx, symbol)
         if q is not None:
-            flags.append("close-only quote available; daily OHLCV history is missing for the as-of session")
+            bar, note = quote_session_bar(q, df, ctx.as_of, spec.QUOTE_PREV_CLOSE_TOLERANCE)
+            if bar is not None:
+                df = pd.concat([df, bar])
+            flags.append(note)
     try:
         df, trimmed = trim_bad_history(df, symbol)  # an old glitch drops older history, a recent one rejects
         if trimmed:
             flags.append(trimmed)
-        df = validate_bars(df, symbol, ctx.as_of, spec.MAX_PRICE_LAG_BUSINESS_DAYS, min_bars)
+        df = validate_bars(
+            df,
+            symbol,
+            ctx.as_of,
+            spec.MAX_PRICE_LAG_BUSINESS_DAYS,
+            min_bars,
+            check_open_range=False,
+            close_range_bars=spec.PRICE_RANGE_CHECK_BARS,
+        )
     except DataQualityError as exc:
         ctx.histories[key] = (None, f"price data rejected: {exc}", flags)
         return ctx.histories[key]
+    old_breaks = int(range_breaks(df, "close").sum())
+    if old_breaks:
+        flags.append(
+            f"{old_breaks} close(s) before the last {spec.PRICE_RANGE_CHECK_BARS} sessions lie outside that day's "
+            "published high-low range; kept as published"
+        )
     ctx.histories[key] = (df, None, flags)
     return ctx.histories[key]
 

@@ -211,6 +211,29 @@ def test_cboe_history_drops_padding_without_fabricating_ranges():
     assert df.loc["2026-01-02", "open"] == 0 and df.loc["2026-01-05", "high"] == 10.5
 
 
+def test_cboe_quote_keeps_the_session_range_and_volume():
+    raw = {
+        "timestamp": "2026-10-17 00:05:25",
+        "data": {
+            "symbol": "IJH",
+            "open": 73.19,
+            "high": 73.455,
+            "low": 72.12,
+            "close": 72.35,
+            "prev_day_close": 73.03,
+            "price_change": -0.68,
+            "volume": 8881319,
+            "iv30": 16.199,
+            "last_trade_time": "2026-10-16T15:59:59",
+        },
+    }
+    q = pv.parse_cboe_quote(raw)
+    assert (q.open, q.high, q.low, q.close, q.prev_close, q.volume) == (73.19, 73.455, 72.12, 72.35, 73.03, 8881319)
+    assert q.change == -0.68
+    bare = pv.parse_cboe_quote({"data": {"symbol": "IJH", "close": 72.35}})
+    assert (bare.open, bare.high, bare.low, bare.volume, bare.change) == (None, None, None, None, None)
+
+
 def test_cboe_chain_and_occ_parse():
     assert pv.parse_occ("AAPL270115C00250000") == {
         "root": "AAPL",

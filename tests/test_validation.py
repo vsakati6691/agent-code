@@ -52,6 +52,24 @@ def test_inconsistent_ohlc_rejected():
         check(df)
 
 
+def test_open_outside_range_rejected_unless_caller_skips_it():
+    df = make_bars()
+    df.iloc[5, df.columns.get_loc("open")] = df.iloc[5]["high"] * 1.01
+    with pytest.raises(DataQualityError, match="open outside"):
+        check(df)
+    assert len(validate_bars(df, "TEST", AS_OF, 4, 90, check_open_range=False)) == 300
+
+
+def test_close_range_window_limits_only_the_close_check():
+    df = make_bars()
+    df.iloc[5, df.columns.get_loc("close")] = df.iloc[5]["high"] * 1.001
+    with pytest.raises(DataQualityError, match="close outside"):
+        check(df)
+    assert len(validate_bars(df, "TEST", AS_OF, 4, 90, close_range_bars=252)) == 300
+    with pytest.raises(DataQualityError, match="close outside"):
+        validate_bars(df, "TEST", AS_OF, 4, 90, close_range_bars=296)
+
+
 def test_unadjusted_split_rejected():
     df = make_bars()
     df.iloc[200:, :4] = df.iloc[200:, :4] / 4  # 4-for-1 split not adjusted

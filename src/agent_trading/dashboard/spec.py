@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-17.2"
+SPEC_VERSION = "2026-10-17.3"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -56,6 +56,10 @@ SPEC_CHANGELOG = [
     (
         "2026-10-17.2",
         "Owner requested Leaders scenario sanity: three-year growth, faster mega-cap fade, explicit bear stress and implied cap CAGR.",
+    ),
+    (
+        "2026-10-17.3",
+        "Owner-approved data fix: Cboe bars used as published; open not range-checked; lagging as-of bar from a verified close quote.",
     ),
 ]
 
@@ -512,6 +516,21 @@ LIMITED_HISTORY_QUARTERS = 8  # fewer reported quarters than this -> 'limited op
 LIMITED_HISTORY_DAYS = 504  # fewer price bars than this (about 2 years) -> 'limited trading history' flag
 MAX_FILING_AGE_DAYS = 200  # latest 10-Q/10-K older than this -> fundamentals stale, excluded
 MAX_PRICE_LAG_BUSINESS_DAYS = 0  # the as-of close must be present (0 = exactly the as-of session)
+# spec 2026-10-17.3: daily bars are used as Cboe publishes them; nothing is repaired or invented.
+PRICE_BAR_RULE = (
+    "Daily bars are used as Cboe publishes them: open, high, low and close must be positive and finite, high at "
+    "least low, with no unadjusted-split gap or frozen feed. Cboe's open often lies slightly outside its own "
+    "high-low range and no score, list or displayed figure uses the open, so it is not range-checked. The close "
+    "must lie within the high-low range in the last PRICE_RANGE_CHECK_BARS sessions (the 52-week-high window); "
+    "older breaks are kept as published and counted in the price flags. When the history file has not yet "
+    "published the as-of session, that bar is taken from the end-of-session quote only if the quote was captured "
+    "after the 16:00 ET close, its last trade is in the as-of session, it reports a positive open, high, low and "
+    "close, a volume and a range containing the close, the history file ends on the preceding NYSE session, and "
+    "the quote's close less its reported change matches that session's history close within half a cent (Cboe "
+    "can roll the quote's previous close to the session close after hours). Otherwise the price is stale."
+)
+PRICE_RANGE_CHECK_BARS = 252
+QUOTE_PREV_CLOSE_TOLERANCE = 0.005  # dollars, between close - change and the preceding history close
 
 # --- Stock scoring ------------------------------------------------------------------
 #
@@ -1068,11 +1087,16 @@ TRACKING_METHOD = (
 # --- Display and data-quality rules (2026-10-14.5) -----------------------------------------------------
 # None of these feed a score, gate or ranking. They decide how evidence is labelled and compared.
 
-WATCHLIST_PRICE_RULE = (
+WATCHLIST_PRICE_RULE_2026_10_14_5 = (
     "A watchlist price is verified on its own: the latest daily bar must be the as-of session, with positive, "
     "internally consistent open/high/low/close, no unadjusted-split gap and no frozen feed. Analyses that need "
     "history (trailing returns, volatility, momentum) each require their own window and are shown as "
     "unavailable, naming the missing bars, when it is too short."
+)
+WATCHLIST_PRICE_RULE = (
+    "A watchlist price is verified on its own: the latest daily bar must be the as-of session and pass "
+    "PRICE_BAR_RULE. Analyses that need history (trailing returns, volatility, momentum) each require their own "
+    "window and are shown as unavailable, naming the missing bars, when it is too short."
 )
 WATCHLIST_MIN_PRICE_BARS = 1  # bars needed to verify the as-of price itself
 FRESHNESS_RULE = (
@@ -1173,6 +1197,11 @@ def spec_dict() -> dict:
             "limited_history_days": LIMITED_HISTORY_DAYS,
             "max_filing_age_days": MAX_FILING_AGE_DAYS,
             "max_price_lag": MAX_PRICE_LAG_BUSINESS_DAYS,
+        },
+        "price_bars": {
+            "rule": PRICE_BAR_RULE,
+            "range_check_bars": PRICE_RANGE_CHECK_BARS,
+            "quote_prev_close_tolerance": QUOTE_PREV_CLOSE_TOLERANCE,
         },
         "components": [
             {

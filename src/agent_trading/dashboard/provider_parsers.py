@@ -315,6 +315,13 @@ class Quote:
     last_trade: datetime | None
     iv30: float | None
     fetched: str
+    # The last-trade session's observed range, volume and change, when Cboe reports them. After hours Cboe can
+    # roll prev_close to the session's own close, while close - change stays the previous session's close.
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    volume: float | None = None
+    change: float | None = None
 
 
 def _num(x) -> float | None:
@@ -337,6 +344,11 @@ def parse_cboe_quote(raw: dict) -> Quote:
         datetime.fromisoformat(lt) if lt else None,
         _num(d.get("iv30")),
         str(raw.get("timestamp", "")),
+        _num(d.get("open")),
+        _num(d.get("high")),
+        _num(d.get("low")),
+        _num(d.get("volume")),
+        _num(d.get("price_change")),
     )
 
 
