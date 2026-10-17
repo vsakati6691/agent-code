@@ -4,30 +4,130 @@ import csv
 import io
 import json
 import logging
-from datetime import date
+from dataclasses import replace
+from datetime import date, datetime
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
 from agent_trading.dashboard import pipeline_collect, providers
 from agent_trading.dashboard.fmt import csv_value
 from agent_trading.dashboard.pipeline_context import Context
+from agent_trading.dashboard.providers import Quote
 from agent_trading.dashboard.store import Store
 from agent_trading.data.cache import cache_path, write_cache
 from agent_trading.data.dividends import save_dividends
 from agent_trading.logging_setup import protect_log_handlers, register_secret
 from tests.conftest import make_bars
 
+AS_OF = date(2026, 10, 12)  # Monday; a lagging Cboe history file still ends Friday 2026-10-09
 
-def test_close_only_quote_cannot_supply_missing_daily_bar(monkeypatch):
+
+def session_quote(frame, **changes):
+    """A post-close Cboe quote for the as-of session that links to the history file's last close."""
+    last = float(frame["close"].iloc[-1])
+    values = {
+        "symbol": "SYN",
+        "close": last * 1.01,
+        "prev_close": last,
+        "last_trade": datetime(2026, 10, 12, 15, 59, 59),
+        "iv30": 20.0,
+        "fetched": "2026-10-13 00:05:25",  # UTC, as Cboe stamps it: 20:05 ET on the as-of session
+        "open": last * 1.002,
+        "high": last * 1.015,
+        "low": last * 0.995,
+        "volume": 1_234_567.0,
+        "change": last * 0.01,
+    }
+    return Quote(**(values | changes))
+
+
+def lagging_bars(frame, quote):
+    context = Context(AS_OF, SimpleNamespace(history=lambda _: frame, quote=lambda _: quote))
+    return pipeline_collect.latest_bars(context, "SYN")
+
+
+def test_close_only_quote_cannot_supply_missing_daily_bar():
     frame = make_bars(n=80, end="2026-10-09")
     before = frame.copy(deep=True)
-    context = Context(date(2026, 10, 12), SimpleNamespace(history=lambda _: frame))
-    monkeypatch.setattr(pipeline_collect, "_quote", lambda *_: (SimpleNamespace(close=123.0), None))
-    result, reason, flags = pipeline_collect.latest_bars(context, "SYN")
+    quote = session_quote(frame, open=None, high=None, low=None, volume=None)
+    result, reason, flags = lagging_bars(frame, quote)
     assert result is None and "stale" in reason
     assert any("close-only" in flag for flag in flags)
     assert frame.equals(before)
+
+
+@pytest.mark.parametrize("rolled", [False, True])
+def test_lagging_history_takes_as_of_bar_from_post_close_quote(rolled):
+    frame = make_bars(n=80, end="2026-10-09")
+    before = frame.copy(deep=True)
+    quote = session_quote(frame)
+    if rolled:  # after hours Cboe can set prev_close to the session's own close; close - change still links
+        quote = replace(quote, prev_close=quote.close)
+    result, reason, flags = lagging_bars(frame, quote)
+    assert reason is None and result.index[-1].date() == AS_OF
+    observed = {"open": quote.open, "high": quote.high, "low": quote.low, "close": quote.close, "volume": quote.volume}
+    assert result.iloc[-1].to_dict() == observed
+    pd.testing.assert_frame_equal(result.iloc[:-1], frame, check_dtype=False, check_freq=False)
+    assert frame.equals(before)
+    assert any("end-of-session Cboe quote" in flag for flag in flags)
+
+
+@pytest.mark.parametrize(
+    "change, history_end, flag",
+    [
+        (lambda q: {"change": None}, "2026-10-09", "close less its change does not match"),
+        (lambda q: {"change": q.change + 0.01}, "2026-10-09", "close less its change does not match"),
+        (lambda q: {"last_trade": datetime(2026, 10, 9, 15, 59, 59)}, "2026-10-09", "last trade is not in the as-of"),
+        (lambda q: {"close": q.high * 1.01}, "2026-10-09", "outside its own high-low range"),
+        (lambda q: {"volume": None}, "2026-10-09", "close-only"),
+        (lambda q: {}, "2026-10-08", "before the preceding session"),
+        (lambda q: {"fetched": "2026-10-12 19:30:00"}, "2026-10-09", None),  # 15:30 ET: pre-close, quote rejected
+    ],
+)
+def test_quote_cannot_supply_as_of_bar_unless_verified_and_linked(change, history_end, flag):
+    frame = make_bars(n=80, end=history_end)
+    quote = session_quote(frame)
+    result, reason, flags = lagging_bars(frame, replace(quote, **change(quote)))
+    assert result is None and "stale" in reason
+    if flag is None:
+        assert flags == []
+    else:
+        assert any(flag in f for f in flags)
+
+
+def test_cboe_open_outside_range_is_kept_but_recent_close_break_rejects():
+    frame = make_bars(n=300, end=AS_OF.isoformat())
+    open_col, close_col = frame.columns.get_loc("open"), frame.columns.get_loc("close")
+    frame.iloc[-1, open_col] = frame.iloc[-1]["high"] * 1.002  # Cboe convention, seen on most series
+    frame.iloc[10, close_col] = frame.iloc[10]["high"] * 1.001  # older than the 252-session window
+    before = frame.copy(deep=True)
+    result, reason, flags = pipeline_collect.latest_bars(
+        Context(AS_OF, SimpleNamespace(history=lambda _: frame)), "SYN"
+    )
+    assert reason is None and result.equals(before)  # used exactly as published
+    assert any(flag.startswith("1 close(s) before the last 252 sessions") for flag in flags)
+
+    recent = before.copy()
+    recent.iloc[-5, close_col] = recent.iloc[-5]["high"] * 1.001
+    result, reason, _ = pipeline_collect.latest_bars(Context(AS_OF, SimpleNamespace(history=lambda _: recent)), "SYN")
+    assert result is None and reason == "price data rejected: SYN: close outside high/low range"
+
+
+def test_private_history_keeps_strict_checks_and_is_never_completed_from_a_cboe_quote():
+    frame = make_bars(n=300, end=AS_OF.isoformat())
+    frame.iloc[10, frame.columns.get_loc("open")] = frame.iloc[10]["high"] * 1.002
+    private = SimpleNamespace(history_provider="massive", history=lambda _: frame)
+    result, reason, _ = pipeline_collect.latest_bars(Context(AS_OF, private), "SYN")
+    assert result is None and reason == "price data rejected: SYN: open outside high/low range"
+
+    lagging = make_bars(n=80, end="2026-10-09")
+    quote = session_quote(lagging)
+    private = SimpleNamespace(history_provider="massive", history=lambda _: lagging, quote=lambda _: quote)
+    result, reason, flags = pipeline_collect.latest_bars(Context(AS_OF, private), "SYN")
+    assert result is None and "stale" in reason
+    assert flags == ["close-only quote available; daily OHLCV history is missing for the as-of session"]
 
 
 def test_parser_preserves_unknown_volume():

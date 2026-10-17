@@ -221,6 +221,14 @@ def test_long_paragraphs_are_folded_except_on_methodology(site):
     assert all(f in _outside_details(meth) for f in full)
 
 
+def test_methodology_states_the_registered_price_bar_rule(site):
+    meth = (site / "methodology.html").read_text(encoding="utf-8").replace("&#x27;", "'")
+    assert 'id="price-bars"' in meth and "so it is not range-checked" in meth
+    assert "in the last 252 sessions (the 52-week-high window)" in meth
+    assert "pass the daily price-bar rule" in meth
+    assert "PRICE_BAR_RULE" not in meth and "PRICE_RANGE_CHECK_BARS" not in meth
+
+
 def test_empty_states_say_what_appears_and_when(tmp_path):
     from agent_trading.dashboard.fmt import tracking_schedule
 

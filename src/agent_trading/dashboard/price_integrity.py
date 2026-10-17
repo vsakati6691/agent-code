@@ -3,7 +3,9 @@
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
-from ..market_calendar import is_trading_day
+import pandas as pd
+
+from ..market_calendar import is_trading_day, previous_trading_day
 
 ET = ZoneInfo("America/New_York")
 CORRECTION_DATE = "2026-10-16"
@@ -44,6 +46,28 @@ def quote_close_reason(quote, as_of: date) -> str | None:
     if observed.date() < as_of or (observed.date() == as_of and observed.hour < 16):
         return "quote snapshot predates the as-of close"
     return None
+
+
+def quote_session_bar(quote, history: pd.DataFrame, as_of: date, tolerance: float) -> tuple[pd.DataFrame | None, str]:
+    """The as-of daily bar from a close-verified quote (spec PRICE_BAR_RULE), or why it cannot supply one.
+
+    `quote` must already have passed quote_close_reason. Every value in the bar is the quote's own."""
+    bar = {"open": quote.open, "high": quote.high, "low": quote.low, "close": quote.close, "volume": quote.volume}
+    if any(v is None or v <= 0 for k, v in bar.items() if k != "volume") or bar["volume"] is None or bar["volume"] < 0:
+        return None, "close-only quote available; daily OHLCV history is missing for the as-of session"
+    if quote.last_trade is None or quote.last_trade.date() != as_of:
+        return None, "end-of-session quote not used: its last trade is not in the as-of session"
+    if not bar["low"] - 1e-6 <= bar["close"] <= bar["high"] + 1e-6:
+        return None, "end-of-session quote not used: its close lies outside its own high-low range"
+    last = history.index[-1].date()
+    if last != previous_trading_day(as_of):
+        return None, f"end-of-session quote not used: the history file ends {last}, before the preceding session"
+    prev = float(history["close"].iloc[-1])
+    if quote.change is None or abs(quote.close - quote.change - prev) > tolerance:
+        return None, f"end-of-session quote not used: its close less its change does not match the {last} history close"
+    index = pd.DatetimeIndex([pd.Timestamp(as_of)], name=history.index.name)
+    frame = pd.DataFrame({k: [float(v)] for k, v in bar.items()}, index=index)
+    return frame, "as-of bar taken from the end-of-session Cboe quote; the history file had not yet published it"
 
 
 def correction(snap: dict) -> str:
