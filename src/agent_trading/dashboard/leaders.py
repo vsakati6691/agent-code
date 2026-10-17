@@ -8,7 +8,7 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from . import scenarios, spec
+from . import leaders_scenarios, spec
 from .fmt import ok
 from .schema import LEADERS_CHALLENGER
 
@@ -136,7 +136,11 @@ def computed_row(ticker: str, record: dict, snap: dict) -> dict:
         "shares_date": shares[1],
         "shares_basis": SHARE_BASIS,
         "shares_assumption": spec.LEADERS_SHARE_RULE,
-        "scenario_2030": {f"{case}_{field}": None for case in CASES for field in ("cap", "price", "shares")},
+        "scenario_2030": {
+            f"{case}_{field}": None for case in CASES for field in ("cap", "price", "shares", "implied_cagr")
+        },
+        "scenario_assumptions": {},
+        "aggressive_assumption": False,
         "rank_2030": None,
         "rank_delta": None,
         "movement": "unavailable",
@@ -178,8 +182,9 @@ def computed_row(ticker: str, record: dict, snap: dict) -> dict:
         missing.append("too few reported quarters for a revenue-based valuation (new filer)")
     if not ok(m.get("revenue_ttm")) or m["revenue_ttm"] <= 0:
         missing.append("too little reported revenue for a revenue-based valuation (pre-revenue)")
-    if not ok(m.get("revenue_growth_ttm")):
-        missing.append("revenue growth not computable (fewer than 8 reported quarters)")
+    growth, growth_basis = leaders_scenarios.growth_input(record, m, as_of)
+    if growth is None:
+        missing.append(growth_basis)
     if not ok(m.get("ev_to_sales")) or m["ev_to_sales"] <= 0:
         missing.append("enterprise value not positive, so EV/Sales cannot anchor the valuation")
     if not ok(m.get("net_debt")):
@@ -194,29 +199,30 @@ def computed_row(ticker: str, record: dict, snap: dict) -> dict:
         row["missing_inputs"] = list(dict.fromkeys(row["missing_inputs"] + missing))
         row["unavailable_reason"] = record.get("unavailable_reason") or "; ".join(missing)
         return row
-    margin = m.get("fcf_margin") if ok(m.get("fcf_margin")) else m.get("operating_margin")
     try:
-        result = scenarios.company_scenarios(
-            price,
-            shares[0],
-            m["revenue_ttm"],
-            m["revenue_growth_ttm"],
-            m["ev_to_sales"],
-            -m["net_debt"],
-            m["dilution"],
-            (date.fromisoformat(spec.WATCHLIST_TARGET_DATE) - date.fromisoformat(as_of)).days / 365.25,
-            margin,
-            "FCF" if ok(m.get("fcf_margin")) else "operating",
+        result = leaders_scenarios.company_scenarios(
+            current_cap=row["current_market_cap_usd"],
+            shares=shares[0],
+            metrics=m,
+            years=(date.fromisoformat(spec.WATCHLIST_TARGET_DATE) - date.fromisoformat(as_of)).days / 365.25,
+            growth=growth,
+            basis=growth_basis,
+            cyclical=leaders_scenarios.is_cyclical(ticker, record),
         )
         for case in CASES:
-            value, projected = result[case]["price"], result[case]["assumptions"]["shares_2030"]
-            if not all(ok(v) for v in (value, projected, value * projected)) or projected <= 0:
+            values = result[case]
+            if not all(ok(values[field]) for field in ("cap", "price", "shares", "implied_cagr")):
                 raise ValueError("non-finite scenario or non-positive projected shares")
             row["scenario_2030"].update(
-                {f"{case}_cap": value * projected, f"{case}_price": value, f"{case}_shares": projected}
+                {f"{case}_{field}": values[field] for field in ("cap", "price", "shares", "implied_cagr")}
             )
+            row["scenario_assumptions"][case] = values["assumptions"]
+        row["aggressive_assumption"] = (
+            row["scenario_2030"]["base_implied_cagr"] > spec.LEADERS_SCENARIO_RULES["aggressive_cap_cagr"]
+        )
     except (ValueError, OverflowError, ZeroDivisionError, TypeError) as exc:
         row["scenario_2030"] = {key: None for key in row["scenario_2030"]}
+        row["scenario_assumptions"] = {}
         row["unavailable_reason"] = f"Scenario unavailable: {exc}"
         row["missing_inputs"].append(row["unavailable_reason"])
     return row

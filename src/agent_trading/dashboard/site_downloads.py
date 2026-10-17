@@ -19,7 +19,11 @@ from .watchlist import upside_fields
 def leaders_csv(payload: dict) -> str:
     from .schema import LEADER_ENTRY
 
-    cols = [key for key in LEADER_ENTRY["properties"] if key != "scenario_2030"]
+    cols = [
+        key
+        for key in LEADER_ENTRY["properties"]
+        if key not in ("scenario_2030", "scenario_assumptions", "aggressive_assumption")
+    ]
     scenario_cols = [f"{case}_{field}" for case in ("bear", "base", "bull") for field in ("cap", "price", "shares")]
     buf = io.StringIO()
     writer = csv.writer(buf)

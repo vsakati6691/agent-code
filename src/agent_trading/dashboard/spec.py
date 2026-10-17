@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-17.1"
+SPEC_VERSION = "2026-10-17.2"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -53,6 +53,10 @@ SPEC_CHANGELOG = [
     ),
     ("2026-10-16.2", "additive datasets; zero weekly snapshots under 2026-10-16.1 at registration"),
     ("2026-10-17.1", "owner requested a top-20 view; full S&P 500 coverage"),
+    (
+        "2026-10-17.2",
+        "Owner requested Leaders scenario sanity: three-year growth, faster mega-cap fade, explicit bear stress and implied cap CAGR.",
+    ),
 ]
 
 EXTERNAL_DATA_RULES = {
@@ -103,8 +107,12 @@ LEADERS_RULE_2026_10_16 = (
     "Probability is not established without documented out-of-sample calibration."
 )
 LEADERS_TOP_N = 20
-LEADERS_RULE = LEADERS_RULE_2026_10_16.replace("top 50", "top 20").replace("top-50", "top-20")
-LEADERS_COLLECTION_RULE = (
+LEADERS_RULE_2026_10_17_1 = LEADERS_RULE_2026_10_16.replace("top 50", "top 20").replace("top-50", "top-20")
+LEADERS_RULE = LEADERS_RULE_2026_10_17_1.replace(
+    "Reuse the registered exact-date company scenario formula.",
+    "Use the separate registered Leaders three-year-growth and bear-stress model through 2030-12-31.",
+)
+LEADERS_COLLECTION_RULE_2026_10_17_1 = (
     "Every weekly S&P 500 member is attempted after research-list screening, regardless of price, liquidity, "
     "score or tradability gates. Reuse successful and failed cached lookups; collect missing as-of history "
     "and SEC company facts through existing providers, pacing and budgets with SEC_USER_AGENT. "
@@ -112,6 +120,45 @@ LEADERS_COLLECTION_RULE = (
     "Retain dated diluted shares and the existing scenario inputs. Record incremental request attempts and "
     "coverage gaps. Development --limit remains partial. No snapshot backfills or change to scenario math."
 )
+LEADERS_COLLECTION_RULE = LEADERS_COLLECTION_RULE_2026_10_17_1.replace(
+    "the existing scenario inputs", "the scenario inputs including three-year revenue CAGR"
+).replace("No snapshot backfills or change to scenario math.", "No snapshot backfills.")
+LEADERS_SCENARIO_RULES = {
+    "growth_basis": "Stored TTM revenue CAGR over three years; fallback to dated matched fiscal-year revenue CAGR over three years. Never substitute one-year growth. Missing both means unavailable.",
+    "growth_floor": -0.30,
+    "growth_cap": 0.60,
+    "terminal_growth": 0.04,
+    "fade": 0.20,
+    "large_cap_threshold_usd": 500e9,
+    "large_cap_fade": 0.40,
+    "bear_growth_ceiling": -0.05,
+    "cyclical_bear_growth_ceiling": -0.20,
+    "bear_terminal_growth": 0.0,
+    "bear_cap_ceiling_fraction": 0.90,
+    "aggressive_cap_cagr": 0.25,
+    "cyclical_tickers": ("MU", "SNDK", "STX", "WDC", "P", "PSTG", "AMAT", "LRCX", "KLAC", "TER", "ONTO"),
+    "cyclical_sectors": (
+        "memory",
+        "storage",
+        "memory and storage",
+        "semiconductor equipment",
+        "semiconductor equipment & materials",
+        "semiconductor equipment and materials",
+        "chip equipment and test",
+    ),
+    "method": (
+        "Clamp three-year CAGR to [-30%,60%]. Apply existing case multipliers/shifts, but bear growth cannot "
+        "exceed base or -5% (-20% for registered memory/storage/equipment names or matching stored sector/industry); "
+        "bull growth cannot fall below base. Each subsequent year closes 20% of the gap to terminal growth, "
+        "or 40% when current cap is strictly above $500B. Base/bull terminal is 4%; bear is 0%. "
+        "Use fractional years, existing exit-multiple floors/factors, net cash and projected-share rules. "
+        "Bear equity is the lesser of the raw valuation and 90% of current cap: an explicit downside stress "
+        "constraint, not a calibrated estimate. Retain raw equity and the constraint adjustment. "
+        "Implied cap CAGR = (2030 cap/current cap)^(1/years)-1; zero cap means -100%. "
+        "Base cap CAGR strictly above 25%/yr is labelled aggressive assumption. Curated caps without current "
+        "values have no implied rate or computed bear case. Watchlist/Plan stored scenarios are unchanged."
+    ),
+}
 
 DECISION_RULES = {
     "growth_bands": ("large", "mid", "small"),
@@ -1109,6 +1156,7 @@ def spec_dict() -> dict:
             "shares": LEADERS_SHARE_RULE,
             "top_n": LEADERS_TOP_N,
             "collection": LEADERS_COLLECTION_RULE,
+            "scenario": LEADERS_SCENARIO_RULES,
         },
         "decision_research": DECISION_RULES,
         "speculative_options": SPECULATIVE_RULES,

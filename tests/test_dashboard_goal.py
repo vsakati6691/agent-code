@@ -164,6 +164,37 @@ def test_goal_missing_rows_escape_and_keep_saved_weight_mapping(monkeypatch):
     assert payload(snap)["assets"][0]["ticker"] == missing["ticker"]
 
 
+def test_plan_explains_company_etf_gap_with_stored_etf_arithmetic():
+    from agent_trading.dashboard.site_goal import scenario_model_gap
+
+    entry = price_entry("SMH")
+    entry["scenarios"]["base"]["assumptions"] = {
+        "total_return_assumption": 0.06,
+        "assumed_fee": 0.0035,
+        "assumed_distribution_yield": 0.004,
+        "price_return": 0.0525,
+    }
+    snap = {"spec_version": "<old-version>", "watchlist": {"entries": [entry]}}
+    before = json.dumps(snap, sort_keys=True)
+    text = scenario_model_gap(snap)
+    for value in (
+        "SMH",
+        "QQQ",
+        "6.00%",
+        "0.35%",
+        "0.40%",
+        "5.25%",
+        "No holdings-weighted reconciliation",
+        "market-cap CAGR",
+        "per-share",
+        "one-year",
+        "three-year CAGR",
+    ):
+        assert value in text
+    assert "&lt;old-version&gt;" in text and "<old-version>" not in text
+    assert json.dumps(snap, sort_keys=True) == before
+
+
 def test_evidence_reads_source_tables_and_omits_operational_columns(tmp_path):
     for name in (FINAL, TOURNAMENT):
         target = tmp_path / name

@@ -4,9 +4,9 @@ from agent_trading.dashboard import spec
 
 
 def test_registered_spec_hash_is_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-17.1"
+    assert spec.SPEC_VERSION == "2026-10-17.2"
     assert spec.SPEC_FREEZE_DATE == "2026-10-16"
-    assert spec.spec_hash() == "7878076b25e6eecd"
+    assert spec.spec_hash() == "48a72cddda547a92"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():
@@ -37,8 +37,14 @@ def test_addition_preserves_every_prior_registered_rule():
     import json
 
     previous = spec.spec_dict()
+    assert previous["leaders_2030"].pop("scenario") == spec.LEADERS_SCENARIO_RULES
+    previous["leaders_2030"]["rule"] = spec.LEADERS_RULE_2026_10_17_1
+    previous["leaders_2030"]["collection"] = spec.LEADERS_COLLECTION_RULE_2026_10_17_1
+    previous["version"] = "2026-10-17.1"
+    digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    assert digest == "7878076b25e6eecd"
     assert previous["leaders_2030"]["top_n"] == 20
-    assert previous["leaders_2030"].pop("collection") == spec.LEADERS_COLLECTION_RULE
+    assert previous["leaders_2030"].pop("collection") == spec.LEADERS_COLLECTION_RULE_2026_10_17_1
     previous["leaders_2030"]["top_n"] = 50
     previous["leaders_2030"]["rule"] = spec.LEADERS_RULE_2026_10_16
     previous["version"] = "2026-10-16.2"
