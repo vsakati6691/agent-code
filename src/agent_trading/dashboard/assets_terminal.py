@@ -122,6 +122,26 @@ kbd { font: 11px/1.5 ui-monospace, monospace; font-variant-numeric: tabular-nums
 .command-footer { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between;
   border-top: 1px solid var(--border); padding: 12px 18px; font-size: 12px; color: var(--text-muted); }
 .command-footer p { margin: 0; }
+.ai-heading { margin: 18px 0 10px; }
+.ai-heading h1 { font-size: clamp(26px, 3vw, 34px); margin: 4px 0 8px; letter-spacing: -.6px; }
+.ai-heading .lede { max-width: 70ch; margin: 0 0 8px; }
+.section-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.section-nav a { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); text-decoration: none; }
+.section-nav a:hover { background: var(--row-hover); }
+.ai-guide { border-left: 3px solid var(--warn-border); padding: 10px 14px; background: var(--warn-bg);
+  border-radius: 6px; margin: 12px 0 22px; }
+.ai-guide > p { margin: 0 0 6px; }
+.ai-guide details { margin: 0; }
+.ai-page h2, .ai-page section[id] { scroll-margin-top: 20px; }
+.ai-list-context { margin-bottom: 10px; }
+.ai-page td.num > small { display: block; margin-top: 4px; min-inline-size: 112px; }
+.ai-page td.num > small:empty { display: none; }
+.ai-unavailable { display: inline-block; vertical-align: top; max-width: 28rem; margin: 2px; }
+.ai-unavailable summary { padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--surface-2); font-size: 12px; }
+.ai-unavailable p { margin: 8px; white-space: normal; }
+.ai-page a.pill { display: inline-flex; align-items: center; padding: 5px 8px; margin: 2px; }
 @media (prefers-reduced-motion: no-preference) {
   .action, .command-trigger, .themebtn, .research-path { transition: border-color 120ms ease, background-color 120ms ease; }
   .command-dialog[open] { animation: command-in 120ms ease-out; }
@@ -141,6 +161,9 @@ kbd { font: 11px/1.5 ui-monospace, monospace; font-variant-numeric: tabular-nums
   .command-dialog { margin-top: 16px; max-height: calc(100dvh - 32px); }
   .command-results strong { flex-basis: 60px; }
   .command-footer .command-help { display: none; }
+  .section-nav { gap: 6px; }
+  .section-nav a, .ai-page a.pill, .ai-unavailable summary { min-height: 44px; }
+  .section-nav a { font-size: 13px; padding: 6px 10px; }
 }
 @media (max-width: 650px) {
   /* Keep the scanner's native table semantics and headers at narrow widths. */

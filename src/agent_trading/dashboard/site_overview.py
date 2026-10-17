@@ -66,7 +66,7 @@ def ai_teaser(snap: dict) -> str:
             f'<ol class="tight small">{items or "<li>none met every rule this week</li>"}</ol></section>'
         )
     return (
-        f'<h2 id="ai-stocks">AI stocks</h2><p class="small">The top 5 AI-exposed stocks by the same fixed rules, a scenario test '
+        f'<h2 id="ai-stocks">AI stocks</h2><p class="small">Up to 5 AI-exposed stocks per list under the registered AI scoring profile, a scenario test '
         f"of whether any could reach the largest market caps, and private AI companies for context. Not forecasts, "
         f'and no probabilities. <a href="ai.html">Open the AI page</a>.</p><div class="ow-grid">{"".join(cards)}</div>'
     )

@@ -1,0 +1,1213 @@
+{
+  "source": "research-data d8666d8095614a2a1a53c050ccede55d65d7769a; selected rendering inputs, no transformed values",
+  "snapshot": {
+    "as_of": "2026-10-15",
+    "run_started": "2026-10-15T14:37:46+00:00",
+    "run_finished": "2026-10-15T16:52:08+00:00",
+    "spec_version": "2026-10-14.9",
+    "spec_hash": "13c2a70787a83822",
+    "status": "ok",
+    "bands": {
+      "ai_large": {
+        "benchmark": "SPY",
+        "benchmark_name": "SPDR S&P 500 ETF (price return)",
+        "components": [
+          "growth",
+          "earnings",
+          "quality",
+          "balance",
+          "valuation",
+          "momentum",
+          "relative"
+        ],
+        "concentration": [
+          "4 of 5 candidates are in Information Technology: the list is concentrated in one sector."
+        ],
+        "definition": {
+          "max_cap": null,
+          "min_cap": 10000000000.0,
+          "min_dollar_volume": 20000000.0,
+          "min_price": 5.0,
+          "universe": "ai"
+        },
+        "evaluated": 49,
+        "excluded": [
+          {
+            "reason": "market cap $1.83B outside the band",
+            "ticker": "AI"
+          },
+          {
+            "reason": "market cap $5.63B outside the band",
+            "ticker": "APLD"
+          },
+          {
+            "reason": "not common stock (warrant, right, unit, preferred, note, fund or blank-check)",
+            "ticker": "ARM"
+          },
+          {
+            "reason": "price 2.27 below 5",
+            "ticker": "BBAI"
+          },
+          {
+            "reason": "missing critical data: Revenue growth and durability; Price momentum (12-1 month)",
+            "ticker": "CBRS"
+          },
+          {
+            "reason": "market cap $4.09B outside the band",
+            "ticker": "CORZ"
+          },
+          {
+            "reason": "too little evidence: 6 of 21 sub-metrics missing",
+            "ticker": "DLR"
+          },
+          {
+            "reason": "too little evidence: 5 of 21 sub-metrics missing",
+            "ticker": "ETN"
+          },
+          {
+            "reason": "market cap $9.99B outside the band",
+            "ticker": "IREN"
+          },
+          {
+            "reason": "no 10-K/10-Q revenue or income facts filed by the as-of date",
+            "ticker": "NBIS"
+          },
+          {
+            "reason": "market cap $7.00B outside the band",
+            "ticker": "PATH"
+          },
+          {
+            "reason": "price 4.70 below 5",
+            "ticker": "SOUN"
+          },
+          {
+            "reason": "missing critical data: Revenue growth and durability; Valuation and expectations in the price; Price momentum (12-1 month)",
+            "ticker": "SPCX"
+          },
+          {
+            "reason": "market cap $0.01B outside the band",
+            "ticker": "TEM"
+          }
+        ],
+        "gates": [],
+        "max_results": 5,
+        "profile": "standard",
+        "ranked": 45,
+        "scenario_years": [
+          1,
+          3,
+          5,
+          10
+        ],
+        "short_title": "AI large cap ($10B+)",
+        "shortfall_note": null,
+        "title": "AI-exposed large-cap research candidates",
+        "candidates": [
+          {
+            "ai_role": "Memory and storage",
+            "composite": 98.17,
+            "confidence_label": "high",
+            "counterargument": "Weakest evidence: share count changed +1.8% in a year.",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 1025471085312.26,
+            "missing": [],
+            "name": "Micron Technology, Inc. - Common Stock",
+            "price": 906.355,
+            "price_date": "2026-10-15",
+            "rank": 1,
+            "sector": "Information Technology",
+            "ticker": "MU",
+            "top20_test": {
+              "current_vs_threshold": 2.348468033926253,
+              "market_cap_now": 1025471085312.26,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": true,
+                  "case": "bear",
+                  "market_cap": 1734823117748.8499,
+                  "multiple_of_threshold": 3.9729805110095824,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bear",
+                  "market_cap": 1748139258814.8083,
+                  "multiple_of_threshold": 4.0034762822473775,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "base",
+                  "market_cap": 4881586153417.025,
+                  "multiple_of_threshold": 11.179495161159021,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "base",
+                  "market_cap": 8861144606680.867,
+                  "multiple_of_threshold": 20.293224402764388,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 8855306357910.457,
+                  "multiple_of_threshold": 20.279854020305244,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 22765087512799.004,
+                  "multiple_of_threshold": 52.13514167204671,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          },
+          {
+            "ai_role": "Power, cooling and electrical",
+            "composite": 86.93,
+            "confidence_label": "high",
+            "counterargument": "Weakest evidence: six-month return relative to the benchmark (-18%).",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 51459652104.8175,
+            "missing": [],
+            "name": "Comfort Systems USA, Inc. Common Stock",
+            "price": 1462.1575,
+            "price_date": "2026-10-15",
+            "rank": 2,
+            "sector": "Industrials",
+            "ticker": "FIX",
+            "top20_test": {
+              "current_vs_threshold": 0.11784959101828794,
+              "market_cap_now": 51459652104.8175,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 71676451368.97958,
+                  "multiple_of_threshold": 0.1641488065692862,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 67417613000.15579,
+                  "multiple_of_threshold": 0.15439548839767173,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 176056736545.23676,
+                  "multiple_of_threshold": 0.40319383340580794,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 279923559670.85443,
+                  "multiple_of_threshold": 0.6410629624234323,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 299817622428.37195,
+                  "multiple_of_threshold": 0.6866230675498738,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 652824008883.618,
+                  "multiple_of_threshold": 1.4950556272153877,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          },
+          {
+            "ai_role": "Servers and systems",
+            "composite": 82.47,
+            "confidence_label": "medium",
+            "counterargument": "Weakest evidence: gross margin (20%).",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 305227280000.0,
+            "missing": [],
+            "name": "Dell Technologies Inc. Class C Common Stock ",
+            "price": 468.14,
+            "price_date": "2026-10-15",
+            "rank": 3,
+            "sector": "Information Technology",
+            "ticker": "DELL",
+            "top20_test": {
+              "current_vs_threshold": 0.6990119179654729,
+              "market_cap_now": 305227280000.0,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": true,
+                  "case": "bear",
+                  "market_cap": 459024475330.479,
+                  "multiple_of_threshold": 1.0512283793698027,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 436485796092.5471,
+                  "multiple_of_threshold": 0.9996117433911467,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "base",
+                  "market_cap": 1215224289280.2395,
+                  "multiple_of_threshold": 2.7830286375713498,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "base",
+                  "market_cap": 2009679526038.6096,
+                  "multiple_of_threshold": 4.6024390087026,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 2124332818560.664,
+                  "multiple_of_threshold": 4.865010617331087,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 4836571526816.2705,
+                  "multiple_of_threshold": 11.07640555371406,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          },
+          {
+            "ai_role": "Chip equipment and test",
+            "composite": 81.04,
+            "confidence_label": "high",
+            "counterargument": "Weakest evidence: six-month return relative to the benchmark (-16%).",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 53577975025.0,
+            "missing": [],
+            "name": "Teradyne, Inc. - Common Stock",
+            "price": 342.7,
+            "price_date": "2026-10-15",
+            "rank": 4,
+            "sector": "Information Technology",
+            "ticker": "TER",
+            "top20_test": {
+              "current_vs_threshold": 0.12270083815224987,
+              "market_cap_now": 53577975025.0,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 89112506707.02376,
+                  "multiple_of_threshold": 0.2040797409326838,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 88851002668.74908,
+                  "multiple_of_threshold": 0.20348086117544162,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 248789250727.27054,
+                  "multiple_of_threshold": 0.5697611672195955,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "base",
+                  "market_cap": 443948939647.0405,
+                  "multiple_of_threshold": 1.0167033555500535,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 448577734449.4378,
+                  "multiple_of_threshold": 1.0273039241908786,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 1127190569223.9546,
+                  "multiple_of_threshold": 2.5814194645571313,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          },
+          {
+            "ai_role": "Memory and storage",
+            "composite": 80.85,
+            "confidence_label": "high",
+            "counterargument": "Weakest evidence: Price implies about 46%/yr revenue growth for 5 years vs 34% trailing.",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 153650251310.33,
+            "missing": [],
+            "name": "Seagate Technology Holdings PLC - Ordinary Shares (Ireland)",
+            "price": 677.935,
+            "price_date": "2026-10-15",
+            "rank": 5,
+            "sector": "Information Technology",
+            "ticker": "STX",
+            "top20_test": {
+              "current_vs_threshold": 0.3518799396446827,
+              "market_cap_now": 153650251310.33,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 180779271817.0616,
+                  "multiple_of_threshold": 0.4140090804506262,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 159299307136.20352,
+                  "multiple_of_threshold": 0.36481704457035613,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 397834540039.5744,
+                  "multiple_of_threshold": 0.9110951185817159,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "base",
+                  "market_cap": 565161956982.8994,
+                  "multiple_of_threshold": 1.294297624746178,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 640155436312.1976,
+                  "multiple_of_threshold": 1.466042875763311,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": true,
+                  "case": "bull",
+                  "market_cap": 1207114562853.5632,
+                  "multiple_of_threshold": 2.764456262835755,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          }
+        ]
+      },
+      "ai_mid": {
+        "benchmark": "IJH",
+        "benchmark_name": "iShares Core S&P Mid-Cap ETF (price return)",
+        "components": [
+          "growth",
+          "earnings",
+          "quality",
+          "balance",
+          "valuation",
+          "momentum",
+          "relative"
+        ],
+        "concentration": [
+          "2 of 4 candidates are in Information Technology: the list is concentrated in one sector."
+        ],
+        "definition": {
+          "max_cap": 10000000000.0,
+          "min_cap": 2000000000.0,
+          "min_dollar_volume": 5000000.0,
+          "min_price": 5.0,
+          "universe": "ai"
+        },
+        "evaluated": 4,
+        "excluded": [
+          {
+            "reason": "market cap $1.83B outside the band",
+            "ticker": "AI"
+          },
+          {
+            "reason": "market cap $49.31B outside the band",
+            "ticker": "ALAB"
+          },
+          {
+            "reason": "market cap $335.63B outside the band",
+            "ticker": "AMAT"
+          },
+          {
+            "reason": "market cap $875.55B outside the band",
+            "ticker": "AMD"
+          },
+          {
+            "reason": "market cap $2717.61B outside the band",
+            "ticker": "AMZN"
+          },
+          {
+            "reason": "market cap $228.90B outside the band",
+            "ticker": "ANET"
+          },
+          {
+            "reason": "market cap $98.22B outside the band",
+            "ticker": "APH"
+          },
+          {
+            "reason": "not common stock (warrant, right, unit, preferred, note, fund or blank-check)",
+            "ticker": "ARM"
+          },
+          {
+            "reason": "market cap $1621.65B outside the band",
+            "ticker": "AVGO"
+          },
+          {
+            "reason": "price 2.27 below 5",
+            "ticker": "BBAI"
+          },
+          {
+            "reason": "market cap $20.91B outside the band",
+            "ticker": "CBRS"
+          },
+          {
+            "reason": "market cap $96.00B outside the band",
+            "ticker": "CEG"
+          },
+          {
+            "reason": "market cap $49.47B outside the band",
+            "ticker": "CIEN"
+          },
+          {
+            "reason": "market cap $48.53B outside the band",
+            "ticker": "COHR"
+          },
+          {
+            "reason": "market cap $32.43B outside the band",
+            "ticker": "CRDO"
+          },
+          {
+            "reason": "market cap $35.31B outside the band",
+            "ticker": "CRWV"
+          },
+          {
+            "reason": "market cap $97.88B outside the band",
+            "ticker": "DDOG"
+          },
+          {
+            "reason": "market cap $305.23B outside the band",
+            "ticker": "DELL"
+          },
+          {
+            "reason": "market cap $59.78B outside the band",
+            "ticker": "DLR"
+          },
+          {
+            "reason": "market cap $32.08B outside the band",
+            "ticker": "EME"
+          },
+          {
+            "reason": "market cap $95.98B outside the band",
+            "ticker": "EQIX"
+          },
+          {
+            "reason": "market cap $155.02B outside the band",
+            "ticker": "ETN"
+          },
+          {
+            "reason": "market cap $51.46B outside the band",
+            "ticker": "FIX"
+          },
+          {
+            "reason": "market cap $242.67B outside the band",
+            "ticker": "GEV"
+          },
+          {
+            "reason": "market cap $118.33B outside the band",
+            "ticker": "GLW"
+          },
+          {
+            "reason": "market cap $4303.16B outside the band",
+            "ticker": "GOOGL"
+          },
+          {
+            "reason": "market cap $77.40B outside the band",
+            "ticker": "HPE"
+          },
+          {
+            "reason": "market cap $224.22B outside the band",
+            "ticker": "KLAC"
+          },
+          {
+            "reason": "market cap $76.11B outside the band",
+            "ticker": "LITE"
+          },
+          {
+            "reason": "market cap $337.96B outside the band",
+            "ticker": "LRCX"
+          },
+          {
+            "reason": "market cap $28.68B outside the band",
+            "ticker": "MDB"
+          },
+          {
+            "reason": "market cap $1884.86B outside the band",
+            "ticker": "META"
+          },
+          {
+            "reason": "market cap $206.18B outside the band",
+            "ticker": "MRVL"
+          },
+          {
+            "reason": "market cap $3978.98B outside the band",
+            "ticker": "MSFT"
+          },
+          {
+            "reason": "market cap $1025.47B outside the band",
+            "ticker": "MU"
+          },
+          {
+            "reason": "no 10-K/10-Q revenue or income facts filed by the as-of date",
+            "ticker": "NBIS"
+          },
+          {
+            "reason": "market cap $152.65B outside the band",
+            "ticker": "NOW"
+          },
+          {
+            "reason": "market cap $5228.98B outside the band",
+            "ticker": "NVDA"
+          },
+          {
+            "reason": "market cap $11.06B outside the band",
+            "ticker": "ONTO"
+          },
+          {
+            "reason": "market cap $401.70B outside the band",
+            "ticker": "ORCL"
+          },
+          {
+            "reason": "market cap $43.75B outside the band",
+            "ticker": "P"
+          },
+          {
+            "reason": "market cap $509.86B outside the band",
+            "ticker": "PLTR"
+          },
+          {
+            "reason": "market cap $94.74B outside the band",
+            "ticker": "PWR"
+          },
+          {
+            "reason": "market cap $22.03B outside the band",
+            "ticker": "SMCI"
+          },
+          {
+            "reason": "market cap $198.15B outside the band",
+            "ticker": "SNDK"
+          },
+          {
+            "reason": "market cap $114.97B outside the band",
+            "ticker": "SNOW"
+          },
+          {
+            "reason": "price 4.70 below 5",
+            "ticker": "SOUN"
+          },
+          {
+            "reason": "market cap $852.98B outside the band",
+            "ticker": "SPCX"
+          },
+          {
+            "reason": "market cap $153.65B outside the band",
+            "ticker": "STX"
+          },
+          {
+            "reason": "market cap $0.01B outside the band",
+            "ticker": "TEM"
+          },
+          {
+            "reason": "market cap $53.58B outside the band",
+            "ticker": "TER"
+          },
+          {
+            "reason": "market cap $16.53B outside the band",
+            "ticker": "TLN"
+          },
+          {
+            "reason": "market cap $81.19B outside the band",
+            "ticker": "VRT"
+          },
+          {
+            "reason": "market cap $50.09B outside the band",
+            "ticker": "VST"
+          },
+          {
+            "reason": "market cap $124.61B outside the band",
+            "ticker": "WDC"
+          }
+        ],
+        "gates": [],
+        "max_results": 5,
+        "profile": "standard",
+        "ranked": 4,
+        "scenario_years": [
+          1,
+          3,
+          5,
+          10
+        ],
+        "short_title": "AI mid cap ($2B-$10B)",
+        "shortfall_note": "Only 4 stocks met every rule; the list is not padded to 5.",
+        "title": "AI-exposed mid-cap research candidates",
+        "candidates": [
+          {
+            "ai_role": "AI software and data",
+            "composite": 56.88,
+            "confidence_label": "medium",
+            "counterargument": "Weakest evidence: price momentum (-17% over 12-1 months).",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 6997861638.7,
+            "missing": [],
+            "name": "UiPath, Inc. Class A Common Stock",
+            "price": 13.3799,
+            "price_date": "2026-10-15",
+            "rank": 1,
+            "sector": "Information Technology",
+            "ticker": "PATH",
+            "top20_test": {
+              "current_vs_threshold": 0.016026053391180153,
+              "market_cap_now": 6997861638.7,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 6248211930.190848,
+                  "multiple_of_threshold": 0.014309253763875412,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 5246495889.967394,
+                  "multiple_of_threshold": 0.012015188008896447,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 9845717632.164948,
+                  "multiple_of_threshold": 0.022548030326142846,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 11299148827.14545,
+                  "multiple_of_threshold": 0.02587658512384694,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 13470900586.170595,
+                  "multiple_of_threshold": 0.03085019155385233,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 19242576052.78897,
+                  "multiple_of_threshold": 0.04406811210733358,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          },
+          {
+            "ai_role": "Neoclouds and data centers",
+            "composite": 32.5,
+            "confidence_label": "medium",
+            "counterargument": "Key evidence is missing (growth_consistency, growth_acceleration), so the score may overstate the case.",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 5625912739.7,
+            "missing": [
+              "growth_consistency",
+              "growth_acceleration",
+              "roic",
+              "accruals"
+            ],
+            "name": "Applied Digital Corporation - Common Stock",
+            "price": 18.605,
+            "price_date": "2026-10-15",
+            "rank": 2,
+            "sector": "Information Technology",
+            "ticker": "APLD",
+            "top20_test": {
+              "current_vs_threshold": 0.012884104115739868,
+              "market_cap_now": 5625912739.7,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 7548722466.775803,
+                  "multiple_of_threshold": 0.01728759948878098,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 7584817951.66613,
+                  "multiple_of_threshold": 0.01737026305058018,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 16078516274.515728,
+                  "multiple_of_threshold": 0.036821985567896516,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 26865732428.8396,
+                  "multiple_of_threshold": 0.06152617535572302,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 26849906941.618153,
+                  "multiple_of_threshold": 0.06148993284104543,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 64554546222.40609,
+                  "multiple_of_threshold": 0.14783867670122688,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          },
+          {
+            "ai_role": "Neoclouds and data centers",
+            "composite": 19.45,
+            "confidence_label": "medium",
+            "counterargument": "Key evidence is missing (revenue_cagr_3y, growth_consistency, growth_acceleration), so the score may overstate the case.",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 9986947044.93,
+            "missing": [
+              "revenue_cagr_3y",
+              "growth_consistency",
+              "growth_acceleration"
+            ],
+            "name": "IREN Limited - Ordinary Shares",
+            "price": 27.945,
+            "price_date": "2026-10-15",
+            "rank": 3,
+            "sector": "Financials",
+            "ticker": "IREN",
+            "top20_test": {
+              "current_vs_threshold": 0.022871464858895088,
+              "market_cap_now": 9986947044.93,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 13570375610.342186,
+                  "multiple_of_threshold": 0.03107800286690353,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 12276217243.035736,
+                  "multiple_of_threshold": 0.028114204472205823,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 34430037772.01763,
+                  "multiple_of_threshold": 0.0788494617474615,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 53235825461.470314,
+                  "multiple_of_threshold": 0.12191726919133021,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 58568099691.80661,
+                  "multiple_of_threshold": 0.1341289012474991,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 122168209799.24194,
+                  "multiple_of_threshold": 0.2797817896427095,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          },
+          {
+            "ai_role": "Neoclouds and data centers",
+            "composite": 17.07,
+            "confidence_label": "high",
+            "counterargument": "Weakest evidence: price momentum (-11% over 12-1 months).",
+            "data_timestamp": "2026-10-15T14:37:46+00:00",
+            "market_cap": 4089057111.725,
+            "missing": [],
+            "name": "Core Scientific, Inc. - Common Stock",
+            "price": 12.725,
+            "price_date": "2026-10-15",
+            "rank": 4,
+            "sector": "Financials",
+            "ticker": "CORZ",
+            "top20_test": {
+              "current_vs_threshold": 0.009364496038287432,
+              "market_cap_now": 4089057111.725,
+              "reason": null,
+              "rows": [
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 4370946598.118827,
+                  "multiple_of_threshold": 0.01001006123985936,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bear",
+                  "market_cap": 3320055735.55698,
+                  "multiple_of_threshold": 0.007603378464283905,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 11258763235.539549,
+                  "multiple_of_threshold": 0.025784096635116143,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "base",
+                  "market_cap": 15585459350.85876,
+                  "multiple_of_threshold": 0.03569281826059812,
+                  "year": 10
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 18641216991.979584,
+                  "multiple_of_threshold": 0.042690918199625574,
+                  "year": 5
+                },
+                {
+                  "above_today_bar": false,
+                  "case": "bull",
+                  "market_cap": 33641908353.802147,
+                  "multiple_of_threshold": 0.07704453835977539,
+                  "year": 10
+                }
+              ],
+              "status": "ok",
+              "threshold": 436655330410.37,
+              "threshold_ticker": "CVX"
+            }
+          }
+        ]
+      }
+    },
+    "ai": {
+      "ladder": {
+        "available": true,
+        "basis": "S&P 500 members with valid data in this run (as-of close x SEC cover-page shares)",
+        "members": [
+          {
+            "market_cap": 5228977000000.0,
+            "rank": 1,
+            "ticker": "NVDA"
+          },
+          {
+            "market_cap": 5033678623800.0,
+            "rank": 2,
+            "ticker": "AAPL"
+          },
+          {
+            "market_cap": 4303164855000.0005,
+            "rank": 3,
+            "ticker": "GOOGL"
+          },
+          {
+            "market_cap": 3978978551352.35,
+            "rank": 4,
+            "ticker": "MSFT"
+          },
+          {
+            "market_cap": 2717611704465.4,
+            "rank": 5,
+            "ticker": "AMZN"
+          },
+          {
+            "market_cap": 1884855300000.0,
+            "rank": 6,
+            "ticker": "META"
+          },
+          {
+            "market_cap": 1621649801439.15,
+            "rank": 7,
+            "ticker": "AVGO"
+          },
+          {
+            "market_cap": 1428235328618.28,
+            "rank": 8,
+            "ticker": "TSLA"
+          },
+          {
+            "market_cap": 1196351960902.9065,
+            "rank": 9,
+            "ticker": "LLY"
+          },
+          {
+            "market_cap": 1025471085312.26,
+            "rank": 10,
+            "ticker": "MU"
+          },
+          {
+            "market_cap": 945107520959.125,
+            "rank": 11,
+            "ticker": "WMT"
+          },
+          {
+            "market_cap": 888844299884.1,
+            "rank": 12,
+            "ticker": "JPM"
+          },
+          {
+            "market_cap": 875545339275.8601,
+            "rank": 13,
+            "ticker": "AMD"
+          },
+          {
+            "market_cap": 719461235641.2,
+            "rank": 14,
+            "ticker": "XOM"
+          },
+          {
+            "market_cap": 623368470085.99,
+            "rank": 15,
+            "ticker": "JNJ"
+          },
+          {
+            "market_cap": 509860072060.0,
+            "rank": 16,
+            "ticker": "PLTR"
+          },
+          {
+            "market_cap": 509583611475.45,
+            "rank": 17,
+            "ticker": "ABBV"
+          },
+          {
+            "market_cap": 463683318800.0,
+            "rank": 18,
+            "ticker": "INTC"
+          },
+          {
+            "market_cap": 443568047055.51,
+            "rank": 19,
+            "ticker": "COST"
+          },
+          {
+            "market_cap": 436655330410.37,
+            "rank": 20,
+            "ticker": "CVX"
+          },
+          {
+            "market_cap": 429958811435.015,
+            "rank": 21,
+            "ticker": "CSCO"
+          },
+          {
+            "market_cap": 401703327600.0,
+            "rank": 22,
+            "ticker": "ORCL"
+          },
+          {
+            "market_cap": 399532819817.898,
+            "rank": 23,
+            "ticker": "KO"
+          },
+          {
+            "market_cap": 371765758272.03,
+            "rank": 24,
+            "ticker": "MRK"
+          },
+          {
+            "market_cap": 370796431295.7,
+            "rank": 25,
+            "ticker": "UNH"
+          },
+          {
+            "market_cap": 369166458589.2,
+            "rank": 26,
+            "ticker": "PG"
+          },
+          {
+            "market_cap": 359007701059.10004,
+            "rank": 27,
+            "ticker": "BAC"
+          },
+          {
+            "market_cap": 337956775680.0,
+            "rank": 28,
+            "ticker": "LRCX"
+          },
+          {
+            "market_cap": 336265971550.17,
+            "rank": 29,
+            "ticker": "CAT"
+          },
+          {
+            "market_cap": 335628230593.56,
+            "rank": 30,
+            "ticker": "AMAT"
+          }
+        ],
+        "n_with_cap": 495,
+        "reason": null,
+        "threshold": 436655330410.37,
+        "threshold_ticker": "CVX"
+      },
+      "universe": {
+        "defined": 59,
+        "resolved": 58,
+        "roles": {
+          "AI": "AI software and data",
+          "ALAB": "Networking and optical",
+          "AMAT": "Chip equipment and test",
+          "AMD": "Accelerators and AI chips",
+          "AMZN": "Cloud and platforms",
+          "ANET": "Networking and optical",
+          "APH": "Networking and optical",
+          "APLD": "Neoclouds and data centers",
+          "ARM": "Accelerators and AI chips",
+          "AVGO": "Accelerators and AI chips",
+          "BBAI": "AI software and data",
+          "CBRS": "Accelerators and AI chips",
+          "CEG": "Power, cooling and electrical",
+          "CIEN": "Networking and optical",
+          "COHR": "Networking and optical",
+          "CORZ": "Neoclouds and data centers",
+          "CRDO": "Networking and optical",
+          "CRWV": "Neoclouds and data centers",
+          "DDOG": "AI software and data",
+          "DELL": "Servers and systems",
+          "DLR": "Neoclouds and data centers",
+          "EME": "Power, cooling and electrical",
+          "EQIX": "Neoclouds and data centers",
+          "ETN": "Power, cooling and electrical",
+          "FIX": "Power, cooling and electrical",
+          "GEV": "Power, cooling and electrical",
+          "GLW": "Networking and optical",
+          "GOOGL": "Cloud and platforms",
+          "HPE": "Servers and systems",
+          "IREN": "Neoclouds and data centers",
+          "KLAC": "Chip equipment and test",
+          "LITE": "Networking and optical",
+          "LRCX": "Chip equipment and test",
+          "MDB": "AI software and data",
+          "META": "Cloud and platforms",
+          "MRVL": "Accelerators and AI chips",
+          "MSFT": "Cloud and platforms",
+          "MU": "Memory and storage",
+          "NBIS": "Neoclouds and data centers",
+          "NOW": "AI software and data",
+          "NVDA": "Accelerators and AI chips",
+          "ONTO": "Chip equipment and test",
+          "ORCL": "Cloud and platforms",
+          "P": "Memory and storage",
+          "PATH": "AI software and data",
+          "PLTR": "AI software and data",
+          "PWR": "Power, cooling and electrical",
+          "SMCI": "Servers and systems",
+          "SNDK": "Memory and storage",
+          "SNOW": "AI software and data",
+          "SOUN": "AI software and data",
+          "SPCX": "Diversified, includes a frontier AI lab",
+          "STX": "Memory and storage",
+          "TEM": "AI software and data",
+          "TER": "Chip equipment and test",
+          "TLN": "Power, cooling and electrical",
+          "VRT": "Power, cooling and electrical",
+          "VST": "Power, cooling and electrical",
+          "WDC": "Memory and storage"
+        },
+        "unresolved": {
+          "ARM": "not common stock (warrant, right, unit, preferred, note, fund or blank-check)"
+        }
+      }
+    }
+  }
+}

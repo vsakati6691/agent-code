@@ -62,7 +62,8 @@ const server = http.createServer((req, res) => {
           checks.push({name, width, theme, ...dimensions});
           assert.ok(dimensions.overflow <= 1, `${name} ${width} ${theme}: page overflow ${dimensions.overflow}px`);
           assert.ok(dimensions.numeric.includes('tabular-nums'));
-          if ((name === 'index' && width === 1440) || (name === 'watchlist' && width === 390)) {
+          if ((name === 'index' && width === 1440) || (name === 'watchlist' && width === 390) ||
+              (name === 'ai' && [390, 1440].includes(width))) {
             await page.screenshot({path: path.join(out, `${name}-${width}-${theme}.png`)});
           }
         }
@@ -171,8 +172,9 @@ const server = http.createServer((req, res) => {
     assert.equal(await fallback.locator('#ticker-command').isVisible(), false);
     assert.equal(await fallback.locator('#t-scan').locator('..').getAttribute('tabindex'), '0');
     await nojs.close();
+    const ai = await require('./dashboard_ai_browser.cjs').checkAiPage(page, base);
     assert.deepEqual(errors, []);
-    const result = {checks, errors, sticky, maxLayoutShift: Math.max(...checks.map(c => c.cls)),
+    const result = {checks, errors, sticky, ai, maxLayoutShift: Math.max(...checks.map(c => c.cls)),
       interactions: 'palette, nested navigation, empty search, Escape/focus, sticky axes, sorting, 503 retry, partial data, theme, reduced motion, print, no JavaScript'};
     fs.writeFileSync(path.join(out, 'browser-results.json'), JSON.stringify(result, null, 2));
     console.log(JSON.stringify({pagesChecked: checks.length, maxLayoutShift: result.maxLayoutShift, errors, sticky}));
