@@ -162,6 +162,20 @@ def test_13f_slice_reconciles_managers_amendments_and_share_types():
     assert sec_institutions.aggregate_zip(bad, date(2026, 6, 30), AS_OF)["state"] == "partial"
 
 
+def test_ftd_footer_and_undatable_rows_are_skipped_not_fatal():
+    # Weekly run 39094652069 (2026-10-16): one non-date settlement value discarded the whole mapping file.
+    text = fixture("ftd.txt").replace(
+        "Record Count: 5",
+        "Trailer record count 5\r\nTrailer total quantity of shares 300\r\n|000000005|BAD|1|No date|1\r\nSETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE",
+    )
+    mapping = sec_institutions.ftd_mapping(archive("ftd.txt", replacements={"ftd.txt": text}), AS_OF)
+    assert mapping["symbols"]["ABC"] == {"cusip": "000000001", "date": "2026-09-30", "reason": None}
+    assert "BAD" not in mapping["symbols"] and mapping["skipped_rows"] == 4
+    header_only = "SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\r\nTrailer record count 0\r\n"
+    with pytest.raises(FetchError, match="no dated ticker-CUSIP rows"):
+        sec_institutions.ftd_mapping(archive("ftd.txt", replacements={"ftd.txt": header_only}), AS_OF)
+
+
 def test_ftd_gaps_ambiguity_and_institutional_change_staleness():
     mapping = sec_institutions.ftd_mapping(archive("ftd.txt"), AS_OF)
     assert mapping["symbols"]["ABC"]["cusip"] == "000000001"

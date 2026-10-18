@@ -156,6 +156,7 @@ def ftd_mapping(body: bytes, as_of: date) -> dict:
     z = zip_tables(body)
     mappings = defaultdict(set)
     dates = {}
+    skipped = 0
     try:
         names = [n for n in z.namelist() if n.lower().endswith(".txt")]
         if len(names) != 1:
@@ -165,9 +166,14 @@ def ftd_mapping(body: bytes, as_of: date) -> dict:
             if not {"SETTLEMENT DATE", "CUSIP", "SYMBOL"} <= set(reader.fieldnames or []):
                 raise FetchError("FTD column layout changed")
             for row in reader:
-                if row.get("SETTLEMENT DATE", "").startswith("Record Count"):
+                # Trailer/footer lines and undatable rows cannot supply a dated mapping; count them, never guess.
+                try:
+                    if any(row.get(k) is None for k in ("SETTLEMENT DATE", "CUSIP", "SYMBOL")):
+                        raise FetchError("not a data row")
+                    day = _date(row["SETTLEMENT DATE"])
+                except FetchError:
+                    skipped += 1
                     continue
-                day = _date(row["SETTLEMENT DATE"])
                 if day > as_of:
                     continue
                 ticker, cusip = canonical(row.get("SYMBOL", "")), row.get("CUSIP", "").strip().upper()
@@ -175,6 +181,8 @@ def ftd_mapping(body: bytes, as_of: date) -> dict:
                     continue
                 mappings[ticker].add(cusip)
                 dates[ticker] = max(dates.get(ticker, ""), str(day))
+        if not mappings:
+            raise FetchError(f"FTD archive has no dated ticker-CUSIP rows ({skipped} rows skipped)")
         reverse = defaultdict(set)
         for ticker, cusips in mappings.items():
             for cusip in cusips:
@@ -189,8 +197,11 @@ def ftd_mapping(body: bytes, as_of: date) -> dict:
                 }
                 for t, cs in mappings.items()
             },
+            "skipped_rows": skipped,
             "archive_sha256": hashlib.sha256(body).hexdigest(),
         }
+    except (UnicodeError, csv.Error) as exc:
+        raise FetchError(f"FTD archive parse failed ({type(exc).__name__})") from None
     finally:
         z.close()
 
