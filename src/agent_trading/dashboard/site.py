@@ -72,6 +72,7 @@ from .site_overview import band_title, evidence_fragments, excluded_page, list_p
 from .site_symbol import symbol_index, symbol_page
 from .site_watchlist import watchlist_csv, watchlist_page
 from .store import Store, find_private_keys
+from .tracking import weekly_sample
 
 
 def scan_for_secrets(out: Path, env_names: tuple[str, ...]) -> list[str]:
@@ -128,6 +129,11 @@ def _build_site(
     integrity = store.verify_all()
     bad = {p.split()[1] for p in integrity if p.startswith("snapshot ")}
     dates = [d for d in store.dates() if d not in bad]
+    # spec SNAPSHOT_CADENCE_RULE: history views and tracking use one snapshot per version and ISO week; per-snapshot
+    # files are published for those weeks and the latest sessions only. Every snapshot stays in the data branch.
+    manifests = [m for m in store.manifests() if m["as_of"] not in bad]
+    tracked = weekly_sample(manifests)
+    published = sorted(set(tracked) | set(dates[-spec.PUBLISHED_RECENT_SNAPSHOTS :]))
     snap = store.load(dates[-1]) if dates else None
     if snap is not None:  # display-only comparison with the owner's stored Robinhood calendar check (never stored)
         verdicts = earnings_verdicts.EarningsVerdicts.load(data_dir)
@@ -175,7 +181,7 @@ def _build_site(
 
     status = store.status()
     if not dates:
-        msg = (status or {}).get("message", "no weekly snapshot has been produced yet")
+        msg = (status or {}).get("message", "no snapshot has been produced yet")
         body = f'<h1>{E(brand())} Dashboard</h1><div class="banner bad"><strong>No research data available</strong>{E(msg)}</div>'
         (out / "index.html").write_text(page("Overview", body, "index.html"), encoding="utf-8")
         for rel, title in (("growth.html", "Growth Stocks"), ("multibaggers.html", "Multibaggers")):
@@ -216,14 +222,14 @@ def _build_site(
     )
     tracking = store.read_json("tracking.json")
     prev_snap = store.load(dates[-2]) if len(dates) > 1 else None
-    history = [snap if d == dates[-1] else store.load(d) for d in dates]
+    history = [snap if d == dates[-1] else store.load(d) for d in tracked]
     daily = site_refresh.load_context(data_dir, snap, out)
     research_evidence = site_evidence.read_evidence()
     write(
         "index.html",
         "Overview",
         overview(snap, status, dates, tracking, prev_snap, daily)
-        + site_methodology.progress(history)
+        + site_methodology.progress(manifests)
         + site_evidence.summary(research_evidence),
         "index.html",
     )
@@ -258,12 +264,12 @@ def _build_site(
     )
     write("goal.html", "Plan 2030", site_goal.goal_page(snap, daily=daily), "goal.html", js=("assets/goal.js",))
     write("evidence.html", "Evidence", site_evidence.evidence_page(research_evidence), "evidence.html")
-    write("history.html", "History", history_page(dates, tracking, history), "history.html")
+    write("history.html", "History", history_page(dates, tracking, manifests, reports=published), "history.html")
     write("methodology.html", "Methodology", methodology_page(), "methodology.html", fr="")
     write(
         "audit.html",
         "Audit trail",
-        audit_page(store, snap, integrity, daily, status) + site_build.section(build_info),
+        audit_page(store, snap, integrity, daily, status, published=published) + site_build.section(build_info),
         "audit.html",
     )
     profiles = {k: b.get("profile", "standard") for k, b in snap["bands"].items()}
@@ -325,12 +331,14 @@ def _build_site(
                 1,
                 js=("assets/lab.js",),
             )
-    for d in dates:
+    public = earnings_verdicts.without_overlay  # the build-time comparison is not part of the stored data
+    for d in published:  # one snapshot in memory at a time
         s = snap if d == dates[-1] else store.load(d)
+        (out / "data" / f"{d}.json").write_text(json.dumps(public(s), default=str), encoding="utf-8")
         (out / "downloads" / f"{d}_macro.csv").write_text(macro_csv(s), encoding="utf-8")
         (out / "downloads" / f"{d}_external.csv").write_text(external_csv(s), encoding="utf-8")
         (out / "reports" / f"{d}.html").write_text(
-            page(f"Week ending {d}", weekly_report(s), "history.html", 1, ""), encoding="utf-8"
+            page(f"Snapshot {d}", weekly_report(s), "history.html", 1, ""), encoding="utf-8"
         )
         for key, band in s["bands"].items():
             (out / "downloads" / f"{d}_{key}.csv").write_text(band_csv(band), encoding="utf-8")
@@ -341,10 +349,7 @@ def _build_site(
                 )
         if s.get("watchlist"):
             (out / "downloads" / f"{d}_watchlist_2030.csv").write_text(watchlist_csv(s), encoding="utf-8")
-    public = earnings_verdicts.without_overlay  # the build-time comparison is not part of the stored data
     (out / "data" / "latest.json").write_text(json.dumps(public(snap), default=str), encoding="utf-8")
-    for s in history:
-        (out / "data" / f"{s['as_of']}.json").write_text(json.dumps(public(s), default=str), encoding="utf-8")
     from .schema import SCHEMA
 
     (out / "data" / "schema.json").write_text(json.dumps(SCHEMA, indent=1), encoding="utf-8")

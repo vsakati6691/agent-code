@@ -1,6 +1,6 @@
 # Tikasa Stock Research Dashboard (GitHub Pages)
 
-A static website, rebuilt every weekend by GitHub Actions, that compares US growth stocks, long-horizon speculative candidates, S&P 500 call and put contracts, and the owner's watchlist using rules fixed in advance. The outputs are **research comparisons only**: they are not personalized advice, recommendations, or instructions to trade. The dashboard never reads the brokerage account and never places orders.
+A static website, rebuilt after every NYSE session by GitHub Actions, that compares US growth stocks, long-horizon speculative candidates, S&P 500 call and put contracts, and the owner's watchlist using rules fixed in advance. The outputs are **research comparisons only**: they are not personalized advice, recommendations, or instructions to trade. The dashboard never reads the brokerage account and never places orders.
 
 - Code: `src/agent_trading/dashboard/`
 - Workflow: `.github/workflows/research-dashboard.yml`
@@ -254,7 +254,8 @@ There is no fundamental rescan, broker access, new stock ranking or performance-
 `--no-options` collects quotes only; `--as-of YYYY-MM-DD` validates current provider responses against that
 session, not historical chains. It cannot reconstruct a historical option market.
 
-The workflow is scheduled for weekdays at 22:17 UTC (18:17 EDT / 17:17 EST), shares the weekly workflow's
+Since spec 2026-10-18.1 the workflow runs only on manual dispatch, because the full collection now stores a
+snapshot after every session. When run, it shares the main workflow's
 `research-dashboard` concurrency group without cancellation, and runs only from `main`. Holidays and runs
 before 17:00 New York are skipped with an audit reason. Existing cache entries are bypassed so a pre-close
 response cannot masquerade as a post-close refresh. Limits are tightened to 80 Cboe HTTP attempts, one Alpha
@@ -441,9 +442,10 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
 
 ## Schedule, time zones and failures
 
-- **When:** Saturday 14:17 UTC, with a Sunday 14:17 UTC retry. GitHub cron runs in UTC and ignores daylight saving time.
-  - That is 10:17 EDT or 09:17 EST: well after Friday's close, and after Cboe's daily history files catch up. They were observed to lag the close by several hours.
-  - The Sunday run does nothing if Saturday's snapshot exists.
+- **When (spec 2026-10-18.1):** Monday to Friday at 22:17 UTC, with a retry at 11:17 UTC Tuesday to Saturday. GitHub cron runs in UTC and ignores daylight saving time.
+  - That is 18:17 EDT or 17:17 EST, after the close. Cboe's daily history files can lag the close by a session; the as-of bar then comes only from a verified post-close quote (`PRICE_BAR_RULE`).
+  - The retry (07:17 EDT / 06:17 EST, before the next open) does nothing if that session's snapshot exists.
+  - Tracking and the evidence count use one snapshot per methodology version and ISO week (`SNAPSHOT_CADENCE_RULE`); the site publishes per-snapshot files for those weeks and the latest 10 sessions, and every snapshot stays in `research-data`.
   - **Run workflow** (manual dispatch) accepts an as-of date and an options on/off switch.
 - **Holidays:** the as-of date is the latest completed NYSE session (`market_calendar`), for example Thursday after Good Friday. A non-trading as-of date is refused.
 - **Unavailable closing data:** each stock needs a bar for the as-of session.
@@ -561,8 +563,8 @@ session:
 4. Run `python -m agent_trading.dashboard earnings-calendar import --data <data> <files>`.
    `--checked-at` defaults to today; `--start` and `--days` record the exact window of a single file, otherwise the
    window is the first to the last report date in the response. Payloads with account fields are rejected.
-5. Commit and push `research-data`. The next site build shows the verdicts: the daily refresh (22:17 UTC on
-   weekdays) or a manual run of the publish workflow. The weekly run is not needed, and checks expire after 14 days.
+5. Commit and push `research-data`. The next site build shows the verdicts: the next daily run (22:17 UTC on
+   weekdays) or a manual run of the publish workflow. Checks expire after 14 days.
 
 Robinhood's calendar is a second calendar, not the company's own notice: a date "verified (broker calendar)" can
 still move, and the two sources may share an upstream.

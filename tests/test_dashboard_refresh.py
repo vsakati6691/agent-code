@@ -16,7 +16,7 @@ from agent_trading.dashboard.http import BudgetExceeded, FetchError, HttpClient
 from agent_trading.dashboard.refresh import CBOE_BUDGET, constrain, run
 from agent_trading.dashboard.refresh_store import MAX_DAY_BYTES, RefreshStore
 from agent_trading.dashboard.site import build_site
-from agent_trading.dashboard.site_refresh import load_context, price
+from agent_trading.dashboard.site_refresh import audit_context, banner, load_context, options_section, price
 from agent_trading.dashboard.store import Store
 from tests.dashboard_fixtures import AS_OF, FakeProviders, benchmarks, demo_site, option_row
 from tests.test_dashboard_site import visible_text
@@ -253,18 +253,21 @@ def test_site_daily_labels_fallbacks_weekly_scores_links_and_size(built_refresh,
     for name in ("index", "growth", "options"):
         page = (out / f"{name}.html").read_text(encoding="utf-8")
         assert "Daily:" in page and 'href="audit.html#daily-context"' in page
-        assert f"Weekly snapshot {AS_OF}" in audit and "Quotes are delayed, never live" in audit
+        assert f"Snapshot {AS_OF}" in audit and "Quotes are delayed, never live" in audit
         assert "None" not in visible_text(page) and "NaN" not in visible_text(page)
     assert "Daily view" in (out / "options.html").read_text(encoding="utf-8")
     assert "Daily unavailable" in (out / "growth.html").read_text(encoding="utf-8")
     assert Store(data).latest() == snap
     assert all(p.stat().st_size < 300_000 for p in out.rglob("*.html"))
     ctx = load_context(tmp_path / "missing", snap, tmp_path / "empty-out")
-    assert ctx["data"] is None and "missing" in ctx["reason"]
-    assert price("ABC", 10, ctx) == (10, "Weekly close")
+    assert ctx["data"] is None and "missing" in ctx["reason"] and ctx["snapshot_current"]
+    assert price("ABC", 10, ctx) == (10, "Snapshot close")
     newer = {**snap, "as_of": "2026-10-12"}
     ctx = load_context(data, newer, tmp_path / "older-out")
     assert ctx["data"] is None and "older" in ctx["reason"]
+    # spec 2026-10-18.1: with daily snapshots an older refresh is simply superseded, not a warning on every page
+    assert ctx["snapshot_current"] and banner(newer, ctx) == "" and options_section(newer, ctx) == ""
+    assert "the snapshot is the latest collected session" in audit_context(newer, ctx)
 
 
 def test_site_publishes_only_last_30_daily_files_and_keeps_source(tmp_path):

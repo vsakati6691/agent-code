@@ -109,6 +109,13 @@ class Store:
             if (p / "snapshot.json").exists() and (p / "manifest.json").exists()
         )
 
+    def manifests(self) -> list[dict]:
+        """Every stored snapshot's manifest (date, methodology version, hash, status), without loading snapshots."""
+        return [
+            json.loads((self.root / "snapshots" / d / "manifest.json").read_text(encoding="utf-8"))
+            for d in self.dates()
+        ]
+
     def write_snapshot(self, payload: dict, code_commit: str = "") -> Path:
         hits = find_private_keys(payload)
         if hits:

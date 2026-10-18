@@ -83,7 +83,7 @@ required for the goal beside the stored scenarios and research evidence. Inputs
 stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
 the current methodology, frozen as of **2026-10-16**. The administrative freeze
-date is recorded separately from methodology version **2026-10-17.6** and its pinned hash. Versions retain separate evidence counts.
+date is recorded separately from methodology version **2026-10-18.1** and its pinned hash. Versions retain separate evidence counts.
 
 Version **2026-10-17.1** registers full S&P 500 collection for the current top-20
 Leaders view. Version **2026-10-17.2** anchors Leaders base growth in three-year
@@ -97,6 +97,9 @@ own open, high, low, close and volume. See [the changelog](docs/SPEC_CHANGELOG.m
 Version **2026-10-17.6** treats Cboe padding rows (zero open, high or low) and listing gaps
 like frozen feeds: older history is dropped and disclosed rather than the stock being rejected
 ([changelog](docs/SPEC_CHANGELOG.md#2026-10-176)).
+Version **2026-10-18.1** collects a full snapshot after every NYSE session. Tracking and the
+52-snapshot evidence count keep one snapshot per ISO week, so daily data cannot inflate the record
+([changelog](docs/SPEC_CHANGELOG.md#2026-10-181)).
 These rows still depend on a successful weekly import; code deployment does not
 fill missing data in older snapshots.
 
@@ -135,8 +138,8 @@ option contract can lose its entire premium.
 | Workflow | Schedule | What changes |
 |---|---|---|
 | [Publish code changes](.github/workflows/research-dashboard-publish.yml) | Every push to `main`, or manual run on `main` | Tests the code, verifies stored data and rebuilds Pages without collecting data or changing snapshots. |
-| [Weekly research](.github/workflows/research-dashboard.yml) | Saturday 14:17 UTC (10:17 EDT / 09:17 EST); Sunday retry at the same time | Collects fundamentals and prices, ranks candidates, stores an immutable snapshot, updates tracking and builds the site. |
-| [Daily light refresh](.github/workflows/research-dashboard-daily.yml) | Weekdays 22:17 UTC (18:17 EDT / 17:17 EST), when enabled | Adds delayed closing prices and optional options research. Weekly stock scores, ranks, trailing returns and tracking remain unchanged. |
+| [Daily research](.github/workflows/research-dashboard.yml) | Weekdays 22:17 UTC (18:17 EDT / 17:17 EST), after the close; retry 11:17 UTC Tuesday–Saturday, before the next open | Collects fundamentals and prices, ranks candidates, stores an immutable snapshot for the session, updates tracking (one snapshot per ISO week) and builds the site. |
+| [Price-only refresh](.github/workflows/research-dashboard-daily.yml) | Manual only (since 2026-10-18.1) | Adds delayed closing prices and optional options research to the latest snapshot. Not needed while full snapshots run every session. |
 
 GitHub Actions runs independently of the owner's laptop. Scheduled jobs can be
 late or skipped; holidays, provider failures and incomplete coverage are

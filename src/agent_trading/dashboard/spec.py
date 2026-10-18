@@ -1,8 +1,8 @@
-"""Pre-registered methodology for the weekly research dashboard.
+"""Pre-registered methodology for the research dashboard.
 
 Every rule that decides which stocks and option contracts appear, and in what
 order, lives here and is fixed BEFORE results are looked at. The spec is
-hashed (`spec_hash`) and the hash is written into every weekly snapshot, so a
+hashed (`spec_hash`) and the hash is written into every snapshot, so a
 later change to any rule shows up as a new spec version in the audit trail and
 in performance tracking (results are never pooled across versions).
 
@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-17.6"
+SPEC_VERSION = "2026-10-18.1"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -72,6 +72,10 @@ SPEC_CHANGELOG = [
     (
         "2026-10-17.6",
         "Owner-approved data fix: Cboe padded bars and listing gaps trimmed like frozen runs; close range checked over 63 bars.",
+    ),
+    (
+        "2026-10-18.1",
+        "Owner chose daily snapshots: one per NYSE session; tracking and evidence keep one per ISO week; stale after 2 sessions.",
     ),
 ]
 
@@ -1186,6 +1190,17 @@ FEE_NOTE = (
 # --- Performance tracking ---------------------------------------------------------
 TRACK_HORIZONS = {"1m": 21, "3m": 63, "6m": 126, "12m": 252}  # trading days after the snapshot's as-of close
 MIN_SNAPSHOTS_FOR_EVIDENCE = 52
+# spec 2026-10-18.1: snapshots are collected daily; tracking and evidence keep a weekly sample.
+SNAPSHOT_CADENCE_RULE = (
+    "A snapshot is collected after every completed NYSE session (scheduled on weekday evenings after the close, "
+    "with a retry before the next open) and is immutable. Tracking, the desk record and the evidence count use one "
+    "snapshot per methodology version and ISO week: the latest stored session of that week. Other snapshots are "
+    "stored and displayed but never tracked, so overlapping daily baskets cannot inflate the record, and the "
+    "MIN_SNAPSHOTS_FOR_EVIDENCE requirement still counts distinct weeks. The site publishes per-snapshot data and "
+    "reports for those weekly snapshots and the latest PUBLISHED_RECENT_SNAPSHOTS sessions; every snapshot stays "
+    "in the data branch with its hash."
+)
+PUBLISHED_RECENT_SNAPSHOTS = 10
 TRACKING_METHOD = (
     "Each weekly snapshot's ranked candidates form an equal-weighted research basket per category, bought at "
     "the as-of close and held for 1, 3, 6 and 12 months. Returns are PRICE returns (dividends excluded) "
@@ -1217,7 +1232,8 @@ FRESHNESS_RULE = (
     "Data age is counted in completed NYSE sessions after the as-of session, in New York time (a session counts "
     "as completed at 16:00 ET). The page warns when more than FRESHNESS_STALE_SESSIONS sessions have passed."
 )
-FRESHNESS_STALE_SESSIONS = 6  # a weekly update normally lags at most five sessions
+FRESHNESS_STALE_SESSIONS_2026_10_14_5 = 6  # a weekly update normally lagged at most five sessions
+FRESHNESS_STALE_SESSIONS = 2  # spec 2026-10-18.1: daily snapshots; warn after two missed sessions
 FRESHNESS_CALENDAR_DAYS = 120  # sessions listed in each page for the browser to count
 DATASET_STATES = {
     "available": "Collected for the snapshot and passed validation.",
@@ -1319,6 +1335,7 @@ def spec_dict() -> dict:
             "max_filing_age_days": MAX_FILING_AGE_DAYS,
             "max_price_lag": MAX_PRICE_LAG_BUSINESS_DAYS,
         },
+        "snapshot_cadence": {"rule": SNAPSHOT_CADENCE_RULE, "published_recent": PUBLISHED_RECENT_SNAPSHOTS},
         "price_bars": {
             "rule": PRICE_BAR_RULE,
             "range_check_bars": PRICE_RANGE_CHECK_BARS,

@@ -170,7 +170,7 @@ at expiration): {E(", ".join(probability.DATA_CONTRACT["record_fields"]))}. {E(p
 <div class="table-wrap"><table aria-label="ETF exposure-class assumptions"><thead><tr><th>ETF exposure class</th><th>Name keywords</th><th class="num">Bear / base / bull total return</th>
 <th class="num">Assumed fee</th><th class="num">Assumed distribution yield</th></tr></thead><tbody>{etf}</tbody></table></div>
 {site_bets.methodology()}
-<h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p>
+<h2>Performance tracking</h2><p>{E(spec.TRACKING_METHOD)}</p><p id="snapshot-cadence">{E(spec.SNAPSHOT_CADENCE_RULE.replace("MIN_SNAPSHOTS_FOR_EVIDENCE requirement", f"{spec.MIN_SNAPSHOTS_FOR_EVIDENCE}-snapshot requirement").replace("PUBLISHED_RECENT_SNAPSHOTS", str(spec.PUBLISHED_RECENT_SNAPSHOTS)))}</p>
 <h2 id="buy-sell-desk">Buy/Sell desk · version 2026-10-17.5</h2><p>{E(spec.DESK_RULE)}</p><p>{E(spec.DESK_TRACKING)}</p>
 {leaders_methodology()}
 <h2 id="display-rules">Data states, research panel and comparisons</h2>

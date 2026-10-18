@@ -1,11 +1,9 @@
-# Disabled until the owner explicitly sets DASHBOARD_DAILY=true.
-# 22:17 UTC is 18:17 EDT / 17:17 EST: after the conservative post-close delay window.
-# Current public data only. No brokerage access, messages, weekly rescoring or tracking updates.
+# Manual only since spec 2026-10-18.1: research-dashboard now stores a full snapshot after every NYSE session,
+# so this price-only refresh is no longer scheduled. "Run workflow" still works (guarded by DASHBOARD_DAILY=true).
+# Current public data only. No brokerage access, messages, rescoring or tracking updates.
 name: research-dashboard-daily
 
 on:
-  schedule:
-    - cron: "17 22 * * 1-5"
   workflow_dispatch:
 
 permissions:

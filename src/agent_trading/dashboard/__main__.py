@@ -146,7 +146,7 @@ def cmd_run(args) -> int:
 
 
 def update_tracking(store: Store, providers: Providers, as_of: date) -> None:
-    snaps = [store.load(d) for d in store.dates()]
+    snaps = [store.load(d) for d in tracking.weekly_sample(store.manifests())]  # spec SNAPSHOT_CADENCE_RULE
     tickers = {c["ticker"] for s in snaps for b in s.get("bands", {}).values() for c in b.get("candidates", [])}
     tickers |= {b.benchmark for b in spec.BANDS}
     prices = {}

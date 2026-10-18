@@ -20,8 +20,13 @@ from .site_options import lists_of
 from .site_overview import band_title
 
 
-def history_page(dates: list[str], tracking: dict | None, snapshots: list[dict] | None = None) -> str:
-    items = "".join(f'<li><a href="reports/{d}.html">Week ending {d}</a></li>' for d in reversed(dates))
+def history_page(
+    dates: list[str], tracking: dict | None, snapshots: list[dict] | None = None, reports: list[str] | None = None
+) -> str:
+    """`snapshots` may be manifests (version counts only); `reports` are the dates whose report pages are published."""
+    items = "".join(
+        f'<li><a href="reports/{d}.html">Snapshot {d}</a></li>' for d in reversed(dates if reports is None else reports)
+    )
     if not tracking:
         trk = f'<p class="small">{E(tracking_schedule(dates))}</p>'
     else:
@@ -66,13 +71,13 @@ def history_page(dates: list[str], tracking: dict | None, snapshots: list[dict] 
 <p class="small">{E(tracking["method"])}</p><ul class="small">{"".join(f"<li>{E(x)}</li>" for x in tracking["limitations"])}</ul>
 <p class="small">Assumed trading friction per side: {E(", ".join(f"{k} {v:g} bps" for k, v in tracking["friction"].items()))}
 (bps = hundredths of a percent).</p>"""
-    return f"""<h1>History and performance tracking</h1><p class="lede">Every weekly snapshot is stored unchanged. Later prices
-measure each list as it was published.</p>{site_methodology.history_table(snapshots or [])}<h2>Weekly reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
+    return f"""<h1>History and performance tracking</h1><p class="lede">Every snapshot is stored unchanged; tracking uses one per ISO week. Later prices
+measure each list as it was published.</p>{site_methodology.history_table(snapshots or [])}<h2>Snapshot reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
 
 
 def weekly_report(snap: dict) -> str:
     parts = [
-        f'<p class="small"><a href="../history.html">&larr; all weeks</a></p><h1>Week ending {E(snap["as_of"])}</h1>'
+        f'<p class="small"><a href="../history.html">&larr; all snapshots</a></p><h1>Snapshot {E(snap["as_of"])}</h1>'
         f'<p class="lede">Status {E(snap.get("status", "?"))} · methodology {E(snap.get("spec_version", "?"))}.</p>'
     ]
     for k, b in snap["bands"].items():

@@ -6,6 +6,7 @@ import json
 
 from . import (
     evidence,
+    spec,
 )
 from .fmt import (
     metric,
@@ -32,7 +33,12 @@ def _readable(d) -> str:
 
 
 def audit_page(
-    store: Store, snap: dict, integrity: list[str], daily: dict | None = None, status: dict | None = None
+    store: Store,
+    snap: dict,
+    integrity: list[str],
+    daily: dict | None = None,
+    status: dict | None = None,
+    published: list[str] | None = None,
 ) -> str:
     from .site_external import rate_note
     from .site_options_status import status_html, version_line
@@ -78,5 +84,7 @@ Problems: {E("; ".join(snap.get("problems", [])) or "none")}.</p>
 <h2>Machine-readable data</h2><ul class="small"><li><a href="data/schema.json">data/schema.json</a>: what every field means
 (ratios are decimals, money is USD, times are UTC)</li><li><a href="data/latest.json">data/latest.json</a>: the latest snapshot</li>
 <li><a href="downloads/{E(str(snap["as_of"]))}_external.csv">Company public-dataset CSV</a></li><li><a href="downloads/{E(str(snap["as_of"]))}_macro.csv">Macro CSV</a></li>
-{"".join(f'<li><a href="data/{E(d)}.json">data/{E(d)}.json</a>: week ending {E(d)}</li>' for d in reversed(store.dates()))}</ul>
+{"".join(f'<li><a href="data/{E(d)}.json">data/{E(d)}.json</a>: session {E(d)}</li>' for d in reversed(store.dates() if published is None else published))}</ul>
+<p class="small">Published here: the snapshot tracked for each ISO week and the latest {spec.PUBLISHED_RECENT_SNAPSHOTS} sessions.
+Every stored snapshot, listed above with its hash, stays unchanged in the repository's <code>research-data</code> branch.</p>
 <h2>Events</h2><div class="table-wrap"><table aria-label="Audit events"><thead><tr><th>At (UTC)</th><th>Event</th><th>Details</th></tr></thead><tbody>{rows}</tbody></table></div>"""
