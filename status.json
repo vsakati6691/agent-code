@@ -1,6 +1,12 @@
 {
- "status": "failed",
- "message": "unexpected error (ZeroDivisionError)",
+ "status": "partial",
+ "message": "weekly update completed with partial data",
  "as_of": "2026-10-16",
- "at": "2026-10-17T23:41:57+00:00"
+ "at": "2026-10-18T04:54:05+00:00",
+ "problems": [
+  "Alpha Vantage daily budget spent or provider stopped for today",
+  "insiders: partial; 16/40 available; 15 deferred",
+  "institutions: provider_error; 0/40 available; 0 deferred",
+  "risk_excerpt: partial; 37/40 available; 0 deferred"
+ ]
 }
