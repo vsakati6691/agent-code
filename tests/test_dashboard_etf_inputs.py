@@ -22,6 +22,8 @@ def test_new_version_changes_only_input_registration():
     raw.pop("leaders_2030")
     raw.pop("external_datasets")
     raw.pop("price_bars")  # 2026-10-17.4
+    raw.pop("snapshot_cadence")  # 2026-10-18.1
+    raw["display_rules"]["freshness"][1] = spec.FRESHNESS_STALE_SESSIONS_2026_10_14_5
     raw["display_rules"]["watchlist_price"][0] = spec.WATCHLIST_PRICE_RULE_2026_10_14_5
     raw["version"] = "2026-10-14.9"
     assert raw["watchlist"].pop("etf_inputs_sha256") == etf_inputs.config_hash(etf_inputs.load())

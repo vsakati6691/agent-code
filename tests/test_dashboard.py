@@ -505,6 +505,48 @@ def cli_env(monkeypatch, prov):
     return prov
 
 
+def test_daily_snapshots_track_one_per_week_and_publish_a_bounded_set(tmp_path, cli_env, monkeypatch):
+    # spec 2026-10-18.1 SNAPSHOT_CADENCE_RULE: a snapshot every session; tracking keeps the last one of each ISO week
+    from agent_trading.market_calendar import previous_trading_day
+
+    data, out = tmp_path / "data", tmp_path / "site"
+    sessions = [AS_OF]
+    while len(sessions) < 7:
+        sessions.insert(0, previous_trading_day(sessions[0]))
+    for d in sessions:
+        assert cli(["run", "--data", str(data), "--as-of", d.isoformat(), "--no-options"]) == 0
+    st = Store(data)
+    assert st.dates() == [d.isoformat() for d in sessions] == [m["as_of"] for m in st.manifests()]
+    weekly = ["2026-10-02", "2026-10-09"]  # the last stored session of ISO weeks 40 and 41
+    assert tracking.weekly_sample(st.manifests()) == weekly
+    assert {r["as_of"] for r in st.read_json("tracking.json")["by_snapshot"]} <= set(weekly)
+    monkeypatch.setattr(spec, "PUBLISHED_RECENT_SNAPSHOTS", 3)
+    assert cli(["build", "--data", str(data), "--out", str(out)]) == 0
+    published = ["2026-10-02", "2026-10-07", "2026-10-08", "2026-10-09"]
+    assert sorted(p.stem for p in (out / "data").glob("2026-*.json") if "_" not in p.stem) == published
+    assert sorted(p.stem for p in (out / "reports").glob("*.html")) == published
+    audit = (out / "audit.html").read_text(encoding="utf-8")
+    history = (out / "history.html").read_text(encoding="utf-8")
+    for d in sessions:  # every snapshot is listed with its hash; only published ones are linked
+        assert f"<td>{d.isoformat()}</td>" in audit
+        linked = d.isoformat() in published
+        assert (f'href="data/{d.isoformat()}.json"' in audit) is linked
+        assert (f'href="reports/{d.isoformat()}.html"' in history) is linked
+    assert "Daily refresh unavailable" not in (out / "index.html").read_text(encoding="utf-8")
+
+
+def test_weekly_sample_keeps_each_version_and_week_separately():
+    manifests = [
+        {"as_of": "2026-10-13", "spec_version": "a"},
+        {"as_of": "2026-10-14", "spec_version": "a"},
+        {"as_of": "2026-10-15", "spec_version": "b"},  # a new version mid-week keeps its own sample
+        {"as_of": "2026-10-16", "spec_version": "b"},
+        {"as_of": "2026-10-19", "spec_version": "b"},
+    ]
+    assert tracking.weekly_sample(manifests) == ["2026-10-14", "2026-10-16", "2026-10-19"]
+    assert tracking.weekly_sample([]) == []
+
+
 def test_cli_failed_run_keeps_last_snapshot_and_site_shows_stale_banner(tmp_path, cli_env):
     data, out = tmp_path / "data", tmp_path / "site"
     assert cli(["run", "--data", str(data), "--as-of", "2026-10-09", "--no-options"]) == 0
@@ -517,7 +559,7 @@ def test_cli_failed_run_keeps_last_snapshot_and_site_shows_stale_banner(tmp_path
     assert "run_failed" in events and "run_skipped" in events
     assert cli(["build", "--data", str(data), "--out", str(out)]) == 0
     index = (out / "index.html").read_text(encoding="utf-8")
-    assert "latest weekly update failed" in index and "2026-10-09" in index
+    assert "latest update failed" in index and "2026-10-09" in index
     assert (out / "options.html").exists() and "Options data unavailable" in (out / "options.html").read_text(
         encoding="utf-8"
     )

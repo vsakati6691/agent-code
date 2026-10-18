@@ -47,7 +47,7 @@ def market_context(snap: dict, daily: dict | None = None) -> str:
         b = (snap.get("benchmarks") or {}).get(ticker) or {}
         current = b.get("date") == snap.get("as_of")
         close, note = site_refresh.price(ticker, b.get("close") if current else None, daily)
-        if close is None and note == "Weekly close":
+        if close is None and note == site_refresh.SNAPSHOT_CLOSE:
             note = "No dated benchmark close stored for this snapshot"
         available |= close is not None
         value = money(close) if close is not None else f'<span title="{E(note)}">—</span>'

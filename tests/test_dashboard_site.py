@@ -230,6 +230,15 @@ def test_methodology_states_the_registered_price_bar_rule(site):
     assert not any(name in meth for name in ("PRICE_BAR_RULE", "PRICE_RANGE_CHECK_BARS", "PRICE_LISTING_GAP_DAYS"))
 
 
+def test_methodology_states_the_daily_cadence_and_weekly_tracking_sample(site):
+    meth = (site / "methodology.html").read_text(encoding="utf-8")
+    cadence = re.search(r'<p id="snapshot-cadence">(.*?)</p>', meth, re.S).group(1)
+    assert "after every completed NYSE session" in cadence
+    assert "one snapshot per methodology version and ISO week" in cadence and "the 52-snapshot requirement" in cadence
+    assert "the latest 10 sessions" in cadence
+    assert "PUBLISHED_RECENT_SNAPSHOTS" not in cadence and "MIN_SNAPSHOTS_FOR_EVIDENCE" not in cadence
+
+
 def test_empty_states_say_what_appears_and_when(tmp_path):
     from agent_trading.dashboard.fmt import tracking_schedule
 

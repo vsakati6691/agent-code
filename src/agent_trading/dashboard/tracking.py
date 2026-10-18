@@ -32,6 +32,18 @@ class _Legacy:
 ALL_BANDS = {**{k: _Legacy(v) for k, v in spec.LEGACY_BANDS.items()}, **BANDS}
 
 
+def weekly_sample(manifests: list[dict]) -> list[str]:
+    """As-of dates that tracking and evidence use (spec SNAPSHOT_CADENCE_RULE): for each methodology version and
+    ISO week, the latest stored session. Other daily snapshots are stored and shown, never tracked, so overlapping
+    daily baskets cannot inflate the record."""
+    latest: dict[tuple, str] = {}
+    for m in manifests:
+        day = date.fromisoformat(str(m["as_of"]))
+        key = (str(m.get("spec_version")), *day.isocalendar()[:2])
+        latest[key] = max(latest.get(key, ""), str(m["as_of"]))
+    return sorted(set(latest.values()))
+
+
 @lru_cache(maxsize=4096)
 def sessions_elapsed(start: date, as_of: date) -> int:
     """NYSE sessions after `start` up to and including `as_of` (spec.TRACK_HORIZONS count trading days).

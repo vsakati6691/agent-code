@@ -57,7 +57,7 @@ def trace_path(ticker: str) -> str:
 def _provenance(payload: dict, stored: bool, snap: dict) -> str:
     if stored:
         return (
-            f'<p class="small">Ratings stored with the {E(payload["as_of"])} weekly snapshot under methodology '
+            f'<p class="small">Ratings stored with the {E(payload["as_of"])} snapshot under methodology '
             f"{E(payload.get('spec_version') or '?')}. Stored ratings are tracked below.</p>"
         )
     return (

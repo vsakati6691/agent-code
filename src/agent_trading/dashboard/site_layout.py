@@ -92,7 +92,7 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <footer><details><summary>Research, not advice; scenarios are conditional, with no established probability.</summary>
 <p>{E(spec.DISCLAIMER)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p><p>Quotes are delayed, never live.
 Sources:{extra_source} SEC EDGAR, Nasdaq Trader, Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage.
-Built from stored weekly snapshots. <a href="{up}audit.html">Data sources and run details</a>.</p></details></footer></main>{site_command.dialog() if symbols else ""}
+Built from stored snapshots. <a href="{up}audit.html">Data sources and run details</a>.</p></details></footer></main>{site_command.dialog() if symbols else ""}
 <script src="{up}assets/app.js{asset_version}"></script><script src="{up}assets/command.js{asset_version}"></script>{"".join(f'<script src="{up}{s}{asset_version}"></script>' for s in scripts)}</body></html>"""
 
 
@@ -127,7 +127,7 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
     ]
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):
         parts.append(
-            '<div class="banner bad"><strong>Stale data: the latest weekly update failed.</strong>'
+            '<div class="banner bad"><strong>Stale data: the latest update failed.</strong>'
             f'Displaying {E(as_of)}. <a href="audit.html#latest-run">Failure details</a>.</div>'
         )
     if snap.get("status") == "partial":
@@ -137,6 +137,6 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
     parts.append(
         f'<div class="banner warn" id="stale-client"{"" if stale else " hidden"}><strong>This page may be out of date.</strong>'
         f"More than {spec.FRESHNESS_STALE_SESSIONS} NYSE sessions have passed since the as-of close, so at "
-        "least one weekly update did not publish.</div>"
+        "least one scheduled update did not publish.</div>"
     )
     return "".join(parts)

@@ -64,24 +64,33 @@ def load_context(data: Path, snap: dict, out: Path) -> dict:
     latest = valid[-1] if valid else None
     reason = "Daily data missing: no verified daily refresh has been stored."
     if latest and latest["as_of"] < snap["as_of"]:
-        reason = f"Daily data ({latest['as_of']}) is older than the weekly snapshot."
+        reason = f"Daily data ({latest['as_of']}) is older than the snapshot."
         latest = None
     elif latest and latest["weekly_as_of"] != snap["as_of"]:
-        reason = "Daily data belongs to a different weekly candidate set."
+        reason = "Daily data belongs to a different snapshot's candidate set."
         latest = None
-    if problems and (not latest or max(problems) > latest["as_of"]):
+    integrity_failed = bool(problems and (not latest or max(problems) > latest["as_of"]))
+    if integrity_failed:
         reason = "Latest daily data failed its integrity check."
         latest = None
-    return {"data": latest, "reason": reason if latest is None else "", "weekly_preclose": preclose(snap)}
+    return {
+        "data": latest,
+        "reason": reason if latest is None else "",
+        "weekly_preclose": preclose(snap),
+        # spec SNAPSHOT_CADENCE_RULE: snapshots are daily, so without a newer refresh the snapshot is the latest session
+        "snapshot_current": latest is None and not integrity_failed,
+    }
 
 
 def banner(snap: dict, context: dict | None) -> str:
     weekly_date = str(snap.get("as_of") or "unavailable")
     data = (context or {}).get("data")
     if not data:
+        if (context or {}).get("snapshot_current"):
+            return ""
         reason = (context or {}).get("reason") or "Daily data missing: no daily refresh available."
         return (
-            f'<p class="small muted daily-status" title="{E(reason)}">Daily refresh unavailable · weekly {E(weekly_date)} · '
+            f'<p class="small muted daily-status" title="{E(reason)}">Daily refresh unavailable · snapshot {E(weekly_date)} · '
             '<a href="audit.html#daily-context">Details</a>.</p>'
         )
     stamp = str(data["collected_at"]).replace("T", " ").replace("+00:00", "").removesuffix("Z")
@@ -99,12 +108,15 @@ def audit_context(snap: dict, context: dict | None) -> str:
         f"Collected {data.get('collected_at', 'time not stored')}; session {data.get('as_of', 'date not stored')}; "
         f"refresh status: {data.get('status', 'not stored')}."
         if data
+        else "No daily refresh is newer than the snapshot; with daily snapshots, the snapshot is the latest collected session."
+        if (context or {}).get("snapshot_current")
         else (context or {}).get("reason") or "Daily data missing: no daily refresh available."
     )
     return (
         '<section id="daily-context"><h2>Daily refresh details</h2>'
-        f"<p>{E(text)} Weekly snapshot {E(snap['as_of'])}. Scores, ranks and trailing returns remain weekly. "
-        "Change since weekly is an unadjusted price comparison; splits and dividends can affect it. "
+        f"<p>{E(text)} Snapshot {E(snap['as_of'])}. A daily refresh newer than the snapshot updates prices only; scores, "
+        "ranks and trailing returns come from the snapshot. Change since the snapshot is an unadjusted price comparison; "
+        "splits and dividends can affect it. "
         "Quotes are delayed, never live.</p>"
         + partial_details(data).replace(
             '<details class="refresh-missing"><summary>', '<details class="refresh-missing" open><summary>'
@@ -113,10 +125,13 @@ def audit_context(snap: dict, context: dict | None) -> str:
     )
 
 
+SNAPSHOT_CLOSE = "Snapshot close"  # price() label when no newer daily close exists
+
+
 def price(symbol: str, weekly, context: dict | None) -> tuple[float | None, str]:
     data = (context or {}).get("data")
     if data is None:
-        return weekly, SHORT_NOTE if (context or {}).get("weekly_preclose") else "Weekly close"
+        return weekly, SHORT_NOTE if (context or {}).get("weekly_preclose") else SNAPSHOT_CLOSE
     quote = data.get("quotes", {}).get(symbol) or {}
     if quote.get("status") != "available":
         return None, "Daily unavailable: " + (quote.get("reason") or "not collected")
@@ -124,17 +139,19 @@ def price(symbol: str, weekly, context: dict | None) -> tuple[float | None, str]
     delta = value / weekly - 1 if isinstance(weekly, (int, float)) and weekly > 0 else None
     if (context or {}).get("weekly_preclose"):
         return value, f"Daily close · {pct(delta, 1, True)} vs stored intraday input (correction 2026-10-16)"
-    return value, f"Daily close · {pct(delta, 1, True)} since weekly"
+    return value, f"Daily close · {pct(delta, 1, True)} since snapshot"
 
 
 def options_section(snap: dict, context: dict) -> str:
     head = '<section id="daily-options"><h2>Daily view</h2>' + banner(snap, context)
     data = context.get("data")
     if data is None:
+        if context.get("snapshot_current"):
+            return ""  # the option lists above are the latest session's
         return (
             '<details class="empty-data" id="daily-options"><summary>Daily options unavailable</summary>'
             + banner(snap, context)
-            + '<p class="small">The weekly tracked lists appear above.</p></details>'
+            + '<p class="small">The tracked lists appear above.</p></details>'
         )
     options = data.get("options") or {}
     if not options.get("enabled"):

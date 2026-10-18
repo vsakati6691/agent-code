@@ -13,7 +13,7 @@ from tests.spec_history import historical_reason
 
 
 def test_decision_rules_are_registered_before_evaluation():
-    assert spec.SPEC_VERSION == "2026-10-17.6"
+    assert spec.SPEC_VERSION == "2026-10-18.1"
     assert "registered before any data" in historical_reason("2026-10-14.9")
     assert spec.DECISION_RULES["growth_weights"] == {
         "growth": 0.25,

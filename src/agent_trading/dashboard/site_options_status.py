@@ -130,14 +130,14 @@ def status_block(snap: dict) -> dict:
     elif state == "provider_error":
         headline = "Options data unavailable: collection ran but produced no usable chain."
         detail = f"{detail}. No contracts, prices or Greeks are shown rather than inventing them."
-        action = "The next weekly run retries automatically; the audit page lists the request counts and errors."
+        action = "The next scheduled run retries automatically; the audit page lists the request counts and errors."
     elif state == "stale":
         headline = "Options data unavailable: every option chain was rejected as stale."
         detail = (
             f"{detail}. A chain is used only when the underlying traded in the as-of session and the chain's "
             "snapshot is not older than that session."
         )
-        action = "The next weekly run retries automatically."
+        action = "The next scheduled run retries automatically."
     elif state == "partial":
         headline = "Options collected with gaps: some chains could not be used."
         detail = f"{detail}. The lists below rank only the contracts from usable chains; nothing is filled in."

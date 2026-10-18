@@ -106,3 +106,14 @@ def test_all_publish_workflows_guard_main_check_links_and_pin_actions():
                 from tests.workflow_checks import assert_pinned_action
 
                 assert_pinned_action(root.parent.parent, step["uses"])
+
+
+def test_full_snapshot_runs_after_every_session_and_the_price_refresh_is_manual():
+    # spec 2026-10-18.1 SNAPSHOT_CADENCE_RULE: weekday evenings after the close, a retry before the next open
+    root = Path(__file__).resolve().parents[1] / ".github/workflows"
+    full = yaml.safe_load((root / "research-dashboard.yml").read_text())
+    daily = yaml.safe_load((root / "research-dashboard-daily.yml").read_text())
+    full_on, daily_on = full.get("on", full.get(True)), daily.get("on", daily.get(True))
+    assert [c["cron"] for c in full_on["schedule"]] == ["17 22 * * 1-5", "17 11 * * 2-6"]
+    assert "workflow_dispatch" in full_on
+    assert "schedule" not in daily_on and "workflow_dispatch" in daily_on

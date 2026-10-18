@@ -105,4 +105,4 @@ def overview(
 {ai_summary}
 <details class="context-details"><summary>Options research summary</summary>{watchlist_cards(snap)}</details>
 <details class="context-details small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details>
-<p class="small muted">{len(dates)} weekly snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""
+<p class="small muted">{len(dates)} snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""
