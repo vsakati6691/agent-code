@@ -126,6 +126,24 @@ def test_zero_open_is_rejected_not_a_crash(bar):
         check(trimmed)
 
 
+def test_padding_and_listing_gaps_are_anomalies_only_when_asked():
+    import pandas as pd
+
+    from agent_trading.data.validation import listing_gaps, padded_bars, trim_bad_history
+
+    df = make_bars()
+    df.iloc[100, df.columns.get_loc("low")] = 0.0
+    assert padded_bars(df) == [df.index[100]]
+    same, note = trim_bad_history(df, "PAD")  # trading-system default is unchanged
+    assert note is None and same.equals(df)
+    trimmed, note = trim_bad_history(df, "PAD", padding_and_gaps=True)
+    assert trimmed.index[0] == df.index[101] and "padded bar on" in note
+    assert len(check(trimmed)) == 199
+    gapped = pd.concat([make_bars(n=40, end="2020-01-31"), make_bars()])
+    assert listing_gaps(gapped) == [gapped.index[39]]
+    assert listing_gaps(make_bars()) == []  # weekends and holidays are far shorter than 30 days
+
+
 def test_large_genuine_gap_kept_but_split_ratio_rejected():
     df = make_bars()
     df.iloc[150:, :4] = df.iloc[150:, :4] * 1.7  # +70% jump (like ECHO on 2025-08-26): not a split ratio

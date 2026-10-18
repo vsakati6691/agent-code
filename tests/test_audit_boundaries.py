@@ -101,13 +101,13 @@ def test_cboe_open_outside_range_is_kept_but_recent_close_break_rejects():
     frame = make_bars(n=300, end=AS_OF.isoformat())
     open_col, close_col = frame.columns.get_loc("open"), frame.columns.get_loc("close")
     frame.iloc[-1, open_col] = frame.iloc[-1]["high"] * 1.002  # Cboe convention, seen on most series
-    frame.iloc[10, close_col] = frame.iloc[10]["high"] * 1.001  # older than the 252-session window
+    frame.iloc[10, close_col] = frame.iloc[10]["high"] * 1.001  # older than the 63-session window
     before = frame.copy(deep=True)
     result, reason, flags = pipeline_collect.latest_bars(
         Context(AS_OF, SimpleNamespace(history=lambda _: frame)), "SYN"
     )
     assert reason is None and result.equals(before)  # used exactly as published
-    assert any(flag.startswith("1 close(s) before the last 252 sessions") for flag in flags)
+    assert any(flag.startswith("1 close(s) before the last 63 sessions") for flag in flags)
 
     recent = before.copy()
     recent.iloc[-5, close_col] = recent.iloc[-5]["high"] * 1.001
@@ -116,13 +116,40 @@ def test_cboe_open_outside_range_is_kept_but_recent_close_break_rejects():
 
 
 @pytest.mark.parametrize("padded", [["open"], ["open", "high", "low"]])
-def test_cboe_padding_row_rejects_one_stock_instead_of_crashing_the_run(padded):
+def test_cboe_padding_row_is_an_anomaly_never_a_crash_or_a_repair(padded):
     # 2026-10-17 run 39074747829: a zero-open padding row raised ZeroDivisionError and failed the whole weekly run.
+    # 2026-10-16 snapshot: old padding rows then rejected BIIB, OKLO, CRWV, LAZR and RVI outright (spec 2026-10-17.6).
     frame = make_bars(n=300, end=AS_OF.isoformat())
     for col in padded:
         frame.iloc[40, frame.columns.get_loc(col)] = 0.0
-    result, reason, _ = pipeline_collect.latest_bars(Context(AS_OF, SimpleNamespace(history=lambda _: frame)), "SYN")
+    before = frame.copy(deep=True)
+    result, reason, flags = pipeline_collect.latest_bars(
+        Context(AS_OF, SimpleNamespace(history=lambda _: frame)), "SYN"
+    )
+    assert reason is None and result.equals(before.iloc[41:])  # history before the padded bar dropped, nothing filled
+    assert f"SYN: history before {before.index[41].date()} dropped (padded bar on {before.index[40].date()})" in flags
+
+    recent = before.copy()
+    for col in padded:
+        recent.iloc[-10, recent.columns.get_loc(col)] = 0.0
+    result, reason, _ = pipeline_collect.latest_bars(Context(AS_OF, SimpleNamespace(history=lambda _: recent)), "SYN")
+    assert result is None and reason.startswith("price data rejected: SYN: recent data anomaly (padded bar on")
+
+    private = SimpleNamespace(history_provider="massive", history=lambda _: frame)  # strict for private history
+    result, reason, _ = pipeline_collect.latest_bars(Context(AS_OF, private), "SYN")
     assert result is None and reason == "price data rejected: SYN: non-positive prices"
+
+
+def test_cboe_listing_gap_drops_the_earlier_listing():
+    # CRWV: Cboe history holds 2011-2012 OTC rows of an earlier listing, then the 2025 IPO.
+    earlier = make_bars(n=120, start=0.5, end="2012-09-27", seed=3)
+    current = make_bars(n=300, end=AS_OF.isoformat())
+    frame = pd.concat([earlier, current])
+    result, reason, flags = pipeline_collect.latest_bars(
+        Context(AS_OF, SimpleNamespace(history=lambda _: frame)), "SYN"
+    )
+    assert reason is None and result.equals(current)
+    assert f"SYN: history before {current.index[0].date()} dropped (listing gap on 2012-09-27)" in flags
 
 
 def test_private_history_keeps_strict_checks_and_is_never_completed_from_a_cboe_quote():

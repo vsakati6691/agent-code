@@ -224,9 +224,10 @@ def test_long_paragraphs_are_folded_except_on_methodology(site):
 def test_methodology_states_the_registered_price_bar_rule(site):
     meth = (site / "methodology.html").read_text(encoding="utf-8").replace("&#x27;", "'")
     assert 'id="price-bars"' in meth and "so it is not range-checked" in meth
-    assert "in the last 252 sessions (the 52-week-high window)" in meth
+    assert "in the last 63 sessions, the window in which a frozen feed or split also rejects" in meth
+    assert "more than 30 calendar days apart" in meth and "the private-history rule" in meth
     assert "pass the daily price-bar rule" in meth
-    assert "PRICE_BAR_RULE" not in meth and "PRICE_RANGE_CHECK_BARS" not in meth
+    assert not any(name in meth for name in ("PRICE_BAR_RULE", "PRICE_RANGE_CHECK_BARS", "PRICE_LISTING_GAP_DAYS"))
 
 
 def test_empty_states_say_what_appears_and_when(tmp_path):
