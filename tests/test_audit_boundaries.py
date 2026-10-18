@@ -115,6 +115,16 @@ def test_cboe_open_outside_range_is_kept_but_recent_close_break_rejects():
     assert result is None and reason == "price data rejected: SYN: close outside high/low range"
 
 
+@pytest.mark.parametrize("padded", [["open"], ["open", "high", "low"]])
+def test_cboe_padding_row_rejects_one_stock_instead_of_crashing_the_run(padded):
+    # 2026-10-17 run 39074747829: a zero-open padding row raised ZeroDivisionError and failed the whole weekly run.
+    frame = make_bars(n=300, end=AS_OF.isoformat())
+    for col in padded:
+        frame.iloc[40, frame.columns.get_loc(col)] = 0.0
+    result, reason, _ = pipeline_collect.latest_bars(Context(AS_OF, SimpleNamespace(history=lambda _: frame)), "SYN")
+    assert result is None and reason == "price data rejected: SYN: non-positive prices"
+
+
 def test_private_history_keeps_strict_checks_and_is_never_completed_from_a_cboe_quote():
     frame = make_bars(n=300, end=AS_OF.isoformat())
     frame.iloc[10, frame.columns.get_loc("open")] = frame.iloc[10]["high"] * 1.002

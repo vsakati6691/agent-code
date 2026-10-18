@@ -114,6 +114,18 @@ def test_trim_frozen_history_rejects_recent_freeze():
         trim_frozen_history(df, "HON")
 
 
+@pytest.mark.parametrize("bar", [5, -1])  # an old padded bar, and the as-of bar
+def test_zero_open_is_rejected_not_a_crash(bar):
+    from agent_trading.data.validation import trim_bad_history
+
+    df = make_bars()
+    df.iloc[bar, df.columns.get_loc("open")] = 0.0  # Cboe pads some rows with a zero open
+    trimmed, note = trim_bad_history(df, "TEST")  # 2026-10-17: this raised ZeroDivisionError and crashed the run
+    assert note is None and trimmed.equals(df)
+    with pytest.raises(DataQualityError, match="non-positive prices"):
+        check(trimmed)
+
+
 def test_large_genuine_gap_kept_but_split_ratio_rejected():
     df = make_bars()
     df.iloc[150:, :4] = df.iloc[150:, :4] * 1.7  # +70% jump (like ECHO on 2025-08-26): not a split ratio

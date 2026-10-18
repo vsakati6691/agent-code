@@ -52,8 +52,11 @@ def frozen_feed_start(df: pd.DataFrame) -> pd.Timestamp | None:
 
 
 def split_suspects(df: pd.DataFrame) -> list[pd.Timestamp]:
-    """Dates whose overnight gap looks like an unadjusted split (ratio near a split ratio)."""
-    ratio = (df["open"] / df["close"].shift(1)).dropna()
+    """Dates whose overnight gap looks like an unadjusted split (ratio near a split ratio).
+
+    A non-positive or missing price gives no usable ratio; it is skipped here and rejected by validate_bars."""
+    ratio = df["open"] / df["close"].shift(1)
+    ratio = ratio[np.isfinite(ratio) & (ratio > 0)]
     big = ratio[(ratio < SPLIT_SUSPECT_LOW) | (ratio > SPLIT_SUSPECT_HIGH)]
     out = []
     for day, r in big.items():
