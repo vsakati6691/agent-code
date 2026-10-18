@@ -83,7 +83,7 @@ required for the goal beside the stored scenarios and research evidence. Inputs
 stay in the browser's local storage. The overview
 reports missing refresh datasets and progress toward 52 weekly snapshots under
 the current methodology, frozen as of **2026-10-16**. The administrative freeze
-date is recorded separately from methodology version **2026-10-17.5** and its pinned hash. Versions retain separate evidence counts.
+date is recorded separately from methodology version **2026-10-17.6** and its pinned hash. Versions retain separate evidence counts.
 
 Version **2026-10-17.1** registers full S&P 500 collection for the current top-20
 Leaders view. Version **2026-10-17.2** anchors Leaders base growth in three-year
@@ -94,6 +94,9 @@ Version **2026-10-17.4** accepts public Cboe daily bars as published (Cboe's ope
 lies just outside its own high-low range and is not range-checked) and fills a
 lagging history file's as-of bar only from a verified post-close quote with its
 own open, high, low, close and volume. See [the changelog](docs/SPEC_CHANGELOG.md#2026-10-174).
+Version **2026-10-17.6** treats Cboe padding rows (zero open, high or low) and listing gaps
+like frozen feeds: older history is dropped and disclosed rather than the stock being rejected
+([changelog](docs/SPEC_CHANGELOG.md#2026-10-176)).
 These rows still depend on a successful weekly import; code deployment does not
 fill missing data in older snapshots.
 

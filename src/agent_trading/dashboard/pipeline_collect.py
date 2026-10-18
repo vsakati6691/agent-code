@@ -74,7 +74,8 @@ def latest_bars(
         elif q is not None:  # one source per private series: never spliced with a Cboe quote
             flags.append("close-only quote available; daily OHLCV history is missing for the as-of session")
     try:
-        df, trimmed = trim_bad_history(df, symbol)  # an old glitch drops older history, a recent one rejects
+        # an old glitch drops older history, a recent one rejects; Cboe padding rows and listing gaps count too
+        df, trimmed = trim_bad_history(df, symbol, padding_and_gaps=cboe)
         if trimmed:
             flags.append(trimmed)
         df = validate_bars(

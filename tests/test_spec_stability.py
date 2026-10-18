@@ -4,9 +4,9 @@ from agent_trading.dashboard import spec
 
 
 def test_registered_spec_hash_is_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-17.5"
+    assert spec.SPEC_VERSION == "2026-10-17.6"
     assert spec.SPEC_FREEZE_DATE == "2026-10-16"
-    assert spec.spec_hash() == "4ddb57a61a8ef6b3"
+    assert spec.spec_hash() == "e9da93a7beccbb19"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():
@@ -37,12 +37,20 @@ def test_addition_preserves_every_prior_registered_rule():
     import json
 
     previous = spec.spec_dict()
+    # 2026-10-17.6 changes only the Cboe price-bar rule: restoring its 2026-10-17.4 form restores 2026-10-17.5
+    bars = previous["price_bars"]
+    assert bars.pop("listing_gap_days") == spec.PRICE_LISTING_GAP_DAYS == 30
+    assert (bars["rule"], bars["range_check_bars"]) == (spec.PRICE_BAR_RULE, 63)
+    bars["rule"], bars["range_check_bars"] = spec.PRICE_BAR_RULE_2026_10_17_4, spec.PRICE_RANGE_CHECK_BARS_2026_10_17_4
+    previous["version"] = "2026-10-17.5"
+    digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    assert digest == "4ddb57a61a8ef6b3"
     # 2026-10-17.5 only adds the Buy/Sell desk: removing it restores 2026-10-17.4 exactly
     assert previous.pop("decision_desk")["rules"] == spec.DESK_RULES
     previous["version"] = "2026-10-17.4"
     digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
     assert digest == "e6620b35c01e39f3"
-    assert previous.pop("price_bars")["rule"] == spec.PRICE_BAR_RULE
+    assert previous.pop("price_bars")["rule"] == spec.PRICE_BAR_RULE_2026_10_17_4
     previous["display_rules"]["watchlist_price"][0] = spec.WATCHLIST_PRICE_RULE_2026_10_14_5
     previous["version"] = "2026-10-17.3"
     digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]

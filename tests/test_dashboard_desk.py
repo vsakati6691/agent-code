@@ -76,7 +76,7 @@ def cand(
 
 
 def test_registered_before_any_rating_and_additive():
-    assert spec.SPEC_VERSION == "2026-10-17.5"
+    assert spec.SPEC_VERSION == "2026-10-17.6"
     reason = historical_reason("2026-10-17.5")
     assert "written before any rating was computed" in reason
     assert "No existing scale, weight, gate, list" in reason
@@ -274,7 +274,7 @@ def test_weekly_snapshot_stores_the_ratings_and_the_site_renders_them(site):
     store = Store(data)
     snap = store.load(store.dates()[-1])
     stored = snap["decision_desk"]
-    assert stored["spec_version"] == "2026-10-17.5" and stored["entries"]
+    assert stored["spec_version"] == spec.SPEC_VERSION and stored["entries"]
     payload, is_stored = site_desk.payload_for(snap)
     assert is_stored and payload is stored
     page = (out / "desk.html").read_text(encoding="utf-8")

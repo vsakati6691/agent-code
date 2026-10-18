@@ -107,7 +107,7 @@ before any results were computed; a change creates a new version and results are
 <p>Limited operating history: fewer than {spec.LIMITED_HISTORY_QUARTERS} reported quarters. Limited trading history: fewer than
 {spec.LIMITED_HISTORY_DAYS} daily bars. Fundamentals older than {spec.MAX_FILING_AGE_DAYS} days exclude a stock. The as-of close
 must be present. Lists are never padded: fewer than ten qualifying stocks means fewer than ten shown.</p>
-<p id="price-bars">{E(spec.PRICE_BAR_RULE.replace("PRICE_RANGE_CHECK_BARS", str(spec.PRICE_RANGE_CHECK_BARS)))}</p>
+<p id="price-bars">{E(spec.PRICE_BAR_RULE.replace("PRICE_RANGE_CHECK_BARS", str(spec.PRICE_RANGE_CHECK_BARS)).replace("PRICE_LISTING_GAP_DAYS", str(spec.PRICE_LISTING_GAP_DAYS)).replace("PRIVATE_HISTORY_RULE", "the private-history rule"))}</p>
 <h2 id="decision-research">Growth decision research · version 2026-10-14.9</h2>
 <p>New large, mid and small lists rank fundamental quality alone. Price momentum and benchmark-relative returns
 are displayed separately. Annual price returns over 150% are flagged extended. Existing snapshots retain their original ranks.</p>

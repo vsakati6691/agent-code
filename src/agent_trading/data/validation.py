@@ -20,6 +20,7 @@ SPLIT_TOLERANCE = 0.06
 
 FROZEN_RUN = 3  # consecutive flat bars that mark a frozen feed
 RECENT_BARS = 63  # a frozen run this recent means the current feed is broken
+LISTING_GAP_DAYS = 30  # bars further apart than this belong to a different or suspended listing
 
 
 class DataQualityError(ValueError):
@@ -66,14 +67,32 @@ def split_suspects(df: pd.DataFrame) -> list[pd.Timestamp]:
     return out
 
 
-def trim_bad_history(df: pd.DataFrame, symbol: str) -> tuple[pd.DataFrame, str | None]:
-    """Drop history up to the last data anomaly (frozen run or unadjusted split).
+def padded_bars(df: pd.DataFrame) -> list[pd.Timestamp]:
+    """Bars with a positive close but a missing or non-positive open, high or low: vendor padding, not a session."""
+    ohl = df[["open", "high", "low"]]
+    return list(df.index[(df["close"] > 0) & (ohl.isna() | (ohl <= 0)).any(axis=1)])
+
+
+def listing_gaps(df: pd.DataFrame) -> list[pd.Timestamp]:
+    """The last bar before each gap of more than LISTING_GAP_DAYS calendar days (an earlier listing or a suspension)."""
+    days = np.diff(df.index.to_numpy()).astype("timedelta64[D]").astype(int)
+    return [df.index[i] for i in np.flatnonzero(days > LISTING_GAP_DAYS)]
+
+
+def trim_bad_history(
+    df: pd.DataFrame, symbol: str, *, padding_and_gaps: bool = False
+) -> tuple[pd.DataFrame, str | None]:
+    """Drop history up to the last data anomaly (frozen run or unadjusted split; with `padding_and_gaps`, also a
+    padded bar or a listing gap).
 
     An anomaly years ago should not block today's analysis; one inside the last
     RECENT_BARS bars means the current feed is unreliable, so that raises.
     """
     marks = [(end, f"frozen bars {start.date()} to {end.date()}") for start, end in frozen_runs(df)]
     marks += [(d, f"unadjusted split on {d.date()}") for d in split_suspects(df)]
+    if padding_and_gaps:
+        marks += [(d, f"padded bar on {d.date()}") for d in padded_bars(df)]
+        marks += [(d, f"listing gap on {d.date()}") for d in listing_gaps(df)]
     if not marks:
         return df, None
     last, why = max(marks, key=lambda m: m[0])
