@@ -15,6 +15,7 @@ from .fmt import (
 from .fmt import (
     sval as sval,
 )
+from .render_context import customer
 from .site_layout import E, brand
 from .site_options import lists_of
 from .site_overview import band_title
@@ -94,7 +95,7 @@ def weekly_report(snap: dict) -> str:
             f'<p class="small"><a href="../downloads/{E(snap["as_of"])}_{k}.csv" download>CSV</a></p>'
         )
     o = snap.get("options") or {}
-    for h in spec.HORIZONS:
+    for h in () if customer() else spec.HORIZONS:  # the customer edition carries no option research
         for kind, lst in lists_of(o.get(h.key) or {}).items():
             rows = "".join(
                 f"<li>{E(x['option'])}: ask {money(x['ask'])}, breakeven {money(x['breakeven'])}, score "

@@ -15,6 +15,14 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from . import spec
+from .render_context import customer
+
+CUSTOMER_OMITTED_DATASETS = {
+    "Robinhood tradability verdicts",
+    "Broker earnings calendar",
+    "Watchlist prices",
+    "Option chains",
+}
 
 STATE_LABELS = {
     "available": "Available",
@@ -289,6 +297,8 @@ def datasets(snap: dict) -> list[dict]:
                 at,
             )
         )
+    if customer():  # site_customer: datasets behind left-out pages and broker checks are not described
+        out = [r for r in out if r["dataset"] not in CUSTOMER_OMITTED_DATASETS]
     return out
 
 

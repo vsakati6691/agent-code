@@ -272,6 +272,7 @@ def cmd_build(args) -> int:
         code_commit=args.commit,
         data_commit=args.data_commit,
         private=args.private,
+        edition=args.edition,
     )
     print(f"site built: {info}")
     return 0
@@ -343,6 +344,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     b.add_argument("--data-commit", default="", help="full stored-data commit for build metadata")
     b.add_argument("--private", action="store_true", help="allow local rendering of private personal-use data")
+    b.add_argument(
+        "--edition",
+        choices=("full", "customer"),
+        default=os.environ.get("DASHBOARD_EDITION") or "full",
+        help="customer: leave out options, the Buy/Sell desk, the watchlist and broker-derived data",
+    )
     b.set_defaults(func=cmd_build)
     t = sub.add_parser("tradability", help="Robinhood tradability verdicts (checked in a read-only Claude session)")
     t.add_argument("action", choices=["todo", "import"])

@@ -6,6 +6,7 @@ import html
 
 from . import spec
 from .fmt import money, num, pct
+from .render_context import customer
 from .site_options import lists_of
 from .site_overview import band_title, ordered
 
@@ -117,6 +118,7 @@ def symbol_page(ticker: str, snap: dict, history: list[dict]) -> str:
     return (
         f'<h1>{E(ticker)}{" · " + E(name) if name else ""}</h1><p class="lede">{E(sector) + " · " if sector else ""}Everything the '
         f"stored snapshots know about this symbol, as of {E(str(snap['as_of']))}.</p>"
-        f"<h2>This week's lists</h2>{lists}<h2>Option contracts</h2>{options}<h2>Watchlist 2030</h2>{watch}"
-        f"{external}<h2>History across snapshots</h2>{history_html}"
+        f"<h2>This week's lists</h2>{lists}"
+        + ("" if customer() else f"<h2>Option contracts</h2>{options}<h2>Watchlist 2030</h2>{watch}")
+        + f"{external}<h2>History across snapshots</h2>{history_html}"
     )

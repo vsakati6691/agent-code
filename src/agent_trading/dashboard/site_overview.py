@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .fmt import num
+from .render_context import customer
 from .site_briefing import EARNINGS_SHOWN as EARNINGS_SHOWN
 from .site_briefing import FLAG_LIST_MAX as FLAG_LIST_MAX
 from .site_briefing import RISK_GROUPS as RISK_GROUPS
@@ -103,6 +104,6 @@ def overview(
 <div class="section-heading"><h2 id="briefing-title">Research briefing</h2><span class="small muted">Changes, earnings, risks and data coverage</span></div>
 {panels(snap, tracking, dates, prev_snap)}</section>
 {ai_summary}
-<details class="context-details"><summary>Options research summary</summary>{watchlist_cards(snap)}</details>
+{"" if customer() else f'<details class="context-details"><summary>Options research summary</summary>{watchlist_cards(snap)}</details>'}
 <details class="context-details small"><summary>How to read time horizons</summary><p>{E(TIME_GUIDE)}</p></details>
 <p class="small muted">{len(dates)} snapshot(s) stored. <a href="history.html">History and tracking</a>.</p>"""

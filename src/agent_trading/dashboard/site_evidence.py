@@ -8,6 +8,8 @@ import re
 from html import escape
 from pathlib import Path
 
+from .render_context import customer
+
 ROOT = Path(__file__).resolve().parents[3]
 TOURNAMENT = "research/TOURNAMENT_2026-10-12.md"
 FINAL = "docs/FINAL_REPORT_2026-10-12.md"
@@ -98,8 +100,13 @@ def summary(data: dict) -> str:
     return (
         '<section id="evidence"><h2>What the evidence says</h2>'
         f'<p>{escape(verdict)}</p><p><a href="evidence.html">Read the benchmark and GTAA results, '
-        "acceptance rules and limitations</a>. Compare them with the "
-        '<a href="goal.html#required-rate">return required by the Plan 2030 arithmetic</a>.</p></section>'
+        "acceptance rules and limitations</a>."
+        + (
+            ""
+            if customer()
+            else ' Compare them with the <a href="goal.html#required-rate">return required by the Plan 2030 arithmetic</a>.'
+        )
+        + "</p></section>"
     )
 
 
@@ -132,7 +139,12 @@ def evidence_page(data: dict) -> str:
             f"<p>{escape(data['acceptance'])}</p>",
             "<p>The statistical threshold in these historical acceptance rules is not a probability of achieving "
             "a future scenario or return. No candidate passed all rules. No new holdout evaluation was run for this page.</p>",
-            '</details><p><a href="goal.html#required-rate">Compare the required return in Plan 2030</a>.</p>',
+            "</details>"
+            + (
+                ""
+                if customer()
+                else '<p><a href="goal.html#required-rate">Compare the required return in Plan 2030</a>.</p>'
+            ),
         ]
     )
     return "".join(parts)

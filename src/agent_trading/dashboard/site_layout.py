@@ -16,7 +16,7 @@ from . import (
 from .fmt import (
     sval as sval,
 )
-from .render_context import CURRENT_RENDER
+from .render_context import CURRENT_RENDER, customer
 
 _SYMBOLS: dict[str, str] = {}  # legacy standalone page() callers; build_site uses its isolated RenderContext
 
@@ -44,6 +44,15 @@ NAV = [
     ("methodology.html", "Methodology"),
     ("audit.html", "Audit trail"),
 ]
+
+
+def nav_items() -> list[tuple[str, str]]:
+    """Site sections; the customer edition leaves out the pages in site_customer.HIDDEN_PAGES and adds its terms."""
+    if not customer():
+        return NAV
+    from .site_customer import HIDDEN_PAGES
+
+    return [(href, label) for href, label in NAV if href not in HIDDEN_PAGES] + [("terms.html", "Terms")]
 
 
 TH_WITHOUT_SCOPE = re.compile(r"<th\b(?![^>]*\bscope=)")
@@ -74,8 +83,10 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
     freshness = freshness.replace('href="audit.html', f'href="{up}audit.html')
     # the options page is always listed: it explains its own state when nothing was collected (2026-10-14.6)
     nav = "".join(
-        f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>' for href, label in NAV
+        f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>'
+        for href, label in nav_items()
     )
+    terms = f' <a href="{up}terms.html">Terms of use</a>.' if customer() else ""
     search = site_command.search(symbols, up + "symbol/")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -92,7 +103,7 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <footer><details><summary>Research, not advice; scenarios are conditional, with no established probability.</summary>
 <p>{E(spec.DISCLAIMER)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p><p>Quotes are delayed, never live.
 Sources:{extra_source} SEC EDGAR, Nasdaq Trader, Wikipedia (CC BY-SA 4.0), Cboe delayed quotes, Alpha Vantage.
-Built from stored snapshots. <a href="{up}audit.html">Data sources and run details</a>.</p></details></footer></main>{site_command.dialog() if symbols else ""}
+Built from stored snapshots. <a href="{up}audit.html">Data sources and run details</a>.{terms}</p></details></footer></main>{site_command.dialog() if symbols else ""}
 <script src="{up}assets/app.js{asset_version}"></script><script src="{up}assets/command.js{asset_version}"></script>{"".join(f'<script src="{up}{s}{asset_version}"></script>' for s in scripts)}</body></html>"""
 
 
