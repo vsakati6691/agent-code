@@ -26,6 +26,8 @@ Trader, Cboe delayed quotes, Alpha Vantage, FRED and FINRA; coverage and timesta
 on the site.
 
 For personal-use Massive history on this PC, see the [private dashboard setup](docs/PRIVATE_DASHBOARD.md).
+A [customer edition](docs/RESEARCH_DASHBOARD.md#customer-edition) (repository variable `DASHBOARD_EDITION=customer`)
+leaves out options, the Buy/Sell desk, the watchlist and Robinhood-derived data; it is off by default.
 Private data and generated pages stay in ignored local folders and cannot enter the public build.
 
 | Page | What you can explore |
