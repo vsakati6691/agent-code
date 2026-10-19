@@ -111,6 +111,18 @@ Keep SEC XBRL scoring inputs and existing missing-data gates. Cboe remains the p
 
 ## 2026-10-19.2
 
+Owner requested edge-case validation: unknown sector neutrality, New York calendar dates and persistent earnings quarantine during outages.
+
+Register the verification fixes before production collection. Concentration uses the eleven canonical GICS names and the explicit provider aliases in `RESILIENCE_VALIDATION_RULES`; missing and unrecognized tags retain their scores and denominator membership, with a coverage warning. The 50% threshold and maximum ten-point deduction are unchanged. ISO timestamps with an offset are converted to America/New_York before calendar-day comparisons; date-only and naive timestamps already denote New York dates. Invalid or missing historical filing dates are skipped individually, and filings after the as-of date cannot enter cadence. The inclusive +/-21-day tolerance is unchanged.
+
+A future quarantined earnings date remains blocked if the next calendar omits the ticker or fails. Refreshes retain the most recent stored daily validation as well as snapshot validation; the existing confirmed, current manual check is still required to release the same outlier. New scheduled dates are revalidated against the stored estimate. Daily records contain validation only for relevant candidates and option underlyings, keeping the existing 400 KB storage ceiling. A refresh with no verified quotes or chains fails without publishing, so a later retry can recover. Provider JSON and quote/profile/chain schemas are validated before replacing cache entries; an outage never turns stale prices into current observations. Historic methodology hashes, snapshots, tracking, budgets, safety limits and freeze date remain unchanged.
+
+## 2026-10-19.3
+
+Owner requested an executing institutional fallback and a separate delayed 0DTE/next-expiry research desk. SEC failures now invoke optional FMP quarterly aggregates for current collections only, with neutral scoring and explicit provenance. The fixed NVDA, PLTR, MU, AVGO scanner registers actual calendar expiries, liquidity filters, regular-session cutoffs including early closes, bounded fresh requests and immutable intraday observations. No stored snapshot is rescored and no model probability is assigned. Sector deductions remain unchanged and are displayed as pending for historical snapshots lacking them.
+
+## 2026-10-19.4
+
 Data-validation bug fix: date-matched TTM windows, 16-week quarters, current cover pages, Leaders share checks, one row per company.
 
 Found in a review of the published Leaders 2030 page on 2026-10-19 and fixed at the owner's request, then revised after a code review of the same change set before any snapshot was collected under this version. These are data-validation repairs, not tuning: no scale, weight, gate, list size, scenario multiplier or tracking-horizon changes, and stored snapshots are never rescored.

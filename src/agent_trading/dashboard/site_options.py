@@ -87,15 +87,19 @@ def options_page(
     snap: dict, daily: dict | None = None, fragments: dict | None = None, horizon: str | None = None
 ) -> str:
     from .site_refresh import options_section
+    from .site_short_term import navigation
     from .site_speculative import section as speculative_section
 
     o = snap.get("options") or {}
     horizons = [h for h in spec.HORIZONS if horizon is None or h.key == horizon]
     r = spec.OPTION_RULES
     state = status_block(snap)
-    head = f"""<h1>Options</h1><p>Stored calls and puts by expiry, premium and maximum loss.</p>
+    head = (
+        navigation()
+        + f"""<h1>Options</h1><p>Stored calls and puts by expiry, premium and maximum loss.</p>
 <p class="small bad" id="options-critical">Buying an option can lose the entire premium.</p>
 <p class="small" id="options-status" data-state="{E(state["state"])}" title="{E(state["headline"])}">Options: {E(STATE_LABEL[state["state"]])} · <a href="audit.html#options-data">Data details</a>.</p>"""
+    )
     guide = f"""<details class="card small"><summary>Eligibility, pricing and probability limits</summary>
 <p>{E(spec.OPTION_UNIVERSE_TEXT)}</p><p>{E(spec.OPTION_TOP_DEFINITION)}</p><p>{E(spec.OPTION_RANKING_NOTE)}</p>
 <p>Eligibility (fixed in advance): open interest ≥ {r["min_open_interest"]}, volume ≥ {r["min_volume"]}, spread ≤

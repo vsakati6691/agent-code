@@ -18,7 +18,7 @@ from . import spec
 from .site_layout import E, brand
 
 EDITIONS = ("full", "customer")
-HIDDEN_PAGES = ("desk.html", "options.html", "bets.html", "watchlist.html", "goal.html")
+HIDDEN_PAGES = ("desk.html", "options.html", "options-short-term.html", "bets.html", "watchlist.html", "goal.html")
 DROPPED_KEYS = ("options", "speculative", "decision_desk", "watchlist", "tradability")
 # Set to "reviewed" only after legal review of the terms text; until then the page says it is a draft.
 TERMS_STATUS = "draft"

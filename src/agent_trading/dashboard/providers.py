@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 
 import pandas as pd
@@ -130,12 +131,12 @@ class Providers:
         return parse_share_frames(frames, as_of)
 
     def company_facts(self, cik: int) -> dict:
-        return self.http.get_json(SEC_FACTS_URL.format(cik=int(cik)), max_age_hours=72)
+        return self.http.get_json(SEC_FACTS_URL.format(cik=int(cik)), max_age_hours=72, validate=self._object)
 
     def submissions(self, cik: int) -> dict:
         if int(cik) not in self._submissions:
             self._submissions[int(cik)] = self.http.get_json(
-                SEC_SUBMISSIONS_URL.format(cik=int(cik)), max_age_hours=168
+                SEC_SUBMISSIONS_URL.format(cik=int(cik)), max_age_hours=168, validate=self._object
             )
         return self._submissions[int(cik)]
 
@@ -154,15 +155,18 @@ class Providers:
         return parse_sp500(self.http.get_json(WIKI_SP500_URL, WIKI_SP500_PARAMS, max_age_hours=24))
 
     def quote(self, symbol: str) -> Quote:
-        try:
-            quote = parse_cboe_quote(self._price_json(f"{CBOE_BASE}/quotes/{symbol}.json"))
+        def check(raw):
+            quote = parse_cboe_quote(raw)
             if quote.symbol != canonical(symbol) or quote.close is None or quote.close <= 0:
                 raise FetchError("Cboe quote missing or invalid")
             return quote
+
+        try:
+            return self._price_data(f"{CBOE_BASE}/quotes/{symbol}.json", check)
         except (FetchError, ValueError, TypeError, KeyError, AttributeError):
             return self.daily_quote(symbol)
 
-    def _fmp(self, endpoint: str, symbol: str) -> dict | list:
+    def _fmp(self, endpoint: str, symbol: str, validate=None) -> dict | list:
         from .fallbacks import FMP_BASE
 
         if not self.fmp_key:
@@ -171,6 +175,7 @@ class Providers:
             f"{FMP_BASE}/{endpoint}",
             {"symbol": symbol, "apikey": self.fmp_key},
             max_age_hours=24 if endpoint == "profile" else 0,
+            validate=validate,
         )
 
     def daily_quote(self, symbol: str, as_of: date | None = None) -> Quote:
@@ -181,10 +186,12 @@ class Providers:
         now = datetime.now(UTC)
         session = as_of or as_of_for(now)
         try:
-            raw = self._overview_data("GLOBAL_QUOTE", symbol)
+            raw = self._overview_data(
+                "GLOBAL_QUOTE", symbol, lambda raw: daily_quote(raw, symbol, session, now.isoformat(), "alphavantage")
+            )
             return daily_quote(raw, symbol, session, now.isoformat(), "alphavantage")
         except FetchError:
-            raw = self._fmp("quote", symbol)
+            raw = self._fmp("quote", symbol, lambda raw: daily_quote(raw, symbol, session, now.isoformat(), "fmp"))
             return daily_quote(raw, symbol, session, now.isoformat(), "fmp")
 
     def history(self, symbol: str) -> pd.DataFrame:
@@ -193,17 +200,50 @@ class Providers:
 
             assert self.history_as_of is not None
             return fetch_history(self.http, self.massive_key, symbol, self.history_as_of)
-        return parse_cboe_history(self._price_json(f"{CBOE_BASE}/charts/historical/{symbol}.json"))
+        return self._price_data(f"{CBOE_BASE}/charts/historical/{symbol}.json", parse_cboe_history)
 
     def option_chain(self, symbol: str) -> tuple[dict, list[dict]]:
-        return parse_cboe_chain(self._price_json(f"{CBOE_BASE}/options/{symbol}.json"))
+        return self._price_data(f"{CBOE_BASE}/options/{symbol}.json", parse_cboe_chain)
 
-    def _price_json(self, url: str) -> dict:
+    def institutional_holders(self, symbol: str, as_of: date) -> dict:
+        from . import institutional_fallback as fallback
+
+        if not self.fmp_key:
+            raise FetchError("FMP institutional fallback not configured")
+        quarter = fallback.eligible_quarter(as_of)
+        retrieved_at = datetime.now(UTC).isoformat()
+        raw = self.http.get_json(
+            fallback.ENDPOINT,
+            {"symbol": symbol, "year": quarter.year, "quarter": (quarter.month + 2) // 3, "apikey": self.fmp_key},
+            max_age_hours=0,
+            validate=lambda data: fallback.parse(data, symbol, quarter, retrieved_at),
+        )
+        return fallback.parse(raw, symbol, quarter, retrieved_at)
+
+    def _price_data(self, url: str, parser: Callable):
+        """Parse once before caching, retaining the parsed history/chain for the caller."""
+        parsed = None
+
+        def validate(raw):
+            nonlocal parsed
+            parsed = parser(raw)
+
+        self._price_json(url, validate)
+        return parsed
+
+    @staticmethod
+    def _object(raw: object) -> None:
+        if not isinstance(raw, dict):
+            raise FetchError("provider response must be an object")
+
+    def _price_json(self, url: str, validate: Callable | None = None) -> dict:
         from .pipeline_context import as_of_for
 
         # A new completed session must never reuse a cached response fetched before its close.
         session = as_of_for(datetime.now(UTC))
-        return self.http.get_json(url, max_age_hours=12, cache_key_extra=f"completed-session-v1:{session}")
+        return self.http.get_json(
+            url, max_age_hours=12, cache_key_extra=f"completed-session-v1:{session}", validate=validate
+        )
 
     def earnings_calendar(self) -> pd.DataFrame:
         if not self.av_key:
@@ -212,25 +252,39 @@ class Providers:
         from ..logging_setup import register_secret
 
         register_secret(self.av_key)
-        text = self.http.get_text(
-            AV_URL, {"function": "EARNINGS_CALENDAR", "horizon": "12month", "apikey": self.av_key}, max_age_hours=24
+        df = pd.DataFrame()
+
+        def validate(body):
+            nonlocal df
+            try:
+                df = parse_earnings_csv(body.decode("utf-8"))
+                df["symbol"] = df["symbol"].map(canonical)
+            except (AlphaVantageError, UnicodeError, ValueError, TypeError, AttributeError):
+                raise FetchError("Alpha Vantage earnings calendar is unreadable") from None
+
+        self.http.get_bytes(
+            AV_URL,
+            {"function": "EARNINGS_CALENDAR", "horizon": "12month", "apikey": self.av_key},
+            max_age_hours=24,
+            validate=validate,
         )
-        try:
-            df = parse_earnings_csv(text)
-        except (AlphaVantageError, ValueError, TypeError):
-            raise FetchError("Alpha Vantage earnings calendar is unreadable") from None
-        df["symbol"] = df["symbol"].map(canonical)
         return df
 
-    def _overview_data(self, function: str, symbol: str) -> dict:
+    def _overview_data(self, function: str, symbol: str, validate=None) -> dict:
         if not self.av_key:
             raise FetchError("Alpha Vantage key not configured (ALPHAVANTAGE_API_KEY)")
         from ..logging_setup import register_secret
 
         register_secret(self.av_key)
-        raw = self.http.get_json(
-            AV_URL, {"function": function, "symbol": symbol, "apikey": self.av_key}, max_age_hours=24
+        return self.http.get_json(
+            AV_URL,
+            {"function": function, "symbol": symbol, "apikey": self.av_key},
+            max_age_hours=24,
+            validate=lambda raw: (self._check_company(raw, function, symbol), validate(raw) if validate else None),
         )
+
+    @staticmethod
+    def _check_company(raw: object, function: str, symbol: str) -> None:
         if not isinstance(raw, dict) or not raw:
             raise FetchError("Alpha Vantage returned no company data")
         if raw.get("Note") or raw.get("Information"):
@@ -239,7 +293,12 @@ class Providers:
             raise FetchError("Alpha Vantage rejected company data request")
         if function == "OVERVIEW" and canonical(str(raw.get("Symbol", ""))) != canonical(symbol):
             raise FetchError("Alpha Vantage company symbol missing or mismatched")
-        return raw
+        if function == "OVERVIEW":
+            cap = _num(raw.get("MarketCapitalization"))
+            if "MarketCapitalization" in raw and (cap is None or cap <= 0):
+                raise FetchError("Alpha Vantage company capitalization invalid")
+            if "Name" in raw and (not isinstance(raw["Name"], str) or not raw["Name"].strip()):
+                raise FetchError("Alpha Vantage company name invalid")
 
     def overview(self, symbol: str) -> dict:
         try:
@@ -253,7 +312,8 @@ class Providers:
                 raise
             from .fallbacks import profile
 
-            return profile(self._fmp("profile", symbol), symbol, datetime.now(UTC).isoformat())
+            observed = datetime.now(UTC).isoformat()
+            return profile(self._fmp("profile", symbol, lambda raw: profile(raw, symbol, observed)), symbol, observed)
 
     def insider_transactions(self, symbol: str) -> dict:
         return self._overview_data("INSIDER_TRANSACTIONS", symbol)

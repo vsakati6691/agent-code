@@ -183,11 +183,11 @@ LEADER_ENTRY = _obj(
         "other_share_classes": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "From 2026-10-19.2: other index tickers of the same SEC registrant, not ranked separately.",
+            "description": "From 2026-10-19.4: other index tickers of the same SEC registrant, not ranked separately.",
         },
         "gap_kind": {
             "type": ["string", "null"],
-            "description": "From 2026-10-19.2: coarse cause of the first missing input (share count, SEC statements, "
+            "description": "From 2026-10-19.4: coarse cause of the first missing input (share count, SEC statements, "
             "price or other inputs); null when nothing is missing.",
         },
         "is_scenario": {"const": True},
@@ -489,14 +489,14 @@ SCHEMA = {
                 "partial": _f("boolean", "Ranks and movement labels cover available inputs only when true."),
                 "gaps": _f(
                     "array",
-                    "Index members without sufficient stored inputs and their specific reasons; from 2026-10-19.2 "
+                    "Index members without sufficient stored inputs and their specific reasons; from 2026-10-19.4 "
                     "also a coarse kind and whether the member still has a current rank.",
                 ),
                 "share_classes": _f(
                     "array",
-                    "From 2026-10-19.2: extra share classes ranked with their company ({ticker, ranked_as}).",
+                    "From 2026-10-19.4: extra share classes ranked with their company ({ticker, ranked_as}).",
                 ),
-                "company_count": _f("integer", "From 2026-10-19.2: index companies after merging share classes."),
+                "company_count": _f("integer", "From 2026-10-19.4: index companies after merging share classes."),
             },
         ),
         "decision_desk": _obj(

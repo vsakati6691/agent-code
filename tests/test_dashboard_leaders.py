@@ -274,7 +274,7 @@ def test_retention_does_not_call_providers_or_change_exclusions():
     records = retained_inputs(ctx, ref)
     assert not p.calls and ctx.excluded == before
     assert records[0]["fundamentals"]["diluted_shares"]
-    # 2026-10-19.2: the cover-page basis and liquidity are retained for the share checks and class choice
+    # 2026-10-19.4: the cover-page basis and liquidity are retained for the share checks and class choice
     assert records[0]["metrics"]["market_cap"] > 0 and records[0]["dollar_volume"] > 0
     assert (
         leaders.build({**snapshot([]), "leaders_2030_inputs": records, "universe": {"sp500_members": ["AAA"]}}, [])[

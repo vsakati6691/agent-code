@@ -145,7 +145,7 @@ def share_jump(f: dict, shares: tuple) -> str | None:
 
 def cover_basis(record: dict, m: dict, current: float) -> float | None:
     """The stored cover-page equity value behind EV/Sales; None when missing or not independent of the diluted count."""
-    recorded = record.get("market_cap_basis")  # stored from 2026-10-19.2
+    recorded = record.get("market_cap_basis")  # stored from 2026-10-19.4
     if recorded == "diluted fallback" or FALLBACK_FLAG in (record.get("flags") or []):
         return None
     value = m.get("market_cap")
@@ -239,7 +239,7 @@ def computed_row(ticker: str, record: dict, snap: dict) -> dict:
     if not missing:
         current = price * shares[0]
         basis = cover_basis(record, m, current) if ok(current) else None
-        # an independent cover-page basis decides; without one the jump test applies (spec 2026-10-19.2)
+        # an independent cover-page basis decides; without one the jump test applies (spec 2026-10-19.4)
         if not ok(current):
             problem = "current market cap is not a finite number"
         elif basis is not None:
@@ -270,7 +270,7 @@ def computed_row(ticker: str, record: dict, snap: dict) -> dict:
     growth, growth_basis = leaders_scenarios.growth_input(record, m, as_of, positional)
     if growth is None:
         missing.append((other, growth_basis))
-    # today's EV/Sales from this row's own cap, so the scenarios never contradict it (spec 2026-10-19.2)
+    # today's EV/Sales from this row's own cap, so the scenarios never contradict it (spec 2026-10-19.4)
     ev_to_sales, current = None, row["current_market_cap_usd"]
     if ok(current) and ok(m.get("net_debt")) and ok(m.get("revenue_ttm")) and m["revenue_ttm"] > 0:
         if current + m["net_debt"] > 0:
@@ -336,7 +336,7 @@ def share_classes(snap: dict, records: dict[str, dict], members: list[str]) -> d
     Only classes with a verified as-of price compete when any has one, so a class with no data never
     hides one that has it. Among them the most liquid wins: higher stored 20-day median dollar volume
     when every class has one, else the class the snapshot's large list evaluated, else ticker order
-    (spec 2026-10-19.2).
+    (spec 2026-10-19.4).
     """
     by_cik: dict[int, list[str]] = defaultdict(list)
     for ticker in members:

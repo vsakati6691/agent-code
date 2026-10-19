@@ -406,7 +406,7 @@ def invalidation(m: dict, scen: dict | None) -> list[str]:
 def quarterly_yoy(revenue: list, quarters: list) -> list[float | None]:
     """Year-over-year growth of each of the latest quarters (newest first) against the quarter ending
     about a year earlier, matched by date so a missing quarter never pairs different fiscal quarters
-    (spec 2026-10-19.2)."""
+    (spec 2026-10-19.4)."""
     out = []
     for i in range(max(0, len(revenue) - 4)):
         try:

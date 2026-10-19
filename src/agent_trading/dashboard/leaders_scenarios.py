@@ -25,7 +25,7 @@ def _version_key(version: str) -> tuple[str, int] | None:
 
 
 def positional_metrics(version: str | None) -> bool:
-    """True when a snapshot's stored TTM metrics were computed by list position (before 2026-10-19.2)."""
+    """True when a snapshot's stored TTM metrics were computed by list position (before 2026-10-19.4)."""
     key = _version_key(version) if isinstance(version, str) else None
     return key is None or key < _version_key(spec.LEADERS_SHARE_CHECKS["date_matched_from"])
 
@@ -33,7 +33,7 @@ def positional_metrics(version: str | None) -> bool:
 def growth_input(record: dict, metrics: dict, as_of: str, positional: bool = True) -> tuple[float | None, str]:
     """Prefer the three-year TTM series; dated fiscal-year endpoints are an explicit fallback.
 
-    Snapshots before 2026-10-19.2 computed the stored TTM CAGR by list position, so for them it counts
+    Snapshots before 2026-10-19.4 computed the stored TTM CAGR by list position, so for them it counts
     only over an unbroken run of 16 stored quarters; later snapshots already match quarter dates.
     """
     value = metrics.get("revenue_cagr_3y")

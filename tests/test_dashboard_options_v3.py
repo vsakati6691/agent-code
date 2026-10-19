@@ -591,7 +591,10 @@ def test_older_ten_contract_snapshot_renders_with_its_own_limit_and_without_new_
     audit = (o / "audit.html").read_text(encoding="utf-8")
     assert "10 of up to 10" in page and "Snapshot methodology <strong>2026-10-14.5" in audit
     assert f"page renderer <strong>{spec.SPEC_VERSION}" in audit and "never re-ranks" in audit
-    assert len(list(o.glob("options-*.html"))) == 3
+    assert {p.name for p in o.glob("options-*.html")} == {
+        *(f"options-{h.key}.html" for h in spec.HORIZONS),
+        "options-short-term.html",
+    }
     assert len(list((o / "option").glob("*.html"))) == 60
     assert all(p.stat().st_size <= 150_000 for p in o.rglob("*.html"))
     page += "".join(p.read_text(encoding="utf-8") for p in (o / "option").glob("*.html"))

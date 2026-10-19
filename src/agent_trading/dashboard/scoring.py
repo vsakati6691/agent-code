@@ -49,7 +49,7 @@ def implied_revenue_cagr(ev: float | None, revenue: float | None) -> float | Non
 
 def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, market_cap: float | None) -> dict:
     # windows are matched by quarter-end date, so a gap in the reported series never
-    # compares or sums quarters from the wrong years (spec 2026-10-19.2)
+    # compares or sums quarters from the wrong years (spec 2026-10-19.4)
     fl, q = f.flows, f.quarters
     rev = fl["revenue"]
     m: dict[str, float | None] = {}

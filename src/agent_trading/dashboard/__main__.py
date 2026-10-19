@@ -282,8 +282,13 @@ def cmd_build(args) -> int:
 
 def cmd_verify(args) -> int:
     from .refresh_store import RefreshStore
+    from .short_term_store import ShortTermStore
 
-    problems = Store(Path(args.data)).verify_all() + RefreshStore(Path(args.data)).verify_all()
+    problems = (
+        Store(Path(args.data)).verify_all()
+        + RefreshStore(Path(args.data)).verify_all()
+        + ShortTermStore(Path(args.data)).verify_all()
+    )
     if not problems:
         from .private_research import check_publication
 
@@ -305,7 +310,9 @@ def cmd_refresh(args) -> int:
     register_secret(ua)
     if key:
         register_secret(key)
-    providers = Providers(HttpClient(Path(args.cache) if args.cache else None, ua), key)
+    providers = Providers(
+        HttpClient(Path(args.cache) if args.cache else None, ua), key, fmp_key=os.environ.get("FMP_API_KEY") or None
+    )
     result = refresh_run(
         Path(args.data),
         providers,
@@ -315,6 +322,30 @@ def cmd_refresh(args) -> int:
     )
     print(f"daily refresh: {result['status']}")
     return 2 if result["status"] == "failed" else 0
+
+
+def cmd_short_term(args) -> int:
+    from . import short_term
+    from .short_term_store import ShortTermStore
+
+    http = HttpClient(
+        Path(args.cache) if args.cache else None, "agent-code public research dashboard", timeout=10, fresh_only=True
+    )
+    http.limits["cboe"].budget = 12
+    http.deadline = http.clock() + 120
+    providers = Providers(http)
+    store = Store(Path(args.data))
+    payload = short_term.collect(providers)
+    ShortTermStore(Path(args.data)).write(payload, args.commit)
+    store.audit(
+        "short_term_finished", status=payload["status"], collected_at=payload["collected_at"], usage=http.usage()
+    )
+    print(f"short-term scan: {payload['status']}; requests {http.usage()['requests']}")
+    for record in payload["symbols"]:
+        print(
+            f"{record['symbol']}: {record['state']}; {len(record['rows'])} displayed rows; {record.get('reason') or ''}"
+        )
+    return 2 if payload["status"] == "failed" else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -338,6 +369,13 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--no-options", action="store_true")
     f.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
     f.set_defaults(func=cmd_refresh)
+    st = sub.add_parser(
+        "short-term", help="collect delayed 0DTE, 1DTE and next-listed-expiry research during the regular session"
+    )
+    st.add_argument("--data", required=True)
+    st.add_argument("--cache", default=None)
+    st.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
+    st.set_defaults(func=cmd_short_term)
     b = sub.add_parser("build", help="render the static site from stored snapshots (no network)")
     b.add_argument("--data", required=True)
     b.add_argument("--out", required=True)

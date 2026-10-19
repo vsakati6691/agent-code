@@ -4,9 +4,9 @@ from agent_trading.dashboard import spec
 
 
 def test_registered_spec_hash_is_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-19.2"
+    assert spec.SPEC_VERSION == "2026-10-19.4"
     assert spec.SPEC_FREEZE_DATE == "2026-10-16"
-    assert spec.spec_hash() == "6166a67bd43aca17"
+    assert spec.spec_hash() == "80ccdd1aad1d4c1e"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():
@@ -37,7 +37,7 @@ def test_addition_preserves_every_prior_registered_rule():
     import json
 
     previous = spec.spec_dict()
-    # 2026-10-19.2 is a data-validation fix: undoing its windows, share checks and rule texts restores 2026-10-19.1
+    # 2026-10-19.4 is a data-validation fix: undoing its windows, share checks and rule texts restores 2026-10-19.3
     assert previous.pop("quarter_windows") == spec.QUARTER_WINDOWS
     assert spec.QUARTER_WINDOWS["quarter_span_days"] == (80, 120)
     leaders_rules = previous["leaders_2030"]
@@ -50,6 +50,14 @@ def test_addition_preserves_every_prior_registered_rule():
         leaders_rules[key] = old
     assert previous["market_cap_definition"] != spec.MARKET_CAP_DEFINITION_2026_10_13_1
     previous["market_cap_definition"] = spec.MARKET_CAP_DEFINITION_2026_10_13_1
+    previous["version"] = "2026-10-19.3"
+    digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    assert digest == "f7fdc50c0cf51c28"
+    assert previous.pop("live_gaps") == spec.LIVE_GAP_RULES
+    previous["version"] = "2026-10-19.2"
+    digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    assert digest == "61c2dca113e02014"
+    assert previous.pop("resilience_validation") == spec.RESILIENCE_VALIDATION_RULES
     previous["version"] = "2026-10-19.1"
     digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
     assert digest == "0e6cb19e305dffdb"

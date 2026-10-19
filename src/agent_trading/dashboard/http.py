@@ -20,6 +20,7 @@ import hashlib
 import json
 import logging
 import time
+import zlib
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -120,27 +121,61 @@ class HttpClient:
 
     # --- public -----------------------------------------------------------------------
     def get_bytes(
-        self, url: str, params: dict | None = None, max_age_hours: float = 0.0, cache_key_extra: str = ""
+        self,
+        url: str,
+        params: dict | None = None,
+        max_age_hours: float = 0.0,
+        cache_key_extra: str = "",
+        *,
+        validate: Callable[[bytes], object] | None = None,
     ) -> bytes:
         provider = self._provider(url)
         key = self._key(url, params, cache_key_extra)
         self._remaining()
         cached = self._read_cache(key, 0 if self.fresh_only else max_age_hours)
+        if cached is not None and validate is not None:
+            try:
+                validate(cached)
+            except FetchError:
+                log.warning("%s: invalid cached response; fetching again", provider)
+                cached = None
         if cached is not None:
             self.cache_hits += 1
             return cached
         body = self._fetch(provider, url, params)
+        if validate is not None:
+            validate(body)  # Never replace the last usable cache entry with a rejected response.
         self._write_cache(key, body)
         return body
 
     def get_json(
-        self, url: str, params: dict | None = None, max_age_hours: float = 0.0, cache_key_extra: str = ""
+        self,
+        url: str,
+        params: dict | None = None,
+        max_age_hours: float = 0.0,
+        cache_key_extra: str = "",
+        *,
+        validate: Callable[[dict | list], object] | None = None,
     ) -> dict | list:
-        body = self.get_bytes(url, params, max_age_hours, cache_key_extra)
-        try:
-            return json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError):
-            raise FetchError(f"{urlsplit(url).hostname}: response is not JSON") from None
+        parsed: dict | list = {}
+
+        def reject_constant(_: str) -> None:
+            raise ValueError("non-finite JSON number")
+
+        def decode(body: bytes) -> None:
+            nonlocal parsed
+            try:
+                raw = json.loads(body.decode("utf-8"), parse_constant=reject_constant)
+                if not isinstance(raw, (dict, list)):
+                    raise ValueError
+                if validate is not None:
+                    validate(raw)
+                parsed = raw
+            except (UnicodeError, ValueError, TypeError, KeyError, AttributeError, OverflowError):
+                raise FetchError(f"{urlsplit(url).hostname}: response JSON failed validation") from None
+
+        self.get_bytes(url, params, max_age_hours, cache_key_extra, validate=decode)
+        return parsed
 
     def get_text(self, url: str, params: dict | None = None, max_age_hours: float = 0.0) -> str:
         return self.get_bytes(url, params, max_age_hours).decode("utf-8", errors="replace")
@@ -311,16 +346,19 @@ class HttpClient:
         if self.cache_dir is None or max_age_hours <= 0:
             return None
         path = self.cache_dir / f"{key}.gz"
-        if not path.exists() or time.time() - path.stat().st_mtime > max_age_hours * 3600:
-            return None
         try:
+            if not path.exists() or time.time() - path.stat().st_mtime > max_age_hours * 3600:
+                return None
             return gzip.decompress(path.read_bytes())
-        except (OSError, EOFError):
+        except (OSError, EOFError, zlib.error):
             return None
 
     def _write_cache(self, key: str, body: bytes) -> None:
         if self.cache_dir is None:
             return
         tmp = self.cache_dir / f"{key}.tmp"
-        tmp.write_bytes(gzip.compress(body))
-        tmp.replace(self.cache_dir / f"{key}.gz")
+        try:
+            tmp.write_bytes(gzip.compress(body))
+            tmp.replace(self.cache_dir / f"{key}.gz")
+        except OSError:
+            log.warning("HTTP cache write unavailable; previous entry preserved")

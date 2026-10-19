@@ -42,7 +42,7 @@ def _year_back(quarters: list, years: int) -> int | None:
 
 
 def _ttm(values: list, quarters: list, years: int = 0):
-    """Four adjacent stored quarters starting about `years` before the newest (spec 2026-10-19.2)."""
+    """Four adjacent stored quarters starting about `years` before the newest (spec 2026-10-19.4)."""
     start = _year_back(quarters, years)
     if start is None or not consecutive(list(quarters), start):
         return None

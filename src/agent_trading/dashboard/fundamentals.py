@@ -233,7 +233,7 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
     last = max(filings, key=lambda f: f["filed"]) if filings else None
 
     # only the cover page of the latest statements filing (or later): issuers that switch to per-class
-    # cover counts leave an old undimensioned value behind (spec 2026-10-19.2)
+    # cover counts leave an old undimensioned value behind (spec 2026-10-19.4)
     cover, cover_date = None, None
     by_end: dict[str, tuple[float, str]] = {}
     for f in _facts(dei, "EntityCommonStockSharesOutstanding", lambda u: u == "shares", as_of):
@@ -317,7 +317,7 @@ def ttm(values: list[float | None], offset: int = 0, quarters: list[str] | None 
 
     With `quarters` (the aligned end dates, newest first) the offset is calendar time: the window
     must start about offset/4 years before the newest quarter and be four adjacent quarters, so a gap
-    in the reported series never splices quarters from different years (spec 2026-10-19.2).
+    in the reported series never splices quarters from different years (spec 2026-10-19.4).
     Without it the offset counts list positions.
     """
     if quarters is not None:

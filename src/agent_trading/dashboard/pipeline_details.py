@@ -135,10 +135,19 @@ def concentration_warnings(cands: list[dict]) -> list[str]:
     out = []
     if not cands:
         return out
-    sectors = pd.Series([c["sector"] for c in cands]).value_counts()
-    top, n = sectors.index[0], int(sectors.iloc[0])
-    if n / len(cands) > 0.4:
-        out.append(f"{n} of {len(cands)} candidates are in {top}: the list is concentrated in one sector.")
+    from .sector_balance import normalized_sector
+
+    sectors = pd.Series([normalized_sector(c.get("sector")) for c in cands]).value_counts()
+    unknown = int(sectors.get("Unknown", 0))
+    if unknown:
+        out.append(
+            f"{unknown} of {len(cands)} candidates have missing or unrecognized sector metadata; no sector penalty applied to them."
+        )
+    known = sectors.drop("Unknown", errors="ignore")
+    if not known.empty:
+        top, n = known.index[0], int(known.iloc[0])
+        if n / len(cands) > 0.4:
+            out.append(f"{n} of {len(cands)} candidates are in {top}: the list is concentrated in one sector.")
     rets = pd.DataFrame({c["ticker"]: c["bars"]["close"].pct_change().iloc[-252:] for c in cands}).dropna(how="all")
     if rets.shape[1] >= 3:
         corr = rets.corr().to_numpy()

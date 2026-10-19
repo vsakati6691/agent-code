@@ -1,4 +1,4 @@
-"""Spec 2026-10-19.2 data-validation fixes. Every number here is synthetic."""
+"""Spec 2026-10-19.4 data-validation fixes. Every number here is synthetic."""
 
 import copy
 from datetime import date, timedelta
@@ -133,7 +133,7 @@ def test_split_counts_pass_with_a_cover_basis_and_jumps_fail_without_an_independ
 def test_a_cap_from_the_diluted_fallback_cannot_hide_a_unit_error(recorded):
     record = company()
     record["fundamentals"]["diluted_shares"][:2] = [9.82e10, 8.21e10]
-    if recorded:  # collected from 2026-10-19.2
+    if recorded:  # collected from 2026-10-19.4
         record["market_cap_basis"] = "diluted fallback"
         record["metrics"]["market_cap"] = 100 * 9.82e10
     else:  # older snapshot: EV/Sales built on close x the same mis-scaled count
@@ -197,13 +197,14 @@ def test_stored_metrics_from_a_gapped_quarter_list_are_not_used():
 def test_date_matched_snapshots_keep_their_stored_metrics():
     record = company(growth=0.12)
     record["fundamentals"]["quarters"] = QUARTERS[:6] + QUARTERS[7:] + ["2022-06-30"]  # one interior gap
-    row = only_row(record, spec_version="2026-10-19.2")  # metrics were already matched by date
+    row = only_row(record, spec_version="2026-10-19.4")  # metrics were already matched by date
     assert row["scenario_assumptions"]["base"]["observed_revenue_cagr_3y"] == 0.12
     assert row["unavailable_reason"] is None
     assert only_row(record)["unavailable_reason"].startswith("three-year revenue CAGR unavailable")
     positional = leaders.leaders_scenarios.positional_metrics
     assert positional("2026-10-19.1") and positional(None) and positional("not a version")
-    assert not positional("2026-10-19.2") and not positional("2026-11-02.1")
+    assert positional("2026-10-19.3")  # collected by main's code before the date-matched windows
+    assert not positional("2026-10-19.4") and not positional("2026-11-02.1")
 
 
 # --- one row per company ---------------------------------------------------------------------------

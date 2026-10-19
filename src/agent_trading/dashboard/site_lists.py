@@ -6,6 +6,7 @@ import html
 
 from .site_overview import band_title, growth_section, list_page, multibagger_section, ordered
 from .site_scan import candidate_scan
+from .site_sector import status as sector_status
 
 E = html.escape
 
@@ -24,6 +25,7 @@ def growth_page(snap: dict, daily: dict | None = None) -> str:
     )
     return f"""<header class="compact-heading">
 <h1>Growth Stocks</h1><p>Compare candidates across large, mid and small caps.</p></header>
+{sector_status(snap, keys)}
 {candidate_scan(snap, keys, daily)}
 <div class="hero-actions">{links}</div>
 {detail}"""

@@ -22,7 +22,7 @@ def fmp_row(raw: object, symbol: str) -> dict:
 def profile(raw: object, symbol: str, observed_at: str) -> dict:
     row = fmp_row(raw, symbol)
     cap = _num(row.get("marketCap"))
-    if not row.get("companyName") or cap is None or cap <= 0:
+    if not isinstance(row.get("companyName"), str) or not row["companyName"].strip() or cap is None or cap <= 0:
         raise FetchError("FMP basic company fundamentals incomplete")
     return {
         "Symbol": canonical(symbol),
