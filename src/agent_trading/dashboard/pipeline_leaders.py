@@ -9,7 +9,7 @@ from .fmt import ok
 from .pipeline_collect import _facts, watchlist_bars
 from .pipeline_context import Context
 from .pipeline_details import _clean
-from .pipeline_score import market_cap
+from .pipeline_score import dollar_volume, market_cap
 from .watchlist import evidence_quality
 
 
@@ -74,6 +74,9 @@ def retained_inputs(ctx, ref: dict) -> list[dict]:
             row.update(price=float(bars["close"].iloc[-1]), price_date=str(bars.index[-1].date()))
             if bars.attrs.get("price_source"):
                 row["price_source"] = bars.attrs["price_source"]
+            if "volume" in bars:
+                # spec 2026-10-19.2: Leaders ranks one share class per company, the most liquid
+                row["dollar_volume"] = dollar_volume(bars)
         if f is not None:
             row["fundamentals"] = {
                 "quarters": f.quarters,
@@ -90,6 +93,7 @@ def retained_inputs(ctx, ref: dict) -> list[dict]:
                     "revenue_ttm",
                     "revenue_growth_ttm",
                     "revenue_cagr_3y",
+                    "market_cap",
                     "ev_to_sales",
                     "net_debt",
                     "dilution",

@@ -3,7 +3,8 @@
 Only facts FILED on or before the as-of date are used, so a weekly snapshot never
 sees a later filing (no look-ahead) and an old snapshot can be rebuilt exactly.
 
-Quarterly values come from 10-Q/10-K facts with an 80-100 day span. Where a
+Quarterly values come from 10-Q/10-K facts with an 80-120 day span (13-week
+quarters and the 16-week quarters of 12/16-week fiscal calendars). Where a
 company reports only year-to-date figures (cash flows) or only the fiscal year
 (the fourth quarter), the discrete quarter is derived by subtracting cumulative
 facts that share a start date; such quarters are flagged as derived.
@@ -14,7 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from . import spec
+
 FORMS = ("10-Q", "10-K", "10-Q/A", "10-K/A", "10-KT")
+QUARTER_DAYS = spec.QUARTER_WINDOWS["quarter_span_days"]
 
 FLOW_TAGS = {
     "revenue": [
@@ -135,8 +139,9 @@ def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: boo
             if k not in spans or _rank(f) > _rank(spans[k]):
                 spans[k] = f
         q: dict[str, tuple[float, bool]] = {}
+        lo, hi = QUARTER_DAYS
         for (s, e), f in spans.items():
-            if 80 <= (_d(e) - _d(s)).days <= 100:
+            if lo <= (_d(e) - _d(s)).days <= hi:
                 q[e] = (float(f["val"]), False)
         if additive:
             by_start: dict[str, list[tuple[str, float]]] = {}
@@ -145,7 +150,7 @@ def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: boo
             for lst in by_start.values():
                 lst.sort()
                 for (e0, v0), (e1, v1) in zip(lst, lst[1:], strict=False):
-                    if 80 <= (_d(e1) - _d(e0)).days <= 100 and e1 not in q:
+                    if lo <= (_d(e1) - _d(e0)).days <= hi and e1 not in q:
                         q[e1] = (v1 - v0, True)
         if not q:
             continue
@@ -209,18 +214,22 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
         v = _near(vals, ends[0], 10) if ends and vals else None
         instants[k] = v
 
+    filings = [f for k in ("revenue", "net_income") for tag in FLOW_TAGS[k] for f in _facts(gaap, tag, usd, as_of)]
+    last = max(filings, key=lambda f: f["filed"]) if filings else None
+
+    # only the cover page of the latest statements filing (or later): issuers that switch to per-class
+    # cover counts leave an old undimensioned value behind (spec 2026-10-19.2)
     cover, cover_date = None, None
     by_end: dict[str, tuple[float, str]] = {}
     for f in _facts(dei, "EntityCommonStockSharesOutstanding", lambda u: u == "shares", as_of):
         e = f["end"]
+        if last is not None and f["filed"] < last["filed"]:
+            continue
         if e not in by_end or f["filed"] > by_end[e][1]:
             by_end[e] = (float(f["val"]), f["filed"])
     if by_end:
         cover_date = max(by_end)
         cover = by_end[cover_date][0]
-
-    filings = [f for k in ("revenue", "net_income") for tag in FLOW_TAGS[k] for f in _facts(gaap, tag, usd, as_of)]
-    last = max(filings, key=lambda f: f["filed"]) if filings else None
 
     conc = None
     for f in _facts(gaap, CONCENTRATION_TAG, lambda u: u == "pure", as_of):
@@ -265,8 +274,42 @@ def annual_series(group: dict, tags: list[str], unit: str, as_of: date) -> dict[
     return {end: float(f["val"]) for end, f in best.items()}
 
 
-def ttm(values: list[float | None], offset: int = 0) -> float | None:
-    """Sum of 4 consecutive quarters starting `offset` quarters back; None if any is missing."""
+def consecutive(quarters: list[str], start: int, n: int = 4) -> bool:
+    """True when quarters[start:start+n] are n adjacent fiscal quarters (newest first)."""
+    if start < 0 or start + n > len(quarters):
+        return False
+    ends = [_d(q) for q in quarters[start : start + n]]
+    lo, hi = spec.QUARTER_WINDOWS["step_days"]
+    if not all(lo <= (a - b).days <= hi for a, b in zip(ends, ends[1:], strict=False)):
+        return False
+    span_lo, span_hi = spec.QUARTER_WINDOWS["ttm_span_days"]
+    return n != 4 or span_lo <= (ends[0] - ends[-1]).days <= span_hi
+
+
+def quarter_back(quarters: list[str], start: int, years: float) -> int | None:
+    """Index of the quarter ending about `years` before quarters[start]; None when no end date is close enough."""
+    if not 0 <= start < len(quarters):
+        return None
+    target = _d(quarters[start]).toordinal() - round(years * 365.2425)
+    best = min(range(start, len(quarters)), key=lambda i: abs(_d(quarters[i]).toordinal() - target))
+    if abs(_d(quarters[best]).toordinal() - target) > spec.QUARTER_WINDOWS["match_days"]:
+        return None
+    return best
+
+
+def ttm(values: list[float | None], offset: int = 0, quarters: list[str] | None = None) -> float | None:
+    """Sum of 4 consecutive quarters starting `offset` quarters back; None if any is missing.
+
+    With `quarters` (the aligned end dates, newest first) the offset is calendar time: the window
+    must start about offset/4 years before the newest quarter and be four adjacent quarters, so a gap
+    in the reported series never splices quarters from different years (spec 2026-10-19.2).
+    Without it the offset counts list positions.
+    """
+    if quarters is not None:
+        start = quarter_back(quarters, 0, offset / 4)
+        if start is None or not consecutive(quarters, start):
+            return None
+        offset = start
     window = values[offset : offset + 4]
     if len(window) < 4 or any(v is None for v in window):
         return None

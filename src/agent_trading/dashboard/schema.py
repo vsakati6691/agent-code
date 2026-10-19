@@ -180,6 +180,11 @@ LEADER_ENTRY = _obj(
         "aggressive_assumption": _f("boolean", "True when computed base cap CAGR strictly exceeds 25%/yr."),
         "growth_drivers": {"type": "array", "items": {"type": "string"}},
         "missing_inputs": {"type": "array", "items": {"type": "string"}},
+        "other_share_classes": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "From 2026-10-19.2: other index tickers of the same SEC registrant, not ranked separately.",
+        },
         "is_scenario": {"const": True},
     },
 )
@@ -477,7 +482,16 @@ SCHEMA = {
             {
                 "entries": {"type": "array", "items": LEADER_ENTRY},
                 "partial": _f("boolean", "Ranks and movement labels cover available inputs only when true."),
-                "gaps": _f("array", "Index members without sufficient stored inputs and their specific reasons."),
+                "gaps": _f(
+                    "array",
+                    "Index members without sufficient stored inputs and their specific reasons; from 2026-10-19.2 "
+                    "also a coarse kind and whether the member still has a current rank.",
+                ),
+                "share_classes": _f(
+                    "array",
+                    "From 2026-10-19.2: extra share classes ranked with their company ({ticker, ranked_as}).",
+                ),
+                "company_count": _f("integer", "From 2026-10-19.2: index companies after merging share classes."),
             },
         ),
         "decision_desk": _obj(

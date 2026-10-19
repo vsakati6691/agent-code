@@ -6,12 +6,25 @@ from datetime import date
 
 from . import spec
 from .fmt import ok
+from .fundamentals import consecutive
+
+
+def unbroken(quarters: list, n: int) -> bool:
+    try:
+        return consecutive(list(quarters), 0, n)
+    except (TypeError, ValueError):
+        return False
 
 
 def growth_input(record: dict, metrics: dict, as_of: str) -> tuple[float | None, str]:
-    """Prefer the three-year TTM series; dated fiscal-year endpoints are an explicit fallback."""
+    """Prefer the three-year TTM series; dated fiscal-year endpoints are an explicit fallback.
+
+    The stored TTM CAGR counts only over an unbroken run of 16 stored quarters: older snapshots
+    computed it by list position, so a gap spliced in quarters from other years (spec 2026-10-19.2).
+    """
     value = metrics.get("revenue_cagr_3y")
-    if ok(value):
+    quarters = (record.get("fundamentals") or {}).get("quarters") or []
+    if ok(value) and unbroken(quarters, spec.LEADERS_SHARE_CHECKS["cagr_quarters"]):
         return value, "TTM revenue CAGR over three years"
     group = ((record.get("decision_research") or {}).get("groups") or {}).get("growth") or {}
     field = (group.get("fields") or {}).get("revenue_cagr_3y") or {}

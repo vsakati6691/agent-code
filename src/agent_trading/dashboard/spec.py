@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-19.1"
+SPEC_VERSION = "2026-10-19.2"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -80,6 +80,10 @@ SPEC_CHANGELOG = [
     (
         "2026-10-19.1",
         "Owner requested provider fallbacks, a sector concentration penalty and quarantine of earnings cadence outliers; no retrospective rescoring.",
+    ),
+    (
+        "2026-10-19.2",
+        "Data-validation bug fix: date-matched TTM windows, 16-week quarters, current cover pages, Leaders share checks, one row per company.",
     ),
 ]
 
@@ -154,10 +158,35 @@ LEADERS_RULE_2026_10_16 = (
 )
 LEADERS_TOP_N = 20
 LEADERS_RULE_2026_10_17_1 = LEADERS_RULE_2026_10_16.replace("top 50", "top 20").replace("top-50", "top-20")
-LEADERS_RULE = LEADERS_RULE_2026_10_17_1.replace(
+LEADERS_RULE_2026_10_17_2 = LEADERS_RULE_2026_10_17_1.replace(
     "Reuse the registered exact-date company scenario formula.",
     "Use the separate registered Leaders three-year-growth and bear-stress model through 2030-12-31.",
 )
+# 2026-10-19.2: one row per company, as the research lists have done since 2026-10-13.2
+LEADERS_RULE = LEADERS_RULE_2026_10_17_2.replace(
+    "Each index ticker is compared separately; issuer-level diluted shares are not allocated across share "
+    "classes, so class proxies are not additive company values.",
+    "Each company (SEC CIK) is ranked once, using its most liquid listed share class: the higher stored 20-day "
+    "median dollar volume, else the class the snapshot's large list evaluated, else ticker order; its other "
+    "classes are noted and not ranked. Issuer-level diluted shares are not allocated across share classes.",
+)
+LEADERS_SHARE_CHECKS = {
+    "jump_limit": 10.0,
+    "basis_tolerance": 1.25,
+    "ttm_quarters": 4,
+    "cagr_quarters": 16,
+    "rule": (
+        "Close x the latest dated diluted weighted-average count must agree within 1.25x either way with the "
+        "stored cover-page equity value (stored market cap, or EV/Sales x TTM revenue - net debt); otherwise the "
+        "share bases disagree and no rank is computed. Without a stored cover-page basis the count is used unless it "
+        "differs more than 10x from a dated count in the four preceding quarters (a unit error or an unrestated "
+        "split), and the missing cross-check is listed. Today's EV/Sales for "
+        "the scenarios is (close x diluted shares + net debt) / TTM revenue, so it never contradicts the row's "
+        "current cap. Stored TTM revenue is used only when its four stored quarters are adjacent, and the stored "
+        "three-year TTM CAGR only when the first 16 stored quarters are an unbroken run; otherwise the registered "
+        "dated fiscal-year fallback applies."
+    ),
+}
 LEADERS_COLLECTION_RULE_2026_10_17_1 = (
     "Every weekly S&P 500 member is attempted after research-list screening, regardless of price, liquidity, "
     "score or tradability gates. Reuse successful and failed cached lookups; collect missing as-of history "
@@ -166,9 +195,13 @@ LEADERS_COLLECTION_RULE_2026_10_17_1 = (
     "Retain dated diluted shares and the existing scenario inputs. Record incremental request attempts and "
     "coverage gaps. Development --limit remains partial. No snapshot backfills or change to scenario math."
 )
-LEADERS_COLLECTION_RULE = LEADERS_COLLECTION_RULE_2026_10_17_1.replace(
+LEADERS_COLLECTION_RULE_2026_10_17_2 = LEADERS_COLLECTION_RULE_2026_10_17_1.replace(
     "the existing scenario inputs", "the scenario inputs including three-year revenue CAGR"
 ).replace("No snapshot backfills or change to scenario math.", "No snapshot backfills.")
+LEADERS_COLLECTION_RULE = LEADERS_COLLECTION_RULE_2026_10_17_2.replace(
+    "including three-year revenue CAGR",
+    "including three-year revenue CAGR, the cover-page market cap behind EV/Sales and 20-day median dollar volume",
+)
 LEADERS_SCENARIO_RULES = {
     "growth_basis": "Stored TTM revenue CAGR over three years; fallback to dated matched fiscal-year revenue CAGR over three years. Never substitute one-year growth. Missing both means unavailable.",
     "growth_floor": -0.30,
@@ -591,12 +624,37 @@ MULTIBAGGER_RATIONALE = (
     "become multibaggers, and no probability is estimated."
 )
 
-MARKET_CAP_DEFINITION = (
+MARKET_CAP_DEFINITION_2026_10_13_1 = (
     "Market capitalization = the as-of closing price x common shares outstanding from the latest SEC cover "
     "page (dei:EntityCommonStockSharesOutstanding) filed on or before the as-of date, summed over the share "
     "classes the filing reports without class dimensions. When the cover-page count is missing, the latest "
     "diluted weighted-average share count from the income statement is used and the value is flagged."
 )
+# 2026-10-19.2: an undimensioned count left on an old cover page (issuers that later report per class) is not current
+MARKET_CAP_DEFINITION = MARKET_CAP_DEFINITION_2026_10_13_1.replace(
+    "filed on or before the as-of date,",
+    "filed on or before the as-of date, taken only from the cover of the latest 10-K/10-Q with financial "
+    "statements or a later filing,",
+).replace(
+    "When the cover-page count is missing,",
+    "When that cover-page count is missing (including an older count left behind after an issuer moved to "
+    "per-class cover counts),",
+)
+
+# --- Quarterly windows (data validation, 2026-10-19.2) -----------------------------------
+QUARTER_WINDOWS = {
+    "quarter_span_days": (80, 120),  # 13-week quarters and the 16-week quarters of 12/16-week fiscal calendars
+    "step_days": (77, 119),  # adjacent quarter ends: 11 to 17 weeks apart
+    "ttm_span_days": (250, 300),  # first to fourth quarter end of one twelve-month window
+    "match_days": 25,  # a prior-year or three-year window must start this close to the target date
+    "rule": (
+        "A discrete quarter spans 80-120 days, so the 16-week quarters of 12/16-week fiscal calendars count. "
+        "A TTM window is four adjacent quarters (ends 77-119 days apart; first to fourth 250-300 days). "
+        "Prior-year and three-year windows must start within 25 days of one or three years before the newest "
+        "quarter, and year-over-year and dilution comparisons use the quarter ending about a year earlier. "
+        "A window across a gap in the reported series is unavailable; quarters from other years are never spliced in."
+    ),
+}
 LISTED_EXCHANGES = ("NYSE", "Nasdaq", "NYSE American", "NYSE Arca", "Cboe BZX")
 UNIVERSE_DEFINITION = (
     "Large cap: current S&P 500 members (Wikipedia constituent list, CC BY-SA), whatever their market cap. "
@@ -1327,7 +1385,9 @@ def spec_dict() -> dict:
             "top_n": LEADERS_TOP_N,
             "collection": LEADERS_COLLECTION_RULE,
             "scenario": LEADERS_SCENARIO_RULES,
+            "share_checks": LEADERS_SHARE_CHECKS,
         },
+        "quarter_windows": QUARTER_WINDOWS,
         "decision_research": DECISION_RULES,
         "decision_desk": {
             "ratings": DESK_RATINGS,

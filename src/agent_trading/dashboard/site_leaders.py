@@ -41,10 +41,16 @@ def cap_range(row: dict) -> str:
     )
 
 
+def also(row: dict) -> str:
+    others = row.get("other_share_classes") or []
+    return f" · also listed as {E(', '.join(others))}" if others else ""
+
+
 def methodology() -> str:
     return (
         f"<section><h2>How these ranks are computed and what they are not</h2><p>{E(spec.LEADERS_RULE)}</p>"
-        f"<p>{E(spec.LEADERS_SHARE_RULE)}</p><p>{E(spec.LEADERS_SCENARIO_RULES['growth_basis'])}</p>"
+        f"<p>{E(spec.LEADERS_SHARE_RULE)}</p><p>{E(spec.LEADERS_SHARE_CHECKS['rule'])}</p>"
+        f"<p>{E(spec.LEADERS_SCENARIO_RULES['growth_basis'])}</p>"
         f"<p>{E(spec.LEADERS_SCENARIO_RULES['method'])}</p><p>Scenario source: Leaders model "
         f"version {E(spec.SPEC_VERSION)}, through 2030-12-31. "
         "Growth drivers are dated reported figures and issuer excerpts. They do not establish future growth.</p></section>"
@@ -85,7 +91,12 @@ def detail(row: dict, price_note: str = "") -> str:
     )
     return (
         f'<h1>{E(row["company_name"])} · Leaders evidence</h1><p><a href="../leaders.html">Back to Leaders 2030</a></p>'
-        f"<p>{E(row['scenario_basis'])} · snapshot {E(row['snapshot_id'])} · evidence {E(row['evidence_grade'])}.</p>"
+        + (
+            f"<p>Ranked once for the company; other listed classes: {E(', '.join(row['other_share_classes']))}.</p>"
+            if row.get("other_share_classes")
+            else ""
+        )
+        + f"<p>{E(row['scenario_basis'])} · snapshot {E(row['snapshot_id'])} · evidence {E(row['evidence_grade'])}.</p>"
         f"<p>Sector: {E(row['sector'])}. {quality_badge(quality_level(row['evidence_grade']), row['evidence_grade'], len(row['missing_inputs']))}</p>"
         f"<p>Price date: {E(row['price_date'] or 'unavailable')}; current cap date: {E(row['market_cap_date'] or 'unavailable')}.</p>"
         f"<p>{E(price_note)}</p>"
@@ -112,10 +123,27 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
         out.append(
             '<p class="banner warn">No S&P 500 2030 scenarios can be computed from this stored snapshot; a future weekly collection must retain the missing inputs.</p>'
         )
+    companies = payload.get("company_count", payload["universe_count"])
+    classes = payload.get("share_classes") or []
     if payload["partial"]:
+        merged = (
+            f" ({payload['universe_count']} index tickers; {len(classes)} extra share classes ranked with their company)"
+            if classes
+            else ""
+        )
         out.append(
-            f'<p class="small warn">Ranks among {payload["current_cap_count"]} of {payload["universe_count"]} members with data; '
+            f'<p class="small warn">Ranks among {payload["current_cap_count"]} of {companies} companies with data{merged}; '
             f"{payload['computed_count']} have 2030 scenarios. Missing members can change every rank.</p>"
+        )
+    unranked = defaultdict(list)
+    for gap in gaps:
+        if not gap.get("ranked", True):
+            unranked[gap.get("kind") or "other inputs"].append(gap["ticker"])
+    if unranked:
+        out.append(
+            '<p class="small warn">Not ranked for missing or inconsistent inputs: '
+            + "; ".join(f"{E(kind)}: {E(', '.join(tickers))}" for kind, tickers in unranked.items())
+            + ". A large company among them would change every rank below it; reasons are listed below the table.</p>"
         )
     sectors = sorted({r["sector"] for r in entries})
     out.append(
@@ -179,7 +207,7 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
         out.append(
             f'<tr data-ticker="{E(row["ticker"] or "")}" data-sector="{E(row["sector"])}" data-movement="{row["movement"]}" data-kind="{"curated" if curated else "computed"}">'
             f'<td data-v="{sval(row["current_rank"])}">{num(row["current_rank"], 0) if ok(row["current_rank"]) else "—"}</td>'
-            f'<td class="tk" data-v="{E(row["ticker"] or row["company_name"])}">{pin}<strong>{E(row["ticker"] or "Private / pre-IPO")}</strong><div class="small muted">{E(row["company_name"])}</div><a class="small" href="{E(path)}">Details</a></td>'
+            f'<td class="tk" data-v="{E(row["ticker"] or row["company_name"])}">{pin}<strong>{E(row["ticker"] or "Private / pre-IPO")}</strong><div class="small muted">{E(row["company_name"])}{also(row)}</div><a class="small" href="{E(path)}">Details</a></td>'
             f'<td class="num" data-v="{sval(row["current_market_cap_usd"])}" title="{reason if not ok(row["current_market_cap_usd"]) else "Dated close × diluted shares; see Details"}">{cap(row["current_market_cap_usd"]) if ok(row["current_market_cap_usd"]) else "—"}</td>'
             f"{''.join(scenario_cells)}"
             f'<td data-v="{sval(row["rank_2030"])}" title="{reason if not ok(row["rank_2030"]) else "Conditional base cap rank"}">{num(row["rank_2030"], 0) if ok(row["rank_2030"]) else "—"}</td>'
@@ -197,7 +225,14 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
             + "".join(
                 f"<li><strong>{E(', '.join(tickers))}</strong>: {E(reason)}</li>" for reason, tickers in grouped.items()
             )
-            + "</ul></details>"
+            + '</ul><p class="small muted">Stale-statement reasons reflect SEC company-facts data as collected; '
+            "it can lag a filing that SEC's filing index already lists. Nothing is filled in by hand.</p></details>"
+        )
+    if classes:
+        out.append(
+            '<p class="small muted">One row per company: '
+            + "; ".join(f"{E(c['ticker'])} is counted with {E(c['ranked_as'])}" for c in classes)
+            + " (same SEC registrant; only the most liquid class has a row).</p>"
         )
     out.append(
         f'<p><a class="action" href="downloads/{E(payload["as_of"])}_leaders_2030.csv" download>Download Leaders CSV ↓</a> · '
