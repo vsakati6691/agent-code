@@ -11,9 +11,10 @@ from pathlib import Path
 from . import leaders_scenarios, spec
 from .fmt import cap as cap_text
 from .fmt import ok
-from .schema import LEADERS_CHALLENGER
+from .schema import LEADERS_CHALLENGER, LEADERS_OUTSIDE
 
 CONFIG_FILE = Path(__file__).resolve().parents[3] / "config" / "leaders_2030_challengers.json"
+OUTSIDE_FILE = Path(__file__).resolve().parents[3] / "config" / "leaders_outside_index.json"
 CASES = ("bear", "base", "bull")
 SHARE_BASIS = "SEC diluted weighted-average shares (latest reported quarter available)"
 # the large list's exclusion text, written by pipeline_score.one_class_per_company from the same template
@@ -83,6 +84,69 @@ def load_challengers(path: Path = CONFIG_FILE) -> list[dict]:
         names.add(name)
         tickers.add(ticker)
     return raw["challengers"]
+
+
+def load_outside(path: Path = OUTSIDE_FILE) -> list[dict]:
+    """Validate the closed outside-index schema (spec.LEADERS_OUTSIDE_RULES) at every build."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or set(raw) != {"companies"} or not isinstance(raw["companies"], list):
+        raise ValueError("outside-index config requires only a companies array")
+    names = set()
+    for row in raw["companies"]:
+        if not isinstance(row, dict) or set(row) != set(LEADERS_OUTSIDE["required"]):
+            raise ValueError("outside-index fields must exactly match the registered schema")
+        for key in ("name", "valuation_basis", "valuation_source", "status", "status_source"):
+            if not isinstance(row[key], str) or not row[key].strip():
+                raise ValueError(f"outside-index {key} must be non-empty text")
+        if not isinstance(row["notes"], str):
+            raise ValueError("outside-index notes must be text")
+        if row["kind"] not in spec.LEADERS_OUTSIDE_RULES["kinds"]:
+            raise ValueError("invalid outside-index kind")
+        ticker = row["ticker"]
+        if row["kind"] == "private" and ticker is not None:
+            raise ValueError("a private company must have a null ticker")
+        if row["kind"] == "listed_non_index" and (
+            not isinstance(ticker, str) or not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,14}", ticker)
+        ):
+            raise ValueError("a listed company requires a valid ticker")
+        if not ok(row["valuation_usd"]) or row["valuation_usd"] <= 0:
+            raise ValueError("outside-index valuation must be finite and positive")
+        for key in ("valuation_date", "status_date"):
+            if not valid_date(row[key]):
+                raise ValueError(f"outside-index {key} must be an ISO date")
+        for key in ("valuation_url", "status_url"):
+            if not isinstance(row[key], str) or not re.fullmatch(r"https://\S+", row[key]):
+                raise ValueError(f"outside-index {key} must be an https URL")
+        for key in ("valuation_confirmed", "status_confirmed"):
+            if not isinstance(row[key], bool):
+                raise ValueError(f"outside-index {key} must be true or false")
+        name = row["name"].strip().casefold()
+        if name in names:
+            raise ValueError("duplicate outside-index company")
+        names.add(name)
+    return raw["companies"]
+
+
+def outside_rows(entries: list[dict], as_of: str, current_caps: list[float]) -> tuple[list[dict], list[str]]:
+    """Entries valid at the snapshot date, with where the valuation would sit among current caps (scale only)."""
+    rules = spec.LEADERS_OUTSIDE_RULES
+    rows, omitted = [], []
+    for entry in entries:
+        latest = max(entry["valuation_date"], entry["status_date"])
+        age = (date.fromisoformat(as_of) - date.fromisoformat(entry["valuation_date"])).days
+        if latest > as_of:
+            omitted.append(f"{entry['name']}: dated after the snapshot ({latest})")
+        elif age > rules["max_age_days"]:
+            omitted.append(
+                f"{entry['name']}: valuation older than {rules['max_age_days']} days ({entry['valuation_date']})"
+            )
+        elif entry["valuation_usd"] < rules["min_valuation_usd"]:
+            omitted.append(f"{entry['name']}: valuation below {cap_text(rules['min_valuation_usd'])}")
+        else:
+            would = 1 + sum(c > entry["valuation_usd"] for c in current_caps)
+            rows.append({**entry, "would_rank": would, "valuation_age_days": age})
+    rows.sort(key=lambda r: (-r["valuation_usd"], r["name"]))
+    return rows, omitted
 
 
 def growth_drivers(record: dict, as_of: str) -> list[str]:
@@ -370,7 +434,7 @@ def share_classes(snap: dict, records: dict[str, dict], members: list[str]) -> d
     return merged
 
 
-def build(snap: dict, challengers: list[dict]) -> dict:
+def build(snap: dict, challengers: list[dict], outside: list[dict] | None = None) -> dict:
     """A separate derived artifact: never mutate, rescore or backfill the source snapshot."""
     records = stored_records(snap)
     members = sorted(set((snap.get("universe") or {}).get("sp500_members") or []))
@@ -384,6 +448,11 @@ def build(snap: dict, challengers: list[dict]) -> dict:
     )
     for rank, row in enumerate(current, 1):
         row["current_rank"] = rank
+    if any(entry["ticker"] in members for entry in outside or []):
+        raise ValueError("an outside-index company is already in this snapshot's S&P 500 universe")
+    outside_index, omitted_outside = outside_rows(
+        outside or [], snap["as_of"], [r["current_market_cap_usd"] for r in current]
+    )
     omitted = []
     for entry in challengers:
         if entry["ticker"] in members:
@@ -441,6 +510,8 @@ def build(snap: dict, challengers: list[dict]) -> dict:
         "entries": candidates,
         "gaps": gaps,
         "share_classes": [{"ticker": t, "ranked_as": merged[t]} for t in sorted(merged)],
+        "outside_index": outside_index,
+        "omitted_outside": omitted_outside,
         "omitted_challengers": omitted,
         "universe_count": len(members),
         "company_count": len(companies),

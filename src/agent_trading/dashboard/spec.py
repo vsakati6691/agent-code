@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-19.4"
+SPEC_VERSION = "2026-10-19.5"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -92,6 +92,10 @@ SPEC_CHANGELOG = [
     (
         "2026-10-19.4",
         "Data-validation bug fix: date-matched TTM windows, 16-week quarters, current cover pages, Leaders share checks, one row per company.",
+    ),
+    (
+        "2026-10-19.5",
+        "Owner requested sourced private/recently listed companies beside Leaders; revenue tag-gap fill and equal-EPS basic share fallback fixes.",
     ),
 ]
 
@@ -726,6 +730,36 @@ QUARTER_WINDOWS = {
         "The same date matching applies to stored quarterly tables (research trends, forensics and thesis "
         "checks) and the desk's quarterly grid. A window across a gap in the reported series is unavailable; "
         "quarters from other years are never spliced in."
+    ),
+}
+# --- XBRL gap fills (data validation, 2026-10-19.5) ---------------------------------------
+XBRL_FILL_RULES = {
+    "tag_fill_flows": ("revenue",),
+    "tag_fill_tolerance": 0.02,
+    "tag_fill_min_overlap": 4,
+    "equal_eps_tolerance": 0.005,
+    "rule": (
+        "Revenue keeps the registered tag with the most recent coverage; quarters or fiscal years it lacks are "
+        "filled from another registered revenue tag only when the two share at least 4 periods and agree within "
+        "2% on every one, so an issuer's tag switch no longer leaves a years-long hole. A quarter with no tagged "
+        "diluted weighted-average count uses the basic weighted-average count only when that quarter's tagged "
+        "basic and diluted EPS are equal (within $0.005), i.e. there is no measurable dilution."
+    ),
+}
+# --- Companies outside the index (owner-curated, 2026-10-19.5) ------------------------------
+LEADERS_OUTSIDE_RULES = {
+    "min_valuation_usd": 100e9,
+    "max_age_days": 365,
+    "kinds": ("private", "listed_non_index"),
+    "rule": (
+        "A separate, owner-curated list of companies outside the snapshot's S&P 500 universe: private companies "
+        "and companies listed but not index members. Each entry has a dated valuation of at least $100B from a "
+        "named source no older than 365 days at the snapshot date, its basis (priced round, tender offer, "
+        "reported or proposed secondary, IPO price) and a dated, sourced listing status. Figures read on the "
+        "company's own page are marked confirmed; press reports are marked unverified. Entries dated after the "
+        "snapshot are omitted. They are never ranked with index members and get no 2030 scenario; 'would rank' "
+        "places the valuation among the snapshot's current caps for scale only, because private marks are "
+        "negotiated prices, often with investor preferences, not traded market values."
     ),
 }
 LISTED_EXCHANGES = ("NYSE", "Nasdaq", "NYSE American", "NYSE Arca", "Cboe BZX")
@@ -1461,8 +1495,10 @@ def spec_dict() -> dict:
             "collection": LEADERS_COLLECTION_RULE,
             "scenario": LEADERS_SCENARIO_RULES,
             "share_checks": LEADERS_SHARE_CHECKS,
+            "outside_index": LEADERS_OUTSIDE_RULES,
         },
         "quarter_windows": QUARTER_WINDOWS,
+        "xbrl_fill": XBRL_FILL_RULES,
         "decision_research": DECISION_RULES,
         "decision_desk": {
             "ratings": DESK_RATINGS,

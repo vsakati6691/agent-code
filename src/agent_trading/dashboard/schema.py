@@ -47,6 +47,50 @@ LEADERS_CHALLENGER = {
     },
 }
 
+# spec 2026-10-19.5 (LEADERS_OUTSIDE_RULES): config/leaders_outside_index.json entries
+LEADERS_OUTSIDE = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "name",
+        "kind",
+        "ticker",
+        "valuation_usd",
+        "valuation_date",
+        "valuation_basis",
+        "valuation_source",
+        "valuation_url",
+        "valuation_confirmed",
+        "status",
+        "status_date",
+        "status_source",
+        "status_url",
+        "status_confirmed",
+        "notes",
+    ],
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["private", "listed_non_index"]},
+        "ticker": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9.-]{0,14}$"},
+        "valuation_usd": {"type": "number", "exclusiveMinimum": 0},
+        "valuation_date": {"type": "string", "format": "date"},
+        "valuation_basis": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Priced round, tender, secondary, IPO price.",
+        },
+        "valuation_source": {"type": "string", "minLength": 1},
+        "valuation_url": {"type": "string", "pattern": "^https://"},
+        "valuation_confirmed": {"type": "boolean", "description": "True only when read on the company's own page."},
+        "status": {"type": "string", "minLength": 1, "description": "Listing or IPO status as reported."},
+        "status_date": {"type": "string", "format": "date"},
+        "status_source": {"type": "string", "minLength": 1},
+        "status_url": {"type": "string", "pattern": "^https://"},
+        "status_confirmed": {"type": "boolean"},
+        "notes": {"type": "string"},
+    },
+}
+
 EXTERNAL = _obj(
     "Optional dated public datasets, collected prospectively from version 2026-10-16.2; absent in older snapshots.",
     {
@@ -497,6 +541,12 @@ SCHEMA = {
                     "From 2026-10-19.4: extra share classes ranked with their company ({ticker, ranked_as}).",
                 ),
                 "company_count": _f("integer", "From 2026-10-19.4: index companies after merging share classes."),
+                "outside_index": _f(
+                    "array",
+                    "From 2026-10-19.5: owner-curated private or non-index listed companies (LEADERS_OUTSIDE) with "
+                    "would_rank among current caps for scale only; never ranked and no 2030 scenario.",
+                ),
+                "omitted_outside": _f("array", "From 2026-10-19.5: outside-index entries left out and why."),
             },
         ),
         "decision_desk": _obj(

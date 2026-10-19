@@ -41,6 +41,70 @@ def cap_range(row: dict) -> str:
     )
 
 
+def why_unavailable(row: dict) -> str:
+    """The first stored reason, visible in the row rather than only in a tooltip."""
+    if row["movement"] != "unavailable" or not row["unavailable_reason"]:
+        return ""
+    first = row["unavailable_reason"].split("; ")[0]
+    text = first if len(first) <= 110 else first[:107].rstrip() + "…"
+    return f'<div class="small muted">{E(text)}</div>'
+
+
+def outside_section(payload: dict) -> str:
+    """Owner-curated companies outside the index (spec.LEADERS_OUTSIDE_RULES): never ranked, scale only."""
+    rows, omitted = payload.get("outside_index") or [], payload.get("omitted_outside") or []
+    rules = spec.LEADERS_OUTSIDE_RULES
+
+    def label(confirmed: bool) -> str:
+        return (
+            '<span class="small">confirmed (company page)</span>'
+            if confirmed
+            else '<span class="small warn">unverified (press report)</span>'
+        )
+
+    def link(url: str, text: str) -> str:
+        return f'<a href="{E(url)}" rel="noopener noreferrer" target="_blank">{E(text)}</a>'
+
+    head = (
+        "<section><h2>Private and recently listed companies outside the index</h2>"
+        f'<p class="small muted">Not ranked above and no 2030 scenario. Latest dated valuation of at least '
+        f"{cap(rules['min_valuation_usd'])} from a named source, no older than {rules['max_age_days']} days at the "
+        "snapshot date. 'Would rank' places it among today's caps for scale only: private marks are negotiated "
+        "round, tender or proposed-sale prices, often with investor preferences, not traded market values. "
+        "Listing status is as reported and can change.</p>"
+    )
+    if not rows:
+        body = "<p>No companies outside the index registered for this snapshot.</p>"
+    else:
+        body = (
+            '<div class="table-wrap"><table><caption>Companies outside the S&P 500 universe, by latest valuation</caption>'
+            '<thead><tr><th>Company</th><th class="num">Latest valuation</th><th>Basis</th>'
+            '<th class="num">Would rank today</th><th>Listing status</th></tr></thead><tbody>'
+            + "".join(
+                "<tr>"
+                f'<td><strong>{E(r["name"])}</strong><div class="small muted">'
+                + (
+                    f"Listed, not in the S&amp;P 500 ({E(r['ticker'])})"
+                    if r["kind"] == "listed_non_index"
+                    else "Private"
+                )
+                + (f" · {E(r['notes'])}" if r["notes"] else "")
+                + "</div></td>"
+                f'<td class="num">{cap(r["valuation_usd"])}<div class="small muted">{E(r["valuation_date"])}</div></td>'
+                f"<td>{E(r['valuation_basis'])}<div>{link(r['valuation_url'], r['valuation_source'])} · "
+                f"{label(r['valuation_confirmed'])}</div></td>"
+                f'<td class="num">#{r["would_rank"]}<div class="small muted">scale only</div></td>'
+                f'<td>{E(r["status"])}<div class="small muted">{E(r["status_date"])} · '
+                f"{link(r['status_url'], r['status_source'])}</div><div>{label(r['status_confirmed'])}</div></td>"
+                "</tr>"
+                for r in rows
+            )
+            + "</tbody></table></div>"
+        )
+    tail = f'<p class="small muted">Left out: {E("; ".join(omitted))}.</p>' if omitted else ""
+    return head + body + tail + "</section>"
+
+
 def also(row: dict) -> str:
     others = row.get("other_share_classes") or []
     return f" · also listed as {E(', '.join(others))}" if others else ""
@@ -50,6 +114,7 @@ def methodology() -> str:
     return (
         f"<section><h2>How these ranks are computed and what they are not</h2><p>{E(spec.LEADERS_RULE)}</p>"
         f"<p>{E(spec.LEADERS_SHARE_RULE)}</p><p>{E(spec.LEADERS_SHARE_CHECKS['rule'])}</p>"
+        f"<p>{E(spec.LEADERS_OUTSIDE_RULES['rule'])}</p><p>{E(spec.XBRL_FILL_RULES['rule'])}</p>"
         f"<p>{E(spec.LEADERS_SCENARIO_RULES['growth_basis'])}</p>"
         f"<p>{E(spec.LEADERS_SCENARIO_RULES['method'])}</p><p>Scenario source: Leaders model "
         f"version {E(spec.SPEC_VERSION)}, through 2030-12-31. "
@@ -211,11 +276,13 @@ def leaders_page(payload: dict, details: dict[str, str], price_note: str = "") -
             f'<td class="num" data-v="{sval(row["current_market_cap_usd"])}" title="{reason if not ok(row["current_market_cap_usd"]) else "Dated close × diluted shares; see Details"}">{cap(row["current_market_cap_usd"]) if ok(row["current_market_cap_usd"]) else "—"}</td>'
             f"{''.join(scenario_cells)}"
             f'<td data-v="{sval(row["rank_2030"])}" title="{reason if not ok(row["rank_2030"]) else "Conditional base cap rank"}">{num(row["rank_2030"], 0) if ok(row["rank_2030"]) else "—"}</td>'
-            f'<td data-v="{sval(row["rank_delta"])}"><span class="{color}">{delta}</span><div class="small {color}">{symbol} {E(label)}</div></td></tr>'
+            f'<td data-v="{sval(row["rank_delta"])}"><span class="{color}">{delta}</span><div class="small {color}">{symbol} {E(label)}</div>'
+            f"{why_unavailable(row)}</td></tr>"
         )
     out.append(
         '</tbody></table></div><p data-empty="t-leaders" hidden>No rows match these filters.</p><p class="small muted" data-pin-status>Pins are saved only on this device. Private companies without tickers cannot be pinned.</p>'
     )
+    out.append(outside_section(payload))
     grouped = defaultdict(list)
     for gap in gaps:
         grouped[gap["reason"]].append(gap["ticker"])

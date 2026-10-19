@@ -76,7 +76,7 @@ def cand(
 
 
 def test_registered_before_any_rating_and_additive():
-    assert spec.SPEC_VERSION == "2026-10-19.4"
+    assert spec.SPEC_VERSION == "2026-10-19.5"
     reason = historical_reason("2026-10-17.5")
     assert "written before any rating was computed" in reason
     assert "No existing scale, weight, gate, list" in reason

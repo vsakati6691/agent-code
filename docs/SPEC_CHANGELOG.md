@@ -136,3 +136,17 @@ Found in a review of the published Leaders 2030 page on 2026-10-19 and fixed at 
 (4) Leaders ranks each SEC registrant once, using its most liquid class among those with a verified as-of price, as the research lists have done since 2026-10-13.2. Collection now retains 20-day median dollar volume, the cover-page market cap and its basis, and the kind of any collection gap. The exclusion text the research lists write for the other class comes from one shared template (ONE_CLASS_EXCLUSION).
 
 (5) The page lists unranked members by cause (share count, SEC statements, price, other inputs). Stale-statement reasons can reflect SEC company-facts lag: Visa's 2026-07-29 10-Q is in SEC's filing index but not in company facts as of 2026-10-19. Earlier snapshots and spec hashes are unchanged. Freeze date remains 2026-10-16.
+
+## 2026-10-19.5
+
+Owner requested sourced private/recently listed companies beside Leaders; revenue tag-gap fill and equal-EPS basic share fallback fixes.
+
+Owner request on 2026-10-19 after validating the published Leaders page: show private companies that may go public, and fix remaining coverage gaps. Registered before any snapshot is collected under this version; no scale, weight, gate, list size, scenario or tracking rule changes, and stored snapshots are never rescored.
+
+(1) Companies outside the index (LEADERS_OUTSIDE_RULES, config/leaders_outside_index.json with a closed schema). A separate section lists private companies and companies listed but not in the snapshot's S&P 500 universe, each with a dated valuation of at least $100B no older than 365 days, its basis (priced round, tender offer, proposed secondary, IPO price), a named source and a dated, sourced listing status. Figures read on the company's own page are marked confirmed; press reports are marked unverified. They are never ranked with index members and get no 2030 scenario; "would rank" places the valuation among the snapshot's current caps for scale only. Initial entries, researched on 2026-10-19: Anthropic, OpenAI, ByteDance, Databricks, Stripe and Waymo (private) and SpaceX (listed on Nasdaq as SPCX on 2026-06-12, not in the snapshot's S&P 500 list, so the index-based ranks above leave out a company of top-five size). Owner 2030 assumptions for any of them still go in config/leaders_2030_challengers.json.
+
+(2) Revenue tag gaps (XBRL_FILL_RULES). Revenue keeps the tag with the most recent coverage, and periods it lacks are now filled from another registered revenue tag only when the two share at least 4 periods and agree within 2% on every one. Alphabet's "Revenues" tag has no quarters from 2021-09 to 2024-03 and no fiscal 2022, which left it without any three-year growth input and so without a 2030 scenario; "RevenueFromContractWithCustomerExcludingAssessedTax" covers those periods.
+
+(3) Diluted shares (XBRL_FILL_RULES). A quarter with no tagged diluted weighted-average count uses the basic weighted-average count only when that quarter's tagged basic and diluted EPS are equal within $0.005. Exxon Mobil tags its diluted share count only up to 2013 while reporting equal basic and diluted EPS, which left a company of top-20 size unranked. Issuers that report shares only per class (Berkshire Hathaway, Visa) remain unavailable.
+
+(4) The Leaders table shows the first missing-input reason under each unavailable row instead of only in a tooltip.

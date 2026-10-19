@@ -64,6 +64,7 @@ FLOW_TAGS = {
     "interest_expense": ["InterestExpense", "InterestAndDebtExpense", "InterestExpenseDebt"],
 }
 SHARE_TAGS = ["WeightedAverageNumberOfDilutedSharesOutstanding"]
+BASIC_SHARE_TAGS = ["WeightedAverageNumberOfSharesOutstandingBasic"]
 INSTANT_TAGS = {
     "cash_equivalents": [
         "CashAndCashEquivalentsAtCarryingValue",
@@ -142,9 +143,38 @@ def _rank(f: dict) -> tuple:
     return (f["form"].startswith("10-K") if annual else True, f["filed"])
 
 
-def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: bool = True):
-    """{quarter_end: (value, derived)} using the tag with the most recent coverage."""
+def _agrees(base: dict, other: dict, value) -> bool:
+    """Two tags describe the same series: enough shared periods, every one within the registered tolerance."""
+    rules = spec.XBRL_FILL_RULES
+    shared = [k for k in other if k in base]
+    if len(shared) < rules["tag_fill_min_overlap"]:
+        return False
+    for k in shared:
+        a, b = value(base[k]), value(other[k])
+        if a <= 0 or b <= 0 or abs(b / a - 1) > rules["tag_fill_tolerance"]:
+            return False
+    return True
+
+
+def _fill_gaps(best: dict, others: list[dict], value) -> dict:
+    """Fill periods the chosen tag lacks from another registered tag that agrees with it (spec 2026-10-19.5)."""
+    merged = dict(best)
+    for other in others:
+        if _agrees(best, other, value):
+            for end, v in other.items():
+                if all(abs((_d(end) - _d(k)).days) > 20 for k in merged):
+                    merged[end] = v
+    return merged
+
+
+def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: bool = True, fill: bool = False):
+    """{quarter_end: (value, derived)} using the tag with the most recent coverage.
+
+    With `fill`, quarters that tag lacks come from another tag in the list when the two agree on their
+    shared quarters (an issuer that switches revenue tags otherwise leaves years-long holes).
+    """
     best = None
+    by_tag: list[dict] = []
     for tag in tags:
         facts = _facts(group, tag, unit_ok, as_of)
         spans: dict[tuple[str, str], dict] = {}
@@ -169,10 +199,15 @@ def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: boo
                         q[e1] = (v1 - v0, True)
         if not q:
             continue
+        by_tag.append(q)
         latest = max(q)
         if best is None or latest > best[0] or (latest == best[0] and len(q) > len(best[1])):
             best = (latest, q, tag)
-    return best[1] if best else {}
+    if best is None:
+        return {}
+    if fill:
+        return _fill_gaps(best[1], [q for q in by_tag if q is not best[1]], lambda v: v[0])
+    return best[1]
 
 
 def _instant(group: dict, tags: list[str], as_of: date) -> dict[str, float]:
@@ -200,9 +235,13 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
     gaap = (facts.get("facts") or {}).get("us-gaap") or {}
     dei = (facts.get("facts") or {}).get("dei") or {}
     usd = lambda u: u == "USD"  # noqa: E731
-    series = {k: _quarterly(gaap, tags, usd, as_of) for k, tags in FLOW_TAGS.items()}
+    per_share = lambda u: u == "USD/shares"  # noqa: E731
+    fill = spec.XBRL_FILL_RULES["tag_fill_flows"]
+    series = {k: _quarterly(gaap, tags, usd, as_of, fill=k in fill) for k, tags in FLOW_TAGS.items()}
     shares = _quarterly(gaap, SHARE_TAGS, lambda u: u == "shares", as_of, additive=False)
-    eps = _quarterly(gaap, ["EarningsPerShareDiluted"], lambda u: u == "USD/shares", as_of, additive=False)
+    basic = _quarterly(gaap, BASIC_SHARE_TAGS, lambda u: u == "shares", as_of, additive=False)
+    eps = _quarterly(gaap, ["EarningsPerShareDiluted"], per_share, as_of, additive=False)
+    eps_basic = _quarterly(gaap, ["EarningsPerShareBasic"], per_share, as_of, additive=False)
 
     anchor = series["revenue"] or series["net_income"]
     ends: list[str] = []
@@ -222,6 +261,17 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
         for gp, r, c in zip(flows["gross_profit"], flows["revenue"], flows["cost_of_revenue"], strict=False)
     ]
     dil = [_near(shares, e) for e in ends]
+    # spec 2026-10-19.5: an issuer that tags no diluted count (e.g. no dilutive securities) reports one
+    # weighted-average count; use its basic count only where basic and diluted EPS are tagged and equal
+    notes = []
+    for i, e in enumerate(ends):
+        b, eb, ed = _near(basic, e), _near(eps_basic, e), _near(eps, e)
+        if dil[i] is None and b and eb and ed and abs(eb[0] - ed[0]) <= spec.XBRL_FILL_RULES["equal_eps_tolerance"]:
+            dil[i] = b
+            if not notes:
+                notes.append(
+                    "diluted shares from the basic weighted-average count where basic and diluted EPS are equal"
+                )
 
     instants = {}
     for k, tags in INSTANT_TAGS.items():
@@ -264,16 +314,20 @@ def build(facts: dict, as_of: date, max_quarters: int = 16) -> Fundamentals:
         last_filed=last["filed"] if last else None,
         last_form=last["form"] if last else None,
         concentration=conc[0] if conc else None,
+        notes=notes,
         annual={
-            "revenue": annual_series(gaap, FLOW_TAGS["revenue"], "USD", as_of),
+            "revenue": annual_series(gaap, FLOW_TAGS["revenue"], "USD", as_of, fill="revenue" in fill),
             "eps": annual_series(gaap, ["EarningsPerShareDiluted"], "USD/shares", as_of),
         },
         quarterly_eps=[v[0] if v else None for v in (_near(eps, e) for e in ends)],
     )
 
 
-def annual_series(group: dict, tags: list[str], unit: str, as_of: date) -> dict[str, float]:
-    """Full fiscal years, one consistent tag; latest available restatement wins."""
+def annual_series(group: dict, tags: list[str], unit: str, as_of: date, fill: bool = False) -> dict[str, float]:
+    """Full fiscal years, one consistent tag; latest available restatement wins.
+
+    With `fill`, years that tag lacks come from another tag that agrees on the shared years (spec 2026-10-19.5).
+    """
     candidates = []
     for tag in tags:
         by_end = {}
@@ -286,6 +340,8 @@ def annual_series(group: dict, tags: list[str], unit: str, as_of: date) -> dict[
         if by_end:
             candidates.append(by_end)
     best = max(candidates, key=lambda x: (max(x), len(x)), default={})
+    if fill and best:
+        best = _fill_gaps(best, [c for c in candidates if c is not best], lambda f: float(f["val"]))
     return {end: float(f["val"]) for end, f in best.items()}
 
 
