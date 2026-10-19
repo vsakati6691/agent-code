@@ -328,9 +328,11 @@ class Quote:
 
 
 def _num(x) -> float | None:
+    if isinstance(x, bool):
+        return None
     try:
         v = float(x)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return v if v == v and abs(v) != float("inf") else None
 

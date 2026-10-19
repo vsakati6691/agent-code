@@ -22,7 +22,14 @@ def missing(reason: str = OLD, state: str = "missing") -> dict:
 
 
 def institutional_record(
-    archives: list[dict], mapping: dict, ticker: str, as_of: date, error: dict | None = None
+    archives: list[dict],
+    mapping: dict,
+    ticker: str,
+    as_of: date,
+    error: dict | None = None,
+    *,
+    providers=None,
+    current_collection: bool = False,
 ) -> dict:
     """Isolate a malformed company as well as bulk failures; absence is not zero ownership."""
     try:
@@ -31,6 +38,24 @@ def institutional_record(
             raise ValueError("invalid institutional record")
     except (FetchError, OSError, ValueError, KeyError, TypeError, AttributeError):
         record = missing("SEC 13F company data unavailable or malformed", "provider_error")
+    record = {"provider": "sec", **record, "fallback_status": "not_needed"}
+    if record["state"] != "available":
+        record["fallback_status"] = "historical_disabled" if not current_collection else "unconfigured"
+        if current_collection and providers is not None and getattr(providers, "fmp_key", None):
+            primary_state, primary_reason = record["state"], record.get("reason")
+            try:
+                fallback = providers.institutional_holders(ticker, as_of)
+                if not isinstance(fallback, dict) or fallback.get("state") != "available":
+                    raise FetchError("Invalid FMP institutional fallback record")
+                record = {
+                    **fallback,
+                    "fallback_status": "available",
+                    "primary_state": primary_state,
+                    "primary_reason": primary_reason,
+                }
+            except (FetchError, OSError, ValueError, KeyError, TypeError, AttributeError):
+                record["fallback_status"] = "provider_error"
+                record["fallback_reason"] = "FMP unavailable, malformed, not entitled or budget exhausted"
     return {**record, "score_adjustment": 0.0, "scoring_status": "neutral (display-only dataset)"}
 
 
@@ -236,7 +261,15 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
         else:
             external["insiders"] = missing("No SEC CIK for this company")
             external["risk_excerpt"] = missing("No SEC CIK for this company")
-        external["institutions"] = institutional_record(archives, mapping, ticker, ctx.as_of, institutional_error)
+        external["institutions"] = institutional_record(
+            archives,
+            mapping,
+            ticker,
+            ctx.as_of,
+            institutional_error,
+            providers=ctx.providers,
+            current_collection=current_collection,
+        )
         f = ctx.facts.get(int(cik), (None,))[0] if cik else None
         shares, shares_date = None, None
         if f:
@@ -270,4 +303,9 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
             "retrieved_at": ctx.started,
             "reasons": sorted({r["reason"] for r in records if r.get("reason")}),
         }
+        if key == "institutions":
+            summaries[key]["fallback"] = {
+                state: sum(r.get("fallback_status") == state for r in records)
+                for state in ("available", "provider_error", "unconfigured", "historical_disabled", "not_needed")
+            }
     return summaries

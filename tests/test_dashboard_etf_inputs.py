@@ -16,6 +16,7 @@ XML = """<edgarSubmission xmlns="http://www.sec.gov/edgar/nport"><genInfo><serie
 
 def test_new_version_changes_only_input_registration():
     raw = spec.spec_dict()
+    raw.pop("live_gaps")  # 2026-10-19.3
     raw.pop("resilience_validation")  # 2026-10-19.2
     raw.pop("resilience")  # 2026-10-19.1
     # Remove later additive registrations (Leaders, private history, Cboe bars, Buy/Sell desk) to check the ETF delta.

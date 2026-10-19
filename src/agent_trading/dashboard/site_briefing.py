@@ -8,6 +8,7 @@ from .changes import KIND_LABELS
 from .earnings_cadence import display as cadence_display
 from .earnings_cadence import schedule_note
 from .fmt import pct, tracking_schedule
+from .render_context import customer
 from .site_list_common import E, band_title, ordered
 from .site_research import datasets_line
 
@@ -192,10 +193,14 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
         )
     u = snap["universe"]
     tr = snap.get("tradability") or {}
+    verdicts = (
+        ""
+        if customer()  # site_customer: broker check counts are not published
+        else f"Robinhood verdicts {tr.get('verdicts_stored', 'n/a')}, {tr.get('to_check', 'n/a')} to check · "
+    )
     cov = (
         f'<p class="small">S&amp;P 500 price coverage {pct(u.get("sp500_price_coverage"))} of {u.get("sp500_count")} · broad '
-        f"universe {u.get('broad_eligible')} eligible, {u.get('broad_prescreen')} pre-screened · Robinhood verdicts "
-        f"{tr.get('verdicts_stored', 'n/a')}, {tr.get('to_check', 'n/a')} to check · snapshot "
+        f"universe {u.get('broad_eligible')} eligible, {u.get('broad_prescreen')} pre-screened · {verdicts}snapshot "
         f"{E(str(snap.get('run_finished', '')).replace('+00:00', ''))} UTC.</p>"
         f'<p class="small">{E("; ".join(snap.get("problems", []) + snap.get("notes", [])) or "No missing-data warnings.")}</p>'
         f'<p class="small">{datasets_line(evidence.datasets(snap))}</p>'

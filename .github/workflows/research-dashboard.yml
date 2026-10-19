@@ -18,6 +18,8 @@
 #   DASHBOARD_OPTIONS     set to "true" to collect and publish option chains (off by default: Cboe terms)
 #   DASHBOARD_PUBLISH     set to "true" to deploy to Pages, after reviewing the data-source terms in
 #                         docs/RESEARCH_DASHBOARD.md. Without it the site is built and checked but not published.
+#   DASHBOARD_EDITION     "full" (default) or "customer": leaves out options, the Buy/Sell desk, the watchlist and
+#                         Robinhood-derived data, adds a terms page, and fails the build if any of it would leak.
 #
 # This workflow never reads brokerage data, places orders, or sends messages.
 
@@ -157,6 +159,7 @@ jobs:
       - name: Build the static site (from stored snapshots only)
         env:
           DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
+          DASHBOARD_EDITION: ${{ vars.DASHBOARD_EDITION || 'full' }}  # "customer": see site_customer.py
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
@@ -237,6 +240,7 @@ jobs:
       - name: Verify and build the dry-run snapshot
         env:
           DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
+          DASHBOARD_EDITION: ${{ vars.DASHBOARD_EDITION || 'full' }}  # "customer": see site_customer.py
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}

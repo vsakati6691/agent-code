@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-19.2"
+SPEC_VERSION = "2026-10-19.3"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -85,7 +85,33 @@ SPEC_CHANGELOG = [
         "2026-10-19.2",
         "Owner requested edge-case validation: unknown sector neutrality, New York calendar dates and persistent earnings quarantine during outages.",
     ),
+    (
+        "2026-10-19.3",
+        "Owner requested an executing institutional fallback and a separate delayed 0DTE/next-expiry research desk; historical scores remain unchanged.",
+    ),
 ]
+
+LIVE_GAP_RULES = {
+    "institutional_fallback": "SEC first, then optional FMP quarterly aggregate; current collections only; display-only and neutral",
+    "institutional_quarter": "Latest completed quarter at least 45 calendar days old; require exact symbol and quarter",
+    "short_term": {
+        "symbols": ["NVDA", "PLTR", "MU", "AVGO"],
+        "windows": ["0DTE", "1DTE", "Next listed expiry"],
+        "max_next_dte": 7,
+        "max_quote_age_minutes": 25,
+        "future_tolerance_seconds": 60,
+        "min_open_interest": 100,
+        "min_volume": 10,
+        "max_spread_pct": 0.20,
+        "max_moneyness_distance": 0.10,
+        "per_symbol_type_window": 2,
+        "rank": "ascending spread fraction, descending volume, descending open interest, ascending OCC symbol",
+        "session": "NYSE regular session only; stop at 13:00 ET on trading July 3, Christmas Eve and Friday after Thanksgiving, otherwise 16:00 ET",
+        "quotes": "fresh request; Cboe chain timestamp and underlying last trade must be from this NY session and at most 25 minutes old",
+        "payoff": "standard unadjusted OCC roots only; indicative ask times 100 premium and maximum premium loss; fees excluded; no probability estimate",
+        "storage": "separate immutable intraday observations; failed runs preserve the last valid observation and never change weekly ranking",
+    },
+}
 
 RESILIENCE_RULES = {
     "sector_threshold": 0.50,
@@ -1353,6 +1379,7 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "live_gaps": LIVE_GAP_RULES,
         "resilience": RESILIENCE_RULES,
         "resilience_validation": RESILIENCE_VALIDATION_RULES,
         "private_history": PRIVATE_HISTORY_RULE,

@@ -211,6 +211,12 @@ def score_bands(
             "excluded": [{"ticker": t, "reason": why} for t, why in sorted(ctx.excluded[band.key].items())],
             "evaluated": len(rows),
             "ranked": len(ranked),
+            "sector_adjustment": {
+                "applied": True,
+                "stage": "after tradability, before candidate cutoff",
+                "eligible_penalized": sum(s.sector_penalty > 0 for s in ranked),
+                "threshold": spec.RESILIENCE_RULES["sector_threshold"],
+            },
             "concentration": concentration_warnings(top),
             "rank_changes": rank_changes(
                 [

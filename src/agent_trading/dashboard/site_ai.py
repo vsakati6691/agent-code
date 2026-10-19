@@ -237,9 +237,11 @@ def _private_section(ai: dict | None) -> str:
 
 
 def ai_page(snap: dict) -> str:
+    from .site_sector import status as sector_status
+
     ai = snap.get("ai")
     bands = ai_bands(snap)
-    head = '<div class="ai-page">' + site_ai_context.intro(snap, bands)
+    head = '<div class="ai-page">' + site_ai_context.intro(snap, bands) + sector_status(snap, list(bands))
     if not bands:
         v = snap.get("spec_version") or "unknown"
         missing = (

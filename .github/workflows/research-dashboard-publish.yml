@@ -40,6 +40,7 @@ jobs:
       - name: Build from stored data without collection
         env:
           DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
+          DASHBOARD_EDITION: ${{ vars.DASHBOARD_EDITION || 'full' }}  # "customer": see site_customer.py
         run: >-
           python -m agent_trading.dashboard build --data research-data --out site
           --commit "$GITHUB_SHA" --data-commit "$(git -C research-data rev-parse HEAD)"

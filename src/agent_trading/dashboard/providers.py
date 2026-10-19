@@ -205,6 +205,21 @@ class Providers:
     def option_chain(self, symbol: str) -> tuple[dict, list[dict]]:
         return self._price_data(f"{CBOE_BASE}/options/{symbol}.json", parse_cboe_chain)
 
+    def institutional_holders(self, symbol: str, as_of: date) -> dict:
+        from . import institutional_fallback as fallback
+
+        if not self.fmp_key:
+            raise FetchError("FMP institutional fallback not configured")
+        quarter = fallback.eligible_quarter(as_of)
+        retrieved_at = datetime.now(UTC).isoformat()
+        raw = self.http.get_json(
+            fallback.ENDPOINT,
+            {"symbol": symbol, "year": quarter.year, "quarter": (quarter.month + 2) // 3, "apikey": self.fmp_key},
+            max_age_hours=0,
+            validate=lambda data: fallback.parse(data, symbol, quarter, retrieved_at),
+        )
+        return fallback.parse(raw, symbol, quarter, retrieved_at)
+
     def _price_data(self, url: str, parser: Callable):
         """Parse once before caching, retaining the parsed history/chain for the caller."""
         parsed = None

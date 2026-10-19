@@ -1,6 +1,6 @@
 # Provider recovery, sector balance and earnings validation
 
-Registered as methodology **2026-10-19.1**, with verification fixes in **2026-10-19.2**,
+Registered as methodology **2026-10-19.1**, with verification fixes in **2026-10-19.2** and live-build fixes in **2026-10-19.3**,
 these changes apply to new collections.
 Existing snapshots and tracked results retain their original rules. No improved
 investment performance is claimed.
@@ -46,6 +46,16 @@ the earnings calendar before quote fallbacks to preserve its single AV allowance
 addition to the bulk-fetch boundary. It preserves unavailable states and adds
 `score_adjustment: 0.0`. Missing ownership is never fabricated as zero. This
 isolates failures; it does not repair an unavailable upstream SEC archive.
+From 2026-10-19.3, current collections also execute `Providers.institutional_holders()`
+when the SEC record is unavailable, partial or stale and `FMP_API_KEY` is configured.
+This uses FMP's documented [positions summary](https://site.financialmodelingprep.com/developer/docs/stable/positions-summary)
+for the latest completed quarter at least 45 calendar days old. Symbol, exact quarter,
+holder count and share count are validated before use. The aggregate is labeled FMP;
+it is not an individual holder list or point-in-time SEC filing history. Historical
+backfills never query this current source. Each record and the dataset summary report
+fallback status: `available`, `provider_error`, `unconfigured`, `historical_disabled`
+or `not_needed`. Both providers failing leaves explicit missing data and a neutral
+score adjustment. An entitled FMP repository secret is required for live recovery.
 
 ## Sector penalty
 
@@ -68,6 +78,57 @@ a readable flag explain the result. Existing gates, tradability and tie breaks
 still apply. Unknown sectors remain explicit. SEC SIC mappings are sector
 proxies; S&P labels come from the GICS column. This is a soft penalty, not a hard
 cap: it cannot diversify a pool without eligible alternatives.
+
+`score_bands()` runs this after tradability and before the candidate cutoff, for both
+growth and AI lists. New snapshots record `sector_adjustment.applied`, the number of
+eligible candidates penalized, and individual raw scores/deductions. The site explains
+when an older snapshot predates these fields. Publishing code alone does not rescore
+an immutable historical snapshot; the next completed-session collection supplies
+the new ranking.
+
+## Short-term options desk
+
+The Options page links to `options-short-term.html`, a separate delayed research
+desk for NVDA, PLTR, MU and AVGO. It displays 0DTE, 1 calendar DTE and the next actual
+listed expiry within seven days. Empty windows remain empty. A tomorrow contract
+can appear in both the 1DTE and next-listed views. This is liquidity research, not
+an earnings-event trigger, probability estimate, or brokerage order interface.
+
+Run **research-dashboard-short-term** from GitHub Actions on `main` during the
+regular session (`DASHBOARD_OPTIONS=true`; publication also needs
+`DASHBOARD_PUBLISH=true`). The manual workflow tests, collects, verifies, appends
+research data, builds and publishes. It makes no Alpha Vantage requests and needs
+no FMP key. There is no new recurring schedule. Locally:
+
+```powershell
+.\.venv\Scripts\python.exe -m agent_trading.dashboard short-term --data data/research-preview --cache .cache/short-term
+.\.venv\Scripts\python.exe -m agent_trading.dashboard build --data data/research-preview --out data/research-preview-site
+```
+
+The desk is included only in the full site edition. Customer builds omit its page,
+script and stored chain observations; the new workflow honors `DASHBOARD_EDITION`.
+
+Only `HttpClient` fetches data: four chains, a 12-attempt Cboe cap, ten-second
+request timeouts and a two-minute collection deadline. Cached responses cannot
+masquerade as an intraday refresh. Both the chain timestamp (UTC when naive) and
+underlying trade timestamp (New York when naive) must fall within the regular
+session and 25 minutes of collection. Cutoffs follow the regular session and
+[NYSE early-close calendar](https://www.nyse.com/trade/hours-calendars); they are
+research cutoffs, not broker exercise deadlines or extended trading hours.
+
+The fixed filters and sort order live in `spec.LIVE_GAP_RULES`. Standard roots,
+positive bid, noncrossed quotes, integer volume/OI and finite numbers are required.
+Duplicate OCC symbols are rejected. Premium/max premium loss use ask × 100, without
+fees or a pricing model. Immutable `short-term/<UTC timestamp>/scan.json` observations
+have integrity manifests and a 100 KB cap. A completely failed collection appends
+an audit event without replacing the latest good observation. Partial coverage and
+closed sessions are explicit. Stored rows turn stale/expired in the browser based
+on their original timestamps; the page does not fetch new prices automatically.
+
+`tests/test_dashboard_live_gaps.py` covers the executing fallback adapter, candidate
+ranking integration, actual expiry selection, malformed/stale quotes, duplicate
+contracts, early closes and failed-run preservation. A live smoke test must report
+actual provider availability separately from these mocked regression checks.
 
 ## Earnings quarantine
 

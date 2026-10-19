@@ -13,9 +13,16 @@ class RenderContext:
     symbols: dict[str, str] = field(default_factory=dict)
     asset_version: str = ""
     private: bool = False
+    edition: str = "full"  # "customer": see site_customer
 
 
 CURRENT_RENDER: ContextVar[RenderContext | None] = ContextVar("dashboard_render", default=None)
+
+
+def customer() -> bool:
+    """True while rendering the customer edition (no options, desk, watchlist or broker-derived data)."""
+    context = CURRENT_RENDER.get()
+    return context is not None and context.edition == "customer"
 
 
 @contextmanager

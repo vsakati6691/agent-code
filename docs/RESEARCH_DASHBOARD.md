@@ -605,6 +605,31 @@ $env:SEC_USER_AGENT = "agent-code research you@example.com"   # a real contact a
 5. **First run:** Actions → research-dashboard → Run workflow. Check the run summary, the `research-data` branch and the site.
 6. If branch protection rules cover all branches, allow `github-actions[bot]` to push `research-data`. The workflow never force-pushes.
 
+## Customer edition
+
+The repository variable `DASHBOARD_EDITION` chooses what the publishing workflows build: `full` (the default,
+unchanged) or `customer`. Locally: `python -m agent_trading.dashboard build --data research-data --out site --edition customer`.
+
+The customer edition renders the same stored snapshots, which are never modified, without:
+
+- **Cboe option research**: Options (all horizons), Small bets, contract pages, option CSVs and the daily-refresh
+  files, which hold option chains.
+- **The Buy/Sell desk**: the page, trace pages and CSV.
+- **Data from the owner's Robinhood account**: tradability verdicts and counts, the broker earnings-calendar
+  check, and Watchlist 2030 and Plan 2030, which are built on the owner's Robinhood watchlist. Rule descriptions
+  say "brokerage tradability" instead of naming the broker.
+
+It adds `terms.html`, linked from the menu and every footer. The page reads "Draft terms" until
+`site_customer.TERMS_STATUS` is set to `reviewed` after legal review. `site_customer.check` fails the build if
+any left-out page, file, data key, link or broker-derived phrase appears. Company names (Robinhood Markets,
+Robinhood Ventures) are allowed.
+
+Still the owner's decisions before any customer release: stock prices on every page come from Cboe delayed
+quotes (personal, non-commercial use unless Cboe consents); the research lists only include stocks the broker
+check reported as tradable; GitHub Pages' terms do not allow running an online business or SaaS; and whether
+the lists and scenarios count as investment advice or research in your jurisdiction. Methodology and version
+history still describe the left-out features, so the published record of rules stays complete.
+
 ## Known limitations
 
 - Prices are delayed, end-of-session snapshots, never live. Returns exclude dividends.
