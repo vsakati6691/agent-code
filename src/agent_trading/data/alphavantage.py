@@ -37,6 +37,10 @@ class AlphaVantageQuotaError(AlphaVantageError):
     """Provider-wide quota or entitlement failure: stop subsequent requests."""
 
 
+class AlphaVantageTransientError(AlphaVantageError):
+    """A timeout, connection error or server error eligible for bounded retry."""
+
+
 def parse_daily_json(data: dict[str, Any], symbol: str) -> pd.DataFrame:
     for key in ("Error Message", "Information", "Note"):
         if key in data:
@@ -114,6 +118,8 @@ class AlphaVantageClient:
         pause_seconds: float = 12.5,
         timeout: float = 30.0,
         budget: DailyRequestBudget | None = None,
+        attempts: int = 3,
+        backoff: float = 2.0,
     ) -> None:
         register_secret(api_key)
         self._key = api_key
@@ -123,8 +129,21 @@ class AlphaVantageClient:
         self._last_call = 0.0
         self.calls_made = 0
         self.budget = budget if budget is not None else DailyRequestBudget()
+        if not 1 <= attempts <= 3 or not 0 <= backoff <= 30:
+            raise ValueError("retry policy must use 1-3 attempts and 0-30 second base delay")
+        self.attempts, self.backoff = attempts, backoff
 
     def _get(self, params: dict[str, str]) -> requests.Response:
+        for attempt in range(self.attempts):
+            try:
+                return self._attempt(params)
+            except AlphaVantageTransientError:
+                if attempt + 1 == self.attempts:
+                    raise
+                time.sleep(self.backoff * 2**attempt)
+        raise AssertionError("unreachable")
+
+    def _attempt(self, params: dict[str, str]) -> requests.Response:
         try:
             self.budget.reserve()
         except DailyBudgetExceeded as exc:
@@ -137,13 +156,16 @@ class AlphaVantageClient:
         log.info("Alpha Vantage request: function=%s symbol=%s", params.get("function"), params.get("symbol", "-"))
         try:
             resp = self._session.get(BASE_URL, params={**params, "apikey": self._key}, timeout=self._timeout)
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            raise AlphaVantageTransientError(f"network error ({type(exc).__name__})") from None
         except requests.RequestException as exc:
             raise AlphaVantageError(f"network error ({type(exc).__name__})") from None
-        if resp.status_code in {402, 403, 429} or (resp.status_code == 200 and quota_notice(resp.content)):
+        if resp.status_code in {401, 402, 403, 429} or (resp.status_code == 200 and quota_notice(resp.content)):
             self.budget.stop()
             raise AlphaVantageQuotaError("Alpha Vantage quota or entitlement response; stopped for today")
         if resp.status_code != 200:
-            raise AlphaVantageError(f"HTTP {resp.status_code}")
+            error = AlphaVantageTransientError if resp.status_code in {500, 502, 503, 504} else AlphaVantageError
+            raise error(f"HTTP {resp.status_code}")
         return resp
 
     def daily_bars(self, symbol: str, outputsize: str = "compact") -> pd.DataFrame:

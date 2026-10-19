@@ -751,3 +751,7 @@ timeout, never checks out or pushes `research-data`, and skips production
 update/publish/deploy by condition. No schedule can activate this dry-run job.
 The only data-branch input read is the existing public tradability JSON via the
 read-only GitHub API. No new source changes ranks, gates or equity scenarios.
+
+## Provider recovery and event validation
+
+See [RESEARCH_RESILIENCE.md](RESEARCH_RESILIENCE.md) for the 2026-10-19.1 fallback adapters, sector penalty, earnings quarantine and reusable Python entry points.

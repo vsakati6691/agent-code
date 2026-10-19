@@ -109,8 +109,10 @@ before any results were computed; a change creates a new version and results are
 must be present. Lists are never padded: fewer than ten qualifying stocks means fewer than ten shown.</p>
 <p id="price-bars">{E(spec.PRICE_BAR_RULE.replace("PRICE_RANGE_CHECK_BARS", str(spec.PRICE_RANGE_CHECK_BARS)).replace("PRICE_LISTING_GAP_DAYS", str(spec.PRICE_LISTING_GAP_DAYS)).replace("PRIVATE_HISTORY_RULE", "the private-history rule"))}</p>
 <h2 id="decision-research">Growth decision research · version 2026-10-14.9</h2>
-<p>New large, mid and small lists rank fundamental quality alone. Price momentum and benchmark-relative returns
+<p>New large, mid and small lists start from fundamental quality scores. Price momentum and benchmark-relative returns
 are displayed separately. Annual price returns over 150% are flagged extended. Existing snapshots retain their original ranks.</p>
+<p>From version 2026-10-19.1, sectors above 50% of a raw top list receive a proportional deduction of up to 10 points before reranking. Raw scores and deductions remain available. This soft penalty encourages sector representation when eligible alternatives exist; it does not impose a hard sector cap.</p>
+<p>Earnings dates more than 21 calendar days from their historical 8-K cadence estimate require review and are excluded from automated event triggers until a fresh, confirmed manual calendar check agrees. Dates without sufficient cadence history remain unverified.</p>
 <div class="table-wrap"><table aria-label="Growth quality weights"><thead><tr><th>Component</th><th>Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead><tbody>{growth_comps}</tbody></table></div>
 <p>Annual revenue and diluted EPS CAGR require positive full fiscal-year endpoints, matched within 45 days of
 3 or 5 years apart. Latest-quarter revenue acceleration compares its YoY rate with the preceding quarter's YoY rate;

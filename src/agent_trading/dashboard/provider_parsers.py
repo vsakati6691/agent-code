@@ -322,6 +322,7 @@ class Quote:
     low: float | None = None
     volume: float | None = None
     change: float | None = None
+    source: str = SOURCES["cboe"]
 
 
 def _num(x) -> float | None:

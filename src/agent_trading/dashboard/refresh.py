@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from ..market_calendar import is_trading_day
 from . import bets, options, spec, speculative
+from .earnings_cadence import validate as validate_earnings
 from .http import BudgetExceeded, FetchError, HttpClient
 from .providers import Providers, canonical
 from .refresh_store import RefreshStore
@@ -69,7 +70,10 @@ def compact_options(payload: dict) -> dict:
 def constrain(http: HttpClient) -> None:
     """Tighten this run only, never alter the weekly client's defaults."""
     for name, limits in http.limits.items():
-        limits.budget = min(limits.budget, CBOE_BUDGET if name == "cboe" else 1 if name == "alphavantage" else 0)
+        limits.budget = min(
+            limits.budget,
+            CBOE_BUDGET if name == "cboe" else 1 if name == "alphavantage" else 20 if name == "fmp" else 0,
+        )
     http.timeout = min(http.timeout, 10)
     deadline = http.clock() + SECONDS_BUDGET
     http.deadline = min(http.deadline, deadline) if http.deadline is not None else deadline
@@ -100,10 +104,18 @@ def fetch(fn, *args):
 
 
 def collect(
-    providers: Providers, snap: dict, as_of: date, options_enabled: bool, started: str, iv_history: dict | None = None
+    providers: Providers,
+    snap: dict,
+    as_of: date,
+    options_enabled: bool,
+    started: str,
+    iv_history: dict | None = None,
+    earnings_verdicts=None,
 ) -> dict:
     candidates = {c["ticker"] for b in snap.get("bands", {}).values() for c in b.get("candidates", [])}
     quotes, chain_states, chains = {}, {}, {}
+    # Reserve the single refresh AV request for the calendar before optional quote fallbacks.
+    calendar, earn_reason = fetch(providers.earnings_calendar) if options_enabled else (None, None)
     for symbol in sorted(candidates | set(BENCHMARKS)):
         quote, reason = fetch(providers.quote, symbol)
         if quote is not None:
@@ -118,23 +130,45 @@ def collect(
             "reason": reason or "session verified",
             "close": None if reason else quote.close,
             "last_trade": str(quote.last_trade) if quote is not None and quote.last_trade else None,
-            "source": options.QUOTE_SOURCE,
+            "source": getattr(quote, "source", options.QUOTE_SOURCE),
         }
     events, events_known = {}, False
+    earnings_validation = {}
+    stored_checks = {
+        c["ticker"]: c.get("earnings_check") or {}
+        for b in snap.get("bands", {}).values()
+        for c in b.get("candidates", [])
+    }
     option_payload = {"enabled": options_enabled, "status": "unavailable", "reason": "option collection disabled"}
     if options_enabled:
-        calendar, earn_reason = fetch(providers.earnings_calendar)
         if calendar is not None:
             events_known = True
             for symbol, group in calendar.groupby("symbol"):
                 future = sorted(d for d in group["reportDate"] if d > as_of)
                 if future:
-                    events[symbol] = [{"date": future[0], "event": "earnings (scheduled, unverified)"}]
+                    scheduled = str(future[0])
+                    old = stored_checks.get(symbol, {})
+                    expected = old.get("expected_date")
+                    if expected is None and old.get("cadence_check"):
+                        import re
+
+                        match = re.search(r"expected about (\d{4}-\d{2}-\d{2})", old["cadence_check"])
+                        expected = match[1] if match else None
+                    manual = earnings_verdicts.check(symbol, scheduled, as_of) if earnings_verdicts else None
+                    checked = validate_earnings(scheduled, expected, as_of, manual)
+                    earnings_validation[symbol] = {"next_scheduled": scheduled, **checked}
+                    if checked["event_eligible"]:
+                        events[symbol] = [{"date": future[0], "event": "earnings (scheduled, unverified)"}]
         core_underlyings = {c["ticker"] for c in snap.get("bands", {}).get("large", {}).get("candidates", [])}
         underlyings = {
             c["ticker"] for key in spec.EXPLORER_BANDS for c in snap.get("bands", {}).get(key, {}).get("candidates", [])
         }
         for symbol in sorted(underlyings | set(speculative.targets(snap))):
+            if earnings_validation.get(symbol, {}).get("event_eligible") is False:
+                reason = earnings_validation[symbol]["validation_status"]
+                chains[symbol] = reason
+                chain_states[symbol] = {"status": "unavailable", "reason": reason}
+                continue
             chain, reason = fetch(providers.option_chain, symbol)
             info = {}
             if chain is not None:
@@ -174,6 +208,7 @@ def collect(
         "collected_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "status": "partial" if partial else "ok",
         "quotes": quotes,
+        "earnings_validation": earnings_validation,
         "chain_status": chain_states,
         "options": option_payload,
         "explorer": bets.build({s: ch for s, ch in chains.items() if s in underlyings}, as_of, events, events_known)
@@ -220,7 +255,11 @@ def run(
             raise ValueError("no weekly snapshot at or before the refresh session")
         constrain(providers.http)
         iv_history = speculative.stored_history(daily, session) if options_enabled else {}
-        payload = collect(providers, snap, session, options_enabled, started, iv_history)
+        from .earnings_verdicts import EarningsVerdicts
+
+        payload = collect(
+            providers, snap, session, options_enabled, started, iv_history, EarningsVerdicts.load(store.root)
+        )
         written = daily.write(payload, commit)
         store.audit(
             "refresh_finished" if written else "refresh_skipped",

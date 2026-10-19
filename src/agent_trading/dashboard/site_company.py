@@ -265,6 +265,8 @@ def _earnings_check(c: dict, snap: dict | None = None) -> str:
     from .earnings_verdicts import verdict_for
 
     ec = c.get("earnings_check") or {}
+    if ec.get("event_eligible") is False and ec.get("next_scheduled"):
+        return f'<div class="small"><strong>{E(ec.get("validation_status"))}</strong> · {E(cadence_display(ec))} · Excluded from automated event triggers.</div>'
     if ec.get("last_results"):
         note = schedule_note(verdict_for(snap, c.get("ticker", ""), c.get("next_earnings")))
         tail = f" · {E(cadence_display(ec, note))}" if ec.get("cadence_check") else ""

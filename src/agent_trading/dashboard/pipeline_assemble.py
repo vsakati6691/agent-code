@@ -39,6 +39,7 @@ def run(
     iv_history: dict | None = None,
     aggregate_store=None,
     now: datetime | None = None,
+    earnings_verdicts=None,
 ) -> dict:
     """Produce the snapshot payload. Raises RunFailed when the result would not be trustworthy.
 
@@ -53,6 +54,20 @@ def run(
     if as_of > as_of_for(started):
         raise RunFailed(f"{as_of}: as-of close is not yet available under the completed-session collection clock")
     ctx = Context(as_of, providers, started=started.isoformat(timespec="seconds"), limit=limit)
+    ctx.earnings_verdicts = earnings_verdicts
+    if previous and previous.get("as_of", "9999") <= str(as_of):
+        ctx.prior_earnings_checks = {
+            c["ticker"]: c.get("earnings_check") or {}
+            for b in previous.get("bands", {}).values()
+            for c in b.get("candidates", [])
+        }
+        ctx.prior_earnings_checks.update(
+            {
+                e["ticker"]: e.get("earnings_check") or {}
+                for e in previous.get("watchlist", {}).get("entries", [])
+                if e.get("earnings_check")
+            }
+        )
     private_metadata = {}
     private_source: str | None = None
     if getattr(providers, "history_provider", "cboe") == "massive":
@@ -102,13 +117,13 @@ def run(
     external_enabled = hasattr(providers, "fred_key") and hasattr(providers.http, "budget_group")
     macro_payload = macro.collect(providers, as_of) if external_enabled else None
 
-    speculative_payload, options_payload = collect_derivatives(
-        ctx, payload_bands, earnings, cal, options_enabled, iv_history, earn_note
-    )
-
     watch_payload = {"status": "no watchlist configured", "entries": []}
     if watchlist is not None:
         watch_payload = evaluate_watchlist(ctx, ref, watchlist, earnings)
+    upcoming = collect_events(ctx, payload_bands, watch_payload, earnings)
+    speculative_payload, options_payload = collect_derivatives(
+        ctx, payload_bands, earnings, cal, options_enabled, iv_history, earn_note
+    )
     external_status = (
         pipeline_external.collect(ctx, payload_bands, watch_payload, previous, aggregate_store)
         if external_enabled
@@ -127,7 +142,6 @@ def run(
                 )
         if macro_payload["state"] != "available":
             ctx.problems.append(f"macro: {macro_payload['state']}; see per-series reasons")
-    upcoming = collect_events(ctx, payload_bands, watch_payload, earnings)
 
     if ctx.transient_failures:
         ctx.problems.append(

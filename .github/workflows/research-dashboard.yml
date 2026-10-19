@@ -111,6 +111,7 @@ jobs:
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           AS_OF: ${{ github.event.inputs.as_of }}
           # options are off unless the owner opts in: repository variable DASHBOARD_OPTIONS=true (Cboe terms)
@@ -138,6 +139,7 @@ jobs:
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python -m agent_trading.dashboard verify --data research-data
 
@@ -157,6 +159,7 @@ jobs:
           DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: >-
           python -m agent_trading.dashboard build --data research-data --out site
@@ -209,6 +212,7 @@ jobs:
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           AS_OF: ${{ inputs.as_of }}
           OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' && inputs.options == true }}
@@ -235,6 +239,7 @@ jobs:
           DASHBOARD_OPTIONS: ${{ vars.DASHBOARD_OPTIONS == 'true' }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
           ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: |
           python -m agent_trading.dashboard verify --data scratch/data

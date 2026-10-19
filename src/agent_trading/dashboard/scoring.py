@@ -178,6 +178,8 @@ class Score:
     counterargument: str
     rank: int | None = None
     flags: list[str] = field(default_factory=list)
+    raw_composite: float | None = None
+    sector_penalty: float = 0.0
 
 
 def confidence(metrics_present: float, f: Fundamentals | None, flags: list[str]) -> tuple[float, str]:

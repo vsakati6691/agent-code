@@ -101,8 +101,11 @@ def candidate_detail(ctx: Context, band: spec.Band, row: dict, bench: pd.Series,
             "sources": {"price": df.attrs.get("price_source", SOURCES["cboe"]), "fundamentals": SOURCES["sec"]},
             "data_timestamp": ctx.started,
             "composite": s.composite,
+            "raw_composite": s.raw_composite,
+            "sector_penalty": s.sector_penalty,
             "components": s.components,
             "decision_research": research,
+            "basic_fundamentals": ctx.decision_extras.get(row["ticker"], {}).get("basic_fundamentals"),
             "sub_scores": s.sub_scores,
             "metrics": m,
             "missing": s.missing,
@@ -215,11 +218,25 @@ def decision_enrichment(ctx: Context, row: dict) -> dict:
         elif not callable(fn):
             raw, why = None, "Provider does not implement this dataset"
         else:
-            raw, why = _guard(ctx, "alphavantage", fn, ticker)
+            provider = "overview" if key == "estimates" and getattr(ctx.providers, "fmp_key", None) else "alphavantage"
+            raw, why = _guard(ctx, provider, fn, ticker)
         if raw is None:
             out[key + "_reason"] = why
         elif key == "estimates":
             out[key] = estimates(raw, ctx.started)
+            out["basic_fundamentals"] = {
+                k: raw.get(k)
+                for k in (
+                    "Symbol",
+                    "Name",
+                    "MarketCapitalization",
+                    "Sector",
+                    "Industry",
+                    "Beta",
+                    "_source",
+                    "_observed_at",
+                )
+            }
         else:
             out["insider_net"] = insider_net(raw, ctx.as_of, ctx.started)
     fn = getattr(ctx.providers, "annual_filing", None)
