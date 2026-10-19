@@ -11,6 +11,7 @@ import math
 import pandas as pd
 
 from . import spec
+from .fundamentals import quarter_back
 
 
 def annualized(multiple: float, years: float) -> float | None:
@@ -402,11 +403,17 @@ def invalidation(m: dict, scen: dict | None) -> list[str]:
     return [c["text"] for c in thesis_conditions(m, scen)]
 
 
-def quarterly_yoy(revenue: list) -> list[float | None]:
-    """Year-over-year growth of each of the latest quarters with a quarter four places back (newest first)."""
+def quarterly_yoy(revenue: list, quarters: list) -> list[float | None]:
+    """Year-over-year growth of each of the latest quarters (newest first) against the quarter ending
+    about a year earlier, matched by date so a missing quarter never pairs different fiscal quarters
+    (spec 2026-10-19.4)."""
     out = []
     for i in range(max(0, len(revenue) - 4)):
-        a, b = revenue[i], revenue[i + 4]
+        try:
+            j = quarter_back(list(quarters), i, 1)
+        except (TypeError, ValueError):
+            j = None
+        a, b = revenue[i], revenue[j] if j is not None and j < len(revenue) else None
         out.append(a / b - 1 if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b > 0 else None)
     return out
 
@@ -414,7 +421,7 @@ def quarterly_yoy(revenue: list) -> list[float | None]:
 def check_condition(cond: dict, metrics: dict, fundamentals: dict | None) -> tuple[str, object]:
     """('breached' | 'holding' | 'not measurable', the observed value) for one thesis condition."""
     if cond["metric"] == "quarterly_yoy_last2":
-        yoy = quarterly_yoy((fundamentals or {}).get("revenue") or [])
+        yoy = quarterly_yoy((fundamentals or {}).get("revenue") or [], (fundamentals or {}).get("quarters") or [])
         if len(yoy) < 2 or yoy[0] is None or yoy[1] is None:
             return "not measurable", None
         return ("breached" if yoy[0] < cond["value"] and yoy[1] < cond["value"] else "holding"), yoy[:2]

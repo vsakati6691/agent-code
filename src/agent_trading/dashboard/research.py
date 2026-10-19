@@ -22,6 +22,7 @@ from datetime import date, timedelta
 from . import evidence as evidence_mod
 from . import scenarios, spec
 from .fmt import cap, metric, pct
+from .fundamentals import consecutive, quarter_back
 
 EDGAR_FILINGS = (
     "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type={form}&dateb=&owner=include&count=40"
@@ -33,7 +34,18 @@ def _ok(x) -> bool:
     return isinstance(x, (int, float)) and math.isfinite(x)
 
 
-def _ttm(values: list, start: int = 0):
+def _year_back(quarters: list, years: int) -> int | None:
+    try:
+        return quarter_back(list(quarters), 0, years)
+    except (TypeError, ValueError):
+        return None
+
+
+def _ttm(values: list, quarters: list, years: int = 0):
+    """Four adjacent stored quarters starting about `years` before the newest (spec 2026-10-19.4)."""
+    start = _year_back(quarters, years)
+    if start is None or not consecutive(list(quarters), start):
+        return None
     window = values[start : start + 4]
     return sum(window) if len(window) == 4 and all(_ok(v) for v in window) else None
 
@@ -51,7 +63,7 @@ def trends(c: dict) -> list[dict]:
     q = f.get("quarters") or []
     rev = f.get("revenue") or []
     out = []
-    yoy = scenarios.quarterly_yoy(rev)
+    yoy = scenarios.quarterly_yoy(rev, q)
     if yoy:
         out.append(
             {
@@ -83,28 +95,30 @@ def trends(c: dict) -> list[dict]:
     fcf = [
         (o - x if _ok(o) and _ok(x) else None) for o, x in zip(ocf, capex, strict=False)
     ]  # as scoring.compute_metrics
-    now, before = _ttm(fcf), _ttm(fcf, 4)
-    r_now, r_before = _ttm(rev), _ttm(rev, 4)
+    now, before = _ttm(fcf, q), _ttm(fcf, q, 1)
+    r_now, r_before = _ttm(rev, q), _ttm(rev, q, 1)
+    prior = _year_back(q, 1)
+    labels = [q[0] if q else "", q[prior] if prior is not None else ""]
     if _ok(now) and _ok(r_now) and r_now > 0:
         vals = [now / r_now] + ([before / r_before] if _ok(before) and _ok(r_before) and r_before > 0 else [])
         out.append(
             {
                 "label": "Free-cash-flow margin, trailing 4 quarters (latest, year before)",
-                "quarters": [q[0] if q else "", q[4] if len(q) > 4 else ""][: len(vals)],
+                "quarters": labels[: len(vals)],
                 "values": vals,
                 "direction": _direction(vals[0], vals[1]) if len(vals) == 2 else "not measurable",
                 "kind": "pct",
             }
         )
     sbc = f.get("sbc") or []
-    s_now = _ttm(sbc)
+    s_now = _ttm(sbc, q)
     if _ok(s_now) and _ok(r_now) and r_now > 0:
-        s_before = _ttm(sbc, 4)
+        s_before = _ttm(sbc, q, 1)
         vals = [s_now / r_now] + ([s_before / r_before] if _ok(s_before) and _ok(r_before) and r_before > 0 else [])
         out.append(
             {
                 "label": "Stock-based pay as % of revenue, trailing 4 quarters (latest, year before)",
-                "quarters": [q[0] if q else "", q[4] if len(q) > 4 else ""][: len(vals)],
+                "quarters": labels[: len(vals)],
                 "values": vals,
                 "direction": _direction(vals[0], vals[1]) if len(vals) == 2 else "not measurable",
                 "kind": "pct",
@@ -118,7 +132,7 @@ def forensics(c: dict) -> list[dict]:
     f, m = c.get("fundamentals") or {}, c.get("metrics") or {}
     rules = spec.FORENSIC_RULES
     out = []
-    ni = _ttm(f.get("net_income") or [])
+    ni = _ttm(f.get("net_income") or [], f.get("quarters") or [])
     fcf = m.get("fcf_ttm")
     r = rules["fcf_to_net_income"]
     if _ok(ni) and ni > 0 and _ok(fcf):

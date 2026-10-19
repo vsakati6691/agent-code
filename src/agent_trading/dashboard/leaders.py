@@ -4,17 +4,35 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
 from . import leaders_scenarios, spec
+from .fmt import cap as cap_text
 from .fmt import ok
 from .schema import LEADERS_CHALLENGER
 
 CONFIG_FILE = Path(__file__).resolve().parents[3] / "config" / "leaders_2030_challengers.json"
 CASES = ("bear", "base", "bull")
 SHARE_BASIS = "SEC diluted weighted-average shares (latest reported quarter available)"
+# the large list's exclusion text, written by pipeline_score.one_class_per_company from the same template
+CLASS_EXCLUSION = re.compile(re.escape(spec.ONE_CLASS_EXCLUSION).replace(re.escape("{ticker}"), "(.+?)"))
+NO_DILUTED_SHARES = (
+    "dated diluted shares unavailable in the stored snapshot (no company-wide diluted count in SEC XBRL; "
+    "multi-class issuers may report only per-class counts)"
+)
+FALLBACK_FLAG = "shares from weighted-average fallback"  # pipeline_score.market_cap
+
+
+def collection_kind(record: dict) -> str:
+    """Why collection kept no inputs. Older snapshots store no kind: retained SEC facts mean the price failed."""
+    return record.get("unavailable_kind") or ("price" if record.get("fundamentals") else "SEC statements")
+
+
+def usd(value: float) -> str:
+    """Market-cap text that does not round a mis-scaled sub-$1M value to $0M."""
+    return cap_text(value) if abs(value) >= 1e6 else f"${value:,.0f}"
 
 
 def valid_date(value) -> bool:
@@ -109,6 +127,52 @@ def stored_records(snap: dict) -> dict[str, dict]:
     return rows
 
 
+def share_jump(f: dict, shares: tuple) -> str | None:
+    """A latest count more than 10x from one in the preceding four quarters is a unit error or an unrestated split."""
+    value, dated = shares
+    limit = spec.LEADERS_SHARE_CHECKS["jump_limit"]
+    start = date.fromisoformat(dated).toordinal() - 380  # four quarters, allowing 52/53-week calendars
+    for s, d in zip(f.get("diluted_shares") or [], f.get("quarters") or [], strict=False):
+        if not (ok(s) and s > 0 and valid_date(d) and d < dated and date.fromisoformat(d).toordinal() >= start):
+            continue
+        if max(value / s, s / value) > limit:
+            return (
+                f"diluted share count {value:,.0f} ({dated}) differs more than {limit:g}x from {s:,.0f} ({d}): "
+                "unit error or unrestated split"
+            )
+    return None
+
+
+def cover_basis(record: dict, m: dict, current: float) -> float | None:
+    """The stored cover-page equity value behind EV/Sales; None when missing or not independent of the diluted count."""
+    recorded = record.get("market_cap_basis")  # stored from 2026-10-19.4
+    if recorded == "diluted fallback" or FALLBACK_FLAG in (record.get("flags") or []):
+        return None
+    value = m.get("market_cap")
+    if not ok(value):
+        ev_s, revenue = m.get("ev_to_sales"), m.get("revenue_ttm")
+        if not (ok(ev_s) and ok(revenue)):
+            return None
+        # scoring.compute_metrics: EV = market cap + (net debt or 0)
+        value = ev_s * revenue - (m["net_debt"] if ok(m.get("net_debt")) else 0.0)
+    # older snapshots record no basis: a value equal to close x the same diluted count is the fallback itself
+    if value <= 0 or (recorded is None and abs(value / current - 1) < 1e-6):
+        return None
+    return value
+
+
+def basis_check(current: float, other: float) -> str | None:
+    """Close x diluted shares against the stored cover-page equity value behind EV/Sales."""
+    tolerance = spec.LEADERS_SHARE_CHECKS["basis_tolerance"]
+    if max(current / other, other / current) > tolerance:
+        return (
+            f"share bases disagree: close x diluted shares gives {usd(current)}, the stored cover-page "
+            f"basis behind EV/Sales gives {usd(other)} (more than {tolerance:g}x apart: a stale or per-class "
+            "cover count, shares issued after the quarter, an unrestated split or a unit error)"
+        )
+    return None
+
+
 def computed_row(ticker: str, record: dict, snap: dict) -> dict:
     as_of = snap["as_of"]
     f = record.get("fundamentals") or {}
@@ -157,53 +221,81 @@ def computed_row(ticker: str, record: dict, snap: dict) -> dict:
         "assumption_source": None,
         "assumption_date": None,
         "notes": "",
+        "other_share_classes": [],
+        "gap_kind": None,
     }
-    missing = []
+    missing: list[tuple[str, str]] = []  # (coarse kind, reason), so gaps are grouped without parsing text
+    other = "other inputs"
     price = record.get("price")
     if not ok(price) or price <= 0 or record.get("price_date") != as_of:
-        missing.append("no verified as-of price in the stored snapshot")
+        missing.append(("price", "no verified as-of price in the stored snapshot"))
     if shares[0] is None:
-        missing.append("dated diluted shares unavailable in the stored snapshot")
+        missing.append(("share count", NO_DILUTED_SHARES))
     filed = f.get("last_filed")
     if not valid_date(filed) or filed > as_of:
-        missing.append("no dated SEC financial statements filed by the snapshot date")
+        missing.append(("SEC statements", "no dated SEC financial statements filed by the snapshot date"))
     elif (date.fromisoformat(as_of) - date.fromisoformat(filed)).days > spec.MAX_FILING_AGE_DAYS:
-        missing.append(f"fundamentals stale: latest 10-K/10-Q filed {filed}")
+        missing.append(("SEC statements", f"fundamentals stale: latest 10-K/10-Q filed {filed}"))
     if not missing:
-        if ok(price * shares[0]):
-            row["current_market_cap_usd"] = price * shares[0]
-            row["market_cap_date"] = as_of
+        current = price * shares[0]
+        basis = cover_basis(record, m, current) if ok(current) else None
+        # an independent cover-page basis decides; without one the jump test applies (spec 2026-10-19.4)
+        if not ok(current):
+            problem = "current market cap is not a finite number"
+        elif basis is not None:
+            problem = basis_check(current, basis)
+            jump = share_jump(f, shares) if problem else None
+            problem = f"{problem}; {jump}" if jump else problem
         else:
-            missing.append("current market cap is not a finite number")
+            problem = share_jump(f, shares)
+        if problem:
+            missing.append(("share count", problem))
+        else:
+            row["current_market_cap_usd"] = current
+            row["market_cap_date"] = as_of
+            if basis is None:
+                row["missing_inputs"].append(
+                    "diluted share count not cross-checked: no independent cover-page basis stored"
+                )
     asset_type = record.get("asset_type")
     if asset_type and not asset_type.startswith("operating company"):
-        missing.append(f"no scenario method for this security type ({asset_type})")
+        missing.append((other, f"no scenario method for this security type ({asset_type})"))
+    positional = leaders_scenarios.positional_metrics(snap.get("spec_version"))
     if len(quarters) < 4:
-        missing.append("too few reported quarters for a revenue-based valuation (new filer)")
+        missing.append((other, "too few reported quarters for a revenue-based valuation (new filer)"))
+    elif positional and not leaders_scenarios.unbroken(quarters, spec.LEADERS_SHARE_CHECKS["ttm_quarters"]):
+        missing.append((other, "stored TTM revenue is not four adjacent quarters (gap in the reported series)"))
     if not ok(m.get("revenue_ttm")) or m["revenue_ttm"] <= 0:
-        missing.append("too little reported revenue for a revenue-based valuation (pre-revenue)")
-    growth, growth_basis = leaders_scenarios.growth_input(record, m, as_of)
+        missing.append((other, "too little reported revenue for a revenue-based valuation (pre-revenue)"))
+    growth, growth_basis = leaders_scenarios.growth_input(record, m, as_of, positional)
     if growth is None:
-        missing.append(growth_basis)
-    if not ok(m.get("ev_to_sales")) or m["ev_to_sales"] <= 0:
-        missing.append("enterprise value not positive, so EV/Sales cannot anchor the valuation")
+        missing.append((other, growth_basis))
+    # today's EV/Sales from this row's own cap, so the scenarios never contradict it (spec 2026-10-19.4)
+    ev_to_sales, current = None, row["current_market_cap_usd"]
+    if ok(current) and ok(m.get("net_debt")) and ok(m.get("revenue_ttm")) and m["revenue_ttm"] > 0:
+        if current + m["net_debt"] > 0:
+            ev_to_sales = (current + m["net_debt"]) / m["revenue_ttm"]
+        else:
+            missing.append((other, "enterprise value not positive, so EV/Sales cannot anchor the valuation"))
     if not ok(m.get("net_debt")):
-        missing.append("net debt / net cash unavailable in the stored snapshot")
+        missing.append((other, "net debt / net cash unavailable in the stored snapshot"))
     if not ok(m.get("dilution")):
-        missing.append("trailing dilution unavailable in the stored snapshot")
+        missing.append((other, "trailing dilution unavailable in the stored snapshot"))
     if (date.fromisoformat(spec.WATCHLIST_TARGET_DATE) - date.fromisoformat(as_of)).days <= 0:
-        missing.append("the 2030 target is not after the snapshot date")
+        missing.append((other, "the 2030 target is not after the snapshot date"))
     if record.get("unavailable_reason"):
-        missing.insert(0, record["unavailable_reason"])
+        missing.insert(0, (collection_kind(record), record["unavailable_reason"]))
     if missing:
-        row["missing_inputs"] = list(dict.fromkeys(row["missing_inputs"] + missing))
-        row["unavailable_reason"] = record.get("unavailable_reason") or "; ".join(missing)
+        reasons = [reason for _, reason in missing]
+        row["missing_inputs"] = list(dict.fromkeys(row["missing_inputs"] + reasons))
+        row["unavailable_reason"] = record.get("unavailable_reason") or "; ".join(reasons)
+        row["gap_kind"] = missing[0][0]
         return row
     try:
         result = leaders_scenarios.company_scenarios(
             current_cap=row["current_market_cap_usd"],
             shares=shares[0],
-            metrics=m,
+            metrics={**m, "ev_to_sales": ev_to_sales},
             years=(date.fromisoformat(spec.WATCHLIST_TARGET_DATE) - date.fromisoformat(as_of)).days / 365.25,
             growth=growth,
             basis=growth_basis,
@@ -238,11 +330,55 @@ def movement(current: int | None, future: int | None, curated: bool = False) -> 
     return "rises_into_top_20" if future <= spec.LEADERS_TOP_N else "unavailable"
 
 
+def share_classes(snap: dict, records: dict[str, dict], members: list[str]) -> dict[str, str]:
+    """{ticker: class ranked instead} for each company (SEC CIK) listed under several index tickers.
+
+    Only classes with a verified as-of price compete when any has one, so a class with no data never
+    hides one that has it. Among them the most liquid wins: higher stored 20-day median dollar volume
+    when every class has one, else the class the snapshot's large list evaluated, else ticker order
+    (spec 2026-10-19.4).
+    """
+    by_cik: dict[int, list[str]] = defaultdict(list)
+    for ticker in members:
+        cik = (records.get(ticker) or {}).get("cik")
+        if ok(cik) and cik > 0:
+            by_cik[int(cik)].append(ticker)
+    evaluated = {}
+    for excluded in ((snap.get("bands") or {}).get("large") or {}).get("excluded") or []:
+        found = CLASS_EXCLUSION.fullmatch(str(excluded.get("reason") or ""))
+        if found:
+            evaluated[excluded.get("ticker")] = found[1]
+    merged = {}
+    for tickers in by_cik.values():
+        if len(tickers) < 2:
+            continue
+        priced = [
+            t
+            for t in tickers
+            if ok(records[t].get("price")) and records[t]["price"] > 0 and records[t].get("price_date") == snap["as_of"]
+        ]
+        pool = priced or tickers
+        volumes = {t: records[t].get("dollar_volume") for t in pool}
+        named = {evaluated[t] for t in tickers if t in evaluated} & set(pool)
+        if all(ok(v) for v in volumes.values()):
+            winner = max(pool, key=lambda t: (volumes[t], t))  # pipeline_score.one_class_per_company order
+        elif len(named) == 1:
+            winner = named.pop()
+        else:
+            winner = min(pool)
+        merged.update({t: winner for t in tickers if t != winner})
+    return merged
+
+
 def build(snap: dict, challengers: list[dict]) -> dict:
     """A separate derived artifact: never mutate, rescore or backfill the source snapshot."""
     records = stored_records(snap)
     members = sorted(set((snap.get("universe") or {}).get("sp500_members") or []))
-    rows = [computed_row(t, records.get(t, {}), snap) for t in members]
+    merged = share_classes(snap, records, members)
+    companies = [t for t in members if t not in merged]
+    rows = [computed_row(t, records.get(t, {}), snap) for t in companies]
+    for row in rows:
+        row["other_share_classes"] = sorted(t for t, winner in merged.items() if winner == row["ticker"])
     current = sorted(
         (r for r in rows if ok(r["current_market_cap_usd"])), key=lambda r: (-r["current_market_cap_usd"], r["ticker"])
     )
@@ -291,17 +427,26 @@ def build(snap: dict, challengers: list[dict]) -> dict:
         ):
             candidates.append(row)
         elif row["unavailable_reason"]:
-            gaps.append({"ticker": row["ticker"], "reason": row["unavailable_reason"]})
+            gaps.append(
+                {
+                    "ticker": row["ticker"],
+                    "reason": row["unavailable_reason"],
+                    "kind": row["gap_kind"] or "other inputs",
+                    "ranked": row["current_rank"] is not None,
+                }
+            )
     candidates.sort(key=lambda r: (r["current_rank"] or 999999, r["rank_2030"] or 999999, r["company_name"]))
     computed = sum(r["scenario_basis"] != "curated assumption" and r["rank_2030"] is not None for r in rows)
     return {
         "entries": candidates,
         "gaps": gaps,
+        "share_classes": [{"ticker": t, "ranked_as": merged[t]} for t in sorted(merged)],
         "omitted_challengers": omitted,
         "universe_count": len(members),
+        "company_count": len(companies),
         "current_cap_count": len(current),
         "computed_count": computed,
-        "partial": len(current) < len(members) or computed < len(members),
+        "partial": len(current) < len(companies) or computed < len(companies),
         "counts": dict(Counter(r["movement"] for r in candidates)),
         "as_of": snap["as_of"],
         "methodology_version": spec.SPEC_VERSION,

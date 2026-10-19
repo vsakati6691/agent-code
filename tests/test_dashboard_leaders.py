@@ -20,6 +20,9 @@ from agent_trading.dashboard.store import Store
 from tests.dashboard_ci import check_links
 from tests.dashboard_fixtures import FakeProviders, demo_site
 
+# 16 adjacent calendar quarter ends, newest first: 2026-06-30 back to 2022-09-30
+QUARTERS = [f"{y}-{md}" for y in range(2026, 2021, -1) for md in ("12-31", "09-30", "06-30", "03-31")][2:18]
+
 
 def company(ticker="AAA", price=100, growth=0.10):
     return {
@@ -28,7 +31,7 @@ def company(ticker="AAA", price=100, growth=0.10):
         "sector": "Technology",
         "price": price,
         "price_date": "2026-10-15",
-        "fundamentals": {"quarters": ["2026-06-30"] * 16, "diluted_shares": [1e8] * 16, "last_filed": "2026-08-01"},
+        "fundamentals": {"quarters": list(QUARTERS), "diluted_shares": [1e8] * 16, "last_filed": "2026-08-01"},
         "metrics": {
             "revenue_ttm": 4e9,
             "revenue_growth_ttm": growth,
@@ -201,7 +204,8 @@ def test_missing_inputs_are_not_guessed_and_future_assumptions_are_omitted():
     assert "future weekly collection must retain the missing inputs" in text
     assert text.count("<tr data-ticker=") == 1  # preserve the known current cap even without a scenario
     assert "trailing dilution unavailable" in text  # tooltip; full evidence is one click away
-    assert "Ranks among 1 of 2 members with data" in text
+    assert "Ranks among 1 of 2 companies with data" in text
+    assert "Not ranked for missing or inconsistent inputs: price: MISSING" in text
 
 
 def test_growth_drivers_are_dated_stored_evidence():
@@ -270,6 +274,8 @@ def test_retention_does_not_call_providers_or_change_exclusions():
     records = retained_inputs(ctx, ref)
     assert not p.calls and ctx.excluded == before
     assert records[0]["fundamentals"]["diluted_shares"]
+    # 2026-10-19.4: the cover-page basis and liquidity are retained for the share checks and class choice
+    assert records[0]["metrics"]["market_cap"] > 0 and records[0]["dollar_volume"] > 0
     assert (
         leaders.build({**snapshot([]), "leaders_2030_inputs": records, "universe": {"sp500_members": ["AAA"]}}, [])[
             "computed_count"
@@ -288,6 +294,7 @@ def test_latest_dated_share_basis_and_non_operating_reason():
     record = company()
     record["fundamentals"]["quarters"][:3] = ["2025-12-31", "2026-06-30", "2026-12-31"]
     record["fundamentals"]["diluted_shares"][:3] = [2e8, 3e8, 9e8]
+    record["metrics"]["market_cap"] = 3e10  # stored cover-page basis agrees with close x the latest dated count
     record["asset_type"] = "fund"
     row = leaders.build(snapshot([record]), [])["entries"][0]
     assert row["shares_outstanding"] == 3e8 and row["shares_date"] == "2026-06-30"
@@ -458,9 +465,11 @@ def test_cyclical_bear_starts_with_revenue_drop(ticker):
 
 def test_bear_below_current_for_every_row_including_cash_rich_and_declining_companies():
     rows = []
-    for i, (growth, debt) in enumerate((g, d) for g in (-0.9, -0.3, 0, 0.6, 4.0) for d in (-2e12, 0, 1e12)):
+    # net cash of 95% of the cap keeps enterprise value positive; EV/Sales is consistent with each row's own cap
+    for i, (growth, debt) in enumerate((g, d) for g in (-0.9, -0.3, 0, 0.6, 4.0) for d in (-9.5e9, 0, 1e12)):
         record = company(f"T{i:02}", growth=growth)
         record["metrics"]["net_debt"] = debt
+        record["metrics"]["ev_to_sales"] = (1e10 + debt) / 4e9
         rows.append(record)
     result = leaders.build(snapshot(rows), [])
     assert len(result["entries"]) == len(rows) == result["computed_count"]

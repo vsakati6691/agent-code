@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from . import spec
-from .fundamentals import Fundamentals, cash_like, growth, total_debt, ttm
+from .fundamentals import Fundamentals, cash_like, growth, quarter_back, total_debt, ttm
 
 
 def scale(value: float | None, s: spec.Scale) -> float:
@@ -48,24 +48,30 @@ def implied_revenue_cagr(ev: float | None, revenue: float | None) -> float | Non
 
 
 def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, market_cap: float | None) -> dict:
-    fl = f.flows
+    # windows are matched by quarter-end date, so a gap in the reported series never
+    # compares or sums quarters from the wrong years (spec 2026-10-19.4)
+    fl, q = f.flows, f.quarters
     rev = fl["revenue"]
     m: dict[str, float | None] = {}
-    rev_ttm, rev_prev = ttm(rev), ttm(rev, 4)
+    rev_ttm, rev_prev = ttm(rev, 0, q), ttm(rev, 4, q)
     m["revenue_ttm"] = rev_ttm
     m["revenue_growth_ttm"] = growth(rev_ttm, rev_prev)
-    rev_3y = ttm(rev, 12)
+    rev_3y = ttm(rev, 12, q)
     m["revenue_cagr_3y"] = (
         ((rev_ttm / rev_3y) ** (1 / 3) - 1) if rev_ttm and rev_3y and rev_3y > 0 and rev_ttm > 0 else None
     )
-    yoy = [growth(rev[i], rev[i + 4]) if i + 4 < len(rev) else None for i in range(8)]
+    year_ago = [quarter_back(q, i, 1) for i in range(8)]
+    yoy = [growth(rev[i], rev[j]) if j is not None else None for i, j in enumerate(year_ago)]
     known = [g for g in yoy if g is not None]
     m["growth_consistency"] = sum(g > 0 for g in known) / 8 if len(known) == 8 else None
-    m["growth_acceleration"] = yoy[0] - yoy[4] if yoy[0] is not None and len(yoy) > 4 and yoy[4] is not None else None
+    k = year_ago[0]
+    m["growth_acceleration"] = (
+        yoy[0] - yoy[k] if yoy[0] is not None and k is not None and k < 8 and yoy[k] is not None else None
+    )
 
-    oi, oi_prev = ttm(fl["operating_income"]), ttm(fl["operating_income"], 4)
-    ocf, ocf_prev = ttm(fl["ocf"]), ttm(fl["ocf"], 4)
-    capex, capex_prev = ttm(fl["capex"]), ttm(fl["capex"], 4)
+    oi, oi_prev = ttm(fl["operating_income"], 0, q), ttm(fl["operating_income"], 4, q)
+    ocf, ocf_prev = ttm(fl["ocf"], 0, q), ttm(fl["ocf"], 4, q)
+    capex, capex_prev = ttm(fl["capex"], 0, q), ttm(fl["capex"], 4, q)
     fcf = ocf - capex if ocf is not None and capex is not None else None
     fcf_prev = ocf_prev - capex_prev if ocf_prev is not None and capex_prev is not None else None
     m["operating_income_ttm"], m["fcf_ttm"] = oi, fcf
@@ -83,7 +89,7 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
         else None
     )
 
-    gp = ttm(fl["gross_profit"])
+    gp = ttm(fl["gross_profit"], 0, q)
     m["gross_margin"] = gp / rev_ttm if gp is not None and rev_ttm else None
     m["operating_margin"] = oi / rev_ttm if oi is not None and rev_ttm else None
     inst = f.instants
@@ -91,11 +97,11 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     eq = inst.get("equity")
     invested = (debt or 0.0) + eq - (cash or 0.0) if eq is not None else None
     m["roic"] = oi * (1 - spec.ROIC_TAX_RATE) / invested if oi is not None and invested and invested > 0 else None
-    ni = ttm(fl["net_income"])
+    ni = ttm(fl["net_income"], 0, q)
     m["net_income_ttm"] = ni
     m["accruals"] = (ni - ocf) / inst["assets"] if ni is not None and ocf is not None and inst.get("assets") else None
 
-    dna = ttm(fl["dna"])
+    dna = ttm(fl["dna"], 0, q)
     ebitda = oi + dna if oi is not None and dna is not None else None
     net_debt = (debt or 0.0) - (cash or 0.0) if (debt is not None or cash is not None) else None
     m["net_debt"] = net_debt
@@ -113,14 +119,14 @@ def compute_metrics(f: Fundamentals, close: pd.Series, bench: pd.Series | None, 
     # a fiscal Q4 has only a full-year share count, so fall back one quarter (spec 2026-10-14.4)
     pair = next(
         (
-            (sh[i], sh[i + 4])
+            (sh[i], sh[j])
             for i in range(spec.DILUTION_LOOKBACK_QUARTERS + 1)
-            if i + 4 < len(sh) and sh[i] and sh[i + 4]
+            if (j := quarter_back(q, i, 1)) is not None and j < len(sh) and sh[i] and sh[j]
         ),
         None,
     )
     m["dilution"] = pair[0] / pair[1] - 1 if pair else None
-    sbc = ttm(fl["sbc"])
+    sbc = ttm(fl["sbc"], 0, q)
     m["sbc_to_revenue"] = sbc / rev_ttm if sbc is not None and rev_ttm else None
 
     ev = market_cap + (net_debt or 0.0) if market_cap is not None else None
