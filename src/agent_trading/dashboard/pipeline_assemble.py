@@ -166,6 +166,7 @@ def run(
             "leaders_2030_inputs": leader_inputs,
         },
         leaders.load_challengers(),
+        leaders.load_outside(),
     )
     return _clean(
         {

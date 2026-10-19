@@ -135,6 +135,7 @@ def _build_site(
 
     short_term = ShortTermStore(data_dir).latest() if context.edition != "customer" else None
     challengers = leaders.load_challengers()
+    outside = leaders.load_outside()
     integrity = store.verify_all()
     bad = {p.split()[1] for p in integrity if p.startswith("snapshot ")}
     dates = [d for d in store.dates() if d not in bad]
@@ -309,7 +310,7 @@ def _build_site(
             js=("assets/bets.js",),
         )
         write("watchlist.html", "Watchlist 2030", watchlist_page(snap), "watchlist.html")
-    leader_payload = leaders.build(snap, challengers)
+    leader_payload = leaders.build(snap, challengers, outside)
     leader_details: dict[str, str] = {}
     from .price_integrity import SHORT_NOTE, preclose
 
