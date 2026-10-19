@@ -166,25 +166,32 @@ LEADERS_RULE_2026_10_17_2 = LEADERS_RULE_2026_10_17_1.replace(
 LEADERS_RULE = LEADERS_RULE_2026_10_17_2.replace(
     "Each index ticker is compared separately; issuer-level diluted shares are not allocated across share "
     "classes, so class proxies are not additive company values.",
-    "Each company (SEC CIK) is ranked once, using its most liquid listed share class: the higher stored 20-day "
-    "median dollar volume, else the class the snapshot's large list evaluated, else ticker order; its other "
-    "classes are noted and not ranked. Issuer-level diluted shares are not allocated across share classes.",
+    "Each company (SEC CIK) is ranked once, using its most liquid listed share class among those with a verified "
+    "as-of price (all classes when none has one): the higher stored 20-day median dollar volume, else the class "
+    "the snapshot's large list evaluated, else ticker order; its other classes are noted and not ranked. "
+    "Issuer-level diluted shares are not allocated across share classes.",
 )
+# Exclusion text written by pipeline_score.one_class_per_company and read back by Leaders (text, not a rule)
+ONE_CLASS_EXCLUSION = "another share class of the same company is evaluated instead ({ticker}, more liquid)"
 LEADERS_SHARE_CHECKS = {
     "jump_limit": 10.0,
     "basis_tolerance": 1.25,
     "ttm_quarters": 4,
     "cagr_quarters": 16,
+    "date_matched_from": "2026-10-19.2",
     "rule": (
-        "Close x the latest dated diluted weighted-average count must agree within 1.25x either way with the "
-        "stored cover-page equity value (stored market cap, or EV/Sales x TTM revenue - net debt); otherwise the "
-        "share bases disagree and no rank is computed. Without a stored cover-page basis the count is used unless it "
-        "differs more than 10x from a dated count in the four preceding quarters (a unit error or an unrestated "
-        "split), and the missing cross-check is listed. Today's EV/Sales for "
-        "the scenarios is (close x diluted shares + net debt) / TTM revenue, so it never contradicts the row's "
-        "current cap. Stored TTM revenue is used only when its four stored quarters are adjacent, and the stored "
-        "three-year TTM CAGR only when the first 16 stored quarters are an unbroken run; otherwise the registered "
-        "dated fiscal-year fallback applies."
+        "Close x the latest dated diluted weighted-average count must agree within 1.25x either way with an "
+        "independent stored cover-page equity value (stored market cap, or EV/Sales x TTM revenue - net debt); "
+        "otherwise the share bases disagree and no rank is computed. A stored value marked as the diluted fallback "
+        "is not independent; in snapshots that record no basis, neither is one equal to close x the same diluted "
+        "count. Without an independent basis the count is "
+        "used unless it differs more than 10x from a dated count in the four preceding quarters (a unit error or an "
+        "unrestated split), and the missing cross-check is listed. Today's EV/Sales for the scenarios is "
+        "(close x diluted shares + net debt) / TTM revenue, so it never contradicts the row's current cap. "
+        "Snapshots before 2026-10-19.2 computed TTM metrics by list position: for them stored TTM revenue is used "
+        "only when its four stored quarters are adjacent, and the stored three-year TTM CAGR only when the first 16 "
+        "stored quarters are an unbroken run; otherwise the registered dated fiscal-year fallback applies. Later "
+        "snapshots store date-matched metrics, which are used as stored."
     ),
 }
 LEADERS_COLLECTION_RULE_2026_10_17_1 = (
@@ -643,16 +650,21 @@ MARKET_CAP_DEFINITION = MARKET_CAP_DEFINITION_2026_10_13_1.replace(
 
 # --- Quarterly windows (data validation, 2026-10-19.2) -----------------------------------
 QUARTER_WINDOWS = {
-    "quarter_span_days": (80, 120),  # 13-week quarters and the 16-week quarters of 12/16-week fiscal calendars
+    "quarter_span_days": (80, 120),  # outer bounds for a discrete quarter
+    "standard_max_days": 100,  # 80-100 days: any quarter; 101-120 days: whole weeks only (below)
+    "long_quarter_weeks": (15, 17),  # 16-week quarters of 12/16-week calendars, 17 in a 53-week year
     "step_days": (77, 119),  # adjacent quarter ends: 11 to 17 weeks apart
     "ttm_span_days": (250, 300),  # first to fourth quarter end of one twelve-month window
     "match_days": 25,  # a prior-year or three-year window must start this close to the target date
     "rule": (
-        "A discrete quarter spans 80-120 days, so the 16-week quarters of 12/16-week fiscal calendars count. "
+        "A discrete quarter spans 80-100 days, or 101-120 days only when it is 15-17 whole weeks (the long "
+        "quarter of a 52/53-week 12/16-week calendar), so four-month stub and transition periods never count. "
         "A TTM window is four adjacent quarters (ends 77-119 days apart; first to fourth 250-300 days). "
         "Prior-year and three-year windows must start within 25 days of one or three years before the newest "
         "quarter, and year-over-year and dilution comparisons use the quarter ending about a year earlier. "
-        "A window across a gap in the reported series is unavailable; quarters from other years are never spliced in."
+        "The same date matching applies to stored quarterly tables (research trends, forensics and thesis "
+        "checks) and the desk's quarterly grid. A window across a gap in the reported series is unavailable; "
+        "quarters from other years are never spliced in."
     ),
 }
 LISTED_EXCHANGES = ("NYSE", "Nasdaq", "NYSE American", "NYSE Arca", "Cboe BZX")

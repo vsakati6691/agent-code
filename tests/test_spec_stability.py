@@ -6,7 +6,7 @@ from agent_trading.dashboard import spec
 def test_registered_spec_hash_is_unchanged():
     assert spec.SPEC_VERSION == "2026-10-19.2"
     assert spec.SPEC_FREEZE_DATE == "2026-10-16"
-    assert spec.spec_hash() == "ba6223edc7d6dad3"
+    assert spec.spec_hash() == "6166a67bd43aca17"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():

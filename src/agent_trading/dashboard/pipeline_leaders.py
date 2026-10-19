@@ -69,6 +69,8 @@ def retained_inputs(ctx, ref: dict) -> list[dict]:
             "price_date": None,
             "missing": flags,
             "unavailable_reason": why if f is None else price_why if bars is None else None,
+            # spec 2026-10-19.2: Leaders groups coverage gaps by cause without parsing the reason text
+            "unavailable_kind": "SEC statements" if f is None else "price" if bars is None else None,
         }
         if bars is not None and len(bars):
             row.update(price=float(bars["close"].iloc[-1]), price_date=str(bars.index[-1].date()))
@@ -85,7 +87,9 @@ def retained_inputs(ctx, ref: dict) -> list[dict]:
             }
             row["evidence_quality"] = evidence_quality("company", f, len(bars) if bars is not None else 0)
         if f is not None and bars is not None and ok(row["price"]):
-            cap, _ = market_cap(f, row["price"])
+            cap, cap_flags = market_cap(f, row["price"])
+            # spec 2026-10-19.2: a diluted-fallback cap is no independent check on the diluted count
+            row["market_cap_basis"] = "diluted fallback" if cap_flags else "cover page" if cap is not None else None
             m = scoring.compute_metrics(f, bars["close"], None, cap)
             row["metrics"] = {
                 key: m.get(key)

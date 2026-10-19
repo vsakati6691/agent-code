@@ -6,8 +6,8 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-from agent_trading.dashboard import leaders, scoring
-from agent_trading.dashboard.fundamentals import build, consecutive, quarter_back, ttm
+from agent_trading.dashboard import leaders, research, scenarios, scoring, spec
+from agent_trading.dashboard.fundamentals import build, consecutive, quarter_back, quarter_length, ttm
 from agent_trading.dashboard.pipeline_score import market_cap
 from agent_trading.dashboard.site_leaders import leaders_page
 from tests.dashboard_fixtures import _fact, make_facts, quarter_ends
@@ -116,16 +116,30 @@ def test_thousandfold_share_count_is_unavailable():
     assert "differs more than 10x from 100,000,000 (2025-12-31)" in row["unavailable_reason"]
 
 
-@pytest.mark.parametrize("cover", [True, False])
-def test_split_counts_pass_with_a_matching_cover_basis_and_jumps_fail_without_one(cover):
+@pytest.mark.parametrize("basis", ["cover page", "diluted fallback", None])
+def test_split_counts_pass_with_a_cover_basis_and_jumps_fail_without_an_independent_one(basis):
     record = company(price=4)
     record["fundamentals"]["diluted_shares"][0] = 2.5e9  # 25-for-1 split; earlier quarters not restated
-    record["metrics"].update(market_cap=1e10 if cover else None, ev_to_sales=None)
+    record["metrics"].update(market_cap=1e10 if basis else None, ev_to_sales=None)
+    record["market_cap_basis"] = basis
     row = only_row(record)
-    if cover:
+    if basis == "cover page":
         assert row["current_market_cap_usd"] == 1e10 and row["current_rank"] == 1
-    else:
+    else:  # a fallback cap is close x the same diluted count, so it cannot vouch for it
         assert row["current_rank"] is None and "differs more than 10x" in row["unavailable_reason"]
+
+
+@pytest.mark.parametrize("recorded", [True, False])
+def test_a_cap_from_the_diluted_fallback_cannot_hide_a_unit_error(recorded):
+    record = company()
+    record["fundamentals"]["diluted_shares"][:2] = [9.82e10, 8.21e10]
+    if recorded:  # collected from 2026-10-19.2
+        record["market_cap_basis"] = "diluted fallback"
+        record["metrics"]["market_cap"] = 100 * 9.82e10
+    else:  # older snapshot: EV/Sales built on close x the same mis-scaled count
+        record["metrics"]["ev_to_sales"] = 100 * 9.82e10 / 4e9
+    row = only_row(record)
+    assert row["current_rank"] is None and "differs more than 10x" in row["unavailable_reason"]
 
 
 @pytest.mark.parametrize(
@@ -146,8 +160,16 @@ def test_close_times_diluted_shares_must_agree_with_the_cover_page_basis(metrics
     reason = row["unavailable_reason"] or ""
     assert (row["current_rank"] is None) == problem
     assert ("share bases disagree" in reason) == problem
-    unchecked = "diluted share count not cross-checked: no stored cover-page basis"
+    unchecked = "diluted share count not cross-checked: no independent cover-page basis stored"
     assert (unchecked in row.get("missing_inputs", [])) == (metrics.get("ev_to_sales", 1) is None)
+
+
+def test_mis_scaled_counts_are_shown_in_dollars_not_rounded_to_zero():
+    record = company()
+    record["fundamentals"]["diluted_shares"] = [711.1] * 16  # an issuer tagging millions as shares
+    row = only_row(record)
+    assert "close x diluted shares gives $71,110," in row["unavailable_reason"]
+    assert leaders.usd(2.5e9) == "$2.5B" and leaders.usd(0.4) == "$0"
 
 
 def test_scenarios_use_ev_to_sales_from_the_rows_own_cap():
@@ -170,6 +192,18 @@ def test_stored_metrics_from_a_gapped_quarter_list_are_not_used():
     record["fundamentals"]["quarters"][3] = "2025-05-11"  # 2025-08 quarter missing from the stored TTM window
     row = only_row(record)
     assert "stored TTM revenue is not four adjacent quarters" in row["unavailable_reason"]
+
+
+def test_date_matched_snapshots_keep_their_stored_metrics():
+    record = company(growth=0.12)
+    record["fundamentals"]["quarters"] = QUARTERS[:6] + QUARTERS[7:] + ["2022-06-30"]  # one interior gap
+    row = only_row(record, spec_version="2026-10-19.2")  # metrics were already matched by date
+    assert row["scenario_assumptions"]["base"]["observed_revenue_cagr_3y"] == 0.12
+    assert row["unavailable_reason"] is None
+    assert only_row(record)["unavailable_reason"].startswith("three-year revenue CAGR unavailable")
+    positional = leaders.leaders_scenarios.positional_metrics
+    assert positional("2026-10-19.1") and positional(None) and positional("not a version")
+    assert not positional("2026-10-19.2") and not positional("2026-11-02.1")
 
 
 # --- one row per company ---------------------------------------------------------------------------
@@ -217,3 +251,72 @@ def test_each_company_is_ranked_once(volumes, excluded, winner):
     text = leaders_page(payload, details := {})
     assert f"also listed as {loser}" in text and f"{loser} is counted with {winner}" in text
     assert any(f"other listed classes: {loser}" in page for page in details.values())
+
+
+def test_a_class_without_a_verified_price_never_hides_one_with_it():
+    rows = two_classes((1e9, None))
+    rows[1].update(price=None, price_date=None)  # GOOG's history failed; GOOGL is complete
+    payload = leaders.build(snapshot(rows), [])
+    assert payload["share_classes"] == [{"ticker": "GOOG", "ranked_as": "GOOGL"}]
+    assert [r["ticker"] for r in payload["entries"]][0] == "GOOGL"
+
+
+def test_class_exclusion_text_round_trips_through_the_shared_template():
+    text = spec.ONE_CLASS_EXCLUSION.format(ticker="BRK.B")
+    assert leaders.CLASS_EXCLUSION.fullmatch(text)[1] == "BRK.B"
+    assert EVALUATED_GOOGL["reason"] == spec.ONE_CLASS_EXCLUSION.format(ticker="GOOGL")
+
+
+@pytest.mark.parametrize(
+    "record, kind",
+    [
+        ({"unavailable_reason": "Cboe: HTTP 503", "unavailable_kind": "price"}, "price"),
+        ({"unavailable_reason": "anything", "unavailable_kind": "SEC statements"}, "SEC statements"),
+        ({"unavailable_reason": "Cboe: HTTP 503", "fundamentals": {"quarters": []}}, "price"),  # older snapshot
+        ({"unavailable_reason": "no US-GAAP XBRL facts"}, "SEC statements"),  # older snapshot, no facts kept
+        ({}, "price"),  # nothing stored: the first computed reason is the missing price
+    ],
+)
+def test_gap_kinds_come_from_where_the_reason_was_recorded(record, kind):
+    snap = {
+        **snapshot([]),
+        "universe": {"sp500_members": ["AAA"]},
+        "leaders_2030_inputs": [{"ticker": "AAA", **record}],
+    }
+    gap = leaders.build(snap, [])["gaps"][0]
+    assert gap["kind"] == kind and gap["ranked"] is False
+
+
+# --- long quarters and stored quarterly tables ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "days, between_ends, counted",
+    [
+        (90, False, True),
+        (100, True, True),
+        (111, False, True),  # 16 weeks, start to end
+        (112, True, True),  # 16 weeks between two period ends
+        (118, False, True),  # 17 weeks in a 53-week year
+        (104, False, True),  # 15 weeks
+        (119, False, False),  # January to April: four months, not whole weeks
+        (120, True, False),
+        (121, False, False),
+        (79, False, False),
+    ],
+)
+def test_long_quarters_count_only_as_whole_weeks(days, between_ends, counted):
+    assert quarter_length(days, between_ends) == counted
+
+
+def test_stored_quarterly_tables_match_quarters_by_date():
+    q = gapped_quarters()[5:13]  # four quarters before the gap, then quarters from 2021
+    revenue = [10.0, 9.0, 8.0, 7.0, 5.0, 5.0, 5.0, 5.0]
+    assert scenarios.quarterly_yoy(revenue, q) == [None, None, None, None]  # no year-ago quarter is adjacent
+    full = [d.isoformat() for d in quarter_ends(8)]
+    assert scenarios.quarterly_yoy(revenue, full) == pytest.approx([1.0, 0.8, 0.6, 0.4])
+    table = {"quarters": q, "revenue": revenue, "ocf": [2.0] * 8, "capex": [1.0] * 8}
+    fcf = next(t for t in research.trends({"fundamentals": table}) if t["label"].startswith("Free-cash-flow"))
+    assert len(fcf["values"]) == 1 and fcf["quarters"] == [q[0]]  # the year-before window spans the gap
+    cond = {"metric": "quarterly_yoy_last2", "value": 0.0}
+    assert scenarios.check_condition(cond, {}, table) == ("not measurable", None)

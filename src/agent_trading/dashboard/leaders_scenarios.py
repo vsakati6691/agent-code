@@ -16,15 +16,29 @@ def unbroken(quarters: list, n: int) -> bool:
         return False
 
 
-def growth_input(record: dict, metrics: dict, as_of: str) -> tuple[float | None, str]:
+def _version_key(version: str) -> tuple[str, int] | None:
+    day, _, n = version.partition(".")
+    try:
+        return date.fromisoformat(day).isoformat(), int(n)
+    except ValueError:
+        return None
+
+
+def positional_metrics(version: str | None) -> bool:
+    """True when a snapshot's stored TTM metrics were computed by list position (before 2026-10-19.2)."""
+    key = _version_key(version) if isinstance(version, str) else None
+    return key is None or key < _version_key(spec.LEADERS_SHARE_CHECKS["date_matched_from"])
+
+
+def growth_input(record: dict, metrics: dict, as_of: str, positional: bool = True) -> tuple[float | None, str]:
     """Prefer the three-year TTM series; dated fiscal-year endpoints are an explicit fallback.
 
-    The stored TTM CAGR counts only over an unbroken run of 16 stored quarters: older snapshots
-    computed it by list position, so a gap spliced in quarters from other years (spec 2026-10-19.2).
+    Snapshots before 2026-10-19.2 computed the stored TTM CAGR by list position, so for them it counts
+    only over an unbroken run of 16 stored quarters; later snapshots already match quarter dates.
     """
     value = metrics.get("revenue_cagr_3y")
     quarters = (record.get("fundamentals") or {}).get("quarters") or []
-    if ok(value) and unbroken(quarters, spec.LEADERS_SHARE_CHECKS["cagr_quarters"]):
+    if ok(value) and (not positional or unbroken(quarters, spec.LEADERS_SHARE_CHECKS["cagr_quarters"])):
         return value, "TTM revenue CAGR over three years"
     group = ((record.get("decision_research") or {}).get("groups") or {}).get("growth") or {}
     field = (group.get("fields") or {}).get("revenue_cagr_3y") or {}

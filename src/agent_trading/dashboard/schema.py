@@ -185,6 +185,11 @@ LEADER_ENTRY = _obj(
             "items": {"type": "string"},
             "description": "From 2026-10-19.2: other index tickers of the same SEC registrant, not ranked separately.",
         },
+        "gap_kind": {
+            "type": ["string", "null"],
+            "description": "From 2026-10-19.2: coarse cause of the first missing input (share count, SEC statements, "
+            "price or other inputs); null when nothing is missing.",
+        },
         "is_scenario": {"const": True},
     },
 )

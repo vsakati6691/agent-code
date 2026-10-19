@@ -167,7 +167,7 @@ def one_class_per_company(ctx: Context, band: spec.Band, rows: list[dict]) -> li
             ctx.exclude(
                 band.key,
                 r["ticker"],
-                f"another share class of the same company is evaluated instead ({winner['ticker']}, more liquid)",
+                spec.ONE_CLASS_EXCLUSION.format(ticker=winner["ticker"]),
             )
     return keep
 

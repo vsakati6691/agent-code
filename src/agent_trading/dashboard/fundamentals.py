@@ -3,8 +3,8 @@
 Only facts FILED on or before the as-of date are used, so a weekly snapshot never
 sees a later filing (no look-ahead) and an old snapshot can be rebuilt exactly.
 
-Quarterly values come from 10-Q/10-K facts with an 80-120 day span (13-week
-quarters and the 16-week quarters of 12/16-week fiscal calendars). Where a
+Quarterly values come from 10-Q/10-K facts with an 80-100 day span, or 15-17
+whole weeks (the 16-week quarters of 12/16-week fiscal calendars). Where a
 company reports only year-to-date figures (cash flows) or only the fiscal year
 (the fourth quarter), the discrete quarter is derived by subtracting cumulative
 facts that share a start date; such quarters are flagged as derived.
@@ -18,7 +18,23 @@ from datetime import date
 from . import spec
 
 FORMS = ("10-Q", "10-K", "10-Q/A", "10-K/A", "10-KT")
-QUARTER_DAYS = spec.QUARTER_WINDOWS["quarter_span_days"]
+
+
+def quarter_length(days: int, between_ends: bool) -> bool:
+    """A discrete quarter: 80-100 days, or 15-17 whole weeks (spec.QUARTER_WINDOWS).
+
+    A fact's start-to-end span of w weeks is 7w - 1 days; two period ends w weeks apart are 7w days.
+    """
+    rules = spec.QUARTER_WINDOWS
+    lo, hi = rules["quarter_span_days"]
+    if not lo <= days <= hi:
+        return False
+    if days <= rules["standard_max_days"]:
+        return True
+    weeks, rest = divmod(days if between_ends else days + 1, 7)
+    first, last = rules["long_quarter_weeks"]
+    return rest == 0 and first <= weeks <= last
+
 
 FLOW_TAGS = {
     "revenue": [
@@ -139,9 +155,8 @@ def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: boo
             if k not in spans or _rank(f) > _rank(spans[k]):
                 spans[k] = f
         q: dict[str, tuple[float, bool]] = {}
-        lo, hi = QUARTER_DAYS
         for (s, e), f in spans.items():
-            if lo <= (_d(e) - _d(s)).days <= hi:
+            if quarter_length((_d(e) - _d(s)).days, between_ends=False):
                 q[e] = (float(f["val"]), False)
         if additive:
             by_start: dict[str, list[tuple[str, float]]] = {}
@@ -150,7 +165,7 @@ def _quarterly(group: dict, tags: list[str], unit_ok, as_of: date, additive: boo
             for lst in by_start.values():
                 lst.sort()
                 for (e0, v0), (e1, v1) in zip(lst, lst[1:], strict=False):
-                    if lo <= (_d(e1) - _d(e0)).days <= hi and e1 not in q:
+                    if quarter_length((_d(e1) - _d(e0)).days, between_ends=True) and e1 not in q:
                         q[e1] = (v1 - v0, True)
         if not q:
             continue

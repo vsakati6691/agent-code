@@ -6,7 +6,7 @@ import math
 from datetime import date
 
 from . import scoring, spec
-from .fundamentals import Fundamentals, ttm
+from .fundamentals import Fundamentals, quarter_back, ttm
 
 # key, label, format. The same schema drives detail cards and the sortable scanner.
 FIELDS = {
@@ -156,19 +156,9 @@ def build(
     def aligned(values):
         if not f.quarters:
             return []
-        newest = date.fromisoformat(f.quarters[0])
-        offsets = [(newest - date.fromisoformat(q)).days for q in f.quarters]
-        return [
-            next(
-                (
-                    values[j]
-                    for j, offset in enumerate(offsets)
-                    if j < len(values) and abs(offset - i * 365.2425 / 4) <= 25
-                ),
-                None,
-            )
-            for i in range(spec.DECISION_RULES["max_quarters"])
-        ]
+        # the quarter ending i quarters of calendar time back, within spec.QUARTER_WINDOWS["match_days"]
+        back = [quarter_back(f.quarters, 0, i / 4) for i in range(spec.DECISION_RULES["max_quarters"])]
+        return [values[j] if j is not None and j < len(values) else None for j in back]
 
     flow = {key: aligned(values) for key, values in f.flows.items()}
     eps, shares = aligned(f.quarterly_eps), aligned(f.diluted_shares)
