@@ -1,6 +1,7 @@
 # Provider recovery, sector balance and earnings validation
 
-Registered as methodology **2026-10-19.1**, these changes apply to new collections.
+Registered as methodology **2026-10-19.1**, with verification fixes in **2026-10-19.2**,
+these changes apply to new collections.
 Existing snapshots and tracked results retain their original rules. No improved
 investment performance is claimed.
 
@@ -93,3 +94,34 @@ not mutate snapshots. Missing cadence remains explicitly unverified.
 
 Regression tests: `tests/test_dashboard_resilience.py` (external services mocked).
 Run `./.venv/Scripts/python.exe -m pytest` before committing.
+
+## Verification and failure behavior
+
+- Both quote/profile providers failing, including empty, malformed and scalar JSON,
+  returns explicit unavailable data and a warning. Responses and endpoint schemas
+  are validated before replacing cache files. Prior cache bytes remain intact;
+  stale values are not relabeled current. A cache write failure is nonfatal.
+- A refresh with no usable quotes or chains is not saved, so a later retry can
+  recover. Partial refreshes retain explicit missing values. Full collection still
+  requires every benchmark and at least 90% S&P price coverage; failure leaves the
+  prior immutable snapshot intact.
+- Missing/unrecognized sector tags count in the denominator and retain their scores.
+  Only the eleven GICS names and registered aliases are penalized. The concentration
+  warning reports missing coverage, including when every label is missing.
+- Aware ISO timestamps convert to New York dates before the inclusive 21-day check.
+  Date-only and naive timestamps already denote New York dates. Invalid historical
+  rows are skipped individually and future filings excluded. Missing cadence stays
+  unverified, rather than inventing an estimate.
+- A future quarantine survives a failed calendar or an omitted ticker. Refreshes
+  carry forward the latest stored daily validation. Only relevant tickers enter the
+  daily validation payload; a 5,001-symbol calendar is covered by a storage-limit test.
+- Malformed FRED metadata and option-chain layouts produce provider errors. Invalid
+  OCC calendar dates are rejected as contracts. 13F remains a neutral unavailable
+  metric on bulk/per-company errors; it cannot fabricate ownership or change scores.
+
+Additional fault-injection tests are in `tests/test_dashboard_resilience_audit.py`.
+Services are mocked: passing tests establish local failure behavior, not live API
+availability or plan entitlements. Watch the published dataset states, request counts,
+freshness and coverage after the next authorized collection. The full run still
+caches histories and SEC submissions in memory and can reach its configured request
+caps on a broad universe; no production memory benchmark was performed in this audit.

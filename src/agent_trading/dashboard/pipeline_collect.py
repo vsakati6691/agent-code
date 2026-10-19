@@ -9,6 +9,7 @@ from typing import ParamSpec, TypeVar
 
 import pandas as pd
 
+from ..calendar_dates import calendar_day
 from ..data.validation import DataQualityError, range_breaks, trim_bad_history, validate_bars
 from . import spec
 from .earnings_cadence import label as cadence_label
@@ -16,7 +17,7 @@ from .earnings_cadence import validate as validate_earnings
 from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
 from .http import BudgetExceeded, FetchError, ProviderUnavailable
-from .pipeline_context import Context, RunFailed
+from .pipeline_context import Context, RunFailed, log
 from .price_integrity import quote_close_reason, quote_session_bar
 from .providers import Quote, common_stock_reason
 
@@ -41,11 +42,18 @@ def _guard(  # noqa: UP047 -- keep the declared Python 3.11 package compatibilit
         if isinstance(exc, ProviderUnavailable) or (provider == "alphavantage" and "quota or entitlement" in str(exc)):
             if provider not in {"quotes", "overview"}:
                 ctx.budget_hit.add(provider)
-            if str(exc) not in ctx.problems:
-                ctx.problems.append(str(exc))
+        if str(exc) not in ctx.problems:
+            ctx.problems.append(str(exc))
+            log.warning("%s: %s", provider, exc)
         if "attempts" in str(exc):
             ctx.transient_failures += 1
         return None, f"data unavailable ({exc})"
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+        reason = f"{provider}: provider response failed validation"
+        if reason not in ctx.problems:
+            ctx.problems.append(reason)
+            log.warning(reason)
+        return None, reason
 
 
 MIN_HISTORY_BARS = 60
@@ -140,12 +148,16 @@ def _facts(ctx: Context, cik: int) -> tuple[Fundamentals | None, str | None]:
     raw, why = _guard(ctx, "sec", ctx.providers.company_facts, cik)
     if raw is None:
         ctx.facts[cik] = (None, why)
-    elif not (raw.get("facts") or {}).get("us-gaap"):
-        ctx.facts[cik] = (None, "no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)")
     else:
-        max_quarters = spec.DECISION_RULES["max_quarters"]
-        assert isinstance(max_quarters, int)  # fixed registered rule
-        ctx.facts[cik] = (build_fundamentals(raw, ctx.as_of, max_quarters=max_quarters), None)
+
+        def parse():
+            if not (raw.get("facts") or {}).get("us-gaap"):
+                raise FetchError("no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)")
+            max_quarters = spec.DECISION_RULES["max_quarters"]
+            assert isinstance(max_quarters, int)  # fixed registered rule
+            return build_fundamentals(raw, ctx.as_of, max_quarters=max_quarters)
+
+        ctx.facts[cik] = _guard(ctx, "sec", parse)
     return ctx.facts[cik]
 
 
@@ -232,7 +244,7 @@ def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -
         out["last_results_status"] = "not checked: malformed SEC earnings filing dates"
         return out
     if not dates:
-        out["last_results_status"] = "no 8-K item 2.02 among the recent SEC filings"
+        out["last_results_status"] = "no 8-K item 2.02 with valid dates (missing, malformed or absent recent filings)"
         return out
     out["last_results"], out["last_results_status"] = dates[0], "verified (8-K)"
     if next_scheduled and out["event_eligible"] and len(dates) >= 2:
@@ -241,6 +253,8 @@ def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -
         )
         gap = gaps[len(gaps) // 2]
         expected = date.fromisoformat(dates[0]) + timedelta(days=gap)
-        out["cadence_check"] = cadence_label(expected, date.fromisoformat(next_scheduled))
+        scheduled_day = calendar_day(next_scheduled)
+        assert scheduled_day is not None  # validated above before cadence comparison
+        out["cadence_check"] = cadence_label(expected, scheduled_day)
         out.update(validate_earnings(next_scheduled, str(expected), ctx.as_of))
     return out

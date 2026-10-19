@@ -73,7 +73,11 @@ def parse_earnings_csv(text: str) -> pd.DataFrame:
     expected = {"symbol", "reportDate", "fiscalDateEnding"}
     if not expected.issubset(df.columns):
         raise AlphaVantageError("earnings calendar: unexpected format")
-    df["reportDate"] = pd.to_datetime(df["reportDate"]).dt.date
+    from ..calendar_dates import calendar_day
+
+    df["reportDate"] = df["reportDate"].map(calendar_day)
+    if df["reportDate"].isna().any():
+        raise AlphaVantageError("earnings calendar: missing or invalid report date")
     return df
 
 

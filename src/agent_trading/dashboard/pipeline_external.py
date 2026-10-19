@@ -179,7 +179,7 @@ def _risk(ctx, cik: int, previous: dict, business: dict) -> dict:
             return risk_excerpt(ctx.providers.http.get_text(filing["url"], max_age_hours=168), filing)
     except BudgetExceeded:
         return {**prior, "state": "partial", "reason": "excerpt refresh deferred"}
-    except (FetchError, KeyError, TypeError, ValueError):
+    except (FetchError, KeyError, TypeError, ValueError, AttributeError):
         return {
             **prior,
             "state": "provider_error",
@@ -204,7 +204,7 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
             raise FetchError("Current SEC bulk index cannot establish historical archive availability; no backfill")
         archives, mapping = _bulk(ctx.providers, ctx.as_of, store)
         institutional_error = None
-    except (FetchError, IntegrityError, OSError, ValueError, KeyError, TypeError) as exc:
+    except (FetchError, IntegrityError, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         archives, mapping = [], {}
         reason = (
             "SEC 13F collection unavailable"

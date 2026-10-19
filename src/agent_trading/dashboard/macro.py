@@ -14,8 +14,16 @@ METADATA = "https://api.stlouisfed.org/fred/series"
 
 def parse_series(raw: dict, metadata: dict, series: str, as_of: date) -> dict:
     """Never substitute a missing observation, or use a revision from after the cutoff."""
+    if not isinstance(raw, dict) or not isinstance(metadata, dict):
+        raise FetchError("FRED response must be an object")
     info = metadata.get("seriess", [])
-    if len(info) != 1 or info[0].get("id") != series or not info[0].get("last_updated"):
+    if (
+        not isinstance(info, list)
+        or len(info) != 1
+        or not isinstance(info[0], dict)
+        or info[0].get("id") != series
+        or not info[0].get("last_updated")
+    ):
         raise FetchError("FRED series metadata missing or mismatched")
     rows = raw.get("observations")
     if not isinstance(rows, list):

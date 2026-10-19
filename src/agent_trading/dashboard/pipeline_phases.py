@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
+from ..calendar_dates import calendar_day
 from . import ai as ai_mod
 from . import options as opt
 from . import scoring, spec
-from .earnings_cadence import event_eligible
+from .earnings_cadence import event_eligible, future_schedule
 from .earnings_cadence import validate as validate_earnings
 from .pipeline_collect import _guard, _quote, broad_universe, latest_bars, verify_earnings
 from .pipeline_context import BENCHMARKS, Context, RunFailed, log
@@ -31,8 +32,14 @@ def collect_benchmarks(ctx: Context) -> dict[str, pd.Series]:
 
 def collect_earnings(ctx: Context) -> tuple[dict[str, str], str | None, dict, pd.DataFrame | None]:
     providers, as_of = ctx.providers, ctx.as_of
-    earnings, earn_note = {}, None
+    earnings: dict[str, str] = {}
+    earn_note = None
     cal, why = _guard(ctx, "alphavantage", providers.earnings_calendar)
+    if cal is not None:
+        normalized, why = _guard(ctx, "alphavantage", future_schedule, cal, as_of)
+        earnings = normalized or {}
+        if normalized is None:
+            cal = None
     # spec 2026-10-14.5: a failed or unconfigured lookup is never shown as "no earnings scheduled"
     earn_status = {"status": "ok", "state": "available", "calendar_rows": 0, "retrieved_at": ctx.started}
     if cal is None:
@@ -46,10 +53,6 @@ def collect_earnings(ctx: Context) -> tuple[dict[str, str], str | None, dict, pd
         }
     else:
         earn_status["calendar_rows"] = int(len(cal))
-        for sym, grp in cal.groupby("symbol"):
-            future = sorted(d for d in grp["reportDate"] if d > as_of)
-            if future:
-                earnings[sym] = future[0].isoformat()
     return earnings, earn_note, earn_status, cal
 
 
@@ -256,9 +259,16 @@ def collect_derivatives(
             ch, why = _guard(ctx, "cboe", providers.option_chain, ticker)
             chains[ticker] = ch if ch is not None else (why or "option chain unavailable")
         ev = {
-            t: [{"date": date.fromisoformat(d), "event": "earnings (scheduled, unverified)"}]
+            t: [{"date": day, "event": "earnings (scheduled, unverified)"}]
             for t, d in earnings.items()
+            if (day := calendar_day(d)) is not None and day > as_of
         }
+        for band in payload_bands.values():
+            for candidate in band["candidates"]:
+                check = candidate.get("earnings_check") or {}
+                day = calendar_day(check.get("next_scheduled"))
+                if day and day > as_of and event_eligible(check):
+                    ev[candidate["ticker"]] = [{"date": day, "event": "earnings (scheduled, unverified)"}]
         # spec 2026-10-14.6: without a collected calendar every contract's earnings status is 'unknown'
         speculative_payload = speculative.build(
             {t: chains[t] for t in focus}, as_of, ev, iv_history, events_known=cal is not None
@@ -286,11 +296,14 @@ def collect_events(ctx: Context, payload_bands: dict, watch_payload: dict, earni
     as_of = ctx.as_of
 
     def check(c: dict, scheduled: str | None) -> dict:
+        prior = ctx.prior_earnings_checks.get(c["ticker"], {})
+        prior_day = calendar_day(prior.get("next_scheduled"))
+        if scheduled is None and prior.get("outlier") and prior_day and prior_day > as_of:
+            scheduled = prior_day.isoformat()
         key = (c.get("cik"), scheduled)
         if key not in ctx.earnings_checks:
             ctx.earnings_checks[key] = _clean(verify_earnings(ctx, key[0], scheduled))
         record = dict(ctx.earnings_checks[key])
-        prior = ctx.prior_earnings_checks.get(c["ticker"], {})
         if prior.get("outlier") and prior.get("next_scheduled") == scheduled:
             record["latest_cadence_estimate"] = record.get("expected_date")
             record["expected_date"] = prior.get("expected_date")
@@ -311,19 +324,20 @@ def collect_events(ctx: Context, payload_bands: dict, watch_payload: dict, earni
     seen_events: dict[tuple[str, str], dict] = {}
     for key, b in payload_bands.items():
         for c in b["candidates"]:
+            scheduled = c.get("next_earnings") or (c.get("earnings_check") or {}).get("next_scheduled")
             if (
-                c.get("next_earnings")
+                scheduled
                 and event_eligible(c.get("earnings_check"))
-                and as_of.isoformat() < c["next_earnings"] <= horizon_end.isoformat()
+                and as_of.isoformat() < scheduled <= horizon_end.isoformat()
             ):
-                ev_key = (c["ticker"], c["next_earnings"])
+                ev_key = (c["ticker"], scheduled)
                 if ev_key in seen_events:  # a stock on two lists (for example large and AI large) is listed once
                     seen_events[ev_key]["list"] += f", {key}"
                     continue
                 ec = c.get("earnings_check") or {}
                 seen_events[ev_key] = {
                     "ticker": c["ticker"],
-                    "date": c["next_earnings"],
+                    "date": scheduled,
                     "list": key,
                     "event": "earnings (scheduled; Alpha Vantage; not independently verified)",
                     "last_results": ec.get("last_results"),
@@ -332,7 +346,7 @@ def collect_events(ctx: Context, payload_bands: dict, watch_payload: dict, earni
                 }
                 upcoming.append(seen_events[ev_key])
     for e in watch_payload.get("entries", []):
-        d = earnings.get(e["ticker"])
+        d = earnings.get(e["ticker"]) or (e.get("earnings_check") or {}).get("next_scheduled")
         if d and event_eligible(e.get("earnings_check")) and as_of.isoformat() < d <= horizon_end.isoformat():
             upcoming.append(
                 {
