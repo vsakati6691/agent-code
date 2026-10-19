@@ -163,13 +163,15 @@ def parse_earnings_8k(subs: dict | None, on_or_before: date | None = None) -> li
     made after it, so a rerun for an earlier week or a run after a holiday Friday never reports a later release."""
     recent = ((subs or {}).get("filings") or {}).get("recent") or {}
     forms, dates, items = recent.get("form") or [], recent.get("filingDate") or [], recent.get("items") or []
-    cutoff = on_or_before.isoformat() if on_or_before else None
+    from ..calendar_dates import calendar_day
+
     out = [
-        d
+        day.isoformat()
         for f, d, it in zip(forms, dates, items + [""] * (len(forms) - len(items)), strict=False)
         if f in ("8-K", "8-K/A")
         and "2.02" in {s.strip() for s in str(it).split(",")}
-        and (cutoff is None or str(d) <= cutoff)
+        and (day := calendar_day(d)) is not None
+        and (on_or_before is None or day <= on_or_before)
     ]
     return sorted(set(out), reverse=True)
 
@@ -326,9 +328,11 @@ class Quote:
 
 
 def _num(x) -> float | None:
+    if isinstance(x, bool):
+        return None
     try:
         v = float(x)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return v if v == v and abs(v) != float("inf") else None
 
@@ -379,9 +383,13 @@ def parse_occ(symbol: str) -> dict | None:
     m = OCC_RE.match(symbol.strip().upper())
     if not m:
         return None
+    try:
+        expiration = date(2000 + int(m["y"]), int(m["m"]), int(m["d"]))
+    except ValueError:
+        return None
     return {
         "root": m["root"],
-        "expiration": date(2000 + int(m["y"]), int(m["m"]), int(m["d"])),
+        "expiration": expiration,
         "type": "call" if m["cp"] == "C" else "put",
         "strike": int(m["k"]) / 1000.0,
     }
@@ -402,6 +410,8 @@ def parse_cboe_chain(raw: dict) -> tuple[dict, list[dict]]:
     }
     rows = []
     for o in d["options"]:
+        if not isinstance(o, dict):
+            raise FetchError("Cboe option chain: malformed contract row")
         occ = parse_occ(str(o.get("option", "")))
         if occ is None:
             continue

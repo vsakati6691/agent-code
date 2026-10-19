@@ -48,6 +48,15 @@ def company(c: dict) -> str:
             f"{source(holders.get('source'), 'SEC 13F archive')} · {source(holders.get('mapping_url'), 'CUSIP mapping')} "
             f"file {E(holders.get('mapping_date') or 'n/a')}.</p><ol>{top}</ol>"
         )
+    if holders.get("provider") == "fmp" and holders.get("holder_count") is not None:
+        holders_body = (
+            f"<p>{num(holders['holder_count'], 0)} holders · {num(holders.get('reported_shares'), 0)} reported shares. "
+            f"Quarter ended {E(holders.get('report_quarter_end') or 'n/a')}.</p>"
+            f'<p class="small">{source(holders.get("source"), "FMP quarterly aggregate")} · '
+            f"Retrieved {E(holders.get('retrieved_at') or 'n/a')}. Individual holder names and original filing timestamps unavailable.</p>"
+        )
+    if holders.get("fallback_status"):
+        holders_body += f'<p class="small">Fallback: {E(holders["fallback_status"])}. {E(holders.get("fallback_reason") or "")} Institutional score adjustment: 0 (display-only).</p>'
     short_body = "<p>Unavailable · " + gap(short) + "</p>"
     if short.get("shares_short") is not None:
         short_body = (

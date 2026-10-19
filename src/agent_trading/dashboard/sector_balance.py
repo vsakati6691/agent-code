@@ -6,6 +6,11 @@ from dataclasses import replace
 from . import scoring, spec
 
 
+def normalized_sector(value: object) -> str:
+    key = " ".join(value.split()).casefold() if isinstance(value, str) else ""
+    return spec.RESILIENCE_VALIDATION_RULES["sector_aliases"].get(key, "Unknown")
+
+
 def sector_penalty(scores: list[scoring.Score], sectors: dict[str, str | None], size: int) -> list[scoring.Score]:
     """Rerank copies once using the unadjusted, eligible top-list composition.
 
@@ -17,17 +22,17 @@ def sector_penalty(scores: list[scoring.Score], sectors: dict[str, str | None], 
     baseline = scoring.rank(raw)[: max(0, size)]
     if not baseline:
         return []
-    normalized = {t: v.strip().casefold() if isinstance(v, str) else "unknown" for t, v in sectors.items()}
-    counts = Counter(normalized.get(s.ticker, "unknown") for s in baseline)
+    normalized = {t: normalized_sector(v) for t, v in sectors.items()}
+    counts = Counter(normalized.get(s.ticker, "Unknown") for s in baseline)
     threshold = spec.RESILIENCE_RULES["sector_threshold"]
     maximum = spec.RESILIENCE_RULES["sector_max_penalty_points"]
     adjusted = []
     for s in raw:
         if s.composite is None or s.excluded_reason:
             continue
-        sector = normalized.get(s.ticker, "unknown")
+        sector = normalized.get(s.ticker, "Unknown")
         share = counts[sector] / len(baseline)
-        penalty = 0.0 if sector in {"", "unknown", "n/a"} else maximum * max(0, share - threshold) / (1 - threshold)
+        penalty = 0.0 if sector == "Unknown" else maximum * max(0, share - threshold) / (1 - threshold)
         penalty = round(min(s.composite, penalty), 2)
         flags = [f for f in s.flags if not f.startswith("Sector concentration penalty:")]
         if penalty:

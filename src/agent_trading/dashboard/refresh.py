@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from ..calendar_dates import calendar_day
 from ..market_calendar import is_trading_day
 from . import bets, options, spec, speculative
+from .earnings_cadence import future_schedule
 from .earnings_cadence import validate as validate_earnings
 from .http import BudgetExceeded, FetchError, HttpClient
 from .providers import Providers, canonical
@@ -19,6 +22,7 @@ NY = ZoneInfo("America/New_York")
 CBOE_BUDGET = 80
 SECONDS_BUDGET = 14 * 60
 BENCHMARKS = ("SPY", "IJH", "IWM")
+log = logging.getLogger(__name__)
 # No duplicated prose, payoff grids or raw chains in the daily record. All numbers retain their precision.
 ROW_FIELDS = (
     "option",
@@ -99,7 +103,7 @@ def fetch(fn, *args):
         return None, "request or time budget spent"
     except FetchError:
         return None, "provider request failed (unavailable or rate limited)"
-    except (ValueError, TypeError, KeyError, OverflowError):
+    except (ValueError, TypeError, KeyError, OverflowError, AttributeError):
         return None, "provider response unreadable"
 
 
@@ -111,6 +115,7 @@ def collect(
     started: str,
     iv_history: dict | None = None,
     earnings_verdicts=None,
+    prior_earnings_checks: dict | None = None,
 ) -> dict:
     candidates = {c["ticker"] for b in snap.get("bands", {}).values() for c in b.get("candidates", [])}
     quotes, chain_states, chains = {}, {}, {}
@@ -118,18 +123,21 @@ def collect(
     calendar, earn_reason = fetch(providers.earnings_calendar) if options_enabled else (None, None)
     for symbol in sorted(candidates | set(BENCHMARKS)):
         quote, reason = fetch(providers.quote, symbol)
-        if quote is not None:
-            if canonical(quote.symbol) != symbol:
+        if quote is None:
+            reason = reason or "provider returned no quote"
+        else:
+            name = getattr(quote, "symbol", None)
+            if not isinstance(name, str) or canonical(name) != symbol:
                 reason = "symbol does not match requested ticker"
-            elif session_date(quote.last_trade) != as_of:
+            elif session_date(getattr(quote, "last_trade", None)) != as_of:
                 reason = "stale quote: last trade date does not equal the refresh session"
-            elif not valid_price(quote.close):
+            elif not valid_price(getattr(quote, "close", None)):
                 reason = "closing price missing or invalid"
         quotes[symbol] = {
             "status": "unavailable" if reason else "available",
             "reason": reason or "session verified",
             "close": None if reason else quote.close,
-            "last_trade": str(quote.last_trade) if quote is not None and quote.last_trade else None,
+            "last_trade": str(quote.last_trade) if getattr(quote, "last_trade", None) else None,
             "source": getattr(quote, "source", options.QUOTE_SOURCE),
         }
     events, events_known = {}, False
@@ -139,26 +147,35 @@ def collect(
         for b in snap.get("bands", {}).values()
         for c in b.get("candidates", [])
     }
+    stored_checks.update(prior_earnings_checks or {})
     option_payload = {"enabled": options_enabled, "status": "unavailable", "reason": "option collection disabled"}
     if options_enabled:
+        schedules = None
         if calendar is not None:
-            events_known = True
-            for symbol, group in calendar.groupby("symbol"):
-                future = sorted(d for d in group["reportDate"] if d > as_of)
-                if future:
-                    scheduled = str(future[0])
-                    old = stored_checks.get(symbol, {})
-                    expected = old.get("expected_date")
-                    if expected is None and old.get("cadence_check"):
-                        import re
+            schedules, earn_reason = fetch(
+                future_schedule, calendar, as_of, candidates | set(speculative.targets(snap))
+            )
+            events_known = schedules is not None
+        for symbol in sorted(candidates | set(speculative.targets(snap))):
+            old = stored_checks.get(symbol, {})
+            scheduled = (schedules or {}).get(symbol)
+            prior_day = calendar_day(old.get("next_scheduled"))
+            retained = not scheduled and old.get("outlier") and prior_day and prior_day > as_of
+            if retained:
+                scheduled = prior_day.isoformat()
+            if not scheduled:
+                continue
+            expected = old.get("expected_date")
+            if expected is None and old.get("cadence_check"):
+                import re
 
-                        match = re.search(r"expected about (\d{4}-\d{2}-\d{2})", old["cadence_check"])
-                        expected = match[1] if match else None
-                    manual = earnings_verdicts.check(symbol, scheduled, as_of) if earnings_verdicts else None
-                    checked = validate_earnings(scheduled, expected, as_of, manual)
-                    earnings_validation[symbol] = {"next_scheduled": scheduled, **checked}
-                    if checked["event_eligible"]:
-                        events[symbol] = [{"date": future[0], "event": "earnings (scheduled, unverified)"}]
+                match = re.search(r"expected about (\d{4}-\d{2}-\d{2})", old["cadence_check"])
+                expected = match[1] if match else None
+            manual = earnings_verdicts.check(symbol, scheduled, as_of) if earnings_verdicts else None
+            checked = validate_earnings(scheduled, expected, as_of, manual)
+            earnings_validation[symbol] = {"next_scheduled": scheduled, **checked}
+            if checked["event_eligible"]:
+                events[symbol] = [{"date": date.fromisoformat(scheduled), "event": "earnings (scheduled, unverified)"}]
         core_underlyings = {c["ticker"] for c in snap.get("bands", {}).get("large", {}).get("candidates", [])}
         underlyings = {
             c["ticker"] for key in spec.EXPLORER_BANDS for c in snap.get("bands", {}).get(key, {}).get("candidates", [])
@@ -171,6 +188,15 @@ def collect(
                 continue
             chain, reason = fetch(providers.option_chain, symbol)
             info = {}
+            if chain is None:
+                reason = reason or "provider returned no option chain"
+            elif (
+                not isinstance(chain, tuple)
+                or len(chain) != 2
+                or not isinstance(chain[0], dict)
+                or not isinstance(chain[1], list)
+            ):
+                chain, reason = None, "provider response unreadable"
             if chain is not None:
                 under, _ = chain
                 info = options.quote_info(under, as_of)
@@ -257,9 +283,28 @@ def run(
         iv_history = speculative.stored_history(daily, session) if options_enabled else {}
         from .earnings_verdicts import EarningsVerdicts
 
+        prior_checks = {}
+        for day in reversed(daily.dates()):
+            if day < snap["as_of"]:
+                break
+            if day < str(session):
+                for symbol, check in daily.load(day).get("earnings_validation", {}).items():
+                    prior_checks.setdefault(symbol, check)
         payload = collect(
-            providers, snap, session, options_enabled, started, iv_history, EarningsVerdicts.load(store.root)
+            providers,
+            snap,
+            session,
+            options_enabled,
+            started,
+            iv_history,
+            EarningsVerdicts.load(store.root),
+            prior_checks,
         )
+        if not any(
+            r["status"] == "available" for r in (*payload["quotes"].values(), *payload["chain_status"].values())
+        ):
+            log.warning("Refresh has no verified quotes or chains; retaining last published state")
+            raise FetchError("refresh has no usable market data")
         written = daily.write(payload, commit)
         store.audit(
             "refresh_finished" if written else "refresh_skipped",

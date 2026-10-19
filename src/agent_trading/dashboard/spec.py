@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-19.1"
+SPEC_VERSION = "2026-10-19.3"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -81,7 +81,37 @@ SPEC_CHANGELOG = [
         "2026-10-19.1",
         "Owner requested provider fallbacks, a sector concentration penalty and quarantine of earnings cadence outliers; no retrospective rescoring.",
     ),
+    (
+        "2026-10-19.2",
+        "Owner requested edge-case validation: unknown sector neutrality, New York calendar dates and persistent earnings quarantine during outages.",
+    ),
+    (
+        "2026-10-19.3",
+        "Owner requested an executing institutional fallback and a separate delayed 0DTE/next-expiry research desk; historical scores remain unchanged.",
+    ),
 ]
+
+LIVE_GAP_RULES = {
+    "institutional_fallback": "SEC first, then optional FMP quarterly aggregate; current collections only; display-only and neutral",
+    "institutional_quarter": "Latest completed quarter at least 45 calendar days old; require exact symbol and quarter",
+    "short_term": {
+        "symbols": ["NVDA", "PLTR", "MU", "AVGO"],
+        "windows": ["0DTE", "1DTE", "Next listed expiry"],
+        "max_next_dte": 7,
+        "max_quote_age_minutes": 25,
+        "future_tolerance_seconds": 60,
+        "min_open_interest": 100,
+        "min_volume": 10,
+        "max_spread_pct": 0.20,
+        "max_moneyness_distance": 0.10,
+        "per_symbol_type_window": 2,
+        "rank": "ascending spread fraction, descending volume, descending open interest, ascending OCC symbol",
+        "session": "NYSE regular session only; stop at 13:00 ET on trading July 3, Christmas Eve and Friday after Thanksgiving, otherwise 16:00 ET",
+        "quotes": "fresh request; Cboe chain timestamp and underlying last trade must be from this NY session and at most 25 minutes old",
+        "payoff": "standard unadjusted OCC roots only; indicative ask times 100 premium and maximum premium loss; fees excluded; no probability estimate",
+        "storage": "separate immutable intraday observations; failed runs preserve the last valid observation and never change weekly ranking",
+    },
+}
 
 RESILIENCE_RULES = {
     "sector_threshold": 0.50,
@@ -91,6 +121,37 @@ RESILIENCE_RULES = {
     "earnings_rule": "Quarantine dates more than 21 calendar days from the historical 8-K cadence estimate from upcoming events, option catalysts and desk earnings triggers. Exact-date, confirmed owner-imported calendar checks within 14 days can release the quarantine on a new run. Missing cadence remains explicitly unverified.",
     "fallback_rule": "Cboe quotes remain primary; Alpha Vantage daily quotes and optional FMP quotes are fallbacks. Alpha Vantage overview falls back to optional FMP basic company profile only. Current profiles never replace dated SEC scoring fundamentals; fallback quotes never splice Cboe history. Transient retries remain bounded and quota/billing errors stop immediately.",
     "institutions_rule": "13F provider or per-company errors retain an unavailable state and zero score adjustment; missing ownership is never reported as zero holdings.",
+}
+
+RESILIENCE_VALIDATION_RULES = {
+    "sector_aliases": {
+        **{
+            s.casefold(): s
+            for s in (
+                "Communication Services",
+                "Consumer Discretionary",
+                "Consumer Staples",
+                "Energy",
+                "Financials",
+                "Health Care",
+                "Industrials",
+                "Information Technology",
+                "Materials",
+                "Real Estate",
+                "Utilities",
+            )
+        },
+        "technology": "Information Technology",
+        "healthcare": "Health Care",
+        "financial services": "Financials",
+        "basic materials": "Materials",
+        "consumer cyclical": "Consumer Discretionary",
+        "consumer defensive": "Consumer Staples",
+    },
+    "sector_rule": "Only canonical GICS names and the registered aliases receive concentration penalties. Missing and unrecognized tags stay eligible, count in the full-list denominator and receive no sector deduction.",
+    "date_rule": "ISO date-only and naive timestamps denote New York dates; aware timestamps are converted to America/New_York before comparison. Missing or malformed historical filing dates are skipped. Future filings never enter cadence.",
+    "quarantine_rule": "A future previously quarantined date remains blocked when a calendar omits the symbol or is unavailable; a current confirmed owner check can release it. A changed scheduled date is revalidated. Daily refreshes also retain the most recently stored quarantine.",
+    "outage_rule": "Rejected JSON and endpoint schemas never replace a usable cache entry. A refresh with no verified quotes or chains is failed and not published; prior immutable data remains unchanged and stale values are never presented as current.",
 }
 
 PRIVATE_HISTORY_RULE = {
@@ -1318,7 +1379,9 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "live_gaps": LIVE_GAP_RULES,
         "resilience": RESILIENCE_RULES,
+        "resilience_validation": RESILIENCE_VALIDATION_RULES,
         "private_history": PRIVATE_HISTORY_RULE,
         "external_datasets": EXTERNAL_DATA_RULES,
         "leaders_2030": {

@@ -175,7 +175,7 @@ def collect(providers, cik: int, as_of: date, previous: dict | None = None) -> d
                 filings.append(item)
     except BudgetExceeded:
         reason = "deferred to next run"
-    except (FetchError, ValueError, KeyError, TypeError) as exc:
+    except (FetchError, ValueError, KeyError, TypeError, AttributeError) as exc:
         reason = str(exc) if isinstance(exc, FetchError) else "Invalid Form 4 filing metadata"
     result = aggregate(filings, as_of, reason)
     if reason and reason != "deferred to next run" and not filings:

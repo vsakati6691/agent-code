@@ -130,6 +130,10 @@ def _build_site(
     private: bool = False,
 ) -> dict:
     store = Store(data_dir)
+    from . import site_short_term
+    from .short_term_store import ShortTermStore
+
+    short_term = ShortTermStore(data_dir).latest() if context.edition != "customer" else None
     challengers = leaders.load_challengers()
     integrity = store.verify_all()
     bad = {p.split()[1] for p in integrity if p.startswith("snapshot ")}
@@ -158,6 +162,8 @@ def _build_site(
     (out / "assets").mkdir(parents=True)
     (out / "build.json").write_text(json.dumps(build_info, indent=2) + "\n", encoding="utf-8")
     context.symbols.clear()
+    if snap is not None:
+        context.symbols.update(symbol_index(snap))
     (out / "assets" / "favicon.svg").write_text(site_basics.FAVICON_SVG, encoding="utf-8")
     # a content hash in every asset link, so a browser never pairs new pages with a cached old stylesheet or script
     context.asset_version = (
@@ -173,6 +179,7 @@ def _build_site(
                 + assets_bets.JS
                 + assets_goal.JS
                 + assets_command.JS
+                + site_short_term.JS
             ).encode("utf-8")
         ).hexdigest()[:10]
     )
@@ -183,6 +190,17 @@ def _build_site(
     (out / "assets" / "lab.js").write_text(assets_research.LAB_JS, encoding="utf-8")
     (out / "assets" / "bets.js").write_text(assets_bets.JS, encoding="utf-8")
     (out / "assets" / "goal.js").write_text(assets_goal.JS, encoding="utf-8")
+    if not customer:
+        (out / "assets" / "short-term.js").write_text(site_short_term.JS, encoding="utf-8")
+        (out / "options-short-term.html").write_text(
+            page(
+                "0DTE / next expiry lottery desk",
+                site_short_term.desk(short_term),
+                "options.html",
+                scripts=("assets/short-term.js",),
+            ),
+            encoding="utf-8",
+        )
     (out / ".nojekyll").write_text("", encoding="utf-8")
 
     def write_fallback():
@@ -199,8 +217,14 @@ def _build_site(
         for rel, title in (("growth.html", "Growth Stocks"), ("multibaggers.html", "Multibaggers")):
             empty = f'<h1>{title}</h1><p class="scan-empty">No research data available. {E(msg)}</p>'
             (out / rel).write_text(page(title, empty, rel), encoding="utf-8")
+        empty_method = methodology_page()
         (out / "methodology.html").write_text(
-            page("Methodology", methodology_page(), "methodology.html"), encoding="utf-8"
+            page(
+                "Methodology",
+                site_customer.strip_methodology(empty_method) if customer else empty_method,
+                "methodology.html",
+            ),
+            encoding="utf-8",
         )
         if not customer:
             (out / "bets.html").write_text(
@@ -214,12 +238,16 @@ def _build_site(
                 empty = f"<h1>{E(title)}</h1><p>No research data available. {E(msg)}</p>"
                 if rel == "leaders.html" and not challengers:
                     empty += "<p>No curated challengers registered.</p>"
+                if rel == "options.html":
+                    empty = site_short_term.navigation() + empty
                 (out / rel).write_text(page(title, empty, rel), encoding="utf-8")
         (out / "feed.xml").write_text(atom_feed([]), encoding="utf-8")
         write_fallback()
+        if customer:
+            site_customer.neutralize_output(out)
+            if problems := site_customer.check(out):
+                raise RuntimeError("refusing to publish the empty customer edition: " + "; ".join(problems[:5]))
         return {"pages": len(list(out.rglob("*.html"))), "snapshot": None}
-    context.symbols.clear()
-    context.symbols.update(symbol_index(snap))
     write_fallback()
     hits = find_private_keys(snap)
     if hits:
