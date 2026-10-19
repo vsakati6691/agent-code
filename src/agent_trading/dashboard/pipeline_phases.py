@@ -9,6 +9,8 @@ import pandas as pd
 from . import ai as ai_mod
 from . import options as opt
 from . import scoring, spec
+from .earnings_cadence import event_eligible
+from .earnings_cadence import validate as validate_earnings
 from .pipeline_collect import _guard, _quote, broad_universe, latest_bars, verify_earnings
 from .pipeline_context import BENCHMARKS, Context, RunFailed, log
 from .pipeline_details import _clean, candidate_detail, concentration_warnings, rank_changes
@@ -149,11 +151,16 @@ def score_bands(
                     r["sector"] = sp.loc[r["ticker"], "sector"]
         ranked = tradable_only(ctx, band, scoring.rank([r["score"] for r in rows]), trad, todo)
         by_t = {r["ticker"]: r for r in rows}
-        top = [by_t[s.ticker] for s in ranked[: band.max_results]]
-        for r in top + [by_t[s.ticker] for s in ranked[band.max_results : band.max_results + 10]]:
+        for r in [by_t[s.ticker] for s in ranked]:
             if r["sector"] is None:
                 sub, _ = _guard(ctx, "sec", providers.submissions, r["cik"])
                 r["sector"] = sector_from_sic(sub.get("sic")) if sub else "Unknown"
+        from .sector_balance import sector_penalty
+
+        ranked = sector_penalty(ranked, {t: r["sector"] for t, r in by_t.items()}, band.max_results)
+        for s in ranked:
+            by_t[s.ticker]["score"] = s
+        top = [by_t[s.ticker] for s in ranked[: band.max_results]]
         details = [candidate_detail(ctx, band, r, bench[band.benchmark], earnings) for r in top]
         from .decisions import add_percentiles
 
@@ -233,10 +240,19 @@ def collect_derivatives(
     speculative_payload = None
     options_payload = {"enabled": options_enabled, "status": "disabled in configuration"}
     if options_enabled:
-        chains = {}
+        chains: dict[str, tuple[dict, list[dict]] | str] = {}
         large_tickers = {c["ticker"] for c in payload_bands["large"]["candidates"]}
         focus = speculative.targets({"bands": payload_bands})
         for ticker in sorted(large_tickers | set(focus)):
+            checks = [
+                c.get("earnings_check")
+                for b in payload_bands.values()
+                for c in b["candidates"]
+                if c["ticker"] == ticker
+            ]
+            if any(not event_eligible(check) for check in checks if check and check.get("next_scheduled")):
+                chains[ticker] = "Review Required: earnings date excluded from automated event research"
+                continue
             ch, why = _guard(ctx, "cboe", providers.option_chain, ticker)
             chains[ticker] = ch if ch is not None else (why or "option chain unavailable")
         ev = {
@@ -268,18 +284,38 @@ def collect_derivatives(
 
 def collect_events(ctx: Context, payload_bands: dict, watch_payload: dict, earnings: dict) -> list[dict]:
     as_of = ctx.as_of
+
+    def check(c: dict, scheduled: str | None) -> dict:
+        key = (c.get("cik"), scheduled)
+        if key not in ctx.earnings_checks:
+            ctx.earnings_checks[key] = _clean(verify_earnings(ctx, key[0], scheduled))
+        record = dict(ctx.earnings_checks[key])
+        prior = ctx.prior_earnings_checks.get(c["ticker"], {})
+        if prior.get("outlier") and prior.get("next_scheduled") == scheduled:
+            record["latest_cadence_estimate"] = record.get("expected_date")
+            record["expected_date"] = prior.get("expected_date")
+            record["cadence_check"] = prior.get("cadence_check")
+        verdicts = ctx.earnings_verdicts
+        manual = verdicts.check(c["ticker"], scheduled, as_of) if verdicts and scheduled else None
+        record.update(validate_earnings(scheduled, record.get("expected_date"), as_of, manual))
+        return record
+
     for _key, b in payload_bands.items():
         for c in b["candidates"]:
-            c["earnings_check"] = _clean(verify_earnings(ctx, c.get("cik"), c.get("next_earnings")))
+            c["earnings_check"] = check(c, c.get("next_earnings"))
     for e in watch_payload.get("entries", []):
         if (e.get("asset_type") or "").startswith("operating company"):
-            e["earnings_check"] = _clean(verify_earnings(ctx, e.get("cik"), earnings.get(e["ticker"])))
+            e["earnings_check"] = check(e, earnings.get(e["ticker"]))
     upcoming = []
     horizon_end = as_of + timedelta(days=45)
     seen_events: dict[tuple[str, str], dict] = {}
     for key, b in payload_bands.items():
         for c in b["candidates"]:
-            if c.get("next_earnings") and c["next_earnings"] <= horizon_end.isoformat():
+            if (
+                c.get("next_earnings")
+                and event_eligible(c.get("earnings_check"))
+                and as_of.isoformat() < c["next_earnings"] <= horizon_end.isoformat()
+            ):
                 ev_key = (c["ticker"], c["next_earnings"])
                 if ev_key in seen_events:  # a stock on two lists (for example large and AI large) is listed once
                     seen_events[ev_key]["list"] += f", {key}"
@@ -297,7 +333,7 @@ def collect_events(ctx: Context, payload_bands: dict, watch_payload: dict, earni
                 upcoming.append(seen_events[ev_key])
     for e in watch_payload.get("entries", []):
         d = earnings.get(e["ticker"])
-        if d and d <= horizon_end.isoformat():
+        if d and event_eligible(e.get("earnings_check")) and as_of.isoformat() < d <= horizon_end.isoformat():
             upcoming.append(
                 {
                     "ticker": e["ticker"],

@@ -3,7 +3,59 @@
 import re
 from datetime import date
 
-TOLERANCE_DAYS = 21  # Existing pipeline check, not a registered eligibility or scoring rule.
+from . import spec
+
+TOLERANCE_DAYS = spec.RESILIENCE_RULES["earnings_tolerance_days"]
+OUTLIER = "Review Required: Outlier"
+
+
+def validate(scheduled: str | None, expected: str | None, as_of: date, manual: dict | None = None) -> dict:
+    """Validate calendar dates before using them in automated events; keep raw evidence."""
+    result = {
+        "expected_date": expected,
+        "deviation_days": None,
+        "outlier": False,
+        "validation_status": "Unverified: cadence unavailable",
+        "event_eligible": bool(scheduled),
+    }
+    if not scheduled:
+        return {**result, "validation_status": "No scheduled date", "event_eligible": False}
+    try:
+        day = date.fromisoformat(scheduled)
+    except (ValueError, TypeError):
+        return {**result, "validation_status": "Review Required: Invalid date", "event_eligible": False}
+    if day <= as_of:
+        return {**result, "validation_status": "Past or current reporting date", "event_eligible": False}
+    if not expected:
+        return result
+    try:
+        gap = (day - date.fromisoformat(expected)).days
+    except (ValueError, TypeError):
+        return result
+    outlier = abs(gap) > TOLERANCE_DAYS
+    verified = False
+    if manual and manual.get("status") == "verified" and manual.get("confirmed") is True:
+        try:
+            age = (as_of - date.fromisoformat(str(manual["checked_at"])[:10])).days
+            verified = 0 <= age <= 14 and scheduled in manual.get("broker_dates", [])
+        except (KeyError, TypeError, ValueError):
+            pass
+    return {
+        **result,
+        "deviation_days": gap,
+        "outlier": outlier,
+        "validation_status": "Manually verified"
+        if verified
+        else OUTLIER
+        if outlier
+        else "Within cadence tolerance (unverified)",
+        "event_eligible": not outlier or verified,
+    }
+
+
+def event_eligible(record: dict | None) -> bool:
+    """Legacy records remain compatible; new quarantines require explicit release."""
+    return (record or {}).get("event_eligible", True) is True
 
 
 UNVERIFIED_NOTE = "schedule remains unverified"

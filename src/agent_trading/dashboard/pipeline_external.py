@@ -21,6 +21,19 @@ def missing(reason: str = OLD, state: str = "missing") -> dict:
     return {"state": state, "reason": reason}
 
 
+def institutional_record(
+    archives: list[dict], mapping: dict, ticker: str, as_of: date, error: dict | None = None
+) -> dict:
+    """Isolate a malformed company as well as bulk failures; absence is not zero ownership."""
+    try:
+        record = error or institutions.company(archives, mapping, ticker, as_of)
+        if not isinstance(record, dict) or not record.get("state"):
+            raise ValueError("invalid institutional record")
+    except (FetchError, OSError, ValueError, KeyError, TypeError, AttributeError):
+        record = missing("SEC 13F company data unavailable or malformed", "provider_error")
+    return {**record, "score_adjustment": 0.0, "scoring_status": "neutral (display-only dataset)"}
+
+
 def subjects(bands: dict, watchlist: dict) -> dict[str, list[dict]]:
     result = {}
     for band in bands.values():
@@ -193,7 +206,12 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
         institutional_error = None
     except (FetchError, IntegrityError, OSError, ValueError, KeyError, TypeError) as exc:
         archives, mapping = [], {}
-        institutional_error = missing(str(exc), "partial" if isinstance(exc, BudgetExceeded) else "provider_error")
+        reason = (
+            "SEC 13F collection unavailable"
+            if current_collection
+            else "Current SEC bulk index cannot establish historical availability; no backfill"
+        )
+        institutional_error = missing(reason, "partial" if isinstance(exc, BudgetExceeded) else "provider_error")
     try:
         if not current_collection:
             raise FetchError("Current FINRA index cannot establish historical release availability; no backfill")
@@ -218,7 +236,7 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
         else:
             external["insiders"] = missing("No SEC CIK for this company")
             external["risk_excerpt"] = missing("No SEC CIK for this company")
-        external["institutions"] = institutional_error or institutions.company(archives, mapping, ticker, ctx.as_of)
+        external["institutions"] = institutional_record(archives, mapping, ticker, ctx.as_of, institutional_error)
         f = ctx.facts.get(int(cik), (None,))[0] if cik else None
         shares, shares_date = None, None
         if f:

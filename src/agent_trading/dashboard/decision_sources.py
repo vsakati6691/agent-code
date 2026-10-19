@@ -20,13 +20,14 @@ def number(value):
 
 
 def estimates(raw: dict, observed_at: str) -> dict:
+    provider = raw.get("_source", "Alpha Vantage OVERVIEW; current estimate, not point-in-time history")
     keys = {"forward_pe": "ForwardPE", "peg": "PEGRatio", "analyst_target": "AnalystTargetPrice"}
     out = {
         key: field(
             v if v is not None and v > 0 else None,
-            f"Alpha Vantage {source} missing or nonpositive",
+            f"{source} missing or nonpositive in {provider}",
             as_of=observed_at,
-            source="Alpha Vantage OVERVIEW; current estimate, not point-in-time history",
+            source=provider,
         )
         for key, source in keys.items()
         for v in [number(raw.get(source))]
@@ -37,7 +38,7 @@ def estimates(raw: dict, observed_at: str) -> dict:
         int(sum(ratings)) if valid else None,
         "All five analyst rating category counts required",
         as_of=observed_at,
-        source="Alpha Vantage OVERVIEW",
+        source=provider,
     )
     return out
 

@@ -45,6 +45,7 @@ ALLOWED_HOSTS = {
     "www.finra.org": "finra",
     "cdn.finra.org": "finra",
     "api.massive.com": "massive",
+    "financialmodelingprep.com": "fmp",
 }
 RETRY_STATUS = {429, 500, 502, 503, 504}
 RATE_LIMIT_ATTEMPTS = 5
@@ -79,6 +80,7 @@ DEFAULT_LIMITS = {
     "fred": ProviderLimits(0.5, 42),
     "finra": ProviderLimits(1.0, 9),
     "massive": ProviderLimits(13.0, 600),  # private Basic stocks: at most five requests/minute
+    "fmp": ProviderLimits(1.0, 80),  # optional fallback, independently bounded
 }
 
 SEC_SUBCAPS = {"sec_core": 4000, "sec_insiders": 1800, "sec_bulk": 24, "sec_risk": 120}
@@ -230,14 +232,30 @@ class HttpClient:
             except requests.RequestException as exc:
                 raise FetchError(f"{host}: {type(exc).__name__}") from None
             else:
-                if provider == "massive" and resp.status_code in {401, 402, 403, 429}:
+                if provider in {"massive", "fmp"} and resp.status_code in {401, 402, 403, 429}:
                     self.unavailable.add(provider)
-                    raise ProviderUnavailable("Massive access, billing or quota response; stopped for this run")
+                    raise ProviderUnavailable(f"{provider}: access, billing or quota response; stopped for this run")
                 if provider == "alphavantage" and (
-                    resp.status_code in {402, 403, 429} or (resp.status_code == 200 and quota_notice(resp.content))
+                    resp.status_code in {401, 402, 403, 429} or (resp.status_code == 200 and quota_notice(resp.content))
                 ):
+                    self.unavailable.add(provider)
                     self.daily_budget.stop()
                     raise ProviderUnavailable("Alpha Vantage quota or entitlement response; stopped for today")
+                if provider == "fmp" and resp.status_code == 200:
+                    try:
+                        payload = json.loads(resp.content)
+                    except (ValueError, UnicodeError):
+                        payload = None
+                    if isinstance(payload, dict) and any(payload.get(k) for k in ("Error Message", "error", "message")):
+                        self.unavailable.add(provider)
+                        raise ProviderUnavailable("FMP error response; stopped for this run")
+                if provider == "alphavantage" and resp.status_code == 200:
+                    try:
+                        payload = json.loads(resp.content)
+                    except (ValueError, UnicodeError):
+                        payload = None  # the earnings calendar is CSV
+                    if isinstance(payload, dict) and payload.get("Error Message"):
+                        raise FetchError("Alpha Vantage rejected request")
                 if resp.status_code == 200:
                     self._recover(provider)
                     return resp.content

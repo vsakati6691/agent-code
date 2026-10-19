@@ -11,6 +11,7 @@ import pandas as pd
 
 from ..market_calendar import is_trading_day, previous_trading_day
 from . import spec
+from .earnings_verdicts import EarningsVerdicts
 from .fundamentals import Fundamentals
 from .providers import Providers, Quote
 
@@ -57,6 +58,9 @@ class Context:
     facts: dict[int, tuple[Fundamentals | None, str | None]] = field(default_factory=dict)
     decision_extras: dict = field(default_factory=dict)
     earnings_reason: str | None = None
+    earnings_checks: dict[tuple[int | None, str | None], dict] = field(default_factory=dict)
+    earnings_verdicts: EarningsVerdicts | None = None
+    prior_earnings_checks: dict[str, dict] = field(default_factory=dict)
 
     def exclude(self, band: str, ticker: str, reason: str) -> None:
         self.excluded[band].setdefault(ticker, reason)

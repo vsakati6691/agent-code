@@ -89,11 +89,17 @@ class Providers:
         *,
         massive_key: str | None = None,
         history_as_of: date | None = None,
+        fmp_key: str | None = None,
     ) -> None:
         self.http = http
         self.av_key = av_key
         self.fred_key = fred_key
         self.massive_key = massive_key
+        self.fmp_key = fmp_key
+        if fmp_key:
+            from ..logging_setup import register_secret
+
+            register_secret(fmp_key)
         self.history_provider = "massive" if massive_key else "cboe"
         self.history_as_of = history_as_of
         self._submissions: dict[int, dict] = {}
@@ -148,7 +154,38 @@ class Providers:
         return parse_sp500(self.http.get_json(WIKI_SP500_URL, WIKI_SP500_PARAMS, max_age_hours=24))
 
     def quote(self, symbol: str) -> Quote:
-        return parse_cboe_quote(self._price_json(f"{CBOE_BASE}/quotes/{symbol}.json"))
+        try:
+            quote = parse_cboe_quote(self._price_json(f"{CBOE_BASE}/quotes/{symbol}.json"))
+            if quote.symbol != canonical(symbol) or quote.close is None or quote.close <= 0:
+                raise FetchError("Cboe quote missing or invalid")
+            return quote
+        except (FetchError, ValueError, TypeError, KeyError, AttributeError):
+            return self.daily_quote(symbol)
+
+    def _fmp(self, endpoint: str, symbol: str) -> dict | list:
+        from .fallbacks import FMP_BASE
+
+        if not self.fmp_key:
+            raise FetchError("FMP fallback key not configured (FMP_API_KEY)")
+        return self.http.get_json(
+            f"{FMP_BASE}/{endpoint}",
+            {"symbol": symbol, "apikey": self.fmp_key},
+            max_age_hours=24 if endpoint == "profile" else 0,
+        )
+
+    def daily_quote(self, symbol: str, as_of: date | None = None) -> Quote:
+        """Alpha Vantage daily close, then optional FMP; quotas never disable the fallback."""
+        from .fallbacks import daily_quote
+        from .pipeline_context import as_of_for
+
+        now = datetime.now(UTC)
+        session = as_of or as_of_for(now)
+        try:
+            raw = self._overview_data("GLOBAL_QUOTE", symbol)
+            return daily_quote(raw, symbol, session, now.isoformat(), "alphavantage")
+        except FetchError:
+            raw = self._fmp("quote", symbol)
+            return daily_quote(raw, symbol, session, now.isoformat(), "fmp")
 
     def history(self, symbol: str) -> pd.DataFrame:
         if self.massive_key:
@@ -180,8 +217,8 @@ class Providers:
         )
         try:
             df = parse_earnings_csv(text)
-        except AlphaVantageError as exc:
-            raise FetchError(str(exc)) from None
+        except (AlphaVantageError, ValueError, TypeError):
+            raise FetchError("Alpha Vantage earnings calendar is unreadable") from None
         df["symbol"] = df["symbol"].map(canonical)
         return df
 
@@ -200,12 +237,23 @@ class Providers:
             raise FetchError("Alpha Vantage quota or entitlement response; further enrichment stopped")
         if raw.get("Error Message"):
             raise FetchError("Alpha Vantage rejected company data request")
-        if function == "OVERVIEW" and canonical(raw.get("Symbol", "")) != canonical(symbol):
+        if function == "OVERVIEW" and canonical(str(raw.get("Symbol", ""))) != canonical(symbol):
             raise FetchError("Alpha Vantage company symbol missing or mismatched")
         return raw
 
     def overview(self, symbol: str) -> dict:
-        return self._overview_data("OVERVIEW", symbol)
+        try:
+            return {
+                **self._overview_data("OVERVIEW", symbol),
+                "_source": "Alpha Vantage OVERVIEW; current estimate, not point-in-time history",
+                "_observed_at": datetime.now(UTC).isoformat(),
+            }
+        except FetchError:
+            if not self.fmp_key:
+                raise
+            from .fallbacks import profile
+
+            return profile(self._fmp("profile", symbol), symbol, datetime.now(UTC).isoformat())
 
     def insider_transactions(self, symbol: str) -> dict:
         return self._overview_data("INSIDER_TRANSACTIONS", symbol)

@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-18.1"
+SPEC_VERSION = "2026-10-19.1"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -77,7 +77,21 @@ SPEC_CHANGELOG = [
         "2026-10-18.1",
         "Owner chose daily snapshots: one per NYSE session; tracking and evidence keep one per ISO week; stale after 2 sessions.",
     ),
+    (
+        "2026-10-19.1",
+        "Owner requested provider fallbacks, a sector concentration penalty and quarantine of earnings cadence outliers; no retrospective rescoring.",
+    ),
 ]
+
+RESILIENCE_RULES = {
+    "sector_threshold": 0.50,
+    "sector_max_penalty_points": 10.0,
+    "sector_rule": "Measure sector shares in the raw top N eligible, tradable companies per band; subtract up to 10 points linearly from every candidate in sectors above 50%, then rank once. Unknown sectors count in N but receive no penalty. A soft penalty, not a sector cap.",
+    "earnings_tolerance_days": 21,
+    "earnings_rule": "Quarantine dates more than 21 calendar days from the historical 8-K cadence estimate from upcoming events, option catalysts and desk earnings triggers. Exact-date, confirmed owner-imported calendar checks within 14 days can release the quarantine on a new run. Missing cadence remains explicitly unverified.",
+    "fallback_rule": "Cboe quotes remain primary; Alpha Vantage daily quotes and optional FMP quotes are fallbacks. Alpha Vantage overview falls back to optional FMP basic company profile only. Current profiles never replace dated SEC scoring fundamentals; fallback quotes never splice Cboe history. Transient retries remain bounded and quota/billing errors stop immediately.",
+    "institutions_rule": "13F provider or per-company errors retain an unavailable state and zero score adjustment; missing ownership is never reported as zero holdings.",
+}
 
 PRIVATE_HISTORY_RULE = {
     "provider": "Massive REST daily aggregates; local personal research only, explicitly enabled",
@@ -1304,6 +1318,7 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "resilience": RESILIENCE_RULES,
         "private_history": PRIVATE_HISTORY_RULE,
         "external_datasets": EXTERNAL_DATA_RULES,
         "leaders_2030": {

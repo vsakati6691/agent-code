@@ -4,9 +4,9 @@ from agent_trading.dashboard import spec
 
 
 def test_registered_spec_hash_is_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-18.1"
+    assert spec.SPEC_VERSION == "2026-10-19.1"
     assert spec.SPEC_FREEZE_DATE == "2026-10-16"
-    assert spec.spec_hash() == "02ed25651e9d6ed7"
+    assert spec.spec_hash() == "0e6cb19e305dffdb"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():
@@ -37,6 +37,10 @@ def test_addition_preserves_every_prior_registered_rule():
     import json
 
     previous = spec.spec_dict()
+    assert previous.pop("resilience") == spec.RESILIENCE_RULES
+    previous["version"] = "2026-10-18.1"
+    digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    assert digest == "02ed25651e9d6ed7"
     # 2026-10-18.1 adds the daily cadence and a 2-session stale warning: undoing both restores 2026-10-17.6
     cadence = previous.pop("snapshot_cadence")
     assert cadence == {"rule": spec.SNAPSHOT_CADENCE_RULE, "published_recent": 10}

@@ -12,6 +12,7 @@ import pandas as pd
 from ..data.validation import DataQualityError, range_breaks, trim_bad_history, validate_bars
 from . import spec
 from .earnings_cadence import label as cadence_label
+from .earnings_cadence import validate as validate_earnings
 from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
 from .http import BudgetExceeded, FetchError, ProviderUnavailable
@@ -31,13 +32,17 @@ def _guard(  # noqa: UP047 -- keep the declared Python 3.11 package compatibilit
     try:
         return fn(*args, **kwargs), None
     except BudgetExceeded as exc:
-        ctx.budget_hit.add(provider)
-        ctx.problems.append(str(exc))
+        if provider not in {"quotes", "overview"}:  # facades may still serve other providers/symbols
+            ctx.budget_hit.add(provider)
+        if str(exc) not in ctx.problems:
+            ctx.problems.append(str(exc))
         return None, "not evaluated: request budget spent"
     except FetchError as exc:
         if isinstance(exc, ProviderUnavailable) or (provider == "alphavantage" and "quota or entitlement" in str(exc)):
-            ctx.budget_hit.add(provider)
-            ctx.problems.append(str(exc))
+            if provider not in {"quotes", "overview"}:
+                ctx.budget_hit.add(provider)
+            if str(exc) not in ctx.problems:
+                ctx.problems.append(str(exc))
         if "attempts" in str(exc):
             ctx.transient_failures += 1
         return None, f"data unavailable ({exc})"
@@ -122,7 +127,7 @@ def watchlist_bars(ctx: Context, symbol: str) -> tuple[pd.DataFrame | None, str 
 
 def _quote(ctx: Context, symbol: str) -> tuple[Quote | None, str | None]:
     if symbol not in ctx.quotes:
-        quote, reason = _guard(ctx, "cboe", ctx.providers.quote, symbol)
+        quote, reason = _guard(ctx, "quotes", ctx.providers.quote, symbol)
         if quote is not None:
             reason = quote_close_reason(quote, ctx.as_of)
         ctx.quotes[symbol] = (None, reason) if reason else (quote, None)
@@ -205,6 +210,7 @@ def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -
         "last_results": None,
         "last_results_status": None,
         "cadence_check": None,
+        **validate_earnings(next_scheduled, None, ctx.as_of),
     }
     if cik is None:
         out["last_results_status"] = "no SEC registrant, so no 8-K to check"
@@ -219,16 +225,22 @@ def verify_earnings(ctx: Context, cik: int | None, next_scheduled: str | None) -
         return out
     from .providers import parse_earnings_8k
 
-    dates = parse_earnings_8k(sub, ctx.as_of)  # point in time: filings after the as-of date are ignored
+    try:
+        dates = parse_earnings_8k(sub, ctx.as_of)  # point in time: filings after the as-of date are ignored
+        dates = [date.fromisoformat(d).isoformat() for d in dates]
+    except (ValueError, TypeError, AttributeError):
+        out["last_results_status"] = "not checked: malformed SEC earnings filing dates"
+        return out
     if not dates:
         out["last_results_status"] = "no 8-K item 2.02 among the recent SEC filings"
         return out
     out["last_results"], out["last_results_status"] = dates[0], "verified (8-K)"
-    if next_scheduled and len(dates) >= 2:
+    if next_scheduled and out["event_eligible"] and len(dates) >= 2:
         gaps = sorted(
             (date.fromisoformat(a) - date.fromisoformat(b)).days for a, b in zip(dates[:5], dates[1:5], strict=False)
         )
         gap = gaps[len(gaps) // 2]
         expected = date.fromisoformat(dates[0]) + timedelta(days=gap)
         out["cadence_check"] = cadence_label(expected, date.fromisoformat(next_scheduled))
+        out.update(validate_earnings(next_scheduled, str(expected), ctx.as_of))
     return out

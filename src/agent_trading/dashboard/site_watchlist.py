@@ -149,6 +149,8 @@ def _assumptions(e: dict) -> str:
 
 def _earnings_line(e: dict) -> str:
     ec = e.get("earnings_check") or {}
+    if ec.get("event_eligible") is False and ec.get("next_scheduled"):
+        return f'<p class="small"><strong>{E(ec.get("validation_status"))}</strong> · Excluded from automated event triggers.</p>'
     if ec.get("last_results"):
         return f'<p class="small">Last results {E(ec["last_results"])}: verified (8-K).</p>'
     if ec.get("last_results_status"):

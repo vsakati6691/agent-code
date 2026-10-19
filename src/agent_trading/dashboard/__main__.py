@@ -35,7 +35,7 @@ from .tradability import Tradability, TradabilityError, parse_results, read_todo
 from .watchlist import WatchlistConfig
 
 log = logging.getLogger("agent_trading.dashboard")
-SECRET_ENV = ("ALPHAVANTAGE_API_KEY", "SEC_USER_AGENT", "FRED_API_KEY", "MASSIVE_API_KEY")
+SECRET_ENV = ("ALPHAVANTAGE_API_KEY", "SEC_USER_AGENT", "FRED_API_KEY", "MASSIVE_API_KEY", "FMP_API_KEY")
 
 
 def _providers(cache: Path | None, *, private_as_of: date | None = None) -> Providers:
@@ -55,6 +55,7 @@ def _providers(cache: Path | None, *, private_as_of: date | None = None) -> Prov
         os.environ.get("FRED_API_KEY", "").strip() or None,
         massive_key=massive_key,
         history_as_of=private_as_of,
+        fmp_key=os.environ.get("FMP_API_KEY", "").strip() or None,
     )
 
 
@@ -97,6 +98,7 @@ def cmd_run(args) -> int:
                 watchlist=WatchlistConfig.load(),
                 iv_history=iv_history,
                 aggregate_store=store,
+                earnings_verdicts=earnings_verdicts.EarningsVerdicts.load(store.root),
             )
         finally:
             write_todo(store.root, todo, as_of)  # symbols the next Claude session should check on Robinhood

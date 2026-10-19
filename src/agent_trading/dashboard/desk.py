@@ -288,6 +288,11 @@ def risk_flags(c: dict, as_of: date) -> tuple[list[dict], list[str]]:
     rule = R["risk"]
     flags, unchecked = [], []
     nxt = c.get("next_earnings")
+    from .earnings_cadence import event_eligible
+
+    if not event_eligible(c.get("earnings_check")):
+        nxt = None
+        unchecked.append((c.get("earnings_check") or {}).get("validation_status", "Earnings date requires review"))
     try:
         days = (date.fromisoformat(str(nxt)[:10]) - as_of).days if nxt else None
     except ValueError:
