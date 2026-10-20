@@ -33,6 +33,8 @@ def sector_penalty(scores: list[scoring.Score], sectors: dict[str, str | None], 
         sector = normalized.get(s.ticker, "Unknown")
         share = counts[sector] / len(baseline)
         penalty = 0.0 if sector == "Unknown" else maximum * max(0, share - threshold) / (1 - threshold)
+        if sector == "Information Technology":
+            penalty *= spec.DASHBOARD_REFINEMENT_RULES["it_sector_multiplier"]
         penalty = round(min(s.composite, penalty), 2)
         flags = [f for f in s.flags if not f.startswith("Sector concentration penalty:")]
         if penalty:

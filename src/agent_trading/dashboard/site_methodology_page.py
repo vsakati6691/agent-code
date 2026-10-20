@@ -112,6 +112,7 @@ must be present. Lists are never padded: fewer than ten qualifying stocks means 
 <p>New large, mid and small lists start from fundamental quality scores. Price momentum and benchmark-relative returns
 are displayed separately. Annual price returns over 150% are flagged extended. Existing snapshots retain their original ranks.</p>
 <p>From version 2026-10-19.1, sectors above 50% of a raw top list receive a proportional deduction of up to 10 points before reranking. Raw scores and deductions remain available. This soft penalty encourages sector representation when eligible alternatives exist; it does not impose a hard sector cap.</p>
+<p>From version 2026-10-19.6, Information Technology receives 3× that deduction (up to 30 points, score floored at zero) when its equal-weight share exceeds 50%. Other sectors retain the original deduction. Older snapshots keep their original scores.</p>
 <p>Earnings dates more than 21 calendar days from their historical 8-K cadence estimate require review and are excluded from automated event triggers until a fresh, confirmed manual calendar check agrees. Dates without sufficient cadence history remain unverified.</p>
 <div class="table-wrap"><table aria-label="Growth quality weights"><thead><tr><th>Component</th><th>Weight</th><th>Critical</th><th>Inputs and scales</th></tr></thead><tbody>{growth_comps}</tbody></table></div>
 <p>Annual revenue and diluted EPS CAGR require positive full fiscal-year endpoints, matched within 45 days of

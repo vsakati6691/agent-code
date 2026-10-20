@@ -33,8 +33,8 @@ def test_sector_penalty_promotes_a_challenger_and_preserves_evidence():
     before = [asdict(s) for s in scores]
     ranked = sector_penalty(scores, sectors, 4)
     assert ranked[0].ticker == "E" and ranked[0].composite == 74
-    assert ranked[1].raw_composite == 80 and ranked[1].composite == 70
-    assert ranked[1].sector_penalty == 10
+    assert ranked[1].raw_composite == 80 and ranked[1].composite == 50
+    assert ranked[1].sector_penalty == 30
     assert [asdict(s) for s in scores] == before
     assert [asdict(s) for s in sector_penalty(ranked, sectors, 4)] == [asdict(s) for s in ranked]
 
@@ -156,7 +156,7 @@ def test_refresh_rechecks_changed_calendar_date_against_stored_cadence(tmp_path)
 def test_13f_bulk_and_company_errors_are_neutral_without_fake_zero_holdings(monkeypatch):
     error = {"state": "provider_error", "reason": "unavailable"}
     record = pipeline_external.institutional_record([], {}, "A", AS_OF, error)
-    assert record["score_adjustment"] == 0 and "holder_count" not in record
+    assert record["score_adjustment"] == 0 and record["holder_count"] is None
     monkeypatch.setattr(
         pipeline_external.institutions,
         "company",

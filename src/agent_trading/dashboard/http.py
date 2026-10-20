@@ -66,6 +66,14 @@ class ProviderUnavailable(FetchError):
     """A provider-wide quota or entitlement failure; further calls must stop."""
 
 
+class CacheMiss(FetchError):
+    """No validated response within the requested cache age; no request made."""
+
+
+class OptionalDataDeferred(FetchError):
+    """Optional enrichment deferred proactively to preserve provider capacity."""
+
+
 @dataclass
 class ProviderLimits:
     min_interval: float  # seconds between requests to the same provider
@@ -104,6 +112,7 @@ class HttpClient:
     throttled: dict[str, int] = field(default_factory=dict)
     _streak: dict[str, int] = field(default_factory=dict)
     cache_hits: int = 0
+    last_observed_at: float | None = None
     _last: dict[str, float] = field(default_factory=dict)
     deadline: float | None = None  # optional monotonic deadline, used by the light refresh only
     fresh_only: bool = False  # bypass a pre-close cache on a post-close refresh
@@ -128,6 +137,9 @@ class HttpClient:
         cache_key_extra: str = "",
         *,
         validate: Callable[[bytes], object] | None = None,
+        cache_only: bool = False,
+        max_attempts: int | None = None,
+        av_reserve: int = 0,
     ) -> bytes:
         provider = self._provider(url)
         key = self._key(url, params, cache_key_extra)
@@ -142,7 +154,10 @@ class HttpClient:
         if cached is not None:
             self.cache_hits += 1
             return cached
-        body = self._fetch(provider, url, params)
+        if cache_only:
+            raise CacheMiss("No fresh validated cached response")
+        body = self._fetch(provider, url, params, max_attempts=max_attempts, av_reserve=av_reserve)
+        self.last_observed_at = time.time()
         if validate is not None:
             validate(body)  # Never replace the last usable cache entry with a rejected response.
         self._write_cache(key, body)
@@ -156,6 +171,9 @@ class HttpClient:
         cache_key_extra: str = "",
         *,
         validate: Callable[[dict | list], object] | None = None,
+        cache_only: bool = False,
+        max_attempts: int | None = None,
+        av_reserve: int = 0,
     ) -> dict | list:
         parsed: dict | list = {}
 
@@ -174,7 +192,16 @@ class HttpClient:
             except (UnicodeError, ValueError, TypeError, KeyError, AttributeError, OverflowError):
                 raise FetchError(f"{urlsplit(url).hostname}: response JSON failed validation") from None
 
-        self.get_bytes(url, params, max_age_hours, cache_key_extra, validate=decode)
+        self.get_bytes(
+            url,
+            params,
+            max_age_hours,
+            cache_key_extra,
+            validate=decode,
+            cache_only=cache_only,
+            max_attempts=max_attempts,
+            av_reserve=av_reserve,
+        )
         return parsed
 
     def get_text(self, url: str, params: dict | None = None, max_age_hours: float = 0.0) -> str:
@@ -229,13 +256,15 @@ class HttpClient:
             raise FetchError(f"host not allowed: {parts.hostname!r}")
         return ALLOWED_HOSTS[parts.hostname]
 
-    def _fetch(self, provider: str, url: str, params: dict | None) -> bytes:
+    def _fetch(
+        self, provider: str, url: str, params: dict | None, *, max_attempts: int | None = None, av_reserve: int = 0
+    ) -> bytes:
         assert self.session is not None  # established in __post_init__
         if provider in self.unavailable:
             raise ProviderUnavailable(f"{provider}: provider stopped for this run")
         host = urlsplit(url).hostname
         last_error = ""
-        attempt, limit = 0, self.attempts
+        attempt, limit = 0, min(self.attempts, max_attempts) if max_attempts is not None else self.attempts
         while attempt < limit:
             attempt += 1
             if self.used.get(provider, 0) >= self.limits[provider].budget:
@@ -248,8 +277,12 @@ class HttpClient:
             self._pace(provider)
             if provider == "alphavantage":
                 try:
-                    self.daily_budget.reserve()
+                    self.daily_budget.reserve(min_remaining=av_reserve)
                 except DailyBudgetExceeded as exc:
+                    if av_reserve:
+                        raise OptionalDataDeferred(
+                            "Optional Alpha Vantage enrichment deferred; daily capacity reserved"
+                        ) from None
                     raise BudgetExceeded(str(exc)) from None
             self.used[provider] = self.used.get(provider, 0) + 1
             if group:
@@ -307,7 +340,9 @@ class HttpClient:
             wait = self.backoff * 2 ** (attempt - 1)
             if last_error == "HTTP 429":
                 self._streak[provider] = 0
-                limit = max(limit, RATE_LIMIT_ATTEMPTS)
+                limit = (
+                    max(limit, RATE_LIMIT_ATTEMPTS) if max_attempts is None else min(max_attempts, RATE_LIMIT_ATTEMPTS)
+                )
                 self.throttled[provider] = self.throttled.get(provider, 0) + 1
                 lim = self.limits[provider]
                 lim.min_interval = min(MAX_INTERVAL, lim.min_interval * 1.5 + 0.1)
@@ -347,8 +382,13 @@ class HttpClient:
             return None
         path = self.cache_dir / f"{key}.gz"
         try:
-            if not path.exists() or time.time() - path.stat().st_mtime > max_age_hours * 3600:
+            observed = path.stat().st_mtime
+            # Windows filesystem timestamps can lead time.time() by a fraction
+            # of a second. This tolerance affects cache metadata only; market
+            # observations still pass their own timestamp validation.
+            if not -1 <= time.time() - observed <= max_age_hours * 3600:
                 return None
+            self.last_observed_at = observed
             return gzip.decompress(path.read_bytes())
         except (OSError, EOFError, zlib.error):
             return None

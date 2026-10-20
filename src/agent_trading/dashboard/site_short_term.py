@@ -10,18 +10,18 @@ from .site_layout import E
 def navigation(short: bool = False) -> str:
     return (
         '<nav class="hero-actions" aria-label="Options desks">'
-        f'<a class="action" href="options.html" {"" if short else 'aria-current="page"'}>Longer expiries</a>'
-        f'<a class="action" href="options-short-term.html" {'aria-current="page"' if short else ""}>0DTE / next expiry lottery desk</a></nav>'
+        f'<a class="action" href="options.html" {"" if short else 'aria-current="page"'}>3M / 6M / 12M expiries</a>'
+        f'<a class="action" href="options-short-term.html" {'aria-current="page"' if short else ""}>Short-term options · 0DTE / 1–7 days</a></nav>'
     )
 
 
 def desk(payload: dict | None) -> str:
     head = (
         navigation(True)
-        + "<h1>0DTE / next expiry lottery desk</h1><p>NVDA · PLTR · MU · AVGO — delayed contract research.</p>"
+        + "<h1>Short-term options · 0DTE / 1–7 days</h1><p>NVDA · PLTR · MU · AVGO — delayed contract research.</p>"
     )
-    head += '<div class="banner warn"><strong>The entire premium can be lost</strong>“Lottery” describes speculative short-expiry risk, not an estimated chance of profit. Quotes are delayed observations; this page cannot execute orders.</div>'
-    guide = "<details><summary>Scanner rules and timing</summary><p>Uses actual listed dates: 0DTE expires today, 1DTE tomorrow (calendar days), and next listed expiry is the earliest later date within 7 days. A tomorrow contract can appear in both latter views. Missing daily expiries stay empty.</p><p>Regular session only, including 13:00 ET early-close cutoffs. Chain and underlying timestamps must be from this session and within 25 minutes. Open interest ≥ 100, volume ≥ 10, bid &gt; 0, spread ≤ 20% of midpoint, strike within 10% of spot. Standard OCC roots only. Ranked by spread, volume and open interest; at most 2 per symbol, type and window. No probability or price-target model.</p><p>Premium and maximum premium loss use ask × 100 shares; fees excluded. Exercise-related stock exposure and broker deadlines are outside this research calculation. OI is a reported outstanding count, not intraday flow.</p></details>"
+    head += '<div class="banner warn"><strong>The entire premium can be lost</strong>Quotes are delayed observations; this page cannot execute orders.</div>'
+    guide = "<details><summary>Scanner rules and timing</summary><p>Uses actual listed dates: 0DTE expires today; 1DTE through 7DTE each show that many calendar days to expiry. Missing daily expiries stay empty. Older observations retain their original next-listed-expiry window and require a new scan for full 1–7 day coverage.</p><p>Regular session only, including 13:00 ET early-close cutoffs. Chain and underlying timestamps must be from this session and within 25 minutes. Open interest ≥ 100, volume ≥ 10, bid &gt; 0, spread ≤ 20% of midpoint, strike within 10% of spot. Standard OCC roots only. Ranked by spread, volume and open interest; at most 2 per symbol, type and window. No probability or price-target model.</p><p>Premium and maximum premium loss use ask × 100 shares; fees excluded. Exercise-related stock exposure and broker deadlines are outside this research calculation. OI is a reported outstanding count, not intraday flow.</p></details>"
     if not payload:
         return (
             head
@@ -29,16 +29,16 @@ def desk(payload: dict | None) -> str:
             + guide
         )
     head += f'<p>Collected {E(payload["collected_at"])} · {E(payload["source"])} · methodology {E(payload["spec_version"])} · collection status: {E(payload["status"])}</p><p class="small">Static observation: it does not refresh automatically. Contract status below updates from your device clock. A failed collection retains the prior observation with its original timestamp.</p>'
+    windows = payload.get("windows") or spec.LIVE_GAP_RULES["short_term"]["windows"]
+    if windows != spec.DASHBOARD_REFINEMENT_RULES["short_term_windows"]:
+        head += '<p class="banner warn">Full 1–7 day coverage pending a new scan. These stored rows retain their original expiry windows.</p>'
     links = (
         '<nav class="hero-actions" aria-label="Short-term expiry windows">'
-        + "".join(
-            f'<a class="action" href="#st-{i}">{E(window)}</a>'
-            for i, window in enumerate(spec.LIVE_GAP_RULES["short_term"]["windows"])
-        )
+        + "".join(f'<a class="action" href="#st-{i}">{E(window)}</a>' for i, window in enumerate(windows))
         + "</nav>"
     )
     sections = []
-    for i, window in enumerate(spec.LIVE_GAP_RULES["short_term"]["windows"]):
+    for i, window in enumerate(windows):
         rows = []
         gaps = []
         for record in payload["symbols"]:

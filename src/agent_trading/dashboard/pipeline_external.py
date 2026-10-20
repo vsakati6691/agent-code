@@ -6,7 +6,7 @@ import re
 from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit
 
-from . import sec_insiders, short_interest
+from . import sec_insiders, short_interest, spec
 from . import sec_institutions as institutions
 from .decision_sources import latest_10k, parse_efts, risk_excerpt
 from .http import BudgetExceeded, FetchError
@@ -34,9 +34,9 @@ def institutional_record(
     """Isolate a malformed company as well as bulk failures; absence is not zero ownership."""
     try:
         record = error or institutions.company(archives, mapping, ticker, as_of)
-        if not isinstance(record, dict) or not record.get("state"):
+        if not isinstance(record, dict) or record.get("state") not in spec.DATASET_STATES:
             raise ValueError("invalid institutional record")
-    except (FetchError, OSError, ValueError, KeyError, TypeError, AttributeError):
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError, OverflowError):
         record = missing("SEC 13F company data unavailable or malformed", "provider_error")
     record = {"provider": "sec", **record, "fallback_status": "not_needed"}
     if record["state"] != "available":
@@ -53,10 +53,27 @@ def institutional_record(
                     "primary_state": primary_state,
                     "primary_reason": primary_reason,
                 }
-            except (FetchError, OSError, ValueError, KeyError, TypeError, AttributeError):
+            except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError, OverflowError):
                 record["fallback_status"] = "provider_error"
                 record["fallback_reason"] = "FMP unavailable, malformed, not entitled or budget exhausted"
-    return {**record, "score_adjustment": 0.0, "scoring_status": "neutral (display-only dataset)"}
+    if record["state"] != "available":
+        # Stable neutral shape for downstream metrics; null is not zero holdings.
+        record.update(
+            holder_count=None,
+            reported_shares=None,
+            top_holders=[],
+            holder_count_change=None,
+            reported_shares_change=None,
+        )
+    return {
+        **record,
+        "score_adjustment": 0.0,
+        "scoring_status": "neutral (display-only dataset)",
+        "neutral_fallback": record["state"] != "available",
+        "scoring_required": False,
+        "as_of": str(as_of),
+        "source": record.get("source") or institutions.INDEX,
+    }
 
 
 def subjects(bands: dict, watchlist: dict) -> dict[str, list[dict]]:
@@ -229,7 +246,16 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
             raise FetchError("Current SEC bulk index cannot establish historical archive availability; no backfill")
         archives, mapping = _bulk(ctx.providers, ctx.as_of, store)
         institutional_error = None
-    except (FetchError, IntegrityError, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+    except (
+        RuntimeError,
+        IntegrityError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        OverflowError,
+    ) as exc:
         archives, mapping = [], {}
         reason = (
             "SEC 13F collection unavailable"
@@ -270,6 +296,7 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
             providers=ctx.providers,
             current_collection=current_collection,
         )
+        external["institutions"]["retrieved_at"] = external["institutions"].get("retrieved_at") or ctx.started
         f = ctx.facts.get(int(cik), (None,))[0] if cik else None
         shares, shares_date = None, None
         if f:
@@ -304,8 +331,18 @@ def collect(ctx, bands: dict, watchlist: dict, previous: dict | None, store=None
             "reasons": sorted({r["reason"] for r in records if r.get("reason")}),
         }
         if key == "institutions":
+            summaries[key]["neutral_fallback"] = sum(r["neutral_fallback"] for r in records)
+            summaries[key]["scoring_required"] = False
+            summaries[key]["score_adjustment"] = 0.0
             summaries[key]["fallback"] = {
                 state: sum(r.get("fallback_status") == state for r in records)
                 for state in ("available", "provider_error", "unconfigured", "historical_disabled", "not_needed")
             }
     return summaries
+
+
+def institutional_coverage(row: dict) -> str:
+    """Keep verified ownership coverage distinct from neutral scoring behavior."""
+    verified = row.get("available", 0)
+    neutral = row.get("neutral_fallback", max(0, row.get("requested", 0) - verified))
+    return f"{verified} verified ownership records; {neutral} neutral fallbacks (holdings unknown); no missing scoring inputs"

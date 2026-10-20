@@ -121,6 +121,14 @@ EXTERNAL = _obj(
         "institutions": _obj(
             "SEC 13F report-quarter aggregates, not total institutional ownership; reporting managers may overlap.",
             {
+                "neutral_fallback": _f(
+                    "boolean",
+                    "True when holdings are unavailable; null counts and zero score adjustment, never fabricated ownership.",
+                ),
+                "scoring_required": _f(
+                    "boolean", "Always false; this dataset is display-only and creates no missing scoring inputs."
+                ),
+                "score_adjustment": _f("number", "Always zero, including provider failures."),
                 "report_quarter_end": _f("string", "Holdings date, distinct from archive filing-window date."),
                 "holder_count": _f(
                     "integer", "Distinct filing-manager CIKs with positive long SH holdings, excluding puts/calls."

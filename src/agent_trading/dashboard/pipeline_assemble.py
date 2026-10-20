@@ -137,6 +137,11 @@ def run(
         options_payload["rate_input"] = rate
         for name, dataset in external_status.items():
             if dataset["state"] != "available":
+                if name == "institutions" and dataset.get("scoring_required") is False:
+                    ctx.notes.append(
+                        f"institutions: {dataset['state']}; {pipeline_external.institutional_coverage(dataset)}"
+                    )
+                    continue
                 ctx.problems.append(
                     f"{name}: {dataset['state']}; {dataset['available']}/{dataset['requested']} available; {dataset['deferred']} deferred"
                 )

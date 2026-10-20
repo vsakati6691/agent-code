@@ -7,8 +7,10 @@ from datetime import UTC, date, datetime
 
 import pandas as pd
 
+from ..provider_budget import DailyBudgetExceeded
+from . import spec
 from .finra_schema import COLUMNS as FINRA_COLUMNS
-from .http import FetchError, HttpClient
+from .http import CacheMiss, FetchError, HttpClient, OptionalDataDeferred
 from .provider_parsers import AV_URL as AV_URL
 from .provider_parsers import CBOE_BASE as CBOE_BASE
 from .provider_parsers import COMMON as COMMON
@@ -104,6 +106,7 @@ class Providers:
         self.history_provider = "massive" if massive_key else "cboe"
         self.history_as_of = history_as_of
         self._submissions: dict[int, dict] = {}
+        self._insider_requests = 0
         if fred_key:
             from ..logging_setup import register_secret
 
@@ -276,11 +279,46 @@ class Providers:
         from ..logging_setup import register_secret
 
         register_secret(self.av_key)
+        rules = spec.DASHBOARD_REFINEMENT_RULES
+        params = {"function": function, "symbol": symbol, "apikey": self.av_key}
+
+        def check(raw):
+            self._check_company(raw, function, symbol)
+            if validate:
+                validate(raw)
+
+        # Read the cache before inspecting either budget. A stopped provider must
+        # not hide another symbol's valid daily observation.
+        try:
+            return self.http.get_json(
+                AV_URL,
+                params,
+                max_age_hours=rules["insider_cache_hours"],
+                validate=check,
+                cache_only=True,
+            )
+        except CacheMiss:
+            pass
+        try:
+            remaining = self.http.daily_budget.remaining()
+        except DailyBudgetExceeded:
+            remaining = 0
+        if (
+            remaining <= rules["av_optional_reserve"]
+            or self.http.budget_left("alphavantage") <= 0
+            or "alphavantage" in self.http.unavailable
+        ):
+            raise OptionalDataDeferred(
+                "Optional Alpha Vantage enrichment deferred; daily capacity reserved, SEC activity remains independent"
+            )
+        if function == "INSIDER_TRANSACTIONS":
+            if self._insider_requests >= rules["insider_max_requests"]:
+                raise OptionalDataDeferred(
+                    "Insider enrichment deferred after 2 new requests; SEC Form 4 remains primary"
+                )
+            self._insider_requests += 1
         return self.http.get_json(
-            AV_URL,
-            {"function": function, "symbol": symbol, "apikey": self.av_key},
-            max_age_hours=24,
-            validate=lambda raw: (self._check_company(raw, function, symbol), validate(raw) if validate else None),
+            AV_URL, params, validate=check, max_attempts=1, av_reserve=rules["av_optional_reserve"]
         )
 
     @staticmethod
@@ -299,6 +337,17 @@ class Providers:
                 raise FetchError("Alpha Vantage company capitalization invalid")
             if "Name" in raw and (not isinstance(raw["Name"], str) or not raw["Name"].strip()):
                 raise FetchError("Alpha Vantage company name invalid")
+        if function == "INSIDER_TRANSACTIONS":
+            rows = raw.get("data")
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                raise FetchError("Alpha Vantage insider transaction layout invalid")
+            for row in rows:
+                try:
+                    date.fromisoformat(str(row.get("transaction_date")))
+                except ValueError:
+                    raise FetchError("Alpha Vantage insider transaction date invalid") from None
+                if row.get("ticker") and canonical(str(row["ticker"])) != canonical(symbol):
+                    raise FetchError("Alpha Vantage insider symbol mismatch")
 
     def overview(self, symbol: str) -> dict:
         try:
@@ -316,7 +365,11 @@ class Providers:
             return profile(self._fmp("profile", symbol, lambda raw: profile(raw, symbol, observed)), symbol, observed)
 
     def insider_transactions(self, symbol: str) -> dict:
-        return self._overview_data("INSIDER_TRANSACTIONS", symbol)
+        raw = self._overview_data("INSIDER_TRANSACTIONS", symbol)
+        return {
+            **raw,
+            "_observed_at": datetime.fromtimestamp(self.http.last_observed_at, UTC).isoformat(),
+        }
 
     def annual_filing(self, cik: int, as_of: date) -> dict:
         from .decision_sources import filing_excerpts, latest_10k

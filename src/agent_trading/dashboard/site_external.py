@@ -57,6 +57,8 @@ def company(c: dict) -> str:
         )
     if holders.get("fallback_status"):
         holders_body += f'<p class="small">Fallback: {E(holders["fallback_status"])}. {E(holders.get("fallback_reason") or "")} Institutional score adjustment: 0 (display-only).</p>'
+    if holders.get("neutral_fallback"):
+        holders_body += '<p class="small">Neutral fallback · holdings unknown. This optional dataset contributes no missing scoring inputs.</p>'
     short_body = "<p>Unavailable · " + gap(short) + "</p>"
     if short.get("shares_short") is not None:
         short_body = (

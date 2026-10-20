@@ -261,7 +261,7 @@ def datasets(snap: dict) -> list[dict]:
         )
     )
     from .macro import SERIES
-    from .pipeline_external import OLD
+    from .pipeline_external import OLD, institutional_coverage
 
     for key, label in (
         ("insiders", "Form 4 insider activity"),
@@ -276,7 +276,9 @@ def datasets(snap: dict) -> list[dict]:
                 row.get("source", "SEC EDGAR" if key != "short_interest" else "FINRA"),
                 row.get("state", "missing"),
                 "; ".join(row.get("reasons", [])) or (OLD if not row else "Validated dated public data"),
-                f"{row.get('available', 0)} of {row.get('requested', 0)}; {row.get('deferred', 0)} deferred",
+                institutional_coverage(row)
+                if key == "institutions" and row
+                else f"{row.get('available', 0)} of {row.get('requested', 0)}; {row.get('deferred', 0)} deferred",
                 as_of,
                 row.get("retrieved_at"),
             )

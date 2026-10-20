@@ -4,9 +4,9 @@ from agent_trading.dashboard import spec
 
 
 def test_registered_spec_hash_is_unchanged():
-    assert spec.SPEC_VERSION == "2026-10-19.5"
+    assert spec.SPEC_VERSION == "2026-10-19.6"
     assert spec.SPEC_FREEZE_DATE == "2026-10-16"
-    assert spec.spec_hash() == "b3cb68c04141ade3"
+    assert spec.spec_hash() == "7466c6894b20add5"
 
 
 def test_current_version_has_a_new_unique_changelog_entry():
@@ -37,6 +37,10 @@ def test_addition_preserves_every_prior_registered_rule():
     import json
 
     previous = spec.spec_dict()
+    assert previous.pop("dashboard_refinement") == spec.DASHBOARD_REFINEMENT_RULES
+    previous["version"] = "2026-10-19.5"
+    digest = hashlib.sha256(json.dumps(previous, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    assert digest == "b3cb68c04141ade3"
     # 2026-10-19.5 adds the outside-index list and XBRL gap fills: removing both restores 2026-10-19.4
     assert previous.pop("xbrl_fill") == spec.XBRL_FILL_RULES
     assert previous["leaders_2030"].pop("outside_index") == spec.LEADERS_OUTSIDE_RULES
