@@ -61,7 +61,7 @@ def test_both_institutional_providers_fail_without_crashing_or_zero_ownership(bo
     )
     assert len(session.calls) == 1
     assert row["state"] == row["fallback_status"] == "provider_error"
-    assert row["score_adjustment"] == 0 and "holder_count" not in row
+    assert row["score_adjustment"] == 0 and row["holder_count"] is None
 
 
 @pytest.mark.parametrize(
@@ -120,7 +120,7 @@ def test_sector_deduction_runs_before_real_candidate_cutoff(monkeypatch):
         ctx, {}, pd.DataFrame(), pd.DataFrame(), [], [], {band.benchmark: None}, None, Mock(), [], {}
     )[0][band.key]
     assert result["candidates"][0]["ticker"] == "E"  # originally below the top-four cutoff
-    assert result["candidates"][1]["composite"] == 70
+    assert result["candidates"][1]["composite"] == 50
     assert result["sector_adjustment"]["eligible_penalized"] == 4
     assert "applied before selection" in sector_status({"bands": {band.key: result}}, [band.key])
     assert "pending a new collection" in sector_status(
@@ -152,11 +152,11 @@ def contract(expiry="261019", kind="C", symbol="NVDA", **changes):
 def test_real_expiries_calendar_dte_and_ask_loss_without_time_model():
     row = short_term.select("NVDA", underlying(), [contract(), contract("261020"), contract("261023", "P")], NOW)
     assert row["state"] == "available"
-    assert [(r["window"], r["dte"]) for r in row["rows"]] == [("0DTE", 0), ("1DTE", 1), ("Next listed expiry", 1)]
+    assert [(r["window"], r["dte"]) for r in row["rows"]] == [("0DTE", 0), ("1DTE", 1), ("4DTE", 4)]
     assert row["rows"][0]["premium"] == row["rows"][0]["max_premium_loss"] == 110
     assert "probability" not in row["rows"][0]
     row = short_term.select("NVDA", underlying(), [contract("261023")], NOW)
-    assert [(r["window"], r["dte"]) for r in row["rows"]] == [("Next listed expiry", 4)]
+    assert [(r["window"], r["dte"]) for r in row["rows"]] == [("4DTE", 4)]
 
 
 @pytest.mark.parametrize(
@@ -295,7 +295,7 @@ def test_short_term_render_empty_collected_escaped_and_runtime_expiry_status():
     assert "No short-term scan collected" in site_short_term.desk(None)
     payload = short_term.collect(SimpleNamespace(option_chain=lambda t: (underlying(t), [contract(symbol=t)])), NOW)
     html = site_short_term.desk(payload)
-    assert "0DTE" in html and "1DTE" in html and "Next listed expiry" in html
+    assert all(f"{d}DTE" in html for d in range(8))
     assert 'data-short-expiry="2026-10-19T16:00:00-04:00"' in html
     assert "freshness unchecked" in html
     assert "Expired / research cutoff passed" in site_short_term.JS and "Stale observation" in site_short_term.JS

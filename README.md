@@ -62,6 +62,12 @@ calculators. A ticker lookup connects each symbol to its research and history.
 
 ### Latest research features
 
+Methodology **2026-10-19.6** separates neutral 13F fallbacks from verified ownership coverage,
+caches and bounds optional insider enrichment, and applies a 3× Information Technology deduction
+above 50% equal-weight research-list concentration. The [short-term options desk](https://vsakati6691.github.io/agent-code/options-short-term.html)
+now scans each listed expiry from 0DTE through 7DTE alongside the longer-expiry tables.
+New rules apply on future collections; older stock snapshots and intraday observations retain their original results.
+
 Methodology **2026-10-16.2** adds [dated public datasets](docs/PUBLIC_DATASETS.md).
 The prior version had zero weekly snapshots at registration; exact-version
 continuity counts remain separate. Scores, weights, gates, lists and equity

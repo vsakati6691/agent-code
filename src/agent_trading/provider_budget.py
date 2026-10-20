@@ -40,7 +40,13 @@ class DailyRequestBudget:
         self.limit = limit
         self.day = day
 
-    def _update(self, *, reserve: bool = False, block: bool = False) -> int:
+    def _update(self, *, reserve: bool = False, block: bool = False, min_remaining: int = 0) -> int:
+        if (
+            isinstance(min_remaining, bool)
+            or not isinstance(min_remaining, int)
+            or not 0 <= min_remaining <= DAILY_CEILING
+        ):
+            raise ValueError("reserved capacity must be between zero and the daily ceiling")
         day = (self.day or datetime.now(UTC).date()).isoformat()
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -57,7 +63,7 @@ class DailyRequestBudget:
                     connection.execute("UPDATE av_budget SET stopped = 1 WHERE day = ?", (day,))
                     return 0
                 if reserve:
-                    if stopped or used >= self.limit:
+                    if stopped or used >= self.limit - min_remaining:
                         raise DailyBudgetExceeded("Alpha Vantage daily budget spent or provider stopped for today")
                     connection.execute("UPDATE av_budget SET used = used + 1 WHERE day = ?", (day,))
                     used += 1
@@ -65,8 +71,8 @@ class DailyRequestBudget:
         except (OSError, sqlite3.Error):
             raise DailyBudgetExceeded("Alpha Vantage daily budget unavailable; no request made") from None
 
-    def reserve(self) -> None:
-        self._update(reserve=True)
+    def reserve(self, *, min_remaining: int = 0) -> None:
+        self._update(reserve=True, min_remaining=min_remaining)
 
     def stop(self) -> None:
         self._update(block=True)

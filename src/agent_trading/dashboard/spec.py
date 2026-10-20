@@ -18,7 +18,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 
-SPEC_VERSION = "2026-10-19.5"
+SPEC_VERSION = "2026-10-19.6"
 # Owner-approved administrative metadata, excluded from spec_dict().
 SPEC_FREEZE_DATE: str | None = "2026-10-16"
 # Full registration history: docs/SPEC_CHANGELOG.md (not part of spec_dict()).
@@ -97,7 +97,23 @@ SPEC_CHANGELOG = [
         "2026-10-19.5",
         "Owner requested sourced private/recently listed companies beside Leaders; revenue tag-gap fill and equal-EPS basic share fallback fixes.",
     ),
+    (
+        "2026-10-19.6",
+        "Owner requested neutral 13F coverage, cached budget-limited insider enrichment, stronger IT diversification and every 0–7 DTE window.",
+    ),
 ]
+
+DASHBOARD_REFINEMENT_RULES = {
+    "it_sector_multiplier": 3.0,
+    "sector_rule": "Multiply the existing linear sector deduction by 3 for canonical Information Technology above 50% of each raw equal-weight top list; up to 30 points, floored at zero. Other sectors keep the 10-point rule. Rank once before selection; this is a soft penalty, not a cap.",
+    "insider_cache_hours": 24,
+    "insider_max_requests": 2,
+    "av_optional_reserve": 3,
+    "insider_rule": "Validated Alpha Vantage insider responses are cached for at most 24 hours; cache hits remain usable after a budget stop. At most 2 new insider requests per run, without retries, preserving 3 daily calls for other uses. SEC Form 4 remains the independent primary activity dataset; unavailable transactions never become zero buying.",
+    "institutions_rule": "Unavailable 13F records carry null ownership, an empty holder list and zero score adjustment. Count neutral fallbacks separately from verified coverage; optional provider outages do not become missing scoring inputs. Preserve provider errors and timestamps.",
+    "short_term_windows": [f"{d}DTE" for d in range(8)],
+    "short_term_rule": "Scan every actually listed expiry from 0 through 7 calendar DTE in separate windows, with the existing symbols, liquidity, freshness and regular-session gates. Preserve original windows when displaying older observations.",
+}
 
 LIVE_GAP_RULES = {
     "institutional_fallback": "SEC first, then optional FMP quarterly aggregate; current collections only; display-only and neutral",
@@ -1483,6 +1499,7 @@ SCENARIO_LAB_BOUNDS = {
 def spec_dict() -> dict:
     return {
         "version": SPEC_VERSION,
+        "dashboard_refinement": DASHBOARD_REFINEMENT_RULES,
         "live_gaps": LIVE_GAP_RULES,
         "resilience": RESILIENCE_RULES,
         "resilience_validation": RESILIENCE_VALIDATION_RULES,

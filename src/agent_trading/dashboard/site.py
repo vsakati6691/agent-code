@@ -195,7 +195,7 @@ def _build_site(
         (out / "assets" / "short-term.js").write_text(site_short_term.JS, encoding="utf-8")
         (out / "options-short-term.html").write_text(
             page(
-                "0DTE / next expiry lottery desk",
+                "Short-term options · 0DTE / 1–7 days",
                 site_short_term.desk(short_term),
                 "options.html",
                 scripts=("assets/short-term.js",),

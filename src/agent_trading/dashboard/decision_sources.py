@@ -52,7 +52,7 @@ def six_months_before(d: date) -> date:
 def insider_net(raw: dict, as_of: date, observed_at: str) -> dict:
     rows = raw.get("data")
     meta = {
-        "as_of": observed_at,
+        "as_of": raw.get("_observed_at") or observed_at,
         "source": "Alpha Vantage INSIDER_TRANSACTIONS",
         "period": f"{six_months_before(as_of)} to {as_of}",
     }

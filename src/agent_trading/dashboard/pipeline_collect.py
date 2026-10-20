@@ -16,7 +16,7 @@ from .earnings_cadence import label as cadence_label
 from .earnings_cadence import validate as validate_earnings
 from .fundamentals import Fundamentals
 from .fundamentals import build as build_fundamentals
-from .http import BudgetExceeded, FetchError, ProviderUnavailable
+from .http import BudgetExceeded, FetchError, OptionalDataDeferred, ProviderUnavailable
 from .pipeline_context import Context, RunFailed, log
 from .price_integrity import quote_close_reason, quote_session_bar
 from .providers import Quote, common_stock_reason
@@ -32,15 +32,19 @@ def _guard(  # noqa: UP047 -- keep the declared Python 3.11 package compatibilit
         return None, "not evaluated: request budget spent"
     try:
         return fn(*args, **kwargs), None
+    except OptionalDataDeferred as exc:
+        if str(exc) not in ctx.notes:
+            ctx.notes.append(str(exc))
+        return None, str(exc)
     except BudgetExceeded as exc:
-        if provider not in {"quotes", "overview"}:  # facades may still serve other providers/symbols
+        if provider not in {"quotes", "overview", "insider"}:  # facades may still serve cached symbols
             ctx.budget_hit.add(provider)
         if str(exc) not in ctx.problems:
             ctx.problems.append(str(exc))
         return None, "not evaluated: request budget spent"
     except FetchError as exc:
         if isinstance(exc, ProviderUnavailable) or (provider == "alphavantage" and "quota or entitlement" in str(exc)):
-            if provider not in {"quotes", "overview"}:
+            if provider not in {"quotes", "overview", "insider"}:
                 ctx.budget_hit.add(provider)
         if str(exc) not in ctx.problems:
             ctx.problems.append(str(exc))

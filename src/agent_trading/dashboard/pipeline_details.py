@@ -227,7 +227,7 @@ def decision_enrichment(ctx: Context, row: dict) -> dict:
         elif not callable(fn):
             raw, why = None, "Provider does not implement this dataset"
         else:
-            provider = "overview" if key == "estimates" and getattr(ctx.providers, "fmp_key", None) else "alphavantage"
+            provider = "overview" if key == "estimates" else "insider"
             raw, why = _guard(ctx, provider, fn, ticker)
         if raw is None:
             out[key + "_reason"] = why

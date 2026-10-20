@@ -14,7 +14,7 @@ from .http import FetchError
 from .provider_parsers import parse_occ
 
 NY = ZoneInfo("America/New_York")
-RULES = spec.LIVE_GAP_RULES["short_term"]
+RULES = {**spec.LIVE_GAP_RULES["short_term"], "windows": spec.DASHBOARD_REFINEMENT_RULES["short_term_windows"]}
 log = logging.getLogger(__name__)
 
 
@@ -96,7 +96,6 @@ def select(symbol: str, under: dict, contracts: list[dict], now: datetime) -> di
             and 0 < (occ["expiration"] - today).days <= RULES["max_next_dte"]
         }
     )
-    next_expiry = expiries[0] if expiries else None
     rejected = Counter()
     qualified = []
     for row, occ in parsed:
@@ -105,9 +104,7 @@ def select(symbol: str, under: dict, contracts: list[dict], now: datetime) -> di
             continue
         expiry = occ["expiration"]
         dte = (expiry - today).days
-        windows = ["0DTE"] if dte == 0 else ["1DTE"] if dte == 1 else []
-        if expiry == next_expiry:
-            windows.append("Next listed expiry")
+        windows = [f"{dte}DTE"] if 0 <= dte <= RULES["max_next_dte"] else []
         if not windows:
             continue
         try:
@@ -214,5 +211,6 @@ def collect(providers, now: datetime | None = None) -> dict:
         "spec_hash": spec.spec_hash(),
         "status": status,
         "source": "Cboe delayed public option chains",
+        "windows": list(RULES["windows"]),
         "symbols": records,
     }

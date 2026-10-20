@@ -13,7 +13,7 @@ from tests.spec_history import historical_reason
 
 
 def test_decision_rules_are_registered_before_evaluation():
-    assert spec.SPEC_VERSION == "2026-10-19.5"
+    assert spec.SPEC_VERSION == "2026-10-19.6"
     assert "registered before any data" in historical_reason("2026-10-14.9")
     assert spec.DECISION_RULES["growth_weights"] == {
         "growth": 0.25,
@@ -263,11 +263,11 @@ def test_current_enrichment_stops_after_quota_and_never_backfills(monkeypatch):
     monkeypatch.setattr(pipeline_details, "as_of_for", lambda now: AS_OF)
     first = pipeline.decision_enrichment(ctx, {"ticker": "A", "cik": 1})
     pipeline.decision_enrichment(ctx, {"ticker": "B", "cik": 2})
-    assert p.calls == ["overview"] and ctx.problems
+    assert p.calls == ["overview", "insider", "overview", "insider"] and ctx.problems
     assert "quota" in first["estimates_reason"]
     old = pipeline.Context(AS_OF - timedelta(days=7), p)
     result = pipeline.decision_enrichment(old, {"ticker": "C", "cik": 3})
-    assert "backfilled" in result["estimates_reason"] and p.calls == ["overview"]
+    assert "backfilled" in result["estimates_reason"] and len(p.calls) == 4
 
 
 def test_missing_quarter_cannot_shift_year_earlier_comparison():

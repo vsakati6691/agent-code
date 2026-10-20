@@ -89,7 +89,7 @@ def test_unknown_sectors_retain_nonzero_scores_and_remain_in_denominator(value):
 
 def test_sector_aliases_combine_and_all_missing_warning_does_not_crash():
     ranked = sector_penalty([score("A", 70), score("B", 60)], {"A": " Technology ", "B": "INFORMATION   TECHNOLOGY"}, 2)
-    assert [s.sector_penalty for s in ranked] == [10, 10]
+    assert [s.sector_penalty for s in ranked] == [30, 30]
     warnings = concentration_warnings([{"ticker": "A", "sector": None, "bars": pd.DataFrame({"close": [1, 2]})}])
     assert len(warnings) == 1 and "missing or unrecognized" in warnings[0]
 
@@ -230,14 +230,14 @@ def test_malformed_option_chain_is_caught_and_not_cached(tmp_path, raw):
     assert value is None and reason and not list(tmp_path.glob("*.gz"))
 
 
-def test_both_providers_transient_outage_has_six_attempt_ceiling():
+def test_optional_av_has_one_attempt_and_fmp_keeps_bounded_retries():
     http, session = fmp_http([Resp(503)] * 6)
     waits = []
     http.sleep = waits.append
     ctx = Context(AS_OF, Providers(http, av_key="synthetic", fmp_key="synthetic"))
     assert _guard(ctx, "overview", ctx.providers.overview, "A")[0] is None
-    assert len(session.calls) == 6 and waits == [2, 4, 2, 4]
-    assert http.used == {"alphavantage": 3, "fmp": 3}
+    assert len(session.calls) == 4 and waits == [2, 4]
+    assert http.used == {"alphavantage": 1, "fmp": 3}
 
 
 @pytest.mark.parametrize("value", [pd.NA, pd.NaT, None, "", "bad"])

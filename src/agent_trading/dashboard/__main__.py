@@ -370,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
     f.set_defaults(func=cmd_refresh)
     st = sub.add_parser(
-        "short-term", help="collect delayed 0DTE, 1DTE and next-listed-expiry research during the regular session"
+        "short-term", help="collect delayed 0DTE and every 1–7 calendar DTE window during the regular session"
     )
     st.add_argument("--data", required=True)
     st.add_argument("--cache", default=None)
