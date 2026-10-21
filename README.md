@@ -17,6 +17,29 @@ desk analyzes data imported through read-only market and account connectors.
 > or trade options or crypto. Dashboard options are research comparisons only
 > and do not change those restrictions. Nothing here is investment advice.
 
+## Local intraday options simulator
+
+The separate [intraday options lab](docs/INTRADAY_OPTIONS.md) scans timestamped
+S&P 500 minute bars, checks listed next-session CALL/PUT contracts and simulates
+cash-only long options in a local SQLite ledger. It has no brokerage order API.
+Its $50/day goal is an unvalidated research objective. The Streamlit dashboard
+and simulated account records stay local, outside the public research site.
+
+Windows quick start (Python 3.12+):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,intraday]"
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m agent_trading.intraday demo
+.\.venv\Scripts\python.exe -m streamlit run src/agent_trading/intraday/dashboard.py --server.address 127.0.0.1 --browser.gatherUsageStats false
+```
+
+`demo` uses explicitly synthetic data and a separate `data/intraday/demo.sqlite3`
+ledger; it does not demonstrate profitability. In the UI, select that ledger to
+inspect the completed demo. See the runbook for macOS, real-data prerequisites,
+manual scans, local scheduling, replay, controls and component status.
+
 ## Research dashboard
 
 The [GitHub Pages site](https://vsakati6691.github.io/agent-code/index.html) uses

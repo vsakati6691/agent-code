@@ -17,10 +17,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff==0.17.1", "mypy==2.4.0"]
+dev = ["pytest>=8", "ruff==0.17.1", "mypy==2.4.0", "pydantic>=2.7,<3", "exchange-calendars>=4.5,<5", "streamlit>=1.37,<2", "tzdata>=2025.2"]
+intraday = ["pydantic>=2.7,<3", "exchange-calendars>=4.5,<5", "streamlit>=1.37,<2", "tzdata>=2025.2"]
 
 [project.scripts]
 agent-trading = "agent_trading.cli:main"
+intraday-options = "agent_trading.intraday.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
