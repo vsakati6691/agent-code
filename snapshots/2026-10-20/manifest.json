@@ -1,0 +1,10 @@
+{
+ "as_of": "2026-10-20",
+ "sha256": "a01fdfc515ac7c05686aefed2e0b25d4225d537f66ecaba187e2697063cac1b7",
+ "bytes": 9480785,
+ "spec_version": "2026-10-19.6",
+ "spec_hash": "7466c6894b20add5",
+ "code_commit": "6f914be7085ec9f841a2523359c78648cea30eb4",
+ "created_at": "2026-10-21T02:58:48+00:00",
+ "status": "partial"
+}

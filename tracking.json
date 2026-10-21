@@ -1,6 +1,6 @@
 {
  "method": "Each weekly snapshot's ranked candidates form an equal-weighted research basket per category, bought at the as-of close and held for 1, 3, 6 and 12 months. Returns are PRICE returns (dividends excluded) minus the category's assumed friction on entry and exit, compared with the category benchmark over the same days. A candidate whose prices stop (delisting, ticker change) is reported as 'return unavailable' and counted in a separate column, never silently dropped; delisting returns are not available from the data sources. Turnover is the share of a category's names that changed from the previous week. No edge is claimed before at least 52 weekly snapshots exist, and none is claimed afterwards without a statistical test.",
- "as_of": "2026-10-19",
+ "as_of": "2026-10-20",
  "by_snapshot": [
   {
    "as_of": "2026-10-13",
@@ -537,26 +537,170 @@
    "n": 5,
    "horizons": {
     "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-19",
+   "spec_version": "2026-10-19.5",
+   "band": "ai_mid",
+   "n": 3,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-19",
+   "spec_version": "2026-10-19.5",
+   "band": "large",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-19",
+   "spec_version": "2026-10-19.5",
+   "band": "mid",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-19",
+   "spec_version": "2026-10-19.5",
+   "band": "multibagger",
+   "n": 5,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-19",
+   "spec_version": "2026-10-19.5",
+   "band": "small",
+   "n": 10,
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-10-20",
+   "spec_version": "2026-10-19.6",
+   "band": "ai_large",
+   "n": 5,
+   "horizons": {
+    "1m": {
      "status": "unavailable",
      "unavailable": [
-      {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
       {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
+       "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "STX",
+       "ticker": "PWR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "GEV",
        "status": "no close on the snapshot date"
       }
      ]
@@ -565,23 +709,23 @@
      "status": "unavailable",
      "unavailable": [
       {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
+       "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "STX",
+       "ticker": "PWR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "GEV",
        "status": "no close on the snapshot date"
       }
      ]
@@ -590,23 +734,23 @@
      "status": "unavailable",
      "unavailable": [
       {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
+       "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "STX",
+       "ticker": "PWR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "GEV",
        "status": "no close on the snapshot date"
       }
      ]
@@ -615,23 +759,23 @@
      "status": "unavailable",
      "unavailable": [
       {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "DELL",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
+       "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "STX",
+       "ticker": "PWR",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "GEV",
        "status": "no close on the snapshot date"
       }
      ]
@@ -639,8 +783,8 @@
    }
   },
   {
-   "as_of": "2026-10-19",
-   "spec_version": "2026-10-19.5",
+   "as_of": "2026-10-20",
+   "spec_version": "2026-10-19.6",
    "band": "ai_mid",
    "n": 3,
    "horizons": {
@@ -715,8 +859,8 @@
    }
   },
   {
-   "as_of": "2026-10-19",
-   "spec_version": "2026-10-19.5",
+   "as_of": "2026-10-20",
+   "spec_version": "2026-10-19.6",
    "band": "large",
    "n": 10,
    "horizons": {
@@ -724,19 +868,11 @@
      "status": "unavailable",
      "unavailable": [
       {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "NVDA",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "APH",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
@@ -748,10 +884,6 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
@@ -760,7 +892,19 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AVGO",
+       "ticker": "EXPE",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "MNST",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "CF",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PWR",
        "status": "no close on the snapshot date"
       }
      ]
@@ -769,19 +913,11 @@
      "status": "unavailable",
      "unavailable": [
       {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "NVDA",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "APH",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
@@ -793,10 +929,6 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
@@ -805,7 +937,19 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AVGO",
+       "ticker": "EXPE",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "MNST",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "CF",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PWR",
        "status": "no close on the snapshot date"
       }
      ]
@@ -814,19 +958,11 @@
      "status": "unavailable",
      "unavailable": [
       {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "NVDA",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "APH",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
@@ -838,10 +974,6 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
@@ -850,7 +982,19 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AVGO",
+       "ticker": "EXPE",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "MNST",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "CF",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PWR",
        "status": "no close on the snapshot date"
       }
      ]
@@ -859,19 +1003,11 @@
      "status": "unavailable",
      "unavailable": [
       {
-       "ticker": "MU",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "FIX",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "NVDA",
-       "status": "no close on the snapshot date"
-      },
-      {
-       "ticker": "APH",
+       "ticker": "MU",
        "status": "no close on the snapshot date"
       },
       {
@@ -883,10 +1019,6 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "TER",
-       "status": "no close on the snapshot date"
-      },
-      {
        "ticker": "VRT",
        "status": "no close on the snapshot date"
       },
@@ -895,7 +1027,19 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "AVGO",
+       "ticker": "EXPE",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "MNST",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "CF",
+       "status": "no close on the snapshot date"
+      },
+      {
+       "ticker": "PWR",
        "status": "no close on the snapshot date"
       }
      ]
@@ -903,8 +1047,8 @@
    }
   },
   {
-   "as_of": "2026-10-19",
-   "spec_version": "2026-10-19.5",
+   "as_of": "2026-10-20",
+   "spec_version": "2026-10-19.6",
    "band": "mid",
    "n": 10,
    "horizons": {
@@ -940,11 +1084,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
@@ -985,11 +1129,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
@@ -1030,11 +1174,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
@@ -1075,11 +1219,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
@@ -1091,8 +1235,8 @@
    }
   },
   {
-   "as_of": "2026-10-19",
-   "spec_version": "2026-10-19.5",
+   "as_of": "2026-10-20",
+   "spec_version": "2026-10-19.6",
    "band": "multibagger",
    "n": 5,
    "horizons": {
@@ -1199,8 +1343,8 @@
    }
   },
   {
-   "as_of": "2026-10-19",
-   "spec_version": "2026-10-19.5",
+   "as_of": "2026-10-20",
+   "spec_version": "2026-10-19.6",
    "band": "small",
    "n": 10,
    "horizons": {
@@ -1236,11 +1380,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
@@ -1281,11 +1425,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
@@ -1326,11 +1470,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
@@ -1371,11 +1515,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
@@ -1409,7 +1553,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.0
+   "mean_weekly_turnover": 0.15
   },
   "ai_mid": {
    "1m": {
@@ -1432,7 +1576,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.19444444444444445
+   "mean_weekly_turnover": 0.14583333333333334
   },
   "large": {
    "1m": {
@@ -1455,7 +1599,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.15
+   "mean_weekly_turnover": 0.2
   },
   "mid": {
    "1m": {
@@ -1478,7 +1622,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.125
+   "mean_weekly_turnover": 0.1
   },
   "multibagger": {
    "1m": {
@@ -1524,7 +1668,7 @@
     "mean_excess_net": null,
     "share_beating_benchmark": null
    },
-   "mean_weekly_turnover": 0.1
+   "mean_weekly_turnover": 0.08
   }
  },
  "turnover": {
@@ -1544,6 +1688,10 @@
    {
     "as_of": "2026-10-19",
     "turnover": 0.4
+   },
+   {
+    "as_of": "2026-10-20",
+    "turnover": 0.4
    }
   ],
   "mid": [
@@ -1561,6 +1709,10 @@
    },
    {
     "as_of": "2026-10-19",
+    "turnover": 0.0
+   },
+   {
+    "as_of": "2026-10-20",
     "turnover": 0.0
    }
   ],
@@ -1580,6 +1732,10 @@
    {
     "as_of": "2026-10-19",
     "turnover": 0.0
+   },
+   {
+    "as_of": "2026-10-20",
+    "turnover": 0.0
    }
   ],
   "small": [
@@ -1598,6 +1754,10 @@
    {
     "as_of": "2026-10-19",
     "turnover": 0.0
+   },
+   {
+    "as_of": "2026-10-20",
+    "turnover": 0.0
    }
   ],
   "ai_large": [
@@ -1612,6 +1772,10 @@
    {
     "as_of": "2026-10-19",
     "turnover": 0.0
+   },
+   {
+    "as_of": "2026-10-20",
+    "turnover": 0.6
    }
   ],
   "ai_mid": [
@@ -1626,11 +1790,15 @@
    {
     "as_of": "2026-10-19",
     "turnover": 0.33333333333333337
+   },
+   {
+    "as_of": "2026-10-20",
+    "turnover": 0.0
    }
   ]
  },
  "weekly_chain": {},
- "evidence_note": "5 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first.",
+ "evidence_note": "6 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first.",
  "friction": {
   "spec": 50.0,
   "large": 15.0,
@@ -1647,35 +1815,35 @@
  ],
  "decision_desk": {
   "method": "Ratings stored in a weekly snapshot are tracked like the lists: price return from the as-of close over 1, 3, 6 and 12 months minus the entry's benchmark over the same sessions, before costs and dividends, averaged by rating. Ratings computed when the site is built from an older snapshot are previews and are never tracked. No edge is claimed before MIN_SNAPSHOTS_FOR_EVIDENCE snapshots.",
-  "snapshots_with_ratings": 2,
+  "snapshots_with_ratings": 3,
   "first_rated": "2026-10-16",
   "by_rating": {
    "Buy": {
     "1m": {
      "measured": 0,
-     "pending": 11,
-     "unavailable": 12,
+     "pending": 23,
+     "unavailable": 15,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 11,
-     "unavailable": 12,
+     "pending": 23,
+     "unavailable": 15,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 11,
-     "unavailable": 12,
+     "pending": 23,
+     "unavailable": 15,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 11,
-     "unavailable": 12,
+     "pending": 23,
+     "unavailable": 15,
      "mean_excess": null,
      "share_beating_benchmark": null
     }
@@ -1683,29 +1851,29 @@
    "Overweight": {
     "1m": {
      "measured": 0,
-     "pending": 17,
-     "unavailable": 16,
+     "pending": 33,
+     "unavailable": 12,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 17,
-     "unavailable": 16,
+     "pending": 33,
+     "unavailable": 12,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 17,
-     "unavailable": 16,
+     "pending": 33,
+     "unavailable": 12,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 17,
-     "unavailable": 16,
+     "pending": 33,
+     "unavailable": 12,
      "mean_excess": null,
      "share_beating_benchmark": null
     }
@@ -1713,28 +1881,28 @@
    "Hold": {
     "1m": {
      "measured": 0,
-     "pending": 7,
+     "pending": 16,
      "unavailable": 9,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 7,
+     "pending": 16,
      "unavailable": 9,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 7,
+     "pending": 16,
      "unavailable": 9,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 7,
+     "pending": 16,
      "unavailable": 9,
      "mean_excess": null,
      "share_beating_benchmark": null
@@ -1773,34 +1941,34 @@
    "Sell": {
     "1m": {
      "measured": 0,
-     "pending": 1,
+     "pending": 3,
      "unavailable": 2,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 1,
+     "pending": 3,
      "unavailable": 2,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 1,
+     "pending": 3,
      "unavailable": 2,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 1,
+     "pending": 3,
      "unavailable": 2,
      "mean_excess": null,
      "share_beating_benchmark": null
     }
    }
   },
-  "evidence_note": "2 snapshot(s) with stored ratings. No edge is claimed: at least 52 are needed first."
+  "evidence_note": "3 snapshot(s) with stored ratings. No edge is claimed: at least 52 are needed first."
  }
 }
