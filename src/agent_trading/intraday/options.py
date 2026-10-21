@@ -27,6 +27,11 @@ def quote_problems(c: Contract, now: datetime, cfg: Settings, fixture: bool = Fa
     for name, stamp in [("quote", c.quote_at), ("underlying", c.underlying_at)]:
         if not 0 <= (now - stamp).total_seconds() <= cfg.max_quote_age_seconds:
             result.append(f"stale or future {name}")
+    if (
+        c.quote_time_basis == "changed_depth_receipt"
+        and not 0 <= (now - c.volume_at).total_seconds() <= cfg.max_quote_age_seconds
+    ):
+        result.append("receipt-timed depth requires a recent option trade")
     if c.bid <= 0 or c.bid > c.ask:
         result.append("zero or crossed quote")
     if c.bid_size <= 0 or c.ask_size <= 0:

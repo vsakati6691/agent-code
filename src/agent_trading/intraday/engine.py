@@ -35,6 +35,7 @@ class Simulator:
                     raise ValueError("emergency stop is latched; entries cannot be re-enabled")
                 self.store.set("enabled", str(enabled).lower())
             if emergency or running is False or enabled is False:
+                self.store.set("auto_resume_day", "")
                 self._cancel_buys(now, "entries disabled")
             self.store.event(
                 now,
@@ -321,9 +322,13 @@ class Simulator:
                     {"count": len(positions), "reason": "market closed without executable exit; never reported flat"},
                 )
 
-    def cycle(self, snap: Snapshot, now: datetime, *, enter: bool = False) -> Scan:
+    def cycle(
+        self, snap: Snapshot, now: datetime, *, enter: bool = False, only: set[str] | None = None, clock=None
+    ) -> Scan:
         now = aware(now)
-        result = scan(snap, now, self.cfg)
+        result = scan(snap, now, self.cfg, only=only)
+        if clock is not None:
+            now = aware(clock())  # execution checks include the time spent calculating signals
         self.monitor(snap, now, result)
         with self.store.transaction():
             self.store.set("last_scan", result.model_dump_json())

@@ -15,6 +15,8 @@ from .calendar import NY, jobs
 from .config import load_config
 from .demo import demo_snapshot
 from .engine import Simulator
+from .longbridge_api import DataUnavailable
+from .longbridge_provider import LongbridgeProvider
 from .notifications import export_alerts
 from .providers import FileProvider, MassiveProvider
 from .reporting import performance, write_report
@@ -23,6 +25,8 @@ from .store import Store
 
 
 def provider_for(args, cfg):
+    if args.provider == "longbridge":
+        return LongbridgeProvider(cfg)
     if args.provider == "massive":
         return MassiveProvider(os.environ.get("MASSIVE_API_KEY", ""), cfg, args.events)
     if not args.snapshot:
@@ -33,11 +37,14 @@ def provider_for(args, cfg):
 def parser():
     p = argparse.ArgumentParser(description="Local options simulator; no brokerage orders or live endpoints")
     p.add_argument("--config", default="config/intraday_options.yaml")
-    p.add_argument("--db", default="data/intraday/paper.sqlite3")
-    p.add_argument("--provider", choices=["file", "massive"], default="file")
+    p.add_argument("--db", default="data/intraday/longbridge-paper.sqlite3")
+    p.add_argument("--provider", choices=["longbridge", "file", "massive"], default="longbridge")
     p.add_argument("--snapshot", help="normalized timestamped JSON; never restamped")
     p.add_argument("--events", help="sourced event-clearance JSON for Massive")
     p.add_argument("--reports", default="reports/intraday")
+    p.add_argument(
+        "--alert-outbox", default="data/intraday/alerts.jsonl", help="local alert delivery during scheduling"
+    )
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("scan", help="manual read-only candidate scan (also monitor existing simulated positions)")
     sub.add_parser("prepare", help="refresh membership, support/resistance and event coverage")
@@ -50,6 +57,7 @@ def parser():
     sub.add_parser("report")
     sub.add_parser("explain")
     sub.add_parser("schedule")
+    sub.add_parser("doctor", help="read-only Longbridge credentials, data and event access diagnostics")
     export = sub.add_parser("export")
     export.add_argument("path")
     alerts = sub.add_parser("alerts", help="append new notification events to a local JSONL integration outbox")
@@ -72,6 +80,12 @@ def main(argv=None) -> int:
     try:
         cfg = load_config(args.config)
         now = datetime.now(UTC)
+        if args.command == "doctor":
+            provider = provider_for(args, cfg)
+            if not isinstance(provider, LongbridgeProvider):
+                raise ValueError("doctor requires --provider longbridge")
+            print(json.dumps(provider.check_access(now), indent=2))
+            return 0
         if args.command == "schedule":
             print(
                 json.dumps(
@@ -90,7 +104,7 @@ def main(argv=None) -> int:
             print(json.dumps(result, indent=2, allow_nan=False))
             return 0
         if args.command == "demo":
-            if args.db == "data/intraday/paper.sqlite3":
+            if args.db == "data/intraday/longbridge-paper.sqlite3":
                 args.db = "data/intraday/demo.sqlite3"
             now = datetime(2026, 10, 20, 9, 50, tzinfo=NY)
         store = Store(args.db, cfg)
@@ -136,6 +150,7 @@ def main(argv=None) -> int:
                             "enabled": store.get("enabled"),
                             "emergency_stop": store.get("killed"),
                             "heartbeat": store.get("heartbeat"),
+                            "provider": json.loads(store.get("provider_status", "{}")),
                             "performance": performance(store, cfg),
                         },
                         indent=2,
@@ -157,7 +172,7 @@ def main(argv=None) -> int:
                     writer.writerows(rows)
                 print(path)
             else:
-                service = Service(store, cfg, provider_for(args, cfg), args.reports)
+                service = Service(store, cfg, provider_for(args, cfg), args.reports, alerts=args.alert_outbox)
                 if args.command == "run":
                     engine.controls(now, running=True, enabled=args.enable_entries)
                     service.run()
@@ -170,6 +185,9 @@ def main(argv=None) -> int:
         finally:
             store.close()
         return 0
+    except DataUnavailable as exc:
+        print(str(exc))  # this adapter exposes only fixed, redacted diagnostics
+        return 2
     except (OSError, ValueError, RuntimeError) as exc:
         # Avoid leaking raw third-party payloads, URLs or supplied credential values.
         print(f"Unable to complete command ({type(exc).__name__}). Check configuration, data coverage and local logs.")
