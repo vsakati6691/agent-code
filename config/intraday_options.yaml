@@ -1,0 +1,26 @@
+# Separate local simulator. Existing live/account limits are not changed.
+mode: local_simulator
+initial_capital: 10000
+max_trade_loss: 50
+daily_loss_budget: 100
+max_trades: 2
+max_positions: 2
+fee_per_contract: 0.65
+slippage: 0.01
+minimum_score: 70
+minimum_rvol: 1.5
+rvol_sessions: 10
+minimum_coverage: 0.95
+minimum_delta: 0.4
+maximum_delta: 0.6
+minimum_oi: 500
+minimum_option_volume: 100
+maximum_spread: 0.10
+stop_fraction: 0.25
+reward_to_risk: 1.5
+max_hold_minutes: 60
+# Match your verified data-plan limit. The default cannot scan 500 names in five minutes.
+# A bounded collection stops and blocks entries when coverage cannot be completed.
+provider_interval_seconds: 13
+provider_request_budget: 600
+scan_deadline_seconds: 45
