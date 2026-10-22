@@ -1,12 +1,6 @@
 {
- "status": "partial",
- "message": "weekly update completed with partial data",
+ "status": "ok",
+ "message": "snapshot for 2026-10-21 already exists; kept unchanged",
  "as_of": "2026-10-21",
- "at": "2026-10-22T03:01:25+00:00",
- "problems": [
-  "no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)",
-  "insiders: partial; 26/41 available; 0 deferred",
-  "risk_excerpt: partial; 40/41 available; 0 deferred",
-  "macro: provider_error; see per-series reasons"
- ]
+ "at": "2026-10-22T15:55:05+00:00"
 }
