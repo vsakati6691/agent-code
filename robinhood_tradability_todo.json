@@ -1,36 +1,36 @@
 {
- "as_of": "2026-10-20",
+ "as_of": "2026-10-21",
  "count": 26,
  "instructions": "Check with the read-only Robinhood get_equity_tradability tool (Agent-trading account, at most 10 symbols per call), save each response, then run: python -m agent_trading.dashboard tradability import --data <dir> <files>",
  "symbols": [
   {
    "ticker": "TPR",
    "band": "large",
-   "composite": 82.35,
+   "composite": 82.49,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "RDDT",
    "band": "large",
-   "composite": 80.63,
+   "composite": 80.71,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "CVNA",
    "band": "large",
-   "composite": 76.93,
+   "composite": 76.96,
+   "reason": "Robinhood tradability not yet verified"
+  },
+  {
+   "ticker": "ADSK",
+   "band": "large",
+   "composite": 75.47,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "FSLR",
    "band": "large",
    "composite": 75.46,
-   "reason": "Robinhood tradability not yet verified"
-  },
-  {
-   "ticker": "ADSK",
-   "band": "large",
-   "composite": 75.43,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -42,13 +42,13 @@
   {
    "ticker": "DASH",
    "band": "large",
-   "composite": 73.2,
+   "composite": 73.37,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "EQT",
    "band": "large",
-   "composite": 72.97,
+   "composite": 72.99,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -60,13 +60,13 @@
   {
    "ticker": "FSS",
    "band": "mid",
-   "composite": 78.54,
+   "composite": 78.45,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "BOOT",
    "band": "mid",
-   "composite": 76.99,
+   "composite": 76.98,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -88,15 +88,15 @@
    "reason": "Robinhood tradability not yet verified"
   },
   {
-   "ticker": "CGNX",
+   "ticker": "OLLI",
    "band": "mid",
-   "composite": 74.06,
+   "composite": 73.95,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "IDR",
    "band": "small",
-   "composite": 85.12,
+   "composite": 85.13,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -114,7 +114,7 @@
   {
    "ticker": "APEI",
    "band": "small",
-   "composite": 74.01,
+   "composite": 74.09,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -142,21 +142,21 @@
    "reason": "Robinhood tradability not yet verified"
   },
   {
-   "ticker": "INOD",
+   "ticker": "OMCL",
    "band": "small",
-   "composite": 70.44,
+   "composite": 70.34,
    "reason": "Robinhood tradability not yet verified"
   },
   {
-   "ticker": "OMCL",
+   "ticker": "SMTI",
    "band": "small",
-   "composite": 70.33,
+   "composite": 70.2,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "FSLR",
    "band": "multibagger",
-   "composite": 68.35,
+   "composite": 68.44,
    "reason": "Robinhood tradability not yet verified"
   }
  ]
