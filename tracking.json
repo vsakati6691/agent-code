@@ -1,6 +1,6 @@
 {
  "method": "Each weekly snapshot's ranked candidates form an equal-weighted research basket per category, bought at the as-of close and held for 1, 3, 6 and 12 months. Returns are PRICE returns (dividends excluded) minus the category's assumed friction on entry and exit, compared with the category benchmark over the same days. A candidate whose prices stop (delisting, ticker change) is reported as 'return unavailable' and counted in a separate column, never silently dropped; delisting returns are not available from the data sources. Turnover is the share of a category's names that changed from the previous week. No edge is claimed before at least 52 weekly snapshots exist, and none is claimed afterwards without a statistical test.",
- "as_of": "2026-10-22",
+ "as_of": "2026-10-23",
  "by_snapshot": [
   {
    "as_of": "2026-10-13",
@@ -675,7 +675,7 @@
    }
   },
   {
-   "as_of": "2026-10-22",
+   "as_of": "2026-10-23",
    "spec_version": "2026-10-19.6",
    "band": "ai_large",
    "n": 5,
@@ -783,7 +783,7 @@
    }
   },
   {
-   "as_of": "2026-10-22",
+   "as_of": "2026-10-23",
    "spec_version": "2026-10-19.6",
    "band": "ai_mid",
    "n": 4,
@@ -875,7 +875,7 @@
    }
   },
   {
-   "as_of": "2026-10-22",
+   "as_of": "2026-10-23",
    "spec_version": "2026-10-19.6",
    "band": "large",
    "n": 10,
@@ -1063,7 +1063,7 @@
    }
   },
   {
-   "as_of": "2026-10-22",
+   "as_of": "2026-10-23",
    "spec_version": "2026-10-19.6",
    "band": "mid",
    "n": 10,
@@ -1104,11 +1104,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       }
      ]
@@ -1149,11 +1149,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       }
      ]
@@ -1194,11 +1194,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       }
      ]
@@ -1239,11 +1239,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "ELF",
+       "ticker": "JOE",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "JOE",
+       "ticker": "ELF",
        "status": "no close on the snapshot date"
       }
      ]
@@ -1251,7 +1251,7 @@
    }
   },
   {
-   "as_of": "2026-10-22",
+   "as_of": "2026-10-23",
    "spec_version": "2026-10-19.6",
    "band": "multibagger",
    "n": 5,
@@ -1359,7 +1359,7 @@
    }
   },
   {
-   "as_of": "2026-10-22",
+   "as_of": "2026-10-23",
    "spec_version": "2026-10-19.6",
    "band": "small",
    "n": 10,
@@ -1396,11 +1396,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
@@ -1441,11 +1441,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
@@ -1486,11 +1486,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
@@ -1531,11 +1531,11 @@
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "IA",
+       "ticker": "VMD",
        "status": "no close on the snapshot date"
       },
       {
-       "ticker": "VMD",
+       "ticker": "IA",
        "status": "no close on the snapshot date"
       },
       {
@@ -1706,7 +1706,7 @@
     "turnover": 0.4
    },
    {
-    "as_of": "2026-10-22",
+    "as_of": "2026-10-23",
     "turnover": 0.4
    }
   ],
@@ -1728,7 +1728,7 @@
     "turnover": 0.0
    },
    {
-    "as_of": "2026-10-22",
+    "as_of": "2026-10-23",
     "turnover": 0.09999999999999998
    }
   ],
@@ -1750,7 +1750,7 @@
     "turnover": 0.0
    },
    {
-    "as_of": "2026-10-22",
+    "as_of": "2026-10-23",
     "turnover": 0.19999999999999996
    }
   ],
@@ -1772,7 +1772,7 @@
     "turnover": 0.0
    },
    {
-    "as_of": "2026-10-22",
+    "as_of": "2026-10-23",
     "turnover": 0.0
    }
   ],
@@ -1790,7 +1790,7 @@
     "turnover": 0.0
    },
    {
-    "as_of": "2026-10-22",
+    "as_of": "2026-10-23",
     "turnover": 0.6
    }
   ],
@@ -1808,46 +1808,46 @@
     "turnover": 0.33333333333333337
    },
    {
-    "as_of": "2026-10-22",
+    "as_of": "2026-10-23",
     "turnover": 0.0
    }
   ]
  },
  "weekly_chain": {
   "large": {
-   "weeks": 2,
-   "cumulative_net": -0.13828566638159145,
-   "max_drawdown": -0.03067214863634904,
+   "weeks": 3,
+   "cumulative_net": -0.19448050371349224,
+   "max_drawdown": -0.09388476887899044,
    "note": "Each week's list held five sessions, friction charged on turnover."
   },
   "mid": {
-   "weeks": 2,
-   "cumulative_net": 0.0230447754380394,
-   "max_drawdown": 0.0,
+   "weeks": 3,
+   "cumulative_net": 0.006879690484638656,
+   "max_drawdown": -0.015800955482597856,
    "note": "Each week's list held five sessions, friction charged on turnover."
   },
   "multibagger": {
-   "weeks": 2,
-   "cumulative_net": 0.05335532282815292,
-   "max_drawdown": 0.0,
+   "weeks": 3,
+   "cumulative_net": 0.04373683440108889,
+   "max_drawdown": -0.009131285729149119,
    "note": "Each week's list held five sessions, friction charged on turnover."
   },
   "small": {
-   "weeks": 2,
-   "cumulative_net": -0.01537308319440045,
-   "max_drawdown": 0.0,
+   "weeks": 3,
+   "cumulative_net": -0.017631247012446005,
+   "max_drawdown": -0.00229342076628547,
    "note": "Each week's list held five sessions, friction charged on turnover."
   },
   "ai_large": {
-   "weeks": 1,
-   "cumulative_net": -0.04242709304090231,
-   "max_drawdown": 0.0,
+   "weeks": 2,
+   "cumulative_net": -0.12489475224595603,
+   "max_drawdown": -0.08612154605223843,
    "note": "Each week's list held five sessions, friction charged on turnover."
   },
   "ai_mid": {
-   "weeks": 1,
-   "cumulative_net": 0.04050566225608487,
-   "max_drawdown": 0.0,
+   "weeks": 2,
+   "cumulative_net": -0.035988411052125246,
+   "max_drawdown": -0.07351624895759934,
    "note": "Each week's list held five sessions, friction charged on turnover."
   }
  },
@@ -1875,28 +1875,28 @@
     "1m": {
      "measured": 0,
      "pending": 23,
-     "unavailable": 14,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
      "pending": 23,
-     "unavailable": 14,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
      "pending": 23,
-     "unavailable": 14,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
      "pending": 23,
-     "unavailable": 14,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     }
@@ -1905,28 +1905,28 @@
     "1m": {
      "measured": 0,
      "pending": 33,
-     "unavailable": 11,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
      "pending": 33,
-     "unavailable": 11,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
      "pending": 33,
-     "unavailable": 11,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
      "pending": 33,
-     "unavailable": 11,
+     "unavailable": 13,
      "mean_excess": null,
      "share_beating_benchmark": null
     }
@@ -1935,28 +1935,28 @@
     "1m": {
      "measured": 0,
      "pending": 16,
-     "unavailable": 11,
+     "unavailable": 10,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
      "pending": 16,
-     "unavailable": 11,
+     "unavailable": 10,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
      "pending": 16,
-     "unavailable": 11,
+     "unavailable": 10,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
      "pending": 16,
-     "unavailable": 11,
+     "unavailable": 10,
      "mean_excess": null,
      "share_beating_benchmark": null
     }
