@@ -23,13 +23,31 @@ def monthly_closes(df: pd.DataFrame, up_to: pd.Timestamp) -> pd.Series:
     return c.groupby([c.index.year, c.index.month]).last()
 
 
-def signals(history: dict[str, pd.DataFrame], day: pd.Timestamp, assets: list[str], sma_months: int) -> dict[str, dict]:
-    """Per asset: month-end close, its SMA, and whether it is above (None if not enough history)."""
+def signals(
+    history: dict[str, pd.DataFrame],
+    day: pd.Timestamp,
+    assets: list[str],
+    sma_months: int,
+    session: date | None = None,
+) -> dict[str, dict]:
+    """Per asset: month-end close, its SMA, and whether it is above (None if not enough history).
+
+    `session`: the daily run's data session (market_calendar.data_session). An asset whose last bar is
+    older gets no signal, like missing data. Backtests pass None: their history is cut at `day`."""
     out = {}
     for a in assets:
         df = history.get(a)
         if df is None or df.empty:
             out[a] = {"close": None, "sma": None, "above": None, "reason": "no data"}
+            continue
+        last = df.index[-1].date()
+        if session is not None and last < session:
+            out[a] = {
+                "close": None,
+                "sma": None,
+                "above": None,
+                "reason": f"stale data: last bar {last}, not {session}",
+            }
             continue
         m = monthly_closes(df, day)
         if len(m) < sma_months:

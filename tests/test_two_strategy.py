@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from agent_trading.daily_intents import _desk_intents
 from agent_trading.data.cache import write_cache
 from agent_trading.data.snapshots import (
     SnapshotDataError,
@@ -279,6 +280,25 @@ def test_scan_without_fundamentals_has_no_dtype_warning(settings):
     assert res.table["valuation"].isna().all()
 
 
+def test_scanner_stale_stock_is_not_actionable(settings):
+    bars = universe_bars()
+    spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
+    fund = pd.DataFrame(
+        [
+            {"ticker": t, "operating_margin": 0.2, "roe": 0.2, "forward_pe": 20, "sector_code": "311"}
+            | {"earnings_date": "2026-12-15"}
+            for t in bars
+        ]
+    )
+    session = date(2026, 10, 9)  # every other bar ends on this session
+    fresh = run_scan(bars, settings, AS_OF, fund, None, bench=spy, session=session)
+    assert [s.ticker for s in fresh.actionable] == ["UPD"]
+    bars["UPD"] = bars["UPD"].iloc[:-1]  # UPD lags one session
+    res = run_scan(bars, settings, AS_OF, fund, None, bench=spy, session=session)
+    assert "UPD" not in [s.ticker for s in res.actionable]
+    assert "stale data: last bar 2026-10-08, not 2026-10-09" in res.rejected["UPD"]
+
+
 def test_missing_factor_blocks_actionable(settings):
     bars = universe_bars()
     spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
@@ -429,6 +449,45 @@ def test_desk_missing_qqq_data_no_trade(settings):
     del b["QQQ"]
     _, ds = run_desk(b, settings, AS_OF, {}, None, no_earnings)
     assert by_symbol(ds)["TQQQ"].action == "NO TRADE" and by_symbol(ds)["SQQQ"].action == "NO TRADE"
+
+
+def test_desk_stale_regime_input_blocks_only_the_affected_buy(settings):
+    session = date(2026, 10, 9)
+    calm = pd.DataFrame(columns=["name", "date"])
+    _, ds = run_desk(desk_bars(), settings, AS_OF, {}, calm, no_earnings, session)
+    assert {d.symbol: d.action for d in ds} == {"TQQQ": "BUY", "SQQQ": "NO TRADE", "NVDA": "BUY", "IBIT": "NO TRADE"}
+    b = desk_bars()
+    b["QQQ"] = b["QQQ"].iloc[:-1]  # the regime input lags: TQQQ's signal would mix sessions
+    d = by_symbol(run_desk(b, settings, AS_OF, {}, calm, no_earnings, session)[1])
+    assert d["TQQQ"].action != "BUY" and any("stale data: QQQ last bar 2026-10-08" in r for r in d["TQQQ"].reasons)
+    assert d["NVDA"].action == "BUY"  # its own inputs are current
+
+
+def test_desk_stale_buy_becomes_wait_and_exits_still_stand(settings):
+    calm = pd.DataFrame(columns=["name", "date"])
+    _, ds = run_desk(desk_bars(), settings, AS_OF, {}, calm, no_earnings, AS_OF)  # every bar ends 2026-10-09
+    nv = by_symbol(ds)["NVDA"]
+    assert nv.action == "WAIT" and nv.stop is None and nv.reasons[0].startswith("stale data: NVDA last bar 2026-10-09")
+    assert _desk_intents(ds) == []
+    pos = {"TQQQ": Position(0.2, 40, 30, date(2026, 10, 1))}
+    _, ds = run_desk(desk_bars(), settings, AS_OF, pos, calm, no_earnings, AS_OF)
+    t = by_symbol(ds)["TQQQ"]
+    assert t.action == "SELL/REDUCE" and "limit" in t.reasons[0] and "stale data" in t.reasons[-1]
+
+
+def test_daily_run_uses_one_data_session_and_flags_lagging_symbols(settings):
+    from agent_trading.daily import run_daily
+
+    s = small_settings(settings)
+    cache = s.resolve(s.data.cache_dir)
+    for t, df in desk_bars().items():
+        write_cache(cache, t, df.iloc[:-1] if t == "NVDA" else df)
+    write_cache(cache, "SPY", make_bars(n=320, seed=7, drift=0.0004, vol=0.008, volume=8e7, start=400))
+    _, ctx = run_daily(s, AS_OF, run_paper=False)
+    assert ctx.data_session == date(2026, 10, 9)
+    assert any(n.startswith("market data session: 2026-10-09; 1 symbol(s)") and "NVDA" in n for n in ctx.data_notes)
+    nv = by_symbol(ctx.desk)["NVDA"]
+    assert nv.action != "BUY" and any("stale data: NVDA last bar 2026-10-08" in r for r in nv.reasons)
 
 
 # ---------------------------------------------------------------- paper broker with intents

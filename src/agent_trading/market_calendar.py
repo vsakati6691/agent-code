@@ -15,6 +15,7 @@ day with no new bar, which the freshness checks already reject.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, timedelta
 from functools import cache
 
@@ -93,6 +94,17 @@ def previous_trading_day(d: date) -> date:
     while not is_trading_day(d):
         d -= timedelta(days=1)
     return d
+
+
+def data_session(last_bar_dates: Iterable[date], as_of: date) -> date:
+    """The NYSE session a run's market data should end on.
+
+    The newest last bar on or before `as_of` among the run's inputs, but never earlier than the last
+    session before `as_of`. A post-close run whose import has today's bars expects `as_of`; a pre-market,
+    midday or weekend run expects the previous session. An input whose last bar is older is stale."""
+    floor = previous_trading_day(as_of)
+    newest = max((d for d in last_bar_dates if d <= as_of), default=floor)
+    return max(newest, floor)
 
 
 def is_last_trading_day_of_month(d: date) -> bool:

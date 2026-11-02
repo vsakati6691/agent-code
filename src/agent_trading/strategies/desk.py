@@ -458,8 +458,13 @@ def run_desk(
     positions: dict[str, Position],
     events: pd.DataFrame | None,
     earnings_lookup,
+    session: date | None = None,
 ) -> tuple[dict, list[DeskDecision]]:
-    """`earnings_lookup(symbol) -> (date | None, known: bool)`."""
+    """`earnings_lookup(symbol) -> (date | None, known: bool)`.
+
+    `session`: the run's data session (market_calendar.data_session). A BUY whose own, regime or
+    benchmark bars end before it becomes WAIT; exits and holds stand but name the stale input.
+    None skips the check."""
     d = settings.desk
     qqq = bars.get(d.underlying)
     decisions = []
@@ -532,4 +537,35 @@ def run_desk(
             ["tracks spot bitcoin; trades only in US hours, so weekend moves gap at Monday's open"],
         )
     )
+    if session is not None:
+        inputs = {
+            d.leveraged_long: (d.leveraged_long, d.underlying),
+            d.leveraged_inverse: (d.leveraged_inverse, d.underlying),
+            "NVDA": ("NVDA", d.nvda_benchmark),
+            d.bitcoin_instrument: (d.bitcoin_instrument,),
+        }
+        for dec in decisions:
+            _mark_stale(dec, stale_inputs(bars, inputs.get(dec.symbol, (dec.symbol,)), session), session)
     return (regime or {}), decisions
+
+
+def stale_inputs(bars: dict[str, pd.DataFrame], symbols, session: date) -> list[str]:
+    """Inputs whose last bar is before `session` (missing inputs are handled by the rules themselves)."""
+    out = []
+    for s in symbols:
+        df = bars.get(s)
+        if df is not None and not df.empty and df.index[-1].date() < session:
+            out.append(f"{s} last bar {df.index[-1].date()}")
+    return out
+
+
+def _mark_stale(dec: DeskDecision, stale: list[str], session: date) -> None:
+    if not stale:
+        return
+    note = f"stale data: {', '.join(stale)}, not the {session} session"
+    if dec.action == "BUY":  # never enter on old prices; an exit on the last known close still stands
+        dec.action, dec.confidence = "WAIT", "n/a"
+        dec.entry_conditions, dec.stop = "fresh data for the latest session", None
+        dec.reasons = [note, *dec.reasons]
+    else:
+        dec.reasons = [*dec.reasons, note]

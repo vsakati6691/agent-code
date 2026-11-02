@@ -33,7 +33,7 @@ def _run_live(
         return res
     live_intents: list[Intent] = []
     if "B-desk" in settings.live.strategies:
-        _, ctx.live_desk = run_desk(desk_bars, settings, ctx.as_of, res.positions, events, lookup)
+        _, ctx.live_desk = run_desk(desk_bars, settings, ctx.as_of, res.positions, events, lookup, ctx.data_session)
         live_intents += _desk_intents(ctx.live_desk)
     if "C-gtaa" in settings.live.strategies and ctx.gtaa_rebalance:
         live_intents += _gtaa_intents(settings, ctx.gtaa, desk_bars, set(res.positions))

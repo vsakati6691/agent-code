@@ -157,6 +157,9 @@ held GTAA assets below it get paper sell orders, all sized by the RiskEngine.
 - A run failed midway: rerun it. Imports are idempotent and `paper run` will
   not queue duplicate orders for the same date.
 - Stale or missing data: the report lists it, the scanner reports coverage,
-  and leveraged entries are blocked if the economic calendar is missing.
+  and leveraged entries are blocked if the economic calendar is missing. The
+  data notes name the run's market data session; any symbol whose bars end
+  earlier gets no new entry signal (desk exits still stand), so import its
+  latest bars and rerun.
 - Loss limit hit: `paper status` shows it. The 8% drawdown shutdown blocks
   new entries until you review the strategy; exits continue.
