@@ -100,7 +100,8 @@ def scan_header(snap: dict, prev_snap: dict | None) -> str:
     )
     return (
         '<header class="compact-heading" data-overview><h1>Overview</h1>'
-        "<p>Market context and the latest stored research lists.</p></header>"
+        "<p>Weekly research lists for US stocks, with market context. New here? "
+        '<a href="growth.html">Start with Growth Stocks</a> for the ranked candidates.</p></header>'
         f'<div class="scan-stats" aria-label="Snapshot summary">{tiles}</div>'
     )
 

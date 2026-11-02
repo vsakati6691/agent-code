@@ -166,22 +166,24 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
     stale = age > spec.FRESHNESS_STALE_SESSIONS
     price_basis = "intraday inputs · delayed" if preclose(snap) else "delayed close"
     quote_note = correction(snap) or "Quotes are end-of-session and delayed, never live."
+    badge = (
+        '<a class="data-badge" href="audit.html#latest-run" title="Some inputs were unavailable; rows that depend on '
+        'them say so. Open the run details for the list.">Partial data · some inputs missing</a>'
+        if snap.get("status") == "partial"
+        else ""
+    )
     parts = [
         f'<div class="banner info freshness-line" id="freshness" data-asof="{E(as_of)}" '
         f'data-sessions="{E(",".join(sessions_after(as_of)))}" data-stale-after="{spec.FRESHNESS_STALE_SESSIONS}">'
         f'<span>Data: {start:%d %b %Y} · <span id="age">{age_text}</span> · {price_basis}</span>'
         f"<details><summary>Details</summary><p>{E(quote_note)} Age checked at site build {built:%Y-%m-%d %H:%M} ET. "
         "Session age counts completed NYSE sessions, using the registered 16:00 ET convention.</p></details>"
-        '<a href="audit.html#latest-run">Run details</a></div>'
+        f'{badge}<a href="audit.html#latest-run">Run details</a></div>'
     ]
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):
         parts.append(
             '<div class="banner bad"><strong>Stale data: the latest update failed.</strong>'
             f'Displaying {E(as_of)}. <a href="audit.html#latest-run">Failure details</a>.</div>'
-        )
-    if snap.get("status") == "partial":
-        parts.append(
-            '<p class="small warn">Partial data · <a href="audit.html#latest-run">Missing inputs and run details</a>.</p>'
         )
     parts.append(
         f'<div class="banner warn" id="stale-client"{"" if stale else " hidden"}><strong>This page may be out of date.</strong>'

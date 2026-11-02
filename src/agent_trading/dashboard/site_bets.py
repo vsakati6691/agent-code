@@ -90,10 +90,11 @@ def bets_page(snap: dict, daily: dict | None) -> str:
         return (
             head
             + (
-                '<details class="empty-data"><summary>Explorer data unavailable</summary><p>This daily record predates the '
-                "explorer, options collection is disabled, or no compatible daily record exists. "
-                "The explorer will appear after an enabled refresh under spec 2026-10-14.8 or later. "
-                "Weekly lists are not substituted for this separately selected dataset.</p></details>"
+                '<div class="banner info" id="bets-empty"><strong>Explorer data unavailable</strong>No small-bet contracts are '
+                "stored for this snapshot, so there is nothing to compare yet. This daily record predates the explorer, "
+                "options collection is disabled, or no compatible daily record exists; the explorer appears after an "
+                "enabled refresh under spec 2026-10-14.8 or later. Weekly lists are not substituted for this separately "
+                'selected dataset. Meanwhile, see the weekly top-five lists on the <a href="options.html">Options page</a>.</div>'
                 '<p><a href="methodology.html#small-bet-rules">Eligibility and selection rules</a></p>'
             )
             + limits
