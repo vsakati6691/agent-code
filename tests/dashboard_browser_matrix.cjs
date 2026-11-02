@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
+// pages that share a top-level tab show the tab's first page in the main nav and the rest in a second row
+const tabOf={leaders:'watchlist',goal:'watchlist',audit:'methodology',evidence:'methodology'};
 const names = ['index','growth','multibaggers','ai','desk','options','bets','watchlist','leaders',
   'goal','evidence','compare','history','methodology','audit'];
 
@@ -326,15 +328,15 @@ exports.checkMatrix=async function(browser,base,profile,out) {
         assert.ok(initial.numeric.includes('tabular-nums'));
         await page.screenshot({path:path.join(out,`${name}-${width}-${theme}.png`)});
         const nav=page.locator('nav[aria-label="Research sections"]');
-        assert.equal(await nav.locator('a').count(),15);
+        assert.equal(await nav.locator('a').count(),11);
         assert.equal(await nav.locator('[aria-current=page]').count(),1);
-        assert.equal(await nav.locator('[aria-current=page]').getAttribute('href'),name==='company'?'../ai.html':name+'.html');
+        assert.equal(await nav.locator('[aria-current=page]').getAttribute('href'),name==='company'?'../ai.html':(tabOf[name]||name)+'.html');
         assert.ok((await nav.locator('[aria-current=page]').evaluate(e=>getComputedStyle(e).textDecorationLine)).includes('underline'));
         const links=await nav.locator('a').evaluateAll(es=>es.map(e=>e.href));
         for(const url of links) {const response=await context.request.get(url);assert.equal(response.status(),200);}
         const next=names[(names.indexOf(name)+1)%names.length]+'.html';
-        await nav.locator(`a[href$="${next}"]`).click();await page.waitForURL(`**/${next}`);
-        assert.equal(await page.locator('nav[aria-label="Research sections"] [aria-current=page]').getAttribute('href'),next);
+        await page.locator(`header.site a[href$="${next}"]`).first().click();await page.waitForURL(`**/${next}`);
+        assert.equal(await page.locator('nav[aria-label="Research sections"] [aria-current=page]').getAttribute('href'),(tabOf[next.replace('.html','')]||next.replace('.html',''))+'.html');
         await page.goto(`${base}/${file}`);await page.waitForLoadState('networkidle');
         const csv=[...new Set(await page.locator('a[href*=".csv"]').evaluateAll(es=>es.map(e=>e.href)))];
         for(const url of csv) {const response=await context.request.get(url);assert.equal(response.status(),200);assert.ok((await response.body()).length>0);}

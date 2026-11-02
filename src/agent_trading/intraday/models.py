@@ -38,6 +38,7 @@ class Contract(StrictModel):
     bid_size: int = Field(ge=0, strict=True)
     ask_size: int = Field(ge=0, strict=True)
     quote_at: AwareDatetime
+    quote_time_basis: Literal["exchange", "changed_depth_receipt"] = "exchange"
     underlying_at: AwareDatetime
     underlying_price: float = Field(gt=0)
     volume_at: AwareDatetime
@@ -48,6 +49,7 @@ class Contract(StrictModel):
     theta: float
     vega: float = Field(ge=0)
     iv: float = Field(gt=0)
+    greek_units: Literal["standard", "longbridge_raw"] = "standard"
     source: str = Field(min_length=1)
     feed: Literal["realtime", "delayed", "fixture"]
 

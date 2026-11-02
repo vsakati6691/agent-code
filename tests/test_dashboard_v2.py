@@ -309,7 +309,7 @@ def test_new_site_pages_panels_toggle_and_downloads(tmp_path, prov):
     assert "<h1>Multibaggers</h1>" in multibaggers and "Selection rules and 5–10 year scenario limits" in multibaggers
     assert "Growth evidence, assumptions and risks" in multibaggers
     opts = (out / "options.html").read_text(encoding="utf-8")
-    assert 'data-dim="type" data-val="put"' in opts and opts.count("data-hz=") == 6
+    assert 'data-dim="type" data-val="put"' in opts and opts.count("data-hz=") == 2
     assert "Premium assumption" in opts and "not predict profitability" in opts
     watch = (out / "watchlist.html").read_text(encoding="utf-8")
     assert (

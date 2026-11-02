@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from agent_trading.intraday.calendar import NY, session
 from agent_trading.intraday.config import load_config
 from agent_trading.intraday.engine import Simulator
+from agent_trading.intraday.longbridge_provider import LongbridgeProvider
 from agent_trading.intraday.providers import FileProvider, MassiveProvider
 from agent_trading.intraday.reporting import performance
 from agent_trading.intraday.service import Service
@@ -20,11 +21,11 @@ from agent_trading.intraday.store import Store
 def main():
     st.set_page_config(page_title="Intraday options lab", layout="wide")
     st.title("Intraday options lab")
-    st.caption("Local paper simulation · No brokerage connection · Research results, not an established edge")
+    st.caption("Local paper simulation · Read-only market data · Research results, not an established edge")
     load_dotenv(".env", override=False)
     config_path = st.sidebar.text_input("Configuration", "config/intraday_options.yaml")
-    database = st.sidebar.text_input("Local ledger", "data/intraday/paper.sqlite3")
-    source = st.sidebar.selectbox("Market data", ["Normalized JSON", "Massive"])
+    database = st.sidebar.text_input("Local ledger", "data/intraday/longbridge-paper.sqlite3")
+    source = st.sidebar.selectbox("Market data", ["Longbridge", "Normalized JSON", "Massive"])
     snapshot_path = st.sidebar.text_input("Snapshot file", "data/intraday/latest.json")
     events_path = st.sidebar.text_input("Event clearance file (Massive)", "")
     automate = st.sidebar.checkbox("Run scheduler while this dashboard is open", value=False)
@@ -34,6 +35,23 @@ def main():
     except (OSError, ValueError):
         st.error("Configuration unavailable or invalid.")
         return
+
+    def get_provider():
+        key = (source, config_path, snapshot_path, events_path)
+        if st.session_state.get("provider_key") != key:
+            old = st.session_state.pop("market_provider", None)
+            if isinstance(old, LongbridgeProvider):
+                old.close()
+            st.session_state["provider_key"] = key
+        if "market_provider" not in st.session_state:
+            if source == "Longbridge":
+                provider = LongbridgeProvider(cfg)
+            elif source == "Massive":
+                provider = MassiveProvider(os.getenv("MASSIVE_API_KEY", ""), cfg, events_path or None)
+            else:
+                provider = FileProvider(snapshot_path)
+            st.session_state["market_provider"] = provider
+        return st.session_state["market_provider"]
 
     @st.fragment(run_every=5)
     def panel():
@@ -47,12 +65,7 @@ def main():
             engine = Simulator(store, cfg)
 
             def service():
-                provider = (
-                    MassiveProvider(os.getenv("MASSIVE_API_KEY", ""), cfg, events_path or None)
-                    if source == "Massive"
-                    else FileProvider(snapshot_path)
-                )
-                return Service(store, cfg, provider)
+                return Service(store, cfg, get_provider(), alerts="data/intraday/alerts.jsonl")
 
             controls = st.columns(5)
             if controls[0].button("Start scanner"):
@@ -90,6 +103,11 @@ def main():
                     "Emergency stop latched. No new entries. Existing positions still require fresh quotes and an active monitor."
                 )
             st.caption(f"Last scheduler heartbeat: {store.get('heartbeat') or 'none'}")
+            provider_status = json.loads(store.get("provider_status", "{}"))
+            if provider_status:
+                st.caption(f"Data collector: {provider_status.get('progress', 'unknown')}")
+                for problem in provider_status.get("problems", []):
+                    st.warning(problem)
             report = performance(store, cfg)
             metrics = st.columns(4)
             metrics[0].metric("Realized net simulated P&L", f"${report['realized_net_pnl']:.2f}")
@@ -125,8 +143,14 @@ def main():
                     column.dataframe(pd.DataFrame(candidates), hide_index=True)
                 with st.expander("Rejection reasons"):
                     st.json(latest["rejected"])
+                universe_scan = store.get("universe_scan")
+                if universe_scan:
+                    with st.expander("Full-universe ranking before contract checks"):
+                        st.json(json.loads(universe_scan))
             else:
-                st.info("No scan yet. Provide a timestamped snapshot or configure Massive and run a scan.")
+                st.info(
+                    "No scan yet. Configure Longbridge in .env, verify OPRA OpenAPI access, and start the local scheduler."
+                )
             st.subheader("Open simulated positions")
             marks = json.loads(store.get("marks", "{}"))
             rows = []
@@ -164,6 +188,10 @@ def main():
             )
             st.subheader("Events and errors")
             st.dataframe(pd.DataFrame(store.rows("events")[-50:]), hide_index=True)
+            context = store.get("research_context")
+            if context:
+                with st.expander("Sourced event checks and unverified headlines"):
+                    st.json(json.loads(context))
         finally:
             store.close()
 

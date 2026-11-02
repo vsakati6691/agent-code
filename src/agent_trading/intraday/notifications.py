@@ -38,3 +38,17 @@ def export_alerts(store: Store, path: str | Path) -> int:
         if rows:
             store.set(key, str(rows[-1]["id"]))
     return len(alerts)
+
+
+def emit_alerts(store: Store, path: str | Path) -> int:
+    """Console and durable local outbox delivery; each uses its own cursor."""
+    count = export_alerts(store, path)
+    cursor = int(store.get("console_alert_cursor", "0"))
+    rows = [e for e in store.rows("events") if e["id"] > cursor]
+    for event in rows:
+        if event["kind"] in ALERT_KINDS:
+            print(f"[LOCAL PAPER] {event['time']} {event['kind']} {event['payload']}", flush=True)
+    if rows:
+        with store.transaction():
+            store.set("console_alert_cursor", str(rows[-1]["id"]))
+    return count

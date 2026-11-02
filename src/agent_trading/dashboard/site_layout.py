@@ -46,6 +46,14 @@ NAV = [
 ]
 
 
+# Pages that share one top-level tab: (tab label, member pages). Each member keeps its own URL, so existing
+# links and anchors still work; the page shows the members as a second row under the tab.
+GROUPS = (
+    ("2030", ("watchlist.html", "leaders.html", "goal.html")),
+    ("About & proof", ("methodology.html", "audit.html", "evidence.html")),
+)
+
+
 def nav_items() -> list[tuple[str, str]]:
     """Site sections; the customer edition leaves out the pages in site_customer.HIDDEN_PAGES and adds its terms."""
     if not customer():
@@ -53,6 +61,36 @@ def nav_items() -> list[tuple[str, str]]:
     from .site_customer import HIDDEN_PAGES
 
     return [(href, label) for href, label in NAV if href not in HIDDEN_PAGES] + [("terms.html", "Terms")]
+
+
+def nav_tabs() -> list[tuple[str, str, tuple[str, ...]]]:
+    """Top-level tabs as (href, label, member hrefs): a group appears once, at its first visible member's place."""
+    items = nav_items()
+    visible = {href for href, _ in items}
+    tabs: list[tuple[str, str, tuple[str, ...]]] = []
+    placed: set[str] = set()
+    for href, label in items:
+        group = next(((name, members) for name, members in GROUPS if href in members), None)
+        if group is None:
+            tabs.append((href, label, (href,)))
+        elif group[0] not in placed:
+            placed.add(group[0])
+            members = tuple(m for m in group[1] if m in visible)
+            tabs.append((members[0], group[0], members))
+    return tabs
+
+
+def subnav(current: str, up: str) -> str:
+    """Second row of links when the current page belongs to a tab group; empty otherwise."""
+    labels = dict(nav_items())
+    for name, members in GROUPS:
+        visible = [m for m in members if m in labels]
+        if current in visible and len(visible) > 1:
+            links = "".join(
+                f'<a href="{up}{m}"{" aria-current=page" if m == current else ""}>{E(labels[m])}</a>' for m in visible
+            )
+            return f'<nav class="subnav" aria-label="{E(name)} pages">{links}</nav>'
+    return ""
 
 
 TH_WITHOUT_SCOPE = re.compile(r"<th\b(?![^>]*\bscope=)")
@@ -83,8 +121,8 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
     freshness = freshness.replace('href="audit.html', f'href="{up}audit.html')
     # the options page is always listed: it explains its own state when nothing was collected (2026-10-14.6)
     nav = "".join(
-        f'<a href="{up}{href}"{" aria-current=page" if href == current else ""}>{E(label)}</a>'
-        for href, label in nav_items()
+        f'<a href="{up}{href}"{" aria-current=page" if current in members else ""}>{E(label)}</a>'
+        for href, label, members in nav_tabs()
     )
     terms = f' <a href="{up}terms.html">Terms of use</a>.' if customer() else ""
     search = site_command.search(symbols, up + "symbol/")
@@ -98,7 +136,7 @@ def page(title: str, body: str, current: str, depth: int = 0, freshness: str = "
 <noscript><style>[role=tabpanel][hidden],[data-panel][hidden]{{display:block!important}}tr.detail[hidden]{{display:table-row!important}}</style></noscript>
 <link rel="alternate" type="application/atom+xml" title="Weekly research reports" href="{up}feed.xml"></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="site"><div class="inner"><a class="brand" href="{up}index.html">{E(brand())}</a>
-<nav aria-label="Research sections">{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div></header>
+<nav aria-label="Research sections">{nav}</nav>{search}<button class="themebtn" type="button" aria-label="Colour theme: automatic">Theme: auto</button></div>{subnav(current, up)}</header>
 <main id="main" tabindex="-1">{site_tables.enhance(column_headers(freshness + body))}
 <footer><details><summary>Research, not advice; scenarios are conditional, with no established probability.</summary>
 <p>{E(spec.DISCLAIMER)}</p><p>{E(spec.PROBABILITY_STATEMENT)}</p><p>Quotes are delayed, never live.

@@ -24,6 +24,8 @@ S&P 500 minute bars, checks listed next-session CALL/PUT contracts and simulates
 cash-only long options in a local SQLite ledger. It has no brokerage order API.
 Its $50/day goal is an unvalidated research objective. The Streamlit dashboard
 and simulated account records stay local, outside the public research site.
+Longbridge is the default read-only data provider. It streams stock minutes,
+caches RVOL history, and checks option books, earnings, macro events and news.
 
 Windows quick start (Python 3.12+):
 
@@ -32,6 +34,10 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,intraday]"
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m agent_trading.intraday demo
+# Configure the three LONGBRIDGE_* credentials in .env before these commands.
+.\.venv\Scripts\python.exe -m agent_trading.intraday doctor
+.\.venv\Scripts\python.exe -m agent_trading.intraday run --enable-entries
+# Open a second terminal for the local dashboard; leave its scheduler checkbox off.
 .\.venv\Scripts\python.exe -m streamlit run src/agent_trading/intraday/dashboard.py --server.address 127.0.0.1 --browser.gatherUsageStats false
 ```
 
@@ -39,6 +45,10 @@ python -m venv .venv
 ledger; it does not demonstrate profitability. In the UI, select that ledger to
 inspect the completed demo. See the runbook for macOS, real-data prerequisites,
 manual scans, local scheduling, replay, controls and component status.
+The Longbridge options probe currently reports **no quote access**. Running with
+market data requires OPRA **OpenAPI** permission and enough history/subscription
+quota for all constituents plus benchmarks. Start before 08:30 ET for the first
+history warm-up. The service runs only while this computer and process stay on.
 
 ## Research dashboard
 

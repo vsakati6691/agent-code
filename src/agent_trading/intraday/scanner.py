@@ -22,10 +22,14 @@ def frame(bars: list[Bar], now: datetime) -> pd.DataFrame:
         seen.add(b.end)
         s = session(b.end.astimezone(NY).date())
         if s and s.open < b.end <= s.close:
-            rows.append(b.model_dump())
+            rows.append((b.end, b.open, b.high, b.low, b.close, b.volume, b.vwap))
     if not rows:
         raise ValueError("no completed regular-session bars")
-    return pd.DataFrame(rows).set_index("end").sort_index()
+    return (
+        pd.DataFrame(rows, columns=["end", "open", "high", "low", "close", "volume", "vwap"])
+        .set_index("end")
+        .sort_index()
+    )
 
 
 def current(df: pd.DataFrame, now: datetime, cfg: Settings) -> pd.DataFrame:
@@ -171,7 +175,7 @@ def evaluate(
     )
 
 
-def scan(snap: Snapshot, now: datetime, cfg: Settings) -> Scan:
+def scan(snap: Snapshot, now: datetime, cfg: Settings, *, only: set[str] | None = None) -> Scan:
     aware(now)
     problems = list(snap.problems)
     if not 0 <= (now - snap.observed_at).total_seconds() <= cfg.max_bar_age_seconds:
@@ -183,9 +187,16 @@ def scan(snap: Snapshot, now: datetime, cfg: Settings) -> Scan:
     if snap.feed != "fixture" and not 480 <= len(snap.universe) <= 520:
         problems.append("incomplete S&P 500 membership")
     frames, current_frames, rejected = {}, {}, {}
+    current_session = session(aware(now).date())
+    history_targets = (
+        (only | {"SPY"} | {snap.universe[s] for s in only if s in snap.universe}) if only is not None else None
+    )
     for symbol in sorted(set(snap.universe) | set(snap.universe.values()) | {"SPY"}):
         try:
-            frames[symbol] = frame(snap.bars.get(symbol, []), now)
+            bars = snap.bars.get(symbol, [])
+            if history_targets is not None and symbol not in history_targets and current_session:
+                bars = [b for b in bars if b.end > current_session.open]
+            frames[symbol] = frame(bars, now)
             current_frames[symbol] = current(frames[symbol], now, cfg)
         except ValueError as exc:
             rejected[symbol] = str(exc)
@@ -199,7 +210,7 @@ def scan(snap: Snapshot, now: datetime, cfg: Settings) -> Scan:
         else 0.5
     )
     signals = []
-    for symbol in sorted(snap.universe):
+    for symbol in sorted(snap.universe if only is None else only & snap.universe.keys()):
         try:
             signal = evaluate(
                 symbol,

@@ -397,7 +397,7 @@ def test_partial_state_names_the_unusable_chains():
 
 def test_max_loss_and_critical_warning_stay_visible_on_phones(built):
     page = (built[1] / "options.html").read_text(encoding="utf-8")
-    kept = [label for label, cls in _header_classes(page, "o-12m-put") if "hide-sm" not in cls]
+    kept = [label for label, cls in _header_classes(page, "o-3m-put") if "hide-sm" not in cls]
     assert "Max loss" in kept and kept == [
         "#",
         "Underlying",
@@ -410,7 +410,7 @@ def test_max_loss_and_critical_warning_stay_visible_on_phones(built):
     ]
     head = page[page.index('id="options-critical"') - 40 : page.index('id="options-critical"') + 400]
     assert "hide-sm" not in head and "lose the entire premium" in head
-    assert page.count("entire premium") >= 30  # every row's max-loss cell and detail
+    assert page.count("entire premium") >= 10  # every row's max-loss cell and detail
 
 
 def test_no_contract_is_described_as_safe(built):
@@ -438,11 +438,10 @@ def test_facts_assumptions_missing_data_and_scores_are_shown_apart(built):
         "Distance to breakeven",
     ):
         assert h in page, h
-    assert page.count("data-hz=") == 6 and page.count('role="tablist"') == 2
-    assert re.search(
-        r'<section data-hz="6m" data-type="put"[^>]* hidden><h2 class="sr-only">About 6 months · puts · 150-210 days',
-        page,
-    )
+    # only the ~3 month lists are shown (SHOWN_HORIZONS); the 6 and 12 month windows are still collected
+    assert page.count("data-hz=") == 2 and page.count('role="tablist"') == 2
+    assert "About 6 months" not in page and "About 12 months" not in page
+    assert re.search(r'<section data-hz="3m" data-type="put"[^>]*><h2 class="sr-only">About 3 months · puts · 70-110 days', page)
 
 
 def test_short_lists_say_why_on_the_page(tmp_path):
@@ -468,7 +467,7 @@ def test_percentages_never_follow_the_probability_label(built):
     page = (built[1] / "options.html").read_text(encoding="utf-8")
     page += "".join(p.read_text(encoding="utf-8") for p in (built[1] / "option").glob("*.html"))
     segments = page.split("Probability of profit:")[1:]
-    assert len(segments) >= 31  # header note + one per contract
+    assert len(segments) >= 11  # header note + one per contract
     for seg in segments:
         head = seg[:160]
         assert "Probability not established" in head, head
@@ -513,10 +512,10 @@ def test_options_csv_carries_quote_time_event_status_score_parts_and_probability
 
 def test_overview_watchlist_shows_six_compact_lists_with_max_loss(built):
     index = (built[1] / "index.html").read_text(encoding="utf-8")
-    assert 'id="options-watchlist"' in index and index.count("<h3>Calls ·") == 3 and index.count("<h3>Puts ·") == 3
+    assert 'id="options-watchlist"' in index and index.count("<h3>Calls ·") == 1 and index.count("<h3>Puts ·") == 1
     assert (
-        index.count("max loss") >= 30
-        and 'href="options.html#put-12m"' in index
+        index.count("max loss") >= 10
+        and 'href="options.html#put-3m"' in index
         and 'href="options.html#call-3m"' in index
     )
     assert 'id="growth"' not in index
@@ -591,16 +590,13 @@ def test_older_ten_contract_snapshot_renders_with_its_own_limit_and_without_new_
     audit = (o / "audit.html").read_text(encoding="utf-8")
     assert "10 of up to 10" in page and "Snapshot methodology <strong>2026-10-14.5" in audit
     assert f"page renderer <strong>{spec.SPEC_VERSION}" in audit and "never re-ranks" in audit
-    assert {p.name for p in o.glob("options-*.html")} == {
-        *(f"options-{h.key}.html" for h in spec.HORIZONS),
-        "options-short-term.html",
-    }
-    assert len(list((o / "option").glob("*.html"))) == 60
+    assert {p.name for p in o.glob("options-*.html")} == {"options-short-term.html"}
+    assert len(list((o / "option").glob("*.html"))) == 20
     assert all(p.stat().st_size <= 150_000 for p in o.rglob("*.html"))
     page += "".join(p.read_text(encoding="utf-8") for p in (o / "option").glob("*.html"))
     assert page.count("Probability not established") >= 61 and "risk notes were not stored" in page
     assert list_limit(snap, lists_of(snap["options"]["3m"])["calls"]) == 10
     index = (o / "index.html").read_text(encoding="utf-8")
     assert (
-        index.count("<h3>Calls ·") == 3 and index.count('<li><a href="symbol/') == 60
+        index.count("<h3>Calls ·") == 1 and index.count('<li><a href="symbol/') == 20
     )  # the stored lists, as published

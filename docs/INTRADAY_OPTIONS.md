@@ -41,11 +41,32 @@ no-broker-order rule precludes an Alpaca submission adapter in this implementati
 
 A read-only Longbridge probe returned AAPL expirations 2026-10-21, 2026-10-23,
 2026-10-26, 2026-10-28 and 2026-10-30. October 22 was absent. This was an expiration
-check, not validation of real-time quotes, Greeks, liquidity or an executable feed.
+check. Follow-up calls for an actually listed October 23 contract returned
+**301604: no quote access** for both option quotes and depth. No prices were obtained.
+
+- [Longbridge SDK](https://open.longbridge.com/docs/getting-started): the local
+  adapter pins Python `longbridge==4.5.0`, constructs only quote/content contexts,
+  and uses the SDK HTTP client for one fixed GET-only calendar route. Version 4.5's
+  calendar method lacks count/offset paging; the reader follows the official
+  [calendar implementation](https://github.com/longbridge/openapi/blob/main/rust/src/calendar/context.rs).
+  The chat plugin's authorization is separate from this process.
+- [Option quotes](https://open.longbridge.com/docs/quote/pull/option-quote) require
+  OPRA US Options Quotes **OpenAPI** permission; app/web permissions are separate.
+- [Historical candles](https://open.longbridge.com/docs/quote/pull/history-candlestick)
+  have a 1,000-row cap and monthly symbol quotas. Two-session requests avoid truncating
+  the RVOL baseline. Reads are paced at least 0.55 seconds apart, below the documented
+  60 historical calls per 30 seconds. A full universe needs over 500 symbol slots.
+- [Depth](https://open.longbridge.com/docs/quote/push/depth) supplies prices and sizes
+  without an exchange timestamp. Conservative receipt-time handling is described below.
+- [News](https://open.longbridge.com/docs/content/news) publication times are preserved;
+  retrieved headlines remain explicitly unverified research material.
 
 ## Preregistered starting methodology
 
-Version `intraday-options-2026-10-21.1` is exploratory and has no demonstrated edge.
+Version `intraday-options-2026-10-21.2` is exploratory and has no demonstrated edge.
+Version .2 adds explicit depth receipt-time provenance and automatic sourced event
+screening. Risk ceilings are unchanged. Old .1 ledgers retain their original
+methodology; the new default is `data/intraday/longbridge-paper.sqlite3`.
 Weights: trend 30 (VWAP/ORB/structure share one budget), participation 20
 (time-of-day cumulative RVOL/volume acceleration), relative strength 25 (vs SPY
 and sector), momentum 15 (momentum/RSI/ADX share one budget), context 10 (breadth,
@@ -60,8 +81,17 @@ RVOL compares cumulative volume to the same regular-session minute across at lea
 the decision and at most one day old. Observed-market scans require 480–520 members
 and at least 95% minute coverage. Every member is considered; unavailable inputs and
 rejections remain visible. Fixture universes are explicitly exempt from member count.
-Unknown news, earnings or economic-event coverage blocks entry. Event clearance is
-an imported, sourced, timestamped assessment, not an AI assertion of safety.
+Unknown news, earnings or economic-event coverage blocks entry. Longbridge reads
+US earnings, dividend, split and macro calendars and recent stock/SPY news. It blocks
+a stock for a scheduled event that day, blocks the market for macro importance >=2
+or unknown importance,
+and flags headline keywords for earnings, guidance, bankruptcy, corporate actions,
+investigations, offerings, halts, recalls, fraud, lawsuits, inflation, payrolls,
+Fed/FOMC, war and tariffs. Clearances expire within 15 minutes. Refreshing the
+calendar invalidates earlier clearances. Failed or truncated responses are not
+treated as an empty, safe calendar. This English-keyword screen can miss unreported
+or differently worded events; "clear" means no risk found in available coverage,
+not that no news exists. File/Massive providers still accept sourced event JSON.
 
 Contracts must actually be listed for the next **exchange session** (Friday to
 Monday is three calendar days). No fallback expiry is used. Standard 100-share
@@ -107,25 +137,48 @@ python3.12 -m venv .venv
 ```
 
 macOS commands are provided for portability; execution in this implementation
-session was on Windows. No service, startup item, automation or cloud deployment
+session was on Windows. No OS service, startup item, automation or cloud deployment
 is installed automatically.
 
-Use real data only after configuring `MASSIVE_API_KEY` in `.env`, verifying
-entitlement to fresh stock minutes and option bid/ask/size/Greeks, and supplying
-current sourced event coverage. The default 13-second provider request spacing
-cannot refresh 500 symbols in five minutes. Set pacing to your **verified plan's**
-allowance, or use a separate collector to provide a normalized file. Bounded
-collection fails closed if the full scan cannot finish. Increasing the deadline
-does not turn stale data into valid data. The current adapter is sequential; a
-high-throughput feed collector is required before claiming production scan cadence.
+Configure `LONGBRIDGE_APP_KEY`, `LONGBRIDGE_APP_SECRET` and
+`LONGBRIDGE_ACCESS_TOKEN` in the ignored `.env`. Never paste them into chat or commit
+them. Legacy `LONGPORT_*` names also work. Endpoint redirects and SDK log-path
+overrides are rejected. Authentication is for read-only market data; all fills are
+still local simulations. No account/trading context is constructed.
+
+Run `doctor` to probe stock quotes, a real listed option, depth, calendar and news.
+It does not spend the quota for the entire index. A passing probe is not validation
+of full-universe throughput, quote freshness outside market hours or profitability.
+The service also probes once on startup and stops safely on a permission failure.
+
+Start before 08:30 ET. Cold history warm-up can take tens of minutes. A background
+collector subscribes to confirmed one-minute regular-session bars, loads ten prior
+sessions, and persists complete sessions under `data/intraday/longbridge-bars`.
+The foreground position monitor does not wait for that warm-up. Each stock scan
+ranks the full universe, then refreshes bars and revalidates shortlisted stocks
+against current breadth and market/sector data before considering entries.
+The position monitor checks technical invalidation between scheduled scans.
+The 08:30 preparation is completed again when the collector finishes warming.
+
+The scheduler remains active across sessions. End-of-day entry suspension can
+resume on the next session if previously enabled. Manual disable/stop, provider
+failures and emergency stop cancel automatic resumption. No kill switch is released.
+Failures latch by SDK context until the cause is fixed and the process restarted;
+there is no automatic entitlement-error retry loop. Stream outages or missing bars
+block entries. Keep just one scheduler running; the dashboard can monitor its ledger.
+
+Massive remains an optional fallback via `--provider massive`; its original pacing
+and event-file requirements still apply. It is not called by the Longbridge path.
 
 ```powershell
-# Read-only manual scan; does not enable new paper entries.
-.\.venv\Scripts\python.exe -m agent_trading.intraday --provider massive --events data/intraday/events.json scan
+# Check local credentials and read-only data access first.
+.\.venv\Scripts\python.exe -m agent_trading.intraday doctor
+# Foreground automatic local-paper service (Longbridge is the default).
+.\.venv\Scripts\python.exe -m agent_trading.intraday run --enable-entries
 # Or use one validated normalized JSON snapshot, atomically refreshed by your collector.
-.\.venv\Scripts\python.exe -m agent_trading.intraday --snapshot data/intraday/latest.json scan
+.\.venv\Scripts\python.exe -m agent_trading.intraday --provider file --snapshot data/intraday/latest.json scan
 # Foreground local scheduler. This flag authorizes LOCAL SIMULATED entries only.
-.\.venv\Scripts\python.exe -m agent_trading.intraday --snapshot data/intraday/latest.json run --enable-entries
+.\.venv\Scripts\python.exe -m agent_trading.intraday --provider file --snapshot data/intraday/latest.json run --enable-entries
 .\.venv\Scripts\python.exe -m agent_trading.intraday control disable
 .\.venv\Scripts\python.exe -m agent_trading.intraday control emergency
 .\.venv\Scripts\python.exe -m agent_trading.intraday control stop
@@ -149,8 +202,10 @@ are recorded and never caught up as entry trades. Durable job claims and unique
 entry identifiers prevent replay after restart or double-clicks. A claimed job
 interrupted by a crash is not retried as an entry job.
 
-The dashboard can run the scheduler while open. The foreground CLI is preferable
-for continuous operation because its provider/history cache survives UI refreshes.
+The dashboard can run the scheduler while open and retains its collector across
+refreshes. The foreground CLI is preferable for continuous operation. A one-shot
+Longbridge `scan` can report warming/incomplete inputs; use the running dashboard's
+manual scan after warm-up, or the file provider for a ready normalized snapshot.
 Run `control start` and `control enable` only when the data/monitor process is ready.
 Neither command starts a background process by itself.
 
@@ -190,6 +245,14 @@ An event input maps tickers and `MARKET` to `EventRisk` objects. A safe example:
 ## Execution and reporting assumptions
 
 Entry limits use ask plus configured slippage; exit limits use bid minus slippage.
+Longbridge depth has no exchange timestamp. Its `quote_time_basis` explicitly says
+`changed_depth_receipt`. Identical bid/ask/size books retain their original observation
+time on repeated reads and restarts; only a changed book advances that time. A recent
+option trade and underlying quote are also required. This is a conservative freshness
+proxy, not proof of the exchange age of a depth level; executions remain simulated.
+Raw Longbridge Greeks are retained with `greek_units=longbridge_raw`: vendor docs
+give inconsistent theta/vega scaling guidance, so no unverified normalization is
+applied. Only delta is used as a selection threshold; theta/vega are displayed as raw.
 A fill requires a **later** fresh quote, an executable limit, an open session and
 displayed size. Identical quote timestamps cannot replenish size on repeated ticks
 or restart. Partial fills keep the unfilled remainder pending until filled or
@@ -216,8 +279,9 @@ no losses. Daily Sharpe uses sample standard deviation, zero risk-free rate and
 sqrt(252), and is unavailable with fewer than two complete session observations.
 Reports separate CALL/PUT and entry hour; skip reasons remain in the ledger.
 
-Local structured console logs and SQLite events are always available. `alerts`
-exports an optional JSONL outbox for an owner-configured notification integration;
+The running scheduler delivers console notifications and a durable JSONL outbox
+automatically (`--alert-outbox` selects its path). The `alerts` command also exports
+an outbox on demand for an owner-configured notification integration;
 it has at-least-once semantics and event IDs for deduplication. No emails, messages,
 webhooks or notifications to third parties are sent by this implementation.
 
@@ -250,33 +314,39 @@ is deterministic evidence and research hypotheses; no paid AI model is required.
 
 | Component | Status | Practical limit |
 |---|---|---|
-| Scanner and CALL/PUT scoring | Implemented; deterministic tests | Full live S&P 500 cadence not established; sequential collection and plan limits |
-| Next-session contract selector | Implemented; filter tests | Actual-chain Massive access blocked by current entitlement |
+| Scanner and CALL/PUT scoring | Implemented; deterministic tests | Full live S&P 500 cadence still requires entitled feed verification |
+| Next-session contract selector | Implemented; filter tests | Longbridge listings accessible, quotes/depth denied by current entitlement |
 | Central risk gate | Implemented; limit/restart tests | Full premium and fees, no guaranteed stop fill |
 | Local simulator and SQLite ledger | Implemented; lifecycle/partial-fill tests | Displayed-size/queue assumptions remain simulations |
 | External Alpaca paper execution | Not implemented | Excluded by repository no-broker-order rule |
 | Massive GET-only adapter | Implemented; mocked parser/pagination tests | Real-time stock and options entitlements/credentials required |
-| Longbridge | Read-only expiry probe only | No autonomous SDK collector implemented |
+| Longbridge SDK collector | Implemented; mocked SDK and failure tests | Local credentials missing; OPRA OpenAPI permission denied; full-universe quota unverified |
 | Exchange calendar/local scheduler | Implemented; holiday/DST/early-close/job tests | Runs only while process/UI operates |
 | Streamlit dashboard | Implemented; UI tests | Local app, not GitHub Pages |
 | Reports/CSV/local alerts | Implemented; accounting/outbox tests | External messaging integration is an owner-side outbox consumer |
 | Event-driven replay/walk-forward framework | Implemented; causal/boundary tests | Real historical options study blocked by missing dataset |
-| News and economic/earnings risk | Partially implemented | Validated sourced event import; no automatic event/news collector |
+| News and economic/earnings risk | Automatic calendar/headline screening implemented and tested | Requires local Longbridge access; finite vendor coverage and keyword heuristic |
 | AI research | Partially implemented | Deterministic explanations; external model integration not implemented |
 | 0DTE vs 1DTE, trending vs sideways studies | Not performed | Suitable historical contract dataset not supplied |
 | Profitability / $50 per day | Not validated | No market-data evidence supports a claim |
 
 ## Validation executed on 2026-10-21
 
-- Full repository suite: **1,370 passed in 414.23 seconds**, Python 3.12 on Windows.
-  Includes 63 new intraday tests and one Streamlit interaction test.
+- Full repository suite after the Longbridge integration: **1,391 passed in 383.39 seconds**,
+  Python 3.12 on Windows. Includes 21 Longbridge/automation tests, the prior 63
+  intraday tests and the Streamlit interaction test. Provider fixtures do not prove
+  live SDK entitlements or complete real-data coverage.
 - `ruff check .`, `ruff format --check .`, and the repository's configured `mypy`
   checks passed. The existing broker/network safety tests remain green.
 - Executed the offline demo, chronological replay, no-data coverage report, CSV
   export, alert outbox export and schedule listing. Demo orders stayed pending
   until later quotes, filled with fees/slippage, and closed with no remaining positions.
+- Re-ran the synthetic entry/exit scenario after the Longbridge changes: two closed
+  local trades and no open positions. `doctor` correctly reported missing local
+  credentials; it did not enable entries. A 500-symbol synthetic timing check for
+  the two-position monitor took approximately 0.8 seconds, excluding network time.
 - Inspected the running Streamlit UI in a browser: disabled entries, explicit
   fixture labels, stale-scan warnings, orders, fills and historical equity rendered.
 - Massive denied the options snapshot probe with NOT_ENTITLED. Longbridge returned
-  actual listed expirations only. Neither probe validated full-universe real-time
+  actual listings but denied option quotes and depth with 301604. Neither probe validated full-universe real-time
   operation, historical options performance, broker paper fills or profitability.
