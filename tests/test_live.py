@@ -111,6 +111,19 @@ def test_unknown_position_counts_fully_as_risk(settings, ledger):
     assert res.tickets == [] and "open-risk" in res.skipped[0]
 
 
+def test_ticket_stop_not_below_entry_counts_fully_as_risk(settings, ledger):
+    # an old ticket's stop (95) must not be reused for a later, cheaper holding (entry 90): it would count
+    # as zero open risk and advise a stop-loss above the cost basis
+    ledger.replace_tickets(date(2026, 3, 2), [Ticket("NVDA", "buy", 1, 101, 95, "B-desk", "old", 5)])
+    held = snap(total=1000, cash=820, positions=[{"symbol": "NVDA", "quantity": 2.0, "average_buy_price": 90.0}])
+    res = run(settings, ledger, held, [buy("SPY", ref=50.0, stop=49.0)])
+    pos = res.positions["NVDA"]
+    assert pos.stop == 0.0 and pos.entry_price == 90.0 and pos.entry_date == AS_OF
+    assert any("not below its entry" in w and "stop is unknown" in w for w in res.warnings)
+    assert not any("place a good-till-cancelled stop-loss" in w for w in res.warnings)
+    assert res.tickets == [] and "open-risk" in res.skipped[0]
+
+
 def test_open_buy_order_blocks_new_buys(settings, ledger):
     pending = snap(orders=[{"symbol": "GLD", "side": "buy", "state": "queued", "quantity": "1"}])
     res = run(settings, ledger, pending, [buy()])

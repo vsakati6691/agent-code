@@ -259,16 +259,16 @@ def prepare(
         sym = p["symbol"]
         t = ledger.latest_buy(sym)
         avg = p.get("average_buy_price")
-        if t is None:
-            res.warnings.append(
-                f"{sym}: position was not opened from a ticket; its stop is unknown, so its whole "
-                "value counts as open risk"
-            )
+        entry = avg if avg else (float(t["limit_price"]) if t is not None else 0.0)
+        if t is None or not 0 < float(t["stop_price"]) < entry:
+            # A stop at or above the entry (e.g. a stale ticket from an earlier holding, or a fill
+            # below the planned stop) would count as zero risk, so it is treated as unknown too.
+            why = "was not opened from a ticket" if t is None else "has a ticket stop that is not below its entry"
+            res.warnings.append(f"{sym}: position {why}; its stop is unknown, so its whole value counts as open risk")
             # unknown cost basis: assume the whole invested amount (conservative)
             entry = avg or invested / p["quantity"]
             res.positions[sym] = Position(p["quantity"], entry, 0.0, as_of)
             continue
-        entry = avg if avg else float(t["limit_price"])
         filled = next_trading_day(date.fromisoformat(t["created_date"]))
         res.warnings.append(
             f"{sym}: entry date {filled} is inferred from the next NYSE session after the ticket; actual fill date is unknown"
