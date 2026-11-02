@@ -991,3 +991,53 @@ def test_options_pages_name_only_the_expiry_window_they_show(site):
     for name in ("options.html", "options-short-term.html"):
         text = (site / name).read_text(encoding="utf-8")
         assert ">3M expiries</a>" in text and "6M / 12M" not in text, name
+
+
+def test_overview_says_what_the_site_is_for_and_where_to_start(site):
+    overview = (site / "index.html").read_text(encoding="utf-8")
+    assert (
+        "Weekly research lists for US stocks" in overview
+        and 'href="growth.html">Start with Growth Stocks</a>' in overview
+    )
+
+
+def test_partial_data_is_one_badge_in_the_freshness_bar_not_a_separate_line(site):
+    from agent_trading.dashboard.assets import CSS
+
+    for name in ("index.html", "growth.html", "options.html"):
+        page = (site / name).read_text(encoding="utf-8")
+        assert page.count("Partial data") <= 1 and 'class="small warn">Partial data' not in page, name
+        if "Partial data" in page:
+            bar = page[page.index('id="freshness"') : page.index("</div>", page.index('id="freshness"'))]
+            assert 'class="data-badge" href="audit.html#latest-run"' in bar, name
+    assert ".data-badge {" in CSS
+
+
+def test_small_text_and_pointer_targets_meet_the_minimums():
+    import re
+
+    from agent_trading.dashboard.assets import CSS
+
+    for selector in (
+        ".scan-company",
+        ".eyebrow",
+        ".scan-stat small",
+        ".market-foot",
+        "#t-scan th",
+        ".scan-meta .small",
+    ):
+        sizes = [
+            float(m)
+            for rule in re.findall(re.escape(selector) + r"\b[^{]*\{([^}]*)\}", CSS)
+            for m in re.findall(r"font-size:\s*([\d.]+)px", rule)
+        ]
+        assert sizes and min(sizes) >= 12, (selector, sizes)
+    assert ".pinbtn { min-width: 32px; min-height: 32px; }" in CSS
+    assert ".pinbtn { min-width: 44px; min-height: 44px; }" in CSS  # phones
+
+
+def test_small_bets_without_explorer_data_explains_itself_and_points_on(site):
+    page = (site / "bets.html").read_text(encoding="utf-8")
+    if "Explorer data unavailable" in page:
+        assert 'id="bets-empty"' in page and 'href="options.html">Options page</a>' in page
+        assert '<details class="empty-data"><summary>Explorer data unavailable' not in page

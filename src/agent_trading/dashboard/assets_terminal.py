@@ -50,6 +50,18 @@ header.site nav.subnav { max-width: 1400px; margin: 0 auto; padding: 0 28px 10px
 header.site nav.subnav a { color: var(--text-secondary); }
 header.site nav.subnav a[aria-current="page"] { color: var(--link); }
 @media (max-width: 700px) { header.site nav.subnav { padding-left: 16px; padding-right: 16px; } }
+/* pointer targets: at least 24px everywhere, 44px on phones */
+.pinbtn { min-width: 32px; min-height: 32px; }
+main summary, .freshness-line a, .macro-card a, .data-badge { display: inline-block; min-height: 24px; padding-block: 3px; box-sizing: border-box; }
+main summary { display: list-item; }
+@media (max-width: 700px) {
+  .pinbtn { min-width: 44px; min-height: 44px; }
+  main summary, .freshness-line a, .data-badge, .macro-card a { min-height: 44px; padding-block: 12px; }
+  main summary { display: list-item; }
+}
+/* data-status badge in the freshness bar (replaces the separate "Partial data" line) */
+.data-badge { border: 1px solid var(--warn-border); border-radius: 12px; padding-inline: 10px; font-size: 12px; font-weight: 600;
+  background: var(--warn-bg); text-decoration: none; }
 .card, .market-tile, .scan-stats, .research-path, .context-details, .table-wrap {
   border-radius: var(--radius); box-shadow: var(--elevation);
 }
