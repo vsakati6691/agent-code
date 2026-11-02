@@ -14,9 +14,6 @@ header.site .inner { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items:
 header.site .brand { font-weight: 650; font-size: 17px; color: var(--text-primary); text-decoration: none; }
 nav a { margin-right: 14px; text-decoration: none; }
 nav a[aria-current="page"] { font-weight: 650; text-decoration: underline; }
-nav.subnav { max-width: 1180px; margin: 0 auto; padding: 0 16px 10px; font-size: 14px; }
-nav.subnav a { color: var(--text-secondary); }
-nav.subnav a[aria-current="page"] { color: var(--link); }
 main { padding-top: 18px; padding-bottom: 48px; }
 h1 { font-size: 24px; margin: 6px 0 4px; } h2 { font-size: 19px; margin: 28px 0 8px; } h3 { font-size: 16px; margin: 18px 0 6px; }
 p.lede { color: var(--text-secondary); margin-top: 0; }
