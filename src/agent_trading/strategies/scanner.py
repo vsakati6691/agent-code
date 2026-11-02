@@ -107,7 +107,7 @@ def score(table: pd.DataFrame, fundamentals: pd.DataFrame | None, weights: dict[
     t["volume"] = _rank(t["updown_volume"])
     t["quality"] = pd.concat([_rank(t["operating_margin"]), _rank(t["roe"])], axis=1).mean(axis=1)
     ey = (1 / t["forward_pe"]).where(t["forward_pe"] > 0)
-    t["valuation"] = ey.groupby(t["sector_code"].fillna("?")).rank(pct=True)
+    t["valuation"] = ey.groupby(t["sector_code"].astype(object).fillna("?")).rank(pct=True)
     t["risk"] = _rank(t["vol_63"], ascending=False)
     w = pd.Series(weights)
     avail = t[FACTORS].notna()
@@ -231,8 +231,11 @@ def run_scan(
     if table.empty:
         return ScanResult(as_of, table, [], [])
     table = score(table, fundamentals, sc.weights)
+    # one spread per ticker; duplicate quote rows (e.g. merged imports) keep the widest spread (fail closed)
     spreads = (
-        quotes.set_index("ticker")["spread_pct"] if quotes is not None and not quotes.empty else pd.Series(dtype=float)
+        quotes.groupby("ticker")["spread_pct"].max()
+        if quotes is not None and not quotes.empty
+        else pd.Series(dtype=float)
     )
 
     table = table[table["composite"].notna()]

@@ -215,6 +215,14 @@ def test_path_stats_drawdown_duration_and_years():
     assert st["calendar_years"][2025] == pytest.approx(0.1)
 
 
+def test_path_stats_worst_month_includes_the_first_month():
+    from agent_trading.backtest.metrics import path_stats
+
+    idx = pd.to_datetime(["2024-01-10", "2024-01-31", "2024-02-29", "2024-03-29"])
+    eq = pd.Series([950.0, 700.0, 710.0, 720.0], index=idx)  # -30% in January, then small gains
+    assert path_stats(eq, 1000.0)["worst_month"] == pytest.approx(-0.3)
+
+
 def test_vol_managed_weights_scale_down_never_up():
     calm = make_bars(n=400, drift=0.002, vol=0.002, start=100)
     wild = make_bars(n=400, drift=0.004, vol=0.04, start=100, seed=5)

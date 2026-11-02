@@ -84,7 +84,8 @@ def path_stats(equity: pd.Series, initial: float) -> dict:
     if start is not None:
         longest = max(longest, (curve.index[-1] - start).days)
     month_end = curve.groupby([curve.index.year, curve.index.month]).last()
-    monthly = month_end.pct_change().dropna()
+    monthly = month_end.pct_change()
+    monthly.iloc[0] = month_end.iloc[0] / initial - 1  # the first month starts from the initial capital
     year_end = curve.groupby(curve.index.year).last()
     yearly = year_end.pct_change()
     yearly.iloc[0] = year_end.iloc[0] / initial - 1

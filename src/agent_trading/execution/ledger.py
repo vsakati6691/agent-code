@@ -173,14 +173,17 @@ class OrderLedger:
         return json.loads(row["value"]) if row else default
 
     def buys_on(self, day: date, mode: str) -> tuple[int, float]:
-        """(entries, notional) of buys sent or being sent on New York calendar day `day`."""
+        """(entries, notional) of buys sent or being sent on New York calendar day `day`.
+
+        In dry-run mode the recorded dry-run buys count, so a dry run enforces the same daily caps as paper."""
+        not_counted = {"blocked", "rejected", "not_sent"} | ({"dry_run"} if mode != "dry_run" else set())
         n, total = 0, 0.0
         for r in self.orders():
             if (
                 r["mode"] == mode
                 and r["side"] == "buy"
                 and datetime.fromisoformat(r["created_at"]).astimezone(ET).date() == day
-                and r["state"] not in {"blocked", "rejected", "not_sent", "dry_run"}
+                and r["state"] not in not_counted
             ):
                 n += 1
                 total += r["quantity"] * r["limit_price"]

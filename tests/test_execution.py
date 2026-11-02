@@ -141,6 +141,22 @@ def test_daily_entry_and_purchase_limits(settings, tmp_path):
     assert res.state == BLOCKED and any("entry limit" in r for r in res.reasons)
 
 
+def test_dry_run_enforces_daily_purchase_and_entry_limits(settings, tmp_path):
+    # a dry run must block what paper would block, so its recorded buys count against the day's limits
+    svc, broker = make(settings, tmp_path, mode="dry_run")
+    assert svc.execute(buy("IEF", decision="1")).state == DRY_RUN
+    assert svc.execute(buy("EFA", limit=80.05, decision="2")).state == DRY_RUN
+    broker.set_quote(quote("GLD", 30.0))
+    res = svc.execute(OrderRequest("3", "C-gtaa", "GLD", "buy", 1, 30.01))  # $175 + $30 > $200/day
+    assert res.state == BLOCKED and any("daily purchases" in r for r in res.reasons)
+    broker.set_quote(quote("VNQ", 20.0))
+    assert svc.execute(OrderRequest("4", "C-gtaa", "VNQ", "buy", 1, 20.01)).state == DRY_RUN  # 3rd entry
+    broker.set_quote(quote("DBC", 2.0))
+    res = svc.execute(OrderRequest("5", "C-gtaa", "DBC", "buy", 1, 2.01))
+    assert res.state == BLOCKED and any("entry limit" in r for r in res.reasons)
+    assert broker.submit_calls == 0
+
+
 def test_timeout_after_accept_is_resolved_by_lookup_not_resubmission(settings, tmp_path):
     svc, broker = make(settings, tmp_path)
     broker.inject("timeout_after_accept")
