@@ -21,7 +21,6 @@ from .site_options_status import status_block as status_block
 from .site_options_status import status_html as status_html
 from .site_options_status import version_line as version_line
 
-
 # The dashboard shows only the ~3 month lists (owner's choice, 2026-11-01). Collection, the stored snapshot and the
 # CSV downloads still carry every spec.HORIZONS window, so this is presentation only and spec.py is unchanged.
 SHOWN_HORIZONS = tuple(h for h in spec.HORIZONS if h.key == "3m")
