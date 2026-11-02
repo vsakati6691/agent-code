@@ -335,8 +335,10 @@ exports.checkMatrix=async function(browser,base,profile,out) {
         const links=await nav.locator('a').evaluateAll(es=>es.map(e=>e.href));
         for(const url of links) {const response=await context.request.get(url);assert.equal(response.status(),200);}
         const next=names[(names.indexOf(name)+1)%names.length]+'.html';
-        await page.locator(`header.site a[href$="${next}"]`).first().click();await page.waitForURL(`**/${next}`);
-        assert.equal(await page.locator('nav[aria-label="Research sections"] [aria-current=page]').getAttribute('href'),(tabOf[next.replace('.html','')]||next.replace('.html',''))+'.html');
+        const nextName=next.replace('.html',''),top=(tabOf[nextName]||nextName)+'.html';
+        if((tabOf[name]||name)!==(tabOf[nextName]||nextName)){await nav.locator(`a[href$="${top}"]`).click();await page.waitForURL(`**/${top}`);}
+        if(!page.url().endsWith('/'+next)){await page.locator(`nav.subnav a[href$="${next}"]`).click();await page.waitForURL(`**/${next}`);}
+        assert.equal(await page.locator('nav[aria-label="Research sections"] [aria-current=page]').getAttribute('href'),top);
         await page.goto(`${base}/${file}`);await page.waitForLoadState('networkidle');
         const csv=[...new Set(await page.locator('a[href*=".csv"]').evaluateAll(es=>es.map(e=>e.href)))];
         for(const url of csv) {const response=await context.request.get(url);assert.equal(response.status(),200);assert.ok((await response.body()).length>0);}
