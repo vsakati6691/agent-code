@@ -441,7 +441,9 @@ def test_facts_assumptions_missing_data_and_scores_are_shown_apart(built):
     # only the ~3 month lists are shown (SHOWN_HORIZONS); the 6 and 12 month windows are still collected
     assert page.count("data-hz=") == 2 and page.count('role="tablist"') == 2
     assert "About 6 months" not in page and "About 12 months" not in page
-    assert re.search(r'<section data-hz="3m" data-type="put"[^>]*><h2 class="sr-only">About 3 months · puts · 70-110 days', page)
+    assert re.search(
+        r'<section data-hz="3m" data-type="put"[^>]*><h2 class="sr-only">About 3 months · puts · 70-110 days', page
+    )
 
 
 def test_short_lists_say_why_on_the_page(tmp_path):
