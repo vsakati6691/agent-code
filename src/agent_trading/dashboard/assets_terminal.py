@@ -45,6 +45,11 @@ header.site nav { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 20px;
   scrollbar-width: thin; min-width: 0; }
 header.site nav a { flex: none; white-space: nowrap; margin: 0; padding: 6px 0; }
 header.site nav a[aria-current="page"] { text-underline-offset: 7px; }
+/* second row of a tab group (2030, About & proof): same gutters as the header and the page */
+header.site nav.subnav { max-width: 1400px; margin: 0 auto; padding: 0 28px 10px; font-size: 14px; }
+header.site nav.subnav a { color: var(--text-secondary); }
+header.site nav.subnav a[aria-current="page"] { color: var(--link); }
+@media (max-width: 700px) { header.site nav.subnav { padding-left: 16px; padding-right: 16px; } }
 .card, .market-tile, .scan-stats, .research-path, .context-details, .table-wrap {
   border-radius: var(--radius); box-shadow: var(--elevation);
 }

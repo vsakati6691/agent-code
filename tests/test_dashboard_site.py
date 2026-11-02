@@ -961,3 +961,33 @@ def test_every_page_has_a_skip_link_to_a_focusable_main(site):
         ), p.name
         assert text.index('class="skip"') < text.index("<header"), p.name  # first in the Tab order
     assert ".skip:focus { left: 16px; }" in CSS
+
+
+def test_grouped_tabs_show_one_tab_and_a_second_row_for_their_pages():
+    from agent_trading.dashboard.site_layout import GROUPS, nav_tabs, subnav
+
+    tabs = nav_tabs()
+    assert [label for _, label, _ in tabs].count("2030") == 1 and [label for _, label, _ in tabs].count(
+        "About & proof"
+    ) == 1
+    for _, members in GROUPS:
+        assert sum(set(members) <= set(t[2]) for t in tabs) == 1  # each group sits in exactly one tab
+        for page in members:
+            row = subnav(page, "../")
+            assert row.count("aria-current=page") == 1 and f'href="../{page}" aria-current=page' in row
+            assert all(f'href="../{m}"' in row for m in members)
+    assert subnav("index.html", "") == "" and subnav("options.html", "") == ""
+
+
+def test_second_row_nav_keeps_the_page_gutters_after_the_theme_overrides():
+    from agent_trading.dashboard.assets import CSS
+
+    rule = CSS.rindex("header.site nav.subnav { max-width")  # the theme sheet comes last and restyles header.site nav
+    assert "padding: 0 28px 10px" in CSS[rule : CSS.index("}", rule)]
+    assert "header.site nav.subnav { padding-left: 16px; padding-right: 16px; }" in CSS[rule:]
+
+
+def test_options_pages_name_only_the_expiry_window_they_show(site):
+    for name in ("options.html", "options-short-term.html"):
+        text = (site / name).read_text(encoding="utf-8")
+        assert ">3M expiries</a>" in text and "6M / 12M" not in text, name

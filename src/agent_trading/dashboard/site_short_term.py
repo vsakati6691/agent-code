@@ -10,7 +10,7 @@ from .site_layout import E
 def navigation(short: bool = False) -> str:
     return (
         '<nav class="hero-actions" aria-label="Options desks">'
-        f'<a class="action" href="options.html" {"" if short else 'aria-current="page"'}>3M / 6M / 12M expiries</a>'
+        f'<a class="action" href="options.html" {"" if short else 'aria-current="page"'}>3M expiries</a>'
         f'<a class="action" href="options-short-term.html" {'aria-current="page"' if short else ""}>Short-term options · 0DTE / 1–7 days</a></nav>'
     )
 
