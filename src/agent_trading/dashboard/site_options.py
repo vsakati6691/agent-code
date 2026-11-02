@@ -22,6 +22,11 @@ from .site_options_status import status_html as status_html
 from .site_options_status import version_line as version_line
 
 
+# The dashboard shows only the ~3 month lists (owner's choice, 2026-11-01). Collection, the stored snapshot and the
+# CSV downloads still carry every spec.HORIZONS window, so this is presentation only and spec.py is unchanged.
+SHOWN_HORIZONS = tuple(h for h in spec.HORIZONS if h.key == "3m")
+
+
 def _list(snap: dict, h, kind: str, data: dict | None, o: dict, fragments: dict | None = None) -> str:
     plural = f"{kind}s"
     if not data:
@@ -91,7 +96,7 @@ def options_page(
     from .site_speculative import section as speculative_section
 
     o = snap.get("options") or {}
-    horizons = [h for h in spec.HORIZONS if horizon is None or h.key == horizon]
+    horizons = [h for h in SHOWN_HORIZONS if horizon is None or h.key == horizon]
     r = spec.OPTION_RULES
     state = status_block(snap)
     head = (
@@ -105,7 +110,7 @@ def options_page(
 <p>Eligibility (fixed in advance): open interest ≥ {r["min_open_interest"]}, volume ≥ {r["min_volume"]}, spread ≤
 {r["max_spread_pct"]:.0%} of mid, |delta| {r["min_delta"]}-{r["max_delta"]} (calls positive, puts negative), implied volatility and
 theta present, standard 100-share contracts, at most {r["max_per_underlying_per_horizon"]} per underlying per list, up to
-{r["max_per_type_per_horizon"]} per list. Expiry windows: {E(", ".join(f"{h.title.lower()} = {h.min_dte}-{h.max_dte} days" for h in spec.HORIZONS))}.</p>
+{r["max_per_type_per_horizon"]} per list. Expiry windows: {E(", ".join(f"{h.title.lower()} = {h.min_dte}-{h.max_dte} days" for h in SHOWN_HORIZONS))}.</p>
 <p>{E(spec.OPTION_THETA_RULE)} {E(spec.OPTION_QUOTE_RULE)} {E(spec.OPTION_EVENT_RULE)}</p>
 <div class="banner warn small"><strong>Delta is not a probability of profit</strong>{E(spec.DELTA_STATEMENT)}</div>
 <div class="banner info small"><strong>* Premium assumption and fees</strong>{E(spec.PREMIUM_ASSUMPTION)} {E(spec.FEE_TREATMENT)}
@@ -116,13 +121,13 @@ premium, while before-expiration values are Black-Scholes MODEL estimates.</div>
     extra = guide + speculative_section(snap, daily) + options_section(snap, daily or {})
     if not o.get("enabled") or o.get("status") != "ok" or not o.get("underlyings"):
         return head + (
-            '<details class="empty-data"><summary>Options lists unavailable</summary><p class="small">Top 5 calls and top 5 puts for about 3 months, 6 months and 1 year '
+            '<details class="empty-data"><summary>Options lists unavailable</summary><p class="small">Top 5 calls and top 5 puts for about 3 months '
             "to expiry will appear here once option chains are collected and validated for a snapshot (see the "
             'status above). The <a href="methodology.html">methodology</a> page has every rule.</p></details>' + extra
         )
     # ARIA tabs pattern over two dimensions: a type tab controls that type's three panels, a horizon tab the two
     # panels in that window, and each panel names both tabs; the ids never collide with the #call-3m view hashes
-    if horizon:
+    if horizon and len(SHOWN_HORIZONS) > 1:
         head += (
             '<nav aria-label="Option expiry lists">'
             + " ".join(f'<a class="action" href="options-{h.key}.html">{E(h.title)}</a>' for h in spec.HORIZONS)
@@ -175,7 +180,7 @@ def summary_strip(snap: dict) -> str:
     parts = []
     for kind in spec.OPTION_TYPES:
         cells = []
-        for h in spec.HORIZONS:
+        for h in SHOWN_HORIZONS:
             lst = lists_of(o.get(h.key) or {}).get(f"{kind}s") or {}
             n, lim = len(lst.get("rows", [])), list_limit(snap, lst)
             cells.append(f'<a href="#{kind}-{h.key}">{E(HZ_SHORT[h.key])} <strong>{n}</strong>/{lim}</a>')
@@ -196,7 +201,7 @@ def watchlist_cards(snap: dict) -> str:
         return f'<details class="empty-data" id="options-watchlist"><summary>Options watchlist unavailable</summary>{intro}{status}</details>'
     cards = []
     for kind in spec.OPTION_TYPES:
-        for h in spec.HORIZONS:
+        for h in SHOWN_HORIZONS:
             lst = lists_of(o.get(h.key) or {}).get(f"{kind}s") or {}
             rows = lst.get("rows", [])
             lim = list_limit(snap, lst)

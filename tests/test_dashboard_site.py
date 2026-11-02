@@ -315,7 +315,7 @@ def test_option_panels_load_from_matching_files_with_complete_fallbacks(site):
 
     page = (site / "options.html").read_text(encoding="utf-8")
     sources = re.findall(r'data-src="(fragments/o-[^"]+\.json)"', page)
-    assert len(sources) == 30
+    assert len(sources) == 10
     for source in sources:
         content = json.loads((site / source).read_text(encoding="utf-8"))["html"]
         fallback = (site / "option" / (Path(source).stem + ".html")).read_text(encoding="utf-8")
@@ -353,7 +353,8 @@ def test_goal_and_evidence_are_built_and_linked(site):
     overview = (site / "index.html").read_text(encoding="utf-8")
     goal = (site / "goal.html").read_text(encoding="utf-8")
     evidence = (site / "evidence.html").read_text(encoding="utf-8")
-    assert overview.index('href="watchlist.html"') < overview.index('href="goal.html"')
+    assert 'href="watchlist.html"' in overview  # the single "2030" tab
+    assert 'href="goal.html"' in (site / "watchlist.html").read_text(encoding="utf-8")  # its second row
     assert 'id="evidence"' in overview and "No candidate passed" in evidence
     assert 'id="goal-required"' in goal and 'src="assets/goal.js' in goal
     assert "localStorage" in (site / "assets/goal.js").read_text(encoding="utf-8")
@@ -944,9 +945,9 @@ def test_tab_lists_name_their_panels_and_panels_name_their_tabs(site):
                     and tid.group(1) in re.search(r'aria-labelledby="([^"]+)"', panel).group(1).split()
                 )
     options = (site / "options.html").read_text(encoding="utf-8")
-    assert options.count('role="tabpanel"') == 6
-    assert 'id="opanel-put-6m" role="tabpanel" aria-labelledby="otab-type-put otab-hz-6m"' in options
-    assert 'aria-controls="opanel-put-3m opanel-put-6m opanel-put-12m"' in options  # the Puts tab controls three panels
+    assert options.count('role="tabpanel"') == 2
+    assert 'id="opanel-put-3m" role="tabpanel" aria-labelledby="otab-type-put otab-hz-3m"' in options
+    assert 'aria-controls="opanel-put-3m"' in options  # the Puts tab controls the one shown panel
     assert not re.search(r'\bid="(call|put)-(3m|6m|12m)"', options)  # view hashes stay free of elements
 
 

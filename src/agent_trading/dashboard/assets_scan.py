@@ -3,6 +3,7 @@
 CSS = r"""
 /* A restrained desk layout: clear hierarchy, legible figures, no remote assets. */
 header.site .inner, main { max-width: 1400px; padding-left: 28px; padding-right: 28px; }
+nav.subnav { max-width: 1400px; padding-left: 28px; padding-right: 28px; }
 header.site .inner { gap: 14px 20px; padding-top: 18px; padding-bottom: 14px; }
 header.site .brand { display: inline-flex; align-items: center; gap: 10px; letter-spacing: -.4px; }
 header.site .brand::before { content: "T / S"; background: var(--text-primary); color: var(--surface-1);

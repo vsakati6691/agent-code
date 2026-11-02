@@ -293,14 +293,6 @@ def _build_site(
     write("multibaggers.html", "Multibaggers", multibaggers_page(snap), "multibaggers.html")
     if not customer:
         option_body = options_page(snap, daily, option_fragments)
-        if (
-            len(page("Options research", option_body, "options.html", freshness=fresh).encode("utf-8"))
-            > site_performance.HTML_BUDGET
-        ):
-            for h in spec.HORIZONS:
-                body = options_page(snap, daily, option_fragments, horizon=h.key)
-                write(f"options-{h.key}.html", f"Options research · {h.title}", body, "options.html")
-            option_body = options_page(snap, daily, option_fragments, horizon=spec.HORIZONS[0].key)
         write("options.html", "Options research", option_body, "options.html")
         write(
             "bets.html",
