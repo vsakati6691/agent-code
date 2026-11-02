@@ -250,6 +250,35 @@ def test_scanner_actionable_respects_filters(settings):
         assert any("spread" in r for r in res.rejected["UPA"])
 
 
+def test_scanner_duplicate_quotes_use_the_widest_spread(settings):
+    # duplicate quote rows (e.g. a merged import) must not crash the scan; the widest spread applies
+    bars = universe_bars()
+    spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
+    fund = pd.DataFrame(
+        [
+            {"ticker": t, "operating_margin": 0.2, "roe": 0.2, "forward_pe": 20, "sector_code": "311"}
+            | {"earnings_date": "2026-12-15"}
+            for t in bars
+        ]
+    )
+    quotes = pd.DataFrame([{"ticker": t, "spread_pct": s} for t in bars for s in (0.001, 0.01)])
+    res = run_scan(bars, settings, AS_OF, fund, quotes, bench=spy)
+    assert res.actionable == []
+    assert res.rejected and all(any("spread 1.00%" in r for r in rs) for rs in res.rejected.values() if rs)
+
+
+def test_scan_without_fundamentals_has_no_dtype_warning(settings):
+    # fundamentals absent: the all-NaN sector column must not be filled with a string on a float dtype
+    import warnings
+
+    bars = universe_bars()
+    spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        res = run_scan(bars, settings, AS_OF, bench=spy)
+    assert res.table["valuation"].isna().all()
+
+
 def test_missing_factor_blocks_actionable(settings):
     bars = universe_bars()
     spy = make_bars(n=320, seed=7, drift=0.0004, vol=0.008, start=400)
