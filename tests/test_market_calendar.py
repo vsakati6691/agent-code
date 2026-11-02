@@ -45,3 +45,13 @@ def test_month_end_rebalance_respects_holidays():
 def test_next_session_skips_holidays():
     assert next_session(date(2026, 12, 24)) == date(2026, 12, 28)
     assert next_session(date(2026, 10, 9)) == date(2026, 10, 12)
+
+
+def test_data_session_is_the_newest_bar_but_never_older_than_the_previous_session():
+    monday, friday, thursday = date(2026, 10, 12), date(2026, 10, 9), date(2026, 10, 8)
+    assert mc.data_session([friday, thursday], monday) == friday  # pre-market / midday: Friday's close
+    assert mc.data_session([monday, friday], monday) == monday  # post-close with today's bars imported
+    assert mc.data_session([friday], date(2026, 10, 10)) == friday  # Saturday run
+    assert mc.data_session([thursday], monday) == friday  # everything lags: all of it is stale
+    assert mc.data_session([], monday) == friday
+    assert mc.data_session([date(2026, 10, 13)], monday) == friday  # a bar after as_of never sets the session

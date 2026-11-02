@@ -41,3 +41,4 @@ class DailyContext:
     manifest_path: str = ""
     live: LiveResult | None = None
     live_desk: list[DeskDecision] = field(default_factory=list)
+    data_session: date | None = None  # the session the run's bars should end on (market_calendar.data_session)

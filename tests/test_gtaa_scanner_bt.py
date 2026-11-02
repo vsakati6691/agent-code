@@ -25,6 +25,17 @@ def test_gtaa_signals_and_weights():
     assert gtaa.weights(hist, day, ["UP", "DOWN"], 10) == {"UP": 0.5}
 
 
+def test_gtaa_stale_asset_gets_no_signal_only_when_a_session_is_given():
+    df = make_bars(n=400, drift=0.002, vol=0.005, start=100)
+    day, last = df.index[-1], df.index[-1].date()
+    base = gtaa.signals({"X": df}, day, ["X"], 10)["X"]
+    assert gtaa.signals({"X": df}, day, ["X"], 10, session=last)["X"] == base  # fresh: unchanged
+    later = date(2026, 10, 12)
+    stale = gtaa.signals({"X": df}, pd.Timestamp(later), ["X"], 10, session=later)["X"]
+    assert stale["above"] is None and stale["reason"] == f"stale data: last bar {last}, not {later}"
+    assert gtaa.weights({"X": df}, pd.Timestamp(later), ["X"], 10) == {"X": 1.0}  # backtest path: no session
+
+
 def test_gtaa_needs_enough_months():
     short = make_bars(n=120)
     s = gtaa.signals({"X": short}, short.index[-1], ["X"], 10)["X"]

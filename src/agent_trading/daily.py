@@ -25,6 +25,7 @@ from .data.service import MarketDataService
 from .data.snapshots import high_impact_events, load_snapshot
 from .data.universe import coverage, load_universe, universe_problems
 from .journal import Journal
+from .market_calendar import data_session
 from .paper import Intent, PaperBroker
 from .strategies.desk import Position, next_session, run_desk
 from .strategies.scanner import run_scan
@@ -85,10 +86,22 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
     bench = loaded_desk.bars.get(sc.benchmark)
     if bench is not None:
         ctx.market = regime_mod.current(bench, settings.regime)
-    if universe is not None and not problems:
-        loaded = svc.load(universe.tickers, as_of)
+    loaded = svc.load(universe.tickers, as_of) if universe is not None and not problems else None
+    # every strategy compares its bars with one session for the whole run, so a lagging symbol cannot
+    # pass as current next to fresh ones (the loader alone allows a few business days of staleness)
+    run_bars = {**loaded_desk.bars, **(loaded.bars if loaded is not None else {})}
+    session = ctx.data_session = data_session([df.index[-1].date() for df in run_bars.values() if not df.empty], as_of)
+    stale = sorted(s for s, df in run_bars.items() if not df.empty and df.index[-1].date() < session)
+    ctx.data_notes.append(
+        f"market data session: {session}"
+        + (f"; {len(stale)} symbol(s) end earlier and get no entry signal: {', '.join(stale[:10])}" if stale else "")
+        + ("" if len(stale) <= 10 else f" (+{len(stale) - 10} more)")
+    )
+    if loaded is not None:
         ctx.coverage = coverage(universe, list(loaded.bars), loaded.rejected)
-        ctx.scan = run_scan(loaded.bars, settings, as_of, fund, quotes, cal.table if cal.available else None, bench)
+        ctx.scan = run_scan(
+            loaded.bars, settings, as_of, fund, quotes, cal.table if cal.available else None, bench, session
+        )
     elif universe is not None:
         ctx.data_notes.append("Strategy A skipped: " + "; ".join(problems))
 
@@ -103,14 +116,16 @@ def run_daily(settings: Settings, as_of: date, run_paper: bool = True, label: st
         else {}
     )
     events = high_impact_events(snaps["econ"], next_session(as_of), settings.desk.event_blackout_days)
-    ctx.desk_regime, ctx.desk = run_desk(loaded_desk.bars, settings, as_of, positions, events, lookup)
+    ctx.desk_regime, ctx.desk = run_desk(loaded_desk.bars, settings, as_of, positions, events, lookup, session)
 
     # --- paper broker
     intents: list[Intent] = _desk_intents(ctx.desk)
     if gtaa_assets:
         from .strategies import gtaa as gtaa_mod
 
-        ctx.gtaa = gtaa_mod.signals(loaded_desk.bars, pd.Timestamp(as_of), gtaa_assets, settings.gtaa.sma_months)
+        ctx.gtaa = gtaa_mod.signals(
+            loaded_desk.bars, pd.Timestamp(as_of), gtaa_assets, settings.gtaa.sma_months, session
+        )
         cal_days = list(bench.index) if bench is not None else []
         ctx.gtaa_rebalance = gtaa_mod.is_rebalance_day(cal_days, as_of)
         if ctx.gtaa_rebalance:

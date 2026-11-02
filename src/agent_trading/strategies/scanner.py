@@ -219,8 +219,11 @@ def run_scan(
     quotes: pd.DataFrame | None = None,
     earnings_table: pd.DataFrame | None = None,
     bench: pd.DataFrame | None = None,
+    session: date | None = None,
 ) -> ScanResult:
-    """`bars`: constituents only. `bench`: benchmark bars for relative strength."""
+    """`bars`: constituents only. `bench`: benchmark bars for relative strength.
+    `session`: the run's data session (market_calendar.data_session); a stock whose last bar is older
+    is never actionable. None skips the check."""
     sc = settings.scanner
     rows = {}
     for t, df in bars.items():
@@ -249,6 +252,8 @@ def run_scan(
         if len(actionable) >= sc.top_actionable or row["setup"] != "bullish":
             continue
         reasons = []
+        if session is not None and row["date"] < session:
+            reasons.append(f"stale data: last bar {row['date']}, not {session}")
         if row["close"] < sc.min_price:
             reasons.append(f"price ${row['close']:.2f} < ${sc.min_price:.0f}")
         if row["avg_dollar_volume"] < sc.min_avg_dollar_volume:
