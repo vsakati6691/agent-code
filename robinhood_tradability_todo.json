@@ -1,48 +1,42 @@
 {
- "as_of": "2026-10-30",
- "count": 28,
+ "as_of": "2026-11-02",
+ "count": 27,
  "instructions": "Check with the read-only Robinhood get_equity_tradability tool (Agent-trading account, at most 10 symbols per call), save each response, then run: python -m agent_trading.dashboard tradability import --data <dir> <files>",
  "symbols": [
   {
    "ticker": "RDDT",
    "band": "large",
-   "composite": 83.08,
+   "composite": 84.53,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "TPR",
    "band": "large",
-   "composite": 82.42,
+   "composite": 82.16,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "BE",
    "band": "large",
-   "composite": 78.94,
+   "composite": 79.02,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "ADSK",
    "band": "large",
-   "composite": 75.19,
+   "composite": 74.72,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "HAS",
    "band": "large",
-   "composite": 73.54,
+   "composite": 73.58,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "EXE",
    "band": "large",
    "composite": 73.54,
-   "reason": "Robinhood tradability not yet verified"
-  },
-  {
-   "ticker": "DASH",
-   "band": "large",
-   "composite": 73.51,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -54,7 +48,7 @@
   {
    "ticker": "FSS",
    "band": "mid",
-   "composite": 79.36,
+   "composite": 79.16,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -72,19 +66,19 @@
   {
    "ticker": "BOOT",
    "band": "mid",
-   "composite": 75.42,
+   "composite": 75.33,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "CGNX",
    "band": "mid",
-   "composite": 74.22,
+   "composite": 74.15,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "OLLI",
    "band": "mid",
-   "composite": 74.03,
+   "composite": 74.11,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -100,21 +94,15 @@
    "reason": "Robinhood tradability not yet verified"
   },
   {
-   "ticker": "ATMU",
-   "band": "mid",
-   "composite": 73.75,
-   "reason": "Robinhood tradability not yet verified"
-  },
-  {
    "ticker": "IDR",
    "band": "small",
-   "composite": 85.48,
+   "composite": 85.47,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "CRI",
    "band": "small",
-   "composite": 77.66,
+   "composite": 77.17,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -126,7 +114,7 @@
   {
    "ticker": "APEI",
    "band": "small",
-   "composite": 74.77,
+   "composite": 74.67,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -142,33 +130,39 @@
    "reason": "Robinhood tradability not yet verified"
   },
   {
-   "ticker": "PMTS",
-   "band": "small",
-   "composite": 72.54,
-   "reason": "Robinhood tradability not yet verified"
-  },
-  {
    "ticker": "INOD",
    "band": "small",
-   "composite": 70.83,
+   "composite": 70.85,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "OMCL",
    "band": "small",
-   "composite": 70.32,
+   "composite": 70.34,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "SWIM",
    "band": "small",
-   "composite": 70.21,
+   "composite": 70.09,
+   "reason": "Robinhood tradability not yet verified"
+  },
+  {
+   "ticker": "MMI",
+   "band": "small",
+   "composite": 69.76,
+   "reason": "Robinhood tradability not yet verified"
+  },
+  {
+   "ticker": "SD",
+   "band": "small",
+   "composite": 69.75,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "PODD",
    "band": "multibagger",
-   "composite": 67.32,
+   "composite": 67.22,
    "reason": "Robinhood tradability not yet verified"
   }
  ]
