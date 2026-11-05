@@ -153,6 +153,39 @@ def sessions_after(as_of: str, days: int = spec.FRESHNESS_CALENDAR_DAYS) -> list
     ]
 
 
+RUN_OUTCOMES = {
+    "completed": "completed",
+    "skipped": "skipped: the snapshot already existed and was kept unchanged",
+    "failed": "failed: the previous snapshot stays on display",
+}
+
+
+def run_outcome(status: dict | None) -> str | None:
+    """Workflow outcome of the latest attempt (completed, skipped or failed), kept apart from data completeness.
+
+    Before 2026-11-04 a skipped rerun wrote status 'ok' even over a partial snapshot; that fixed message identifies it."""
+    if not status:
+        return None
+    s = str(status.get("status") or "")
+    if s == "skipped" or (s == "ok" and "already exists; kept unchanged" in str(status.get("message", ""))):
+        return "skipped"
+    return "failed" if s == "failed" else "completed"
+
+
+def run_status_text(snap: dict, status: dict | None) -> str:
+    """'Snapshot <date> data: partial · latest workflow run: skipped ..., <at>': two states, never one word."""
+    data = str(snap.get("status") or "unknown")
+    outcome = run_outcome(status)
+    text = f"Snapshot {snap.get('as_of')} data: {data}"
+    if outcome:
+        at = str((status or {}).get("at", "")).replace("+00:00", " UTC")
+        text += f" · latest workflow run: {RUN_OUTCOMES[outcome]}"
+        if (status or {}).get("as_of") and str(status["as_of"]) != str(snap.get("as_of")):
+            text += f" (for {status['as_of']})"
+        text += f", {at}" if at else ""
+    return text
+
+
 def freshness_banner(snap: dict, status: dict | None, now: datetime | None = None) -> str:
     from .price_integrity import correction, preclose
 
@@ -177,7 +210,8 @@ def freshness_banner(snap: dict, status: dict | None, now: datetime | None = Non
         f'data-sessions="{E(",".join(sessions_after(as_of)))}" data-stale-after="{spec.FRESHNESS_STALE_SESSIONS}">'
         f'<span>Data: {start:%d %b %Y} · <span id="age">{age_text}</span> · {price_basis}</span>'
         f"<details><summary>Details</summary><p>{E(quote_note)} Age checked at site build {built:%Y-%m-%d %H:%M} ET. "
-        "Session age counts completed NYSE sessions, using the registered 16:00 ET convention.</p></details>"
+        "Session age counts completed NYSE sessions, using the registered 16:00 ET convention.</p>"
+        f'<p class="run-status">{E(run_status_text(snap, status))}.</p></details>'
         f'{badge}<a href="audit.html#latest-run">Run details</a></div>'
     ]
     if status and status.get("status") == "failed" and str(status.get("at", "")) >= str(snap.get("run_finished", "")):

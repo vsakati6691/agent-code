@@ -11,6 +11,7 @@ from .fmt import pct, tracking_schedule
 from .render_context import customer
 from .site_list_common import E, band_title, ordered
 from .site_research import datasets_line
+from .tracking import version_blocks
 
 RISK_GROUPS = (
     "25%+ below the 52-week high",
@@ -169,13 +170,14 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
     risk = "".join(f'<li class="small">{E(w)}</li>' for w in conc) + "".join(
         _flag_item(g, list(dict.fromkeys(ts)), total) for g, ts in groups.items() if ts
     )
-    measured = any(
-        v.get(h, {}).get("snapshots_measured")
-        for v in ((tracking or {}).get("summary") or {}).values()
-        for h in spec.TRACK_HORIZONS
+    # spec: results are never pooled across methodology versions; complete baskets only (tracking.version_blocks)
+    blocks = version_blocks(tracking) or []
+    latest = blocks[-1] if blocks else None
+    measured = latest is not None and any(
+        (v.get(h) or {}).get("snapshots_measured") for v in latest["summary"].values() for h in spec.TRACK_HORIZONS
     )
     perf = f'<p class="small muted">{E(tracking_schedule(dates or [snap["as_of"]]))}</p>'
-    if tracking and tracking.get("summary") and measured:
+    if latest is not None and measured:
         rows = "".join(
             f"<tr><td>{E(k)}</td>"
             + "".join(
@@ -183,13 +185,14 @@ def panels(snap: dict, tracking: dict | None, dates: list[str] | None = None, pr
                 for h in spec.TRACK_HORIZONS
             )
             + "</tr>"
-            for k, v in tracking["summary"].items()
+            for k, v in latest["summary"].items()
         )
         perf = (
             '<div class="table-wrap"><table class="small" aria-label="Mean excess return by list and horizon"><thead><tr><th>List</th>'
             + "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS)
             + f'</tr></thead><tbody>{rows}</tbody></table></div><p class="small muted">Mean excess return vs benchmark, net of '
-            f"assumed friction, from immutable prior snapshots. {E(tracking.get('evidence_note', ''))}</p>"
+            f"assumed friction, complete baskets of methodology {E(latest['spec_version'])} only, from immutable prior "
+            f"snapshots. {E(latest.get('evidence_note', ''))}</p>"
         )
     u = snap["universe"]
     tr = snap.get("tradability") or {}

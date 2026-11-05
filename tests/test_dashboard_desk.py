@@ -240,7 +240,9 @@ def test_build_rates_each_ticker_once_in_list_order_and_is_reproducible():
 
 
 def test_track_desk_uses_only_stored_ratings():
-    idx = pd.bdate_range("2026-01-02", periods=80)
+    from agent_trading.market_calendar import is_trading_day
+
+    idx = pd.DatetimeIndex([d for d in pd.bdate_range("2026-01-02", periods=90) if is_trading_day(d.date())][:80])
     prices = {
         "AAA": pd.Series([100.0 * 1.01**i for i in range(80)], index=idx),
         "SPY": pd.Series([100.0] * 80, index=idx),

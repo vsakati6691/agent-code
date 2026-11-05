@@ -26,7 +26,7 @@ from pathlib import Path
 
 from ..logging_setup import protect_log_handlers, register_secret
 from . import earnings_verdicts, spec, tracking
-from .http import FetchError, HttpClient
+from .http import HttpClient
 from .pipeline import RunFailed, as_of_for, run
 from .providers import Providers
 from .site import build_site, scan_for_secrets
@@ -69,8 +69,16 @@ def cmd_run(args) -> int:
     store = Store(Path(args.data))
     as_of = date.fromisoformat(args.as_of) if args.as_of else as_of_for(datetime.now(UTC))
     if str(as_of) in store.dates():
+        # The run outcome (skipped) is not the stored data's completeness: a skip over a partial snapshot must not
+        # report "ok". snapshot_status repeats the immutable manifest's status for the status display.
+        existing = next((m for m in store.manifests() if m["as_of"] == str(as_of)), {})
         store.audit("run_skipped", as_of=as_of, reason="snapshot already exists (immutable)")
-        store.write_status("ok", f"snapshot for {as_of} already exists; kept unchanged", str(as_of))
+        store.write_status(
+            "skipped",
+            f"snapshot for {as_of} already exists; kept unchanged",
+            str(as_of),
+            snapshot_status=existing.get("status") or "unknown",
+        )
         print(f"snapshot for {as_of} already exists; nothing to do")
         return 0
     store.audit("run_started", as_of=as_of, commit=args.commit, limit=args.limit, options=not args.no_options)
@@ -112,10 +120,12 @@ def cmd_run(args) -> int:
         store.write_status("failed", f"unexpected error ({type(exc).__name__})", str(as_of))
         log.exception("dashboard run crashed")
         return 2
+    stored_status = payload["status"]
     try:
         store.write_snapshot(payload, args.commit or "")
     except SnapshotExists as exc:
         store.audit("run_skipped", as_of=as_of, reason=str(exc))
+        stored_status = next((m.get("status") for m in store.manifests() if m["as_of"] == str(as_of)), "unknown")
     # From here on the snapshot is stored. The workflow commits the data branch only when this command exits 0
     # or 2, so a failure in the derived tracking file must be recorded, not raised: raising would discard the
     # week's snapshot and audit lines along with it. tracking.json is recomputed from the snapshots next run.
@@ -136,6 +146,7 @@ def cmd_run(args) -> int:
         "weekly update completed" if status == "ok" else "weekly update completed with partial data",
         str(as_of),
         problems=problems[:10],
+        snapshot_status=stored_status,
     )
     store.audit("run_finished", as_of=as_of, status=status, usage=providers.http.usage())
     print(f"snapshot {as_of}: status {status}; requests {providers.http.usage()['requests']}")
@@ -150,25 +161,35 @@ def cmd_run(args) -> int:
 def update_tracking(store: Store, providers: Providers, as_of: date) -> None:
     snaps = [store.load(d) for d in tracking.weekly_sample(store.manifests())]  # spec SNAPSHOT_CADENCE_RULE
     tickers = {c["ticker"] for s in snaps for b in s.get("bands", {}).values() for c in b.get("candidates", [])}
-    tickers |= {b.benchmark for b in spec.BANDS}
+    tickers |= {b.benchmark for b in spec.BANDS} | {b["benchmark"] for b in spec.LEGACY_BANDS.values()}
     prices = {}
     from .pipeline_collect import latest_bars
     from .pipeline_context import Context
 
-    private = getattr(providers, "history_provider", "cboe") == "massive"
+    # The same validated price path as ranking (spec PRICE_BAR_RULE): one source per series, the close-verified
+    # end-of-session quote bar when the history file lags the as-of close, and the split/padding/range checks. Until
+    # 2026-11-04 tracking read the raw history file, which had not yet published the as-of close when the 2026-11-03
+    # snapshot was stored, so every new pick was reported as having no close on its own snapshot date.
     ctx = Context(as_of, providers)
+    rejected, quote_bars = {}, []
     for t in sorted(tickers):
-        if private:
-            df, _, _ = latest_bars(ctx, t)
-            if df is not None:
-                prices[t] = df["close"]
+        df, why, flags = latest_bars(ctx, t, 1, require_as_of=False)
+        if df is None:  # reported by tracking as a missing price, never dropped silently
+            rejected[t] = why or "no validated price data"
             continue
-        try:
-            df = providers.history(t)
-        except FetchError:  # reported by tracking as unavailable, never dropped silently
-            continue
-        prices[t] = df["close"][df.index <= str(as_of)]
-    store.write_json("tracking.json", tracking.track(snaps, prices, as_of))
+        prices[t] = df["close"]
+        if any("end-of-session" in f and "taken from" in f for f in flags):
+            quote_bars.append(t)
+    source = {
+        "provider": getattr(providers, "history_provider", "cboe"),
+        "validation": "spec PRICE_BAR_RULE (as ranking), without the as-of lag gate so stopped series keep their closes",
+        "collected_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "symbols": len(tickers),
+        "validated": len(prices),
+        "rejected": rejected,
+        "as_of_bar_from_quote": quote_bars,
+    }
+    store.write_json("tracking.json", tracking.track(snaps, prices, as_of, source))
 
 
 def cmd_tradability(args) -> int:

@@ -322,12 +322,14 @@ def test_forward_returns_never_look_ahead_and_report_delisting():
     idx = pd.bdate_range("2026-01-01", periods=60)
     up = pd.Series(range(100, 160), index=idx, dtype=float)
     r, status = tracking.forward_return(up, idx[0].date(), 21, idx[-1].date())
-    assert status == "ok" and r == pytest.approx(up.iloc[21] / up.iloc[0] - 1)
+    # the endpoint is the 21st NYSE session (2026-02-02); a weekday bar on a holiday (MLK Day) is not a session
+    assert tracking.session_after(idx[0].date(), 21) == date(2026, 2, 2)
+    assert status == "ok" and r == pytest.approx(up.loc["2026-02-02"] / up.iloc[0] - 1)
     r, status = tracking.forward_return(up, idx[50].date(), 21, idx[-1].date())
     assert r is None and status == "pending"  # future prices are not available yet
     gone = up.iloc[:10]
     r, status = tracking.forward_return(gone, idx[0].date(), 21, idx[-1].date())
-    assert r is None and "delisting" in status
+    assert r is None and status.startswith("missing exit price") and "delisting" in status
 
 
 def test_forward_return_counts_nyse_sessions_not_weekdays():
@@ -347,11 +349,15 @@ def test_forward_return_counts_nyse_sessions_not_weekdays():
     assert status == "ok" and r == pytest.approx(close.iloc[21] / close.iloc[0] - 1)
     # a series that really stops before the as-of session is still reported as a possible delisting
     r, status = tracking.forward_return(close.iloc[:10], start, 21, date(2026, 3, 31))
-    assert r is None and status.startswith("prices stop on 2026-01-15") and "delisting" in status
-    # a vendor gap (a session without a bar) is named as such, never bridged or called a delisting
+    assert r is None and status.startswith("missing exit price: prices stop on 2026-01-15") and "delisting" in status
+    # a vendor gap inside the window never moves the endpoint: the return is still the 2026-02-03 close
     gap = close[close.index <= "2026-02-03"].drop(pd.Timestamp("2026-01-27"))
     r, status = tracking.forward_return(gap, start, 21, date(2026, 2, 3))
-    assert r is None and status == "missing bars: only 20 of 21 sessions after 2026-01-02 have a close"
+    assert status == "ok" and r == pytest.approx(close.loc["2026-02-03"] / close.iloc[0] - 1)
+    # a gap ON the endpoint session is a missing exit price, never bridged to the next session's close
+    hole = close[close.index <= "2026-02-10"].drop(pd.Timestamp("2026-02-03"))
+    r, status = tracking.forward_return(hole, start, 21, date(2026, 2, 10))
+    assert r is None and status == "missing exit price: no close on the 2026-02-03 session"
     # the tracking schedule shown on the site uses the same calendar: results appear when the sessions have passed
     from agent_trading.dashboard.fmt import tracking_schedule
 
@@ -376,7 +382,7 @@ def test_tracking_applies_friction_turnover_and_never_claims_edge():
     out = tracking.track(snaps, prices, idx[-1].date())
     h = out["by_snapshot"][0]["horizons"]["1m"]
     assert h["status"] == "ok" and h["net"] == pytest.approx(h["gross"] - 2 * 15 / 1e4)
-    assert out["turnover"]["large"][0]["turnover"] == pytest.approx(0.5)
+    assert out["by_version"][0]["turnover"]["large"][0]["turnover"] == pytest.approx(0.5)
     assert "No edge is claimed" in out["evidence_note"]
 
 

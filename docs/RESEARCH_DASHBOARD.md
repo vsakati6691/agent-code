@@ -459,6 +459,9 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
 - **Overlap:** a workflow `concurrency` group serializes runs, without cancelling a run in progress.
 - **Failures:**
   - A failed run writes `status.json` and an audit entry, and keeps every earlier snapshot.
+  - A rerun for a date that already has a snapshot writes status `skipped`, plus `snapshot_status` copied from the
+    immutable manifest. The site shows the workflow outcome and the snapshot's data completeness separately. Before
+    2026-11-04 a skip wrote `ok`, even over a `partial` snapshot; the site still reads that older message as a skip.
   - A failure after the snapshot is written (the tracking update) is recorded as `tracking_failed`; the snapshot is
     kept, the status is `partial`, and tracking is recomputed on the next run.
   - The site is rebuilt from the last good snapshot, with a red "latest weekly update failed" banner.
@@ -479,6 +482,22 @@ Spec version 2026-10-14.1 applied two earlier owner requests:
   - lists are never reselected after the fact;
   - fundamentals are point-in-time;
   - names whose prices stop are reported as "possible delisting", not dropped. Delisting returns are not available from these sources.
+- **Measurement revision 2026-11-04** (computation only; `TRACKING_METHOD`, `TRACK_HORIZONS` and the spec hash are
+  unchanged, and no horizon had completed before it):
+  - Prices come from the ranking path (`pipeline_collect.latest_bars`, spec `PRICE_BAR_RULE`): one source per
+    series, the split, padding and range checks, and the close-verified end-of-session quote bar when the Cboe
+    history file lags. A stopped series keeps its closes. `tracking.json` records the provider, collection time,
+    rejected series and quote-filled as-of bars under `prices`.
+  - Every stock and its benchmark use the same two NYSE sessions: the as-of close and exactly N sessions later. A
+    horizon is `pending` until that session has passed and its close is published. A missing close is
+    `missing entry price` or `missing exit price` and is never bridged to another session.
+  - A basket is `ok` only when every published pick and the benchmark are measurable. Otherwise it is `incomplete`,
+    `benchmark unavailable` or `unavailable`; it shows its measurable count and stays out of the averages.
+  - Summaries, turnover and the one-week chain are computed per methodology version (`by_version`). The site does
+    not show a `tracking.json` written before the revision; the next run recomputes it.
+  - Root cause (2026-11-03 snapshot): all 44 published picks carried the flag "as-of bar taken from the
+    end-of-session Cboe quote; the history file had not yet published it". Tracking read the raw history file,
+    which ended on 2026-11-02. So every new basket became "no close on the snapshot date" instead of pending.
 - No edge is claimed before 52 snapshots, and none afterwards without a statistical test. Nothing is tuned on tracked results; a rule change creates a new spec version.
 
 ## Watchlist — 2030 Outlook

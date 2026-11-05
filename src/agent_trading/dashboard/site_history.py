@@ -19,6 +19,7 @@ from .render_context import customer
 from .site_layout import E, brand
 from .site_options import lists_of
 from .site_overview import band_title
+from .tracking import version_blocks
 
 
 def history_page(
@@ -28,52 +29,119 @@ def history_page(
     items = "".join(
         f'<li><a href="reports/{d}.html">Snapshot {d}</a></li>' for d in reversed(dates if reports is None else reports)
     )
-    if not tracking:
-        trk = f'<p class="small">{E(tracking_schedule(dates))}</p>'
-    else:
-        rows = []
-        for r in reversed(tracking["by_snapshot"]):
-            cells = []
-            for h in spec.TRACK_HORIZONS:
-                x = r["horizons"].get(h, {})
-                if x.get("status") == "ok":
-                    cells.append(
-                        f'<td class="num">{pct(x["net"], 1, True)}<div class="small muted">vs {pct(x["benchmark"], 1, True)}'
-                        f"{f' · {len(x["unavailable"])} n/a' if x['unavailable'] else ''}</div></td>"
-                    )
-                else:
-                    cells.append(f'<td class="num muted">{E(x.get("status", "pending"))}</td>')
-            rows.append(
-                f'<tr><td>{E(r["as_of"])}</td><td>{E(r["band"])}</td><td class="small">{E(r["spec_version"])}</td>{"".join(cells)}</tr>'
-            )
-        summ = "".join(
-            f"<tr><td>{E(k)}</td>"
-            + "".join(
-                f'<td class="num">{pct(v[h]["mean_excess_net"], 1, True)}<div class="small muted">{v[h]["snapshots_measured"]} measured</div></td>'
-                for h in spec.TRACK_HORIZONS
-            )
-            + f'<td class="num">{pct(v.get("mean_weekly_turnover"))}</td></tr>'
-            for k, v in tracking["summary"].items()
+    trk = tracking_section(tracking, dates)
+    return f"""<h1>History and performance tracking</h1><p class="lede">Every snapshot is stored unchanged; tracking uses one per ISO week. Later prices
+measure each list as it was published.</p>{site_methodology.history_table(snapshots or [])}<h2>Snapshot reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
+
+
+def _cell(x: dict) -> str:
+    """One basket and horizon: the result only for a complete basket, otherwise its state and measurable count."""
+    st = x.get("status", "pending")
+    n, m = x.get("n"), x.get("measured", 0)
+    count = f"{m} of {n} picks measurable" if n is not None else ""
+    if st == "ok":
+        return (
+            f'<td class="num">{pct(x["net"], 1, True)}<div class="small muted">vs {pct(x["benchmark"], 1, True)} · '
+            f"{E(count)}</div></td>"
         )
-        chain = "".join(
-            f"<li>{E(k)}: {v['weeks']} weeks, cumulative {pct(v['cumulative_net'], 1, True)}, max drawdown "
-            f"{pct(v['max_drawdown'], 1)}</li>"
-            for k, v in tracking.get("weekly_chain", {}).items()
+    if st == "pending":
+        due = x.get("exit_session")
+        detail = x.get("note") or (f"result after the {due} close" if due else "")
+        return f'<td class="num muted">pending<div class="small">{E(detail)}</div></td>'
+    parts = [count]
+    if x.get("missing_entry"):
+        parts.append(f"{x['missing_entry']} missing entry price")
+    if x.get("missing_exit"):
+        parts.append(f"{x['missing_exit']} missing exit price")
+    if x.get("benchmark") is None and x.get("benchmark_status"):
+        parts.append("benchmark unavailable")
+    title = "; ".join(f"{u['ticker']}: {u['status']}" for u in x.get("unavailable", []))
+    return (
+        f'<td class="num muted" title="{E(title)}">{E(st)}<div class="small">{E(" · ".join(p for p in parts if p))}'
+        "</div></td>"
+    )
+
+
+def _version_block(v: dict) -> str:
+    hh = "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS)
+    summ = "".join(
+        f"<tr><td>{E(k)}</td>"
+        + "".join(
+            f'<td class="num">{pct(s[h]["mean_excess_net"], 1, True)}<div class="small muted">'
+            f"{s[h]['snapshots_measured']} complete · {s[h].get('incomplete', 0)} incomplete · "
+            f"{s[h].get('pending', 0)} pending</div></td>"
+            for h in spec.TRACK_HORIZONS
         )
-        hh = "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS)
-        trk = f"""<div class="banner warn"><strong>Evidence status</strong>{E(tracking["evidence_note"])}</div>
-<p class="small">{E(tracking_schedule(dates))}</p>
-<p class="small">Legacy category aggregates below can span methodology versions; they are not evidence for any single version. Use the per-snapshot version column and continuity table when interpreting them.</p>
-<h3>Average excess return net of friction, by category</h3><div class="table-wrap"><table aria-label="Average excess return by list"><thead><tr><th>Category</th>{hh}
+        + f'<td class="num">{pct(s.get("mean_weekly_turnover"))}</td></tr>'
+        for k, s in v["summary"].items()
+    )
+    chain = "".join(
+        (
+            f"<li>{E(k)}: {c['weeks']} weeks ({E(c['first'])} to {E(c['last'])}), cumulative "
+            f"{pct(c['cumulative_net'], 1, True)}, max drawdown {pct(c['max_drawdown'], 1)}"
+            if c.get("weeks")
+            else f"<li>{E(k)}: no complete week yet"
+        )
+        + (
+            f"; {len(c['skipped_incomplete'])} week(s) left out because a pick had no 5-session return"
+            if c.get("skipped_incomplete")
+            else ""
+        )
+        + "</li>"
+        for k, c in v.get("weekly_chain", {}).items()
+    )
+    return f"""<h3>Methodology {E(v["spec_version"])}</h3><p class="small">{v["weekly_snapshots"]} weekly snapshot(s),
+{E(v["first_as_of"])} to {E(v["last_as_of"])}. {E(v["evidence_note"])}</p>
+<div class="table-wrap"><table aria-label="Average excess return by list, methodology {E(v["spec_version"])}"><thead><tr><th>Category</th>{hh}
 <th class="num">Weekly turnover</th></tr></thead><tbody>{summ}</tbody></table></div>
-<h3>Weekly one-week chain</h3><ul class="small">{chain or '<li class="muted">Appears once a weekly list has been held for 5 trading sessions with prices for every name.</li>'}</ul>
+<p class="small">Averages use complete baskets only: every published pick and the benchmark priced on both sessions.</p>
+<ul class="small">{chain or '<li class="muted">Weekly one-week chain: appears once a weekly list has been held for 5 sessions with prices for every name.</li>'}</ul>"""
+
+
+def _price_line(src: dict | None) -> str:
+    if not src:
+        return ""
+    rejected = src.get("rejected") or {}
+    quote = src.get("as_of_bar_from_quote") or []
+    text = (
+        f"Tracking prices: {src.get('provider', '?')} daily closes collected {src.get('collected_at', '?')}, "
+        f"validated as for ranking; {src.get('validated', 0)} of {src.get('symbols', 0)} symbols usable"
+        + (f"; {len(quote)} as-of close(s) from the close-verified end-of-session quote" if quote else "")
+        + (f"; rejected: {', '.join(f'{t} ({why})' for t, why in sorted(rejected.items()))}" if rejected else "")
+        + "."
+    )
+    return f'<p class="small">{E(text)}</p>'
+
+
+def tracking_section(tracking: dict | None, dates: list[str]) -> str:
+    schedule = f'<p class="small">{E(tracking_schedule(dates))}</p>'
+    if not tracking:
+        return schedule
+    blocks = version_blocks(tracking)
+    if blocks is None:  # written before the measurement revision: pooled versions and unvalidated prices
+        return (
+            schedule + '<div class="banner warn"><strong>Tracking is being recomputed</strong>The stored tracking file '
+            f"(as of {E(str(tracking.get('as_of', '?')))}) predates the 2026-11-04 measurement revision: it pooled "
+            "methodology versions and read an unvalidated price file, so it is not shown. The next scheduled run "
+            "recomputes it from the immutable snapshots.</div>"
+        )
+    rev = tracking.get("measurement_revision") or {}
+    rows = []
+    for r in reversed(tracking["by_snapshot"]):
+        cells = "".join(_cell(r["horizons"].get(h, {})) for h in spec.TRACK_HORIZONS)
+        rows.append(
+            f'<tr><td>{E(r["as_of"])}</td><td>{E(r["band"])}</td><td class="small">{E(r["spec_version"])}</td>{cells}</tr>'
+        )
+    hh = "".join(f'<th class="num">{h}</th>' for h in spec.TRACK_HORIZONS)
+    return f"""<div class="banner warn"><strong>Evidence status</strong>{E(tracking["evidence_note"])}</div>{schedule}
+<p class="small"><strong>Measurement revision {E(rev.get("date", ""))}.</strong> {E(rev.get("rule", ""))} {E(rev.get("previous", ""))}
+The registered tracking method below is unchanged.</p>{_price_line(tracking.get("prices"))}
+{"".join(_version_block(v) for v in reversed(blocks))}
 <h3>Each snapshot</h3><div class="table-wrap"><table aria-label="Tracking result for each snapshot"><thead><tr><th>As of</th><th>Category</th><th>Spec</th>{hh}</tr></thead>
 <tbody>{"".join(rows)}</tbody></table></div>
 <p class="small">{E(tracking["method"])}</p><ul class="small">{"".join(f"<li>{E(x)}</li>" for x in tracking["limitations"])}</ul>
 <p class="small">Assumed trading friction per side: {E(", ".join(f"{k} {v:g} bps" for k, v in tracking["friction"].items()))}
 (bps = hundredths of a percent).</p>"""
-    return f"""<h1>History and performance tracking</h1><p class="lede">Every snapshot is stored unchanged; tracking uses one per ISO week. Later prices
-measure each list as it was published.</p>{site_methodology.history_table(snapshots or [])}<h2>Snapshot reports</h2><ul>{items}</ul><h2>Tracking</h2>{trk}"""
 
 
 def weekly_report(snap: dict) -> str:
