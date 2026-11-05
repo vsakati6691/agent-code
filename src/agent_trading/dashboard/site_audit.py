@@ -15,7 +15,7 @@ from .fmt import (
     sval as sval,
 )
 from .render_context import customer
-from .site_layout import E
+from .site_layout import E, run_status_text
 from .site_research import datasets_table
 from .store import Store
 
@@ -76,7 +76,9 @@ def audit_page(
 estimated data: anything not collected is shown as missing.</p><h2>Snapshots</h2><div class="table-wrap"><table aria-label="Stored snapshots"><thead><tr><th>As of</th><th>SHA-256</th>
 <th>Spec</th><th>Code</th><th>Status</th></tr></thead><tbody>{"".join(man)}</tbody></table></div>
 <h2 id="latest-run">Latest run</h2><p>Snapshot methodology: {E(str(snap.get("spec_version") or "unavailable"))}.
-Status: {E(str(snap.get("status") or "unavailable"))}. Latest attempt: {E(_readable(status or {}))}.</p>
+{E(run_status_text(snap, status))}.</p><p class="small">Snapshot data completeness (ok or partial) is fixed when the
+snapshot is stored; the workflow outcome describes the latest scheduled attempt. Latest attempt details:
+{E(_readable({k: v for k, v in (status or {}).items() if k != "status"}))}.</p>
 <p class="small">Started {E(snap.get("run_started", ""))}, finished {E(snap.get("run_finished", ""))} UTC.
 Requests by provider: {E(", ".join(f"{k} {v}" for k, v in usage.get("requests", {}).items()) or "none (all answered from cache)")};
 cache hits {E(str(usage.get("cache_hits", 0)))}.

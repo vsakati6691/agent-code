@@ -64,12 +64,17 @@ MIN_HISTORY_BARS = 60
 
 
 def latest_bars(
-    ctx: Context, symbol: str, min_bars: int = MIN_HISTORY_BARS
+    ctx: Context, symbol: str, min_bars: int = MIN_HISTORY_BARS, *, require_as_of: bool = True
 ) -> tuple[pd.DataFrame | None, str | None, list[str]]:
     """Validated daily bars ending exactly on the as-of session, or a reason.
 
-    `min_bars` below the default only verifies the as-of price itself (spec WATCHLIST_PRICE_RULE)."""
-    key = symbol if min_bars == MIN_HISTORY_BARS else (symbol, min_bars)
+    `min_bars` below the default only verifies the as-of price itself (spec WATCHLIST_PRICE_RULE).
+    `require_as_of=False` (performance tracking) applies the same source, as-of quote bar and PRICE_BAR_RULE checks
+    but keeps a series that ends before the as-of session, so a delisted name is reported as 'prices stop' for the
+    horizons it cannot reach instead of losing the closes it did publish."""
+    key: str | tuple[str, int] | tuple[str, int, bool] = symbol if min_bars == MIN_HISTORY_BARS else (symbol, min_bars)
+    if not require_as_of:
+        key = (symbol, min_bars, False)
     if key in ctx.histories:
         return ctx.histories[key]
     flags: list[str] = []
@@ -99,7 +104,7 @@ def latest_bars(
             df,
             symbol,
             ctx.as_of,
-            spec.MAX_PRICE_LAG_BUSINESS_DAYS,
+            spec.MAX_PRICE_LAG_BUSINESS_DAYS if require_as_of else 10**6,
             min_bars,
             check_open_range=not cboe,
             close_range_bars=spec.PRICE_RANGE_CHECK_BARS if cboe else None,

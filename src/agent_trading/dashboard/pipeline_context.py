@@ -52,9 +52,9 @@ class Context:
     transient_failures: int = 0  # requests that still failed after their retries (429/5xx/timeouts)
     limit: int | None = None
     quotes: dict[str, tuple[Quote | None, str | None]] = field(default_factory=dict)
-    histories: dict[str | tuple[str, int], tuple[pd.DataFrame | None, str | None, list[str]]] = field(
-        default_factory=dict
-    )
+    histories: dict[
+        str | tuple[str, int] | tuple[str, int, bool], tuple[pd.DataFrame | None, str | None, list[str]]
+    ] = field(default_factory=dict)
     facts: dict[int, tuple[Fundamentals | None, str | None]] = field(default_factory=dict)
     decision_extras: dict = field(default_factory=dict)
     earnings_reason: str | None = None
