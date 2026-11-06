@@ -1,7 +1,12 @@
 {
- "status": "skipped",
- "message": "snapshot for 2026-11-04 already exists; kept unchanged",
- "as_of": "2026-11-04",
- "at": "2026-11-05T18:47:01+00:00",
+ "status": "partial",
+ "message": "weekly update completed with partial data",
+ "as_of": "2026-11-05",
+ "at": "2026-11-06T04:50:54+00:00",
+ "problems": [
+  "no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)",
+  "insiders: partial; 23/39 available; 0 deferred",
+  "risk_excerpt: partial; 38/39 available; 0 deferred"
+ ],
  "snapshot_status": "partial"
 }
