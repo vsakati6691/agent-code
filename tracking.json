@@ -5,7 +5,7 @@
   "rule": "Every stock and its benchmark are measured between the same two NYSE sessions: the snapshot's as-of close and exactly N sessions later (TRACK_HORIZONS). A horizon is pending until that session has passed and its closes are published. A missing entry or exit close is reported as missing, never bridged to another session. A basket counts as complete only when every published pick and the benchmark have both closes; incomplete baskets are shown with their measurable count and left out of the completed-basket averages. Summaries, turnover and weekly chains are computed separately for each methodology version. Prices pass the same validation as ranking (PRICE_BAR_RULE, including the close-verified end-of-session quote bar when the history file lags).",
   "previous": "Before 2026-11-04 the tracking file used unvalidated provider history, positional session counts and category aggregates across versions. No 1-, 3-, 6- or 12-month result had completed under it."
  },
- "as_of": "2026-11-06",
+ "as_of": "2026-11-09",
  "by_snapshot": [
   {
    "as_of": "2026-10-13",
@@ -1892,6 +1892,252 @@
      "unavailable": []
     }
    }
+  },
+  {
+   "as_of": "2026-11-09",
+   "spec_version": "2026-10-19.6",
+   "band": "ai_large",
+   "n": 5,
+   "benchmark": "SPY",
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2026-12-09",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-02-10",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-05-12",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-11-10",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-11-09",
+   "spec_version": "2026-10-19.6",
+   "band": "ai_mid",
+   "n": 4,
+   "benchmark": "IJH",
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2026-12-09",
+     "n": 4,
+     "measured": 0,
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-02-10",
+     "n": 4,
+     "measured": 0,
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-05-12",
+     "n": 4,
+     "measured": 0,
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-11-10",
+     "n": 4,
+     "measured": 0,
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-11-09",
+   "spec_version": "2026-10-19.6",
+   "band": "large",
+   "n": 10,
+   "benchmark": "SPY",
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2026-12-09",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-02-10",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-05-12",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-11-10",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-11-09",
+   "spec_version": "2026-10-19.6",
+   "band": "mid",
+   "n": 10,
+   "benchmark": "IJH",
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2026-12-09",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-02-10",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-05-12",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-11-10",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-11-09",
+   "spec_version": "2026-10-19.6",
+   "band": "multibagger",
+   "n": 5,
+   "benchmark": "IWM",
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2026-12-09",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-02-10",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-05-12",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-11-10",
+     "n": 5,
+     "measured": 0,
+     "unavailable": []
+    }
+   }
+  },
+  {
+   "as_of": "2026-11-09",
+   "spec_version": "2026-10-19.6",
+   "band": "small",
+   "n": 10,
+   "benchmark": "IWM",
+   "horizons": {
+    "1m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2026-12-09",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "3m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-02-10",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "6m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-05-12",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    },
+    "12m": {
+     "status": "pending",
+     "entry_session": "2026-11-09",
+     "exit_session": "2027-11-10",
+     "n": 10,
+     "measured": 0,
+     "unavailable": []
+    }
+   }
   }
  ],
  "by_version": [
@@ -3078,66 +3324,66 @@
   {
    "spec_version": "2026-10-19.6",
    "first_as_of": "2026-10-23",
-   "last_as_of": "2026-11-06",
-   "weekly_snapshots": 3,
+   "last_as_of": "2026-11-09",
+   "weekly_snapshots": 4,
    "summary": {
     "ai_large": {
      "1m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "3m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "6m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "12m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
-     "mean_weekly_turnover": 0.09999999999999998
+     "mean_weekly_turnover": 0.06666666666666665
     },
     "ai_mid": {
      "1m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "3m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "6m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "12m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
@@ -3147,90 +3393,90 @@
      "1m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "3m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "6m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "12m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
-     "mean_weekly_turnover": 0.14999999999999997
+     "mean_weekly_turnover": 0.1333333333333333
     },
     "mid": {
      "1m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "3m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "6m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "12m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
-     "mean_weekly_turnover": 0.14999999999999997
+     "mean_weekly_turnover": 0.16666666666666663
     },
     "multibagger": {
      "1m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "3m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "6m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "12m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
@@ -3240,32 +3486,32 @@
      "1m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "3m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "6m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
      "12m": {
       "snapshots_measured": 0,
       "incomplete": 0,
-      "pending": 3,
+      "pending": 4,
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
-     "mean_weekly_turnover": 0.2
+     "mean_weekly_turnover": 0.16666666666666666
     }
    },
    "turnover": {
@@ -3277,6 +3523,10 @@
      {
       "as_of": "2026-11-06",
       "turnover": 0.0
+     },
+     {
+      "as_of": "2026-11-09",
+      "turnover": 0.0
      }
     ],
     "ai_mid": [
@@ -3286,6 +3536,10 @@
      },
      {
       "as_of": "2026-11-06",
+      "turnover": 0.0
+     },
+     {
+      "as_of": "2026-11-09",
       "turnover": 0.0
      }
     ],
@@ -3297,6 +3551,10 @@
      {
       "as_of": "2026-11-06",
       "turnover": 0.19999999999999996
+     },
+     {
+      "as_of": "2026-11-09",
+      "turnover": 0.09999999999999998
      }
     ],
     "mid": [
@@ -3306,6 +3564,10 @@
      },
      {
       "as_of": "2026-11-06",
+      "turnover": 0.19999999999999996
+     },
+     {
+      "as_of": "2026-11-09",
       "turnover": 0.19999999999999996
      }
     ],
@@ -3317,6 +3579,10 @@
      {
       "as_of": "2026-11-06",
       "turnover": 0.19999999999999996
+     },
+     {
+      "as_of": "2026-11-09",
+      "turnover": 0.19999999999999996
      }
     ],
     "small": [
@@ -3327,6 +3593,10 @@
      {
       "as_of": "2026-11-06",
       "turnover": 0.30000000000000004
+     },
+     {
+      "as_of": "2026-11-09",
+      "turnover": 0.09999999999999998
      }
     ]
    },
@@ -3371,8 +3641,8 @@
      "weeks": 2,
      "first": "2026-10-23",
      "last": "2026-10-30",
-     "cumulative_net": -0.02343357650515887,
-     "max_drawdown": -0.0005064127160722132,
+     "cumulative_net": -0.023437137613223746,
+     "max_drawdown": -0.0005100574294155669,
      "skipped_incomplete": [],
      "note": "Each week's list held five sessions, friction charged on turnover within this version."
     },
@@ -3386,16 +3656,16 @@
      "note": "Each week's list held five sessions, friction charged on turnover within this version."
     }
    },
-   "evidence_note": "3 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first."
+   "evidence_note": "4 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first."
   }
  ],
- "evidence_note": "8 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first. Results are never pooled across methodology versions.",
+ "evidence_note": "9 weekly snapshot(s). No edge is claimed: at least 52 snapshots and a statistical test are needed first. Results are never pooled across methodology versions.",
  "prices": {
   "provider": "cboe",
   "validation": "spec PRICE_BAR_RULE (as ranking), without the as-of lag gate so stopped series keep their closes",
-  "collected_at": "2026-11-07T04:20:38+00:00",
-  "symbols": 68,
-  "validated": 68,
+  "collected_at": "2026-11-10T06:30:57+00:00",
+  "symbols": 69,
+  "validated": 69,
   "rejected": {},
   "as_of_bar_from_quote": [
    "AGX",
@@ -3463,6 +3733,7 @@
    "VCYT",
    "VMD",
    "VRT",
+   "VST",
    "VSXY",
    "WDC",
    "WT"
@@ -3484,34 +3755,34 @@
  ],
  "decision_desk": {
   "method": "Ratings stored in a weekly snapshot are tracked like the lists: price return from the as-of close over 1, 3, 6 and 12 months minus the entry's benchmark over the same sessions, before costs and dividends, averaged by rating. Ratings computed when the site is built from an older snapshot are previews and are never tracked. No edge is claimed before MIN_SNAPSHOTS_FOR_EVIDENCE snapshots.",
-  "snapshots_with_ratings": 5,
+  "snapshots_with_ratings": 6,
   "first_rated": "2026-10-16",
   "by_rating": {
    "Buy": {
     "1m": {
      "measured": 0,
-     "pending": 64,
+     "pending": 73,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 64,
+     "pending": 73,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 64,
+     "pending": 73,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 64,
+     "pending": 73,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
@@ -3520,28 +3791,28 @@
    "Overweight": {
     "1m": {
      "measured": 0,
-     "pending": 75,
+     "pending": 93,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 75,
+     "pending": 93,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 75,
+     "pending": 93,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 75,
+     "pending": 93,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
@@ -3550,28 +3821,28 @@
    "Hold": {
     "1m": {
      "measured": 0,
-     "pending": 39,
+     "pending": 48,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 39,
+     "pending": 48,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 39,
+     "pending": 48,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 39,
+     "pending": 48,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
@@ -3610,34 +3881,34 @@
    "Sell": {
     "1m": {
      "measured": 0,
-     "pending": 9,
+     "pending": 11,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "3m": {
      "measured": 0,
-     "pending": 9,
+     "pending": 11,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 9,
+     "pending": 11,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 9,
+     "pending": 11,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     }
    }
   },
-  "evidence_note": "5 snapshot(s) with stored ratings. No edge is claimed: at least 52 are needed first."
+  "evidence_note": "6 snapshot(s) with stored ratings. No edge is claimed: at least 52 are needed first."
  }
 }
