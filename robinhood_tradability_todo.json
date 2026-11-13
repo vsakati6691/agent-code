@@ -1,48 +1,48 @@
 {
- "as_of": "2026-11-11",
- "count": 29,
+ "as_of": "2026-11-12",
+ "count": 28,
  "instructions": "Check with the read-only Robinhood get_equity_tradability tool (Agent-trading account, at most 10 symbols per call), save each response, then run: python -m agent_trading.dashboard tradability import --data <dir> <files>",
  "symbols": [
   {
    "ticker": "RDDT",
    "band": "large",
-   "composite": 84.23,
+   "composite": 84.5,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "TPR",
    "band": "large",
-   "composite": 79.61,
+   "composite": 79.65,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "BE",
    "band": "large",
-   "composite": 78.87,
+   "composite": 78.96,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "FICO",
    "band": "large",
-   "composite": 75.73,
+   "composite": 75.84,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "HUM",
    "band": "large",
-   "composite": 74.84,
+   "composite": 74.87,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "ADSK",
    "band": "large",
-   "composite": 74.61,
+   "composite": 74.64,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "MCHP",
    "band": "large",
-   "composite": 74.47,
+   "composite": 74.48,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -64,27 +64,27 @@
    "reason": "Robinhood tradability not yet verified"
   },
   {
-   "ticker": "FSS",
+   "ticker": "FORM",
    "band": "mid",
-   "composite": 79.18,
+   "composite": 79.3,
    "reason": "Robinhood tradability not yet verified"
   },
   {
-   "ticker": "FORM",
+   "ticker": "FSS",
    "band": "mid",
-   "composite": 78.9,
+   "composite": 79.25,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "STRL",
    "band": "mid",
-   "composite": 78.28,
+   "composite": 78.3,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "FRPT",
    "band": "mid",
-   "composite": 76.61,
+   "composite": 76.6,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -96,13 +96,7 @@
   {
    "ticker": "BOOT",
    "band": "mid",
-   "composite": 75.36,
-   "reason": "Robinhood tradability not yet verified"
-  },
-  {
-   "ticker": "IDR",
-   "band": "small",
-   "composite": 85.35,
+   "composite": 75.4,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -126,7 +120,7 @@
   {
    "ticker": "LEGH",
    "band": "small",
-   "composite": 75.2,
+   "composite": 75.47,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -138,13 +132,13 @@
   {
    "ticker": "TRUP",
    "band": "small",
-   "composite": 71.96,
+   "composite": 71.97,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "BJRI",
    "band": "small",
-   "composite": 70.4,
+   "composite": 70.65,
    "reason": "Robinhood tradability not yet verified"
   },
   {
@@ -162,19 +156,19 @@
   {
    "ticker": "CORT",
    "band": "multibagger",
-   "composite": 76.47,
+   "composite": 76.02,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "UI",
    "band": "multibagger",
-   "composite": 73.49,
+   "composite": 73.36,
    "reason": "Robinhood tradability not yet verified"
   },
   {
    "ticker": "FICO",
    "band": "multibagger",
-   "composite": 70.41,
+   "composite": 70.51,
    "reason": "Robinhood tradability not yet verified"
   }
  ]
