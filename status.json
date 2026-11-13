@@ -1,13 +1,7 @@
 {
- "status": "partial",
- "message": "weekly update completed with partial data",
+ "status": "skipped",
+ "message": "snapshot for 2026-11-12 already exists; kept unchanged",
  "as_of": "2026-11-12",
- "at": "2026-11-13T05:00:40+00:00",
- "problems": [
-  "no US-GAAP XBRL facts (likely a foreign filer using 20-F/40-F or IFRS)",
-  "cdn-api.cboe.com: HTTP 403",
-  "insiders: partial; 23/39 available; 0 deferred",
-  "macro: partial; see per-series reasons"
- ],
+ "at": "2026-11-13T18:33:17+00:00",
  "snapshot_status": "partial"
 }
