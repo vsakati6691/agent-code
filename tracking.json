@@ -5,7 +5,7 @@
   "rule": "Every stock and its benchmark are measured between the same two NYSE sessions: the snapshot's as-of close and exactly N sessions later (TRACK_HORIZONS). A horizon is pending until that session has passed and its closes are published. A missing entry or exit close is reported as missing, never bridged to another session. A basket counts as complete only when every published pick and the benchmark have both closes; incomplete baskets are shown with their measurable count and left out of the completed-basket averages. Summaries, turnover and weekly chains are computed separately for each methodology version. Prices pass the same validation as ranking (PRICE_BAR_RULE, including the close-verified end-of-session quote bar when the history file lags).",
   "previous": "Before 2026-11-04 the tracking file used unvalidated provider history, positional session counts and category aggregates across versions. No 1-, 3-, 6- or 12-month result had completed under it."
  },
- "as_of": "2026-11-16",
+ "as_of": "2026-11-17",
  "by_snapshot": [
   {
    "as_of": "2026-10-13",
@@ -1093,12 +1093,20 @@
    "benchmark": "SPY",
    "horizons": {
     "1m": {
-     "status": "pending",
      "entry_session": "2026-10-19",
      "exit_session": "2026-11-17",
      "n": 5,
-     "measured": 0,
-     "unavailable": []
+     "measured": 5,
+     "unavailable": [],
+     "missing_entry": 0,
+     "missing_exit": 0,
+     "benchmark_status": "ok",
+     "status": "ok",
+     "gross": -0.2584116602354155,
+     "net": -0.2614116602354155,
+     "benchmark": -0.044410813067529475,
+     "excess_net": -0.21700084716788604,
+     "hit_rate": 0.0
     },
     "3m": {
      "status": "pending",
@@ -1134,12 +1142,20 @@
    "benchmark": "IJH",
    "horizons": {
     "1m": {
-     "status": "pending",
      "entry_session": "2026-10-19",
      "exit_session": "2026-11-17",
      "n": 3,
-     "measured": 0,
-     "unavailable": []
+     "measured": 3,
+     "unavailable": [],
+     "missing_entry": 0,
+     "missing_exit": 0,
+     "benchmark_status": "ok",
+     "status": "ok",
+     "gross": -0.16723440625320526,
+     "net": -0.17223440625320527,
+     "benchmark": -0.008704061895551174,
+     "excess_net": -0.1635303443576541,
+     "hit_rate": 0.0
     },
     "3m": {
      "status": "pending",
@@ -1175,12 +1191,20 @@
    "benchmark": "SPY",
    "horizons": {
     "1m": {
-     "status": "pending",
      "entry_session": "2026-10-19",
      "exit_session": "2026-11-17",
      "n": 10,
-     "measured": 0,
-     "unavailable": []
+     "measured": 10,
+     "unavailable": [],
+     "missing_entry": 0,
+     "missing_exit": 0,
+     "benchmark_status": "ok",
+     "status": "ok",
+     "gross": -0.11397646887661836,
+     "net": -0.11697646887661836,
+     "benchmark": -0.044410813067529475,
+     "excess_net": -0.07256565580908889,
+     "hit_rate": 0.2
     },
     "3m": {
      "status": "pending",
@@ -1216,12 +1240,20 @@
    "benchmark": "IJH",
    "horizons": {
     "1m": {
-     "status": "pending",
      "entry_session": "2026-10-19",
      "exit_session": "2026-11-17",
      "n": 10,
-     "measured": 0,
-     "unavailable": []
+     "measured": 10,
+     "unavailable": [],
+     "missing_entry": 0,
+     "missing_exit": 0,
+     "benchmark_status": "ok",
+     "status": "ok",
+     "gross": -0.025961049258262925,
+     "net": -0.030961049258262926,
+     "benchmark": -0.008704061895551174,
+     "excess_net": -0.022256987362711752,
+     "hit_rate": 0.4
     },
     "3m": {
      "status": "pending",
@@ -1257,12 +1289,20 @@
    "benchmark": "IWM",
    "horizons": {
     "1m": {
-     "status": "pending",
      "entry_session": "2026-10-19",
      "exit_session": "2026-11-17",
      "n": 5,
-     "measured": 0,
-     "unavailable": []
+     "measured": 5,
+     "unavailable": [],
+     "missing_entry": 0,
+     "missing_exit": 0,
+     "benchmark_status": "ok",
+     "status": "ok",
+     "gross": -0.1585373681260003,
+     "net": -0.1655373681260003,
+     "benchmark": -0.008220289000294811,
+     "excess_net": -0.1573170791257055,
+     "hit_rate": 0.2
     },
     "3m": {
      "status": "pending",
@@ -1298,12 +1338,20 @@
    "benchmark": "IWM",
    "horizons": {
     "1m": {
-     "status": "pending",
      "entry_session": "2026-10-19",
      "exit_session": "2026-11-17",
      "n": 10,
-     "measured": 0,
-     "unavailable": []
+     "measured": 10,
+     "unavailable": [],
+     "missing_entry": 0,
+     "missing_exit": 0,
+     "benchmark_status": "ok",
+     "status": "ok",
+     "gross": -0.10362847800299224,
+     "net": -0.11362847800299224,
+     "benchmark": -0.008220289000294811,
+     "excess_net": -0.10540818900269742,
+     "hit_rate": 0.2
     },
     "3m": {
      "status": "pending",
@@ -2316,7 +2364,7 @@
    }
   },
   {
-   "as_of": "2026-11-16",
+   "as_of": "2026-11-17",
    "spec_version": "2026-10-19.6",
    "band": "ai_large",
    "n": 5,
@@ -2324,32 +2372,32 @@
    "horizons": {
     "1m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2026-12-16",
+     "entry_session": "2026-11-17",
+     "exit_session": "2026-12-17",
      "n": 5,
      "measured": 0,
      "unavailable": []
     },
     "3m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-02-18",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-02-19",
      "n": 5,
      "measured": 0,
      "unavailable": []
     },
     "6m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-05-19",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-05-20",
      "n": 5,
      "measured": 0,
      "unavailable": []
     },
     "12m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-11-17",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-11-18",
      "n": 5,
      "measured": 0,
      "unavailable": []
@@ -2357,7 +2405,7 @@
    }
   },
   {
-   "as_of": "2026-11-16",
+   "as_of": "2026-11-17",
    "spec_version": "2026-10-19.6",
    "band": "ai_mid",
    "n": 4,
@@ -2365,32 +2413,32 @@
    "horizons": {
     "1m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2026-12-16",
+     "entry_session": "2026-11-17",
+     "exit_session": "2026-12-17",
      "n": 4,
      "measured": 0,
      "unavailable": []
     },
     "3m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-02-18",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-02-19",
      "n": 4,
      "measured": 0,
      "unavailable": []
     },
     "6m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-05-19",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-05-20",
      "n": 4,
      "measured": 0,
      "unavailable": []
     },
     "12m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-11-17",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-11-18",
      "n": 4,
      "measured": 0,
      "unavailable": []
@@ -2398,7 +2446,7 @@
    }
   },
   {
-   "as_of": "2026-11-16",
+   "as_of": "2026-11-17",
    "spec_version": "2026-10-19.6",
    "band": "large",
    "n": 10,
@@ -2406,32 +2454,32 @@
    "horizons": {
     "1m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2026-12-16",
+     "entry_session": "2026-11-17",
+     "exit_session": "2026-12-17",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "3m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-02-18",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-02-19",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "6m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-05-19",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-05-20",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "12m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-11-17",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-11-18",
      "n": 10,
      "measured": 0,
      "unavailable": []
@@ -2439,7 +2487,7 @@
    }
   },
   {
-   "as_of": "2026-11-16",
+   "as_of": "2026-11-17",
    "spec_version": "2026-10-19.6",
    "band": "mid",
    "n": 10,
@@ -2447,32 +2495,32 @@
    "horizons": {
     "1m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2026-12-16",
+     "entry_session": "2026-11-17",
+     "exit_session": "2026-12-17",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "3m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-02-18",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-02-19",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "6m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-05-19",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-05-20",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "12m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-11-17",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-11-18",
      "n": 10,
      "measured": 0,
      "unavailable": []
@@ -2480,7 +2528,7 @@
    }
   },
   {
-   "as_of": "2026-11-16",
+   "as_of": "2026-11-17",
    "spec_version": "2026-10-19.6",
    "band": "multibagger",
    "n": 5,
@@ -2488,32 +2536,32 @@
    "horizons": {
     "1m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2026-12-16",
+     "entry_session": "2026-11-17",
+     "exit_session": "2026-12-17",
      "n": 5,
      "measured": 0,
      "unavailable": []
     },
     "3m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-02-18",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-02-19",
      "n": 5,
      "measured": 0,
      "unavailable": []
     },
     "6m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-05-19",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-05-20",
      "n": 5,
      "measured": 0,
      "unavailable": []
     },
     "12m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-11-17",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-11-18",
      "n": 5,
      "measured": 0,
      "unavailable": []
@@ -2521,7 +2569,7 @@
    }
   },
   {
-   "as_of": "2026-11-16",
+   "as_of": "2026-11-17",
    "spec_version": "2026-10-19.6",
    "band": "small",
    "n": 10,
@@ -2529,32 +2577,32 @@
    "horizons": {
     "1m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2026-12-16",
+     "entry_session": "2026-11-17",
+     "exit_session": "2026-12-17",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "3m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-02-18",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-02-19",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "6m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-05-19",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-05-20",
      "n": 10,
      "measured": 0,
      "unavailable": []
     },
     "12m": {
      "status": "pending",
-     "entry_session": "2026-11-16",
-     "exit_session": "2027-11-17",
+     "entry_session": "2026-11-17",
+     "exit_session": "2027-11-18",
      "n": 10,
      "measured": 0,
      "unavailable": []
@@ -3499,11 +3547,11 @@
    "summary": {
     "ai_large": {
      "1m": {
-      "snapshots_measured": 0,
+      "snapshots_measured": 1,
       "incomplete": 0,
-      "pending": 1,
-      "mean_excess_net": null,
-      "share_beating_benchmark": null
+      "pending": 0,
+      "mean_excess_net": -0.21700084716788604,
+      "share_beating_benchmark": 0.0
      },
      "3m": {
       "snapshots_measured": 0,
@@ -3530,11 +3578,11 @@
     },
     "ai_mid": {
      "1m": {
-      "snapshots_measured": 0,
+      "snapshots_measured": 1,
       "incomplete": 0,
-      "pending": 1,
-      "mean_excess_net": null,
-      "share_beating_benchmark": null
+      "pending": 0,
+      "mean_excess_net": -0.1635303443576541,
+      "share_beating_benchmark": 0.0
      },
      "3m": {
       "snapshots_measured": 0,
@@ -3561,11 +3609,11 @@
     },
     "large": {
      "1m": {
-      "snapshots_measured": 0,
+      "snapshots_measured": 1,
       "incomplete": 0,
-      "pending": 1,
-      "mean_excess_net": null,
-      "share_beating_benchmark": null
+      "pending": 0,
+      "mean_excess_net": -0.07256565580908889,
+      "share_beating_benchmark": 0.0
      },
      "3m": {
       "snapshots_measured": 0,
@@ -3592,11 +3640,11 @@
     },
     "mid": {
      "1m": {
-      "snapshots_measured": 0,
+      "snapshots_measured": 1,
       "incomplete": 0,
-      "pending": 1,
-      "mean_excess_net": null,
-      "share_beating_benchmark": null
+      "pending": 0,
+      "mean_excess_net": -0.022256987362711752,
+      "share_beating_benchmark": 0.0
      },
      "3m": {
       "snapshots_measured": 0,
@@ -3623,11 +3671,11 @@
     },
     "multibagger": {
      "1m": {
-      "snapshots_measured": 0,
+      "snapshots_measured": 1,
       "incomplete": 0,
-      "pending": 1,
-      "mean_excess_net": null,
-      "share_beating_benchmark": null
+      "pending": 0,
+      "mean_excess_net": -0.1573170791257055,
+      "share_beating_benchmark": 0.0
      },
      "3m": {
       "snapshots_measured": 0,
@@ -3654,11 +3702,11 @@
     },
     "small": {
      "1m": {
-      "snapshots_measured": 0,
+      "snapshots_measured": 1,
       "incomplete": 0,
-      "pending": 1,
-      "mean_excess_net": null,
-      "share_beating_benchmark": null
+      "pending": 0,
+      "mean_excess_net": -0.10540818900269742,
+      "share_beating_benchmark": 0.0
      },
      "3m": {
       "snapshots_measured": 0,
@@ -3746,7 +3794,7 @@
   {
    "spec_version": "2026-10-19.6",
    "first_as_of": "2026-10-23",
-   "last_as_of": "2026-11-16",
+   "last_as_of": "2026-11-17",
    "weekly_snapshots": 5,
    "summary": {
     "ai_large": {
@@ -3933,7 +3981,7 @@
       "mean_excess_net": null,
       "share_beating_benchmark": null
      },
-     "mean_weekly_turnover": 0.125
+     "mean_weekly_turnover": 0.15
     }
    },
    "turnover": {
@@ -3951,7 +3999,7 @@
       "turnover": 0.0
      },
      {
-      "as_of": "2026-11-16",
+      "as_of": "2026-11-17",
       "turnover": 0.0
      }
     ],
@@ -3969,7 +4017,7 @@
       "turnover": 0.0
      },
      {
-      "as_of": "2026-11-16",
+      "as_of": "2026-11-17",
       "turnover": 0.0
      }
     ],
@@ -3987,7 +4035,7 @@
       "turnover": 0.09999999999999998
      },
      {
-      "as_of": "2026-11-16",
+      "as_of": "2026-11-17",
       "turnover": 0.0
      }
     ],
@@ -4005,7 +4053,7 @@
       "turnover": 0.09999999999999998
      },
      {
-      "as_of": "2026-11-16",
+      "as_of": "2026-11-17",
       "turnover": 0.09999999999999998
      }
     ],
@@ -4023,7 +4071,7 @@
       "turnover": 0.19999999999999996
      },
      {
-      "as_of": "2026-11-16",
+      "as_of": "2026-11-17",
       "turnover": 0.0
      }
     ],
@@ -4041,8 +4089,8 @@
       "turnover": 0.09999999999999998
      },
      {
-      "as_of": "2026-11-16",
-      "turnover": 0.0
+      "as_of": "2026-11-17",
+      "turnover": 0.09999999999999998
      }
     ]
    },
@@ -4109,7 +4157,7 @@
  "prices": {
   "provider": "cboe",
   "validation": "spec PRICE_BAR_RULE (as ranking), without the as-of lag gate so stopped series keep their closes",
-  "collected_at": "2026-11-17T06:52:41+00:00",
+  "collected_at": "2026-11-18T05:59:13+00:00",
   "symbols": 69,
   "validated": 69,
   "rejected": {},
@@ -4206,29 +4254,29 @@
   "by_rating": {
    "Buy": {
     "1m": {
-     "measured": 11,
-     "pending": 72,
+     "measured": 23,
+     "pending": 59,
      "unavailable": 0,
-     "mean_excess": -0.041687244533606733,
-     "share_beating_benchmark": 0.36363636363636365
+     "mean_excess": -0.024993926725155026,
+     "share_beating_benchmark": 0.391304347826087
     },
     "3m": {
      "measured": 0,
-     "pending": 83,
+     "pending": 82,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 83,
+     "pending": 82,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 83,
+     "pending": 82,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
@@ -4236,11 +4284,11 @@
    },
    "Overweight": {
     "1m": {
-     "measured": 17,
-     "pending": 92,
+     "measured": 33,
+     "pending": 76,
      "unavailable": 0,
-     "mean_excess": -0.12765338153249414,
-     "share_beating_benchmark": 0.23529411764705882
+     "mean_excess": -0.12581856908689731,
+     "share_beating_benchmark": 0.18181818181818182
     },
     "3m": {
      "measured": 0,
@@ -4266,29 +4314,29 @@
    },
    "Hold": {
     "1m": {
-     "measured": 7,
-     "pending": 49,
+     "measured": 16,
+     "pending": 41,
      "unavailable": 0,
-     "mean_excess": -0.05753953635668908,
-     "share_beating_benchmark": 0.42857142857142855
+     "mean_excess": -0.063265945494282,
+     "share_beating_benchmark": 0.3125
     },
     "3m": {
      "measured": 0,
-     "pending": 56,
+     "pending": 57,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "6m": {
      "measured": 0,
-     "pending": 56,
+     "pending": 57,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
     },
     "12m": {
      "measured": 0,
-     "pending": 56,
+     "pending": 57,
      "unavailable": 0,
      "mean_excess": null,
      "share_beating_benchmark": null
@@ -4326,10 +4374,10 @@
    },
    "Sell": {
     "1m": {
-     "measured": 1,
-     "pending": 12,
+     "measured": 3,
+     "pending": 10,
      "unavailable": 0,
-     "mean_excess": -0.39757564615423624,
+     "mean_excess": -0.2754101657401036,
      "share_beating_benchmark": 0.0
     },
     "3m": {
